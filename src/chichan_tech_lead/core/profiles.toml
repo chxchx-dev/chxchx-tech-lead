@@ -1,0 +1,54 @@
+[profiles.generic]
+stacks = []
+priority = 0
+
+[profiles.nextjs]
+stacks = ["nextjs"]
+priority = 10
+
+[profiles.react-vite]
+stacks = ["react-vite"]
+priority = 10
+
+[profiles.react-native]
+stacks = ["react-native"]
+priority = 10
+
+[profiles.nestjs]
+stacks = ["nestjs"]
+priority = 10
+
+[profiles.dotnet]
+stacks = ["dotnet"]
+priority = 10
+
+[profiles.python]
+stacks = ["python"]
+priority = 10
+
+[profiles.next-dotnet]
+stacks = ["nextjs", "dotnet"]
+priority = 20
+
+[profiles.next-nest]
+stacks = ["nextjs", "nestjs"]
+priority = 20
+
+[profiles.rn-nest]
+stacks = ["react-native", "nestjs"]
+priority = 20
+
+[profiles.next-dotnet-postgres]
+stacks = ["nextjs", "dotnet", "postgres"]
+priority = 30
+rules = ["Mantén explícitos los contratos entre frontend, API y persistencia."]
+
+[profiles.next-nest-postgres]
+stacks = ["nextjs", "nestjs", "postgres"]
+priority = 30
+rules = ["Mantén migraciones y contratos de API sincronizados antes de cambiar el modelo."]
+
+[profiles.ai-python]
+stacks = ["python", "ai"]
+priority = 20
+rules = ["Aísla dependencias de modelos y proveedores detrás de adaptadores testeables."]
