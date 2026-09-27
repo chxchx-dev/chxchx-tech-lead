@@ -18,6 +18,7 @@ from .core.trust import trust_project
 from .integrations.installers import install_tool
 from .integrations.basic_memory import ensure_project as ensure_memory_project, available as basic_memory_available
 from .integrations.mcp import integrate as integrate_mcp, write_opencode_example
+from .integrations.mcp_diagnostics import diagnose_project_mcp
 from .integrations.tools import check_tools
 from .workspace.manager import WorkspaceManager
 from .workspace.state import load_state
@@ -283,6 +284,30 @@ def doctor(
                 console.print(f"{mark} {item.id} cwd: {cwd}")
         for warning in inspection.warnings:
             console.print(f"[yellow]! {warning}[/]")
+
+    console.print("\n[bold]MCP POR PROYECTO[/]")
+    diagnostics = Table(title="Basic Memory y Serena · configuración (solo lectura)")
+    diagnostics.add_column("Cliente")
+    diagnostics.add_column("Servidor")
+    diagnostics.add_column("Estado")
+    diagnostics.add_column("Alcance")
+    diagnostics.add_column("Detalle")
+    for item in diagnose_project_mcp(info):
+        style = {"OK": "green", "AVISO": "yellow", "FALTA": "yellow", "ERROR": "red"}.get(
+            item.status, "white"
+        )
+        diagnostics.add_row(
+            item.client,
+            item.server,
+            f"[{style}]{item.status}[/{style}]",
+            item.scope,
+            item.detail,
+        )
+    console.print(diagnostics)
+    console.print(
+        "[dim]Solo lectura: no inicia agentes/servidores ni imprime variables de entorno. "
+        "Codex debe confiar en el proyecto para cargar su configuración local.[/]"
+    )
 
 
 @app.command()

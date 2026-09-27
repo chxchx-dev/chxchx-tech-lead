@@ -1062,7 +1062,7 @@ Pasar del registro actual a gestión operativa de proyectos.
 - [x] persistencia de último proyecto.
 - [x] recuperación de sesiones.
 - [x] política “un ACTIVE por defecto” al activar cualquier workspace.
-- [ ] vista agregada de recursos.
+- [x] vista agregada de recursos (`dev`, commit `c2b1867`).
 
 ### Definition of Done
 

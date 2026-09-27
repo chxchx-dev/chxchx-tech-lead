@@ -5,6 +5,7 @@ from typer.testing import CliRunner
 from chxchx_tech_lead.cli import app
 from chxchx_tech_lead.core.registry import register_project
 from chxchx_tech_lead.core.models import ProjectInfo
+from chxchx_tech_lead.integrations.mcp_diagnostics import McpDiagnostic
 
 
 runner = CliRunner()
@@ -15,6 +16,28 @@ def test_version_command():
 
     assert result.exit_code == 0
     assert "chxchx-tech-lead" in result.stdout
+
+
+def test_doctor_reports_project_scoped_mcp_diagnostics_without_mutating(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setattr("chxchx_tech_lead.cli.check_tools", lambda: [])
+    monkeypatch.setattr(
+        "chxchx_tech_lead.cli.diagnose_project_mcp",
+        lambda _info: [
+            McpDiagnostic("Codex", "basic-memory", "AVISO", "usuario/global", "solo global")
+        ],
+    )
+
+    result = runner.invoke(app, ["doctor", str(project)])
+
+    assert result.exit_code == 0, result.stdout
+    assert "MCP POR PROYECTO" in result.stdout
+    assert "basic-memory" in result.stdout
+    assert "AVISO" in result.stdout
+    assert "no inicia agentes/servidores" in result.stdout
+    assert not (project / ".codex").exists()
+    assert not (project / ".mcp.json").exists()
 
 
 def test_init_dry_run_does_not_write_project_or_global_state(tmp_path: Path, monkeypatch):
