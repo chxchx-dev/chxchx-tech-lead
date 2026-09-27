@@ -605,6 +605,12 @@ chxchx-tech integrate --client opencode .
 
 ChxChx no guarda tokens, no copia `.env` y no instala automáticamente clientes que tienen su propio instalador.
 
+`chxchx-tech doctor [PATH]` también revisa si Basic Memory y Serena están configurados
+para ese proyecto en Claude Code y Codex, y advierte si solo encuentra una configuración
+global que podría compartirse con otros repositorios. El chequeo es estático: no inicia
+agentes ni servidores MCP, no valida conectividad en vivo y no muestra variables de entorno.
+En Codex, la configuración MCP local solo se carga cuando el proyecto es de confianza.
+
 Para publicar un repositorio preparado, revisa siempre `git status` y `git diff --cached`.
 El `.gitignore` excluye `.ai/`, `.serena/`, memorias, SQLite, logs, credenciales,
 material criptográfico y reglas generadas de agentes. No reemplaza una auditoría:
