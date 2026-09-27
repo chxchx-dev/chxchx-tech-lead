@@ -6,10 +6,10 @@ Cada repositorio nuevo repite la misma preparación: reglas para agentes, memori
 
 ## Solución
 
-`chichan-tech-lead` no crea otro agente ni otra memoria. Es el bootstrapper/orquestador que conecta componentes especializados:
+`chxchx-tech-lead` no crea otro agente ni otra memoria. Es el bootstrapper/orquestador que conecta componentes especializados:
 
 ```text
-Chichan
+ChxChx
   │
   ├─ Claude Code
   ├─ Codex
@@ -32,8 +32,8 @@ Después de instalar el CLI una vez, el flujo ideal es:
 
 ```bash
 cd mi-proyecto
-chichan setup --dry-run
-chichan setup
+chxchx-tech setup --dry-run
+chxchx-tech setup
 ```
 
 El segundo comando debe dejar preparado lo necesario para comenzar a trabajar con los agentes disponibles en la máquina.

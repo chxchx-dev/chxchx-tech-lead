@@ -27,18 +27,18 @@ La suite actual debe pasar completa. El smoke test debe terminar con `lab smoke:
 ## Rollout recomendado
 
 1. Instala la etiqueta `v0.2.0` o usa una instalación editable si estás desarrollando.
-2. Ejecuta `chichan doctor` y corrige solo los requisitos que realmente vayas a usar.
-3. En un proyecto laboratorio, ejecuta `chichan setup --dry-run`, revisa el plan y luego `chichan setup`.
-4. Conecta un único cliente MCP usando primero `chichan integrate --dry-run`.
+2. Ejecuta `chxchx-tech doctor` y corrige solo los requisitos que realmente vayas a usar.
+3. En un proyecto laboratorio, ejecuta `chxchx-tech setup --dry-run`, revisa el plan y luego `chxchx-tech setup`.
+4. Conecta un único cliente MCP usando primero `chxchx-tech integrate --dry-run`.
 5. Valida el trabajo diario del proyecto laboratorio y conserva el backup inicial.
 6. Repite el proceso en los proyectos grandes, uno por uno.
 
 ## Recuperación
 
-Antes de aceptar cambios en un proyecto real, revisa `chichan status`. Si necesitas deshacer la última modificación gestionada:
+Antes de aceptar cambios en un proyecto real, revisa `chxchx-tech status`. Si necesitas deshacer la última modificación gestionada:
 
 ```bash
-chichan rollback
+chxchx-tech rollback
 ```
 
 El rollback restaura el backup más reciente y conserva el estado actual según el mecanismo de backup de la operación. Si el cambio pertenece a un archivo fuera del alcance gestionado, recupéralo desde el control de versiones del propio proyecto.

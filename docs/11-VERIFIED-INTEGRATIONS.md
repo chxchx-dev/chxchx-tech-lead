@@ -2,7 +2,7 @@
 
 Última revisión documental: **2026-09-23**.
 
-Este archivo existe porque las CLI externas cambian. Cuando una integración falle, revisa primero la documentación oficial y modifica únicamente `src/chichan_tech_lead/integrations/`.
+Este archivo existe porque las CLI externas cambian. Cuando una integración falle, revisa primero la documentación oficial y modifica únicamente `src/chxchx_tech_lead/integrations/`.
 
 ## Basic Memory
 

@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from chichan_tech_lead.core.sync import sync_project
+from chxchx_tech_lead.core.sync import sync_project
 
 
 def test_sync_is_idempotent_and_backed_up(tmp_path: Path, monkeypatch):
     project = tmp_path / "project"
     project.mkdir()
-    monkeypatch.setenv("CHICHAN_HOME", str(tmp_path / "global"))
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
 
     first = sync_project(project)
     second = sync_project(project)

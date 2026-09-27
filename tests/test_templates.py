@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from chichan_tech_lead.core.detector import detect_project
-from chichan_tech_lead.core.templates import create_project_structure, project_rule_body
+from chxchx_tech_lead.core.detector import detect_project
+from chxchx_tech_lead.core.templates import create_project_structure, project_rule_body
 
 
 def test_structure_idempotent(tmp_path: Path):

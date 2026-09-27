@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from chichan_tech_lead.core.detector import detect_project
+from chxchx_tech_lead.core.detector import detect_project
 
 
 def test_detect_nextjs(tmp_path: Path):

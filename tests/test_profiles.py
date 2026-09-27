@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from chichan_tech_lead.core.models import ProjectInfo
+from chxchx_tech_lead.core.models import ProjectInfo
 
 
 def test_custom_profile_overrides_builtin_resolution(tmp_path: Path, monkeypatch):
@@ -14,7 +14,7 @@ def test_custom_profile_overrides_builtin_resolution(tmp_path: Path, monkeypatch
         "rules = [\"Use the project API conventions.\"]\n",
         encoding="utf-8",
     )
-    monkeypatch.setenv("CHICHAN_HOME", str(global_home))
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(global_home))
 
     info = ProjectInfo(tmp_path / "project", "project", stacks=["nextjs", "nestjs"])
 

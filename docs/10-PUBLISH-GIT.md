@@ -15,7 +15,7 @@ Si todavía no existe un repositorio Git, inicialízalo una sola vez:
 ```bash
 git init
 git branch -M main
-git remote add origin https://github.com/TU_USUARIO/chichan-tech-lead.git
+git remote add origin https://github.com/TU_USUARIO/chxchx-tech-lead.git
 ```
 
 ## 2. Verificar el contenido
@@ -33,8 +33,8 @@ No publiques `.env`, tokens, credenciales ni archivos de configuración personal
 
 ```bash
 git add .
-git commit -m "release: chichan-tech-lead v0.2.0"
-git tag -a v0.2.0 -m "chichan-tech-lead v0.2.0"
+git commit -m "release: chxchx-tech-lead v0.2.0"
+git tag -a v0.2.0 -m "chxchx-tech-lead v0.2.0"
 git push -u origin main
 git push origin v0.2.0
 ```
@@ -46,25 +46,25 @@ La etiqueta debe ser exactamente `v0.2.0`, porque es la referencia que usará `u
 En cualquier equipo con `uv`:
 
 ```bash
-uv tool install "git+https://github.com/TU_USUARIO/chichan-tech-lead.git@v0.2.0"
-chichan version
-chichan doctor
+uv tool install "git+https://github.com/TU_USUARIO/chxchx-tech-lead.git@v0.2.0"
+chxchx-tech version
+chxchx-tech doctor
 ```
 
 Para reinstalar una herramienta ya instalada:
 
 ```bash
-uv tool install --force "git+https://github.com/TU_USUARIO/chichan-tech-lead.git@v0.2.0"
+uv tool install --force "git+https://github.com/TU_USUARIO/chxchx-tech-lead.git@v0.2.0"
 ```
 
 ## 5. Publicar una actualización
 
-Para una nueva versión, actualiza `pyproject.toml`, `src/chichan_tech_lead/__init__.py` y `CHANGELOG.md`; después crea una etiqueta nueva, por ejemplo `v0.2.1`:
+Para una nueva versión, actualiza `pyproject.toml`, `src/chxchx_tech_lead/__init__.py` y `CHANGELOG.md`; después crea una etiqueta nueva, por ejemplo `v0.2.1`:
 
 ```bash
 git add .
-git commit -m "release: chichan-tech-lead v0.2.1"
-git tag -a v0.2.1 -m "chichan-tech-lead v0.2.1"
+git commit -m "release: chxchx-tech-lead v0.2.1"
+git tag -a v0.2.1 -m "chxchx-tech-lead v0.2.1"
 git push origin main
 git push origin v0.2.1
 ```

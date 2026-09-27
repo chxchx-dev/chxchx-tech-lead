@@ -2,10 +2,10 @@
 
 ## Objetivo
 
-`chichan-tech-lead` es la capa de automatización. No debe poseer toda la inteligencia del entorno.
+`chxchx-tech-lead` es la capa de automatización. No debe poseer toda la inteligencia del entorno.
 
 ```text
-                  chichan-tech-lead
+                  chxchx-tech-lead
                          │
            ┌─────────────┼─────────────┐
            │             │             │
@@ -44,7 +44,7 @@ Constitución compacta del repositorio: reglas estables y expectativas de calida
 
 Estado humano y operativo del proyecto, no una base de datos paralela.
 
-### chichan-tech-lead
+### chxchx-tech-lead
 
 Instala, detecta, genera, sincroniza, diagnostica y configura adaptadores.
 
@@ -66,12 +66,12 @@ Basic Memory + Serena          decisiones persistentes y navegación del código
 Cambio verificable             pruebas, smoke test y reporte de pendientes
 ```
 
-`chichan-tech-lead` genera y sincroniza esta estructura, pero no decide el producto por el agente. La decisión sigue perteneciendo al usuario y al contexto del proyecto.
+`chxchx-tech-lead` genera y sincroniza esta estructura, pero no decide el producto por el agente. La decisión sigue perteneciendo al usuario y al contexto del proyecto.
 
 ## Capas del código
 
 ```text
-src/chichan_tech_lead/
+src/chxchx_tech_lead/
 ├── cli.py
 ├── core/
 │   ├── detector.py
@@ -95,7 +95,7 @@ Una integración externa nunca debe filtrarse por todo el código. Si Claude/Cod
 ## Estado global
 
 ```text
-~/.chichan-tech-lead/
+~/.chxchx-tech-lead/
 ├── projects.json
 ├── backups/
 ├── logs/

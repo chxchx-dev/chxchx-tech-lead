@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from typer.testing import CliRunner  # noqa: E402
 
-from chichan_tech_lead.cli import app  # noqa: E402
+from chxchx_tech_lead.cli import app  # noqa: E402
 
 
 def invoke(runner: CliRunner, args: list[str]):
@@ -24,7 +24,7 @@ def invoke(runner: CliRunner, args: list[str]):
 
 def main() -> None:
     runner = CliRunner()
-    with tempfile.TemporaryDirectory(prefix="chichan-lab-") as temp:
+    with tempfile.TemporaryDirectory(prefix="chxchx-tech-lab-") as temp:
         root = Path(temp)
         project = root / "next-nest-postgres"
         project.mkdir()
@@ -37,8 +37,8 @@ def main() -> None:
             "services:\n  db:\n    image: postgres:16\n", encoding="utf-8"
         )
         global_home = root / "global"
-        old_home = os.environ.get("CHICHAN_HOME")
-        os.environ["CHICHAN_HOME"] = str(global_home)
+        old_home = os.environ.get("CHXCHX_TECH_HOME")
+        os.environ["CHXCHX_TECH_HOME"] = str(global_home)
         try:
             setup_preview = invoke(runner, ["setup", str(project), "--dry-run"])
             assert "No se realizaron cambios" in setup_preview.stdout
@@ -54,7 +54,7 @@ def main() -> None:
             second = invoke(runner, ["init", str(project)])
             assert "next-nest-postgres" in first.stdout
             assert "Todo está actualizado" in second.stdout
-            assert (project / ".ai" / "chichan.toml").exists()
+            assert (project / ".ai" / "chxchx-tech.toml").exists()
 
             agents = project / "AGENTS.md"
             original = agents.read_text(encoding="utf-8")
@@ -81,9 +81,9 @@ def main() -> None:
             assert "Manual lab note." in restored
         finally:
             if old_home is None:
-                os.environ.pop("CHICHAN_HOME", None)
+                os.environ.pop("CHXCHX_TECH_HOME", None)
             else:
-                os.environ["CHICHAN_HOME"] = old_home
+                os.environ["CHXCHX_TECH_HOME"] = old_home
     print("lab smoke: ok")
 
 

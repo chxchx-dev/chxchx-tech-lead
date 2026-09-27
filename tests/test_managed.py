@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from chichan_tech_lead.core.managed import upsert_managed_block
+from chxchx_tech_lead.core.managed import upsert_managed_block
 
 
 def test_managed_block_is_idempotent(tmp_path: Path):

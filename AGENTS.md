@@ -1,4 +1,4 @@
-# AGENTS.md — chichan-tech-lead
+# AGENTS.md — chxchx-tech-lead
 
 ## Propósito
 

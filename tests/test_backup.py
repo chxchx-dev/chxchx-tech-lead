@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from chichan_tech_lead.core.backup import backup_project, latest_backup, restore_backup
+from chxchx_tech_lead.core.backup import backup_project, latest_backup, restore_backup
 
 
 def test_restore_previous_backup_after_safety_backup(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("CHICHAN_HOME", str(tmp_path / "global"))
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
     project = tmp_path / "project"
     project.mkdir()
     target = project / "AGENTS.md"
@@ -22,7 +22,7 @@ def test_restore_previous_backup_after_safety_backup(tmp_path: Path, monkeypatch
 
 def test_latest_backup_is_read_only_when_empty(tmp_path: Path, monkeypatch):
     global_home = tmp_path / "global"
-    monkeypatch.setenv("CHICHAN_HOME", str(global_home))
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(global_home))
     project = tmp_path / "project"
     project.mkdir()
 
@@ -30,7 +30,7 @@ def test_latest_backup_is_read_only_when_empty(tmp_path: Path, monkeypatch):
     assert not global_home.exists()
 
 def test_restore_removes_managed_items_created_after_backup(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("CHICHAN_HOME", str(tmp_path / "global"))
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
     project = tmp_path / "project"
     project.mkdir()
 
