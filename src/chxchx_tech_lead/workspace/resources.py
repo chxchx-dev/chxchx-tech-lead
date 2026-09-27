@@ -51,6 +51,19 @@ class ProcessResources:
     status: ProcessStatus = ProcessStatus.STOPPED
 
 
+@dataclass(frozen=True, slots=True)
+class ProcessResourceSummary:
+    running_count: int
+    rss_bytes: int
+    cpu_percent: float | None
+    measured_cpu_count: int
+
+    def memory_percent(self, total_memory_bytes: int) -> float | None:
+        if total_memory_bytes <= 0:
+            return None
+        return self.rss_bytes / total_memory_bytes * 100
+
+
 SystemReader = Callable[[], SystemResources]
 ProcessReader = Callable[[int], tuple[int, float | None] | None]
 
@@ -96,6 +109,21 @@ class ResourceManager:
                     rss, cpu = measurement
             result.append(ProcessResources(process.id, process.label, process.pid, rss, cpu, process.status))
         return result
+
+
+def summarize_process_resources(processes: Iterable[ProcessResources]) -> ProcessResourceSummary:
+    running = [
+        process
+        for process in processes
+        if process.status is ProcessStatus.RUNNING and process.pid is not None
+    ]
+    measured_cpu = [process.cpu_percent for process in running if process.cpu_percent is not None]
+    return ProcessResourceSummary(
+        running_count=len(running),
+        rss_bytes=sum(process.rss_bytes for process in running),
+        cpu_percent=sum(measured_cpu) if measured_cpu else None,
+        measured_cpu_count=len(measured_cpu),
+    )
 
 
 def read_system_resources() -> SystemResources:

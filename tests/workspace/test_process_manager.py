@@ -4,7 +4,12 @@ import sys
 import pytest
 
 from chxchx_tech_lead.workspace.models import ProcessConfig
-from chxchx_tech_lead.workspace.process_manager import ProcessManager, ProcessManagerError, ProcessStatus
+from chxchx_tech_lead.workspace.process_manager import (
+    ManagedProcess,
+    ProcessManager,
+    ProcessManagerError,
+    ProcessStatus,
+)
 
 
 def _config(command: list[str]) -> ProcessConfig:
@@ -69,3 +74,27 @@ def test_process_manager_rejects_missing_executable(tmp_path: Path):
 
     with pytest.raises(ProcessManagerError, match="No encuentro el ejecutable"):
         manager.start("worker")
+
+
+def test_process_manager_can_refresh_status_without_persisting(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    manager = ProcessManager(project, [_config([sys.executable, "-c", "pass"])], trusted=True)
+    record = ManagedProcess(
+        id="worker",
+        label="Worker",
+        command=[sys.executable, "-c", "pass"],
+        cwd=project,
+        status=ProcessStatus.RUNNING,
+        pid=987654,
+    )
+    manager._records[record.id] = record
+
+    def mark_exited(item):
+        item.status = ProcessStatus.EXITED
+        return item
+
+    monkeypatch.setattr(manager, "_refresh", mark_exited)
+    monkeypatch.setattr(manager, "_persist", lambda: pytest.fail("persist should not be called"))
+
+    assert manager.list(persist=False)[0].status is ProcessStatus.EXITED
