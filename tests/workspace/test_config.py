@@ -60,7 +60,10 @@ def test_existing_v2_config_is_validated_but_not_rewritten(tmp_path: Path):
     assert target.read_text(encoding="utf-8") == content
 
 
-@pytest.mark.parametrize("cwd", ["/tmp/outside", "../outside"])
+@pytest.mark.parametrize(
+    "cwd",
+    ["/tmp/outside", "../outside", r"C:\outside", r"..\outside"],
+)
 def test_workspace_rejects_cwd_outside_project(tmp_path: Path, cwd: str):
     with pytest.raises(WorkspaceConfigError, match="ruta relativa"):
         WorkspaceConfig.from_mapping(

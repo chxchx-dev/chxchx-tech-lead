@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import sys
 
@@ -75,7 +76,7 @@ auto_start = false
 [[workspace.processes]]
 id = "api"
 label = "API"
-command = ["{sys.executable}", "-c", "pass"]
+command = [{json.dumps(sys.executable)}, "-c", "pass"]
 cwd = "."
 auto_start = true
 restart = "never"
