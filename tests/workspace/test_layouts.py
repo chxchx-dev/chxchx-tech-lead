@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from chxchx_tech_lead.workspace.layouts import header_text, workspace_layout
@@ -20,7 +21,7 @@ def test_header_uses_project_profile_and_custom_label(tmp_path: Path):
     assert "chxchx_tech_lead.workspace.header" in layout
     assert "[backend] bokana / dotnet" in layout
     assert "size=2" in layout
-    assert f'cwd="{tmp_path.resolve()}"' in layout
+    assert f"cwd={json.dumps(str(tmp_path.resolve()), ensure_ascii=False)}" in layout
     assert 'split_direction="vertical"' in layout
     assert 'name="codex"' in layout
     assert 'name="claude"' in layout

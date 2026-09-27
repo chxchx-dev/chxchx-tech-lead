@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 from string import Formatter
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 
@@ -96,7 +96,17 @@ def _as_string(value: Any, field_name: str, *, default: str | None = None) -> st
 def _relative_path(value: Any, field_name: str) -> str:
     path = _as_string(value, field_name)
     candidate = Path(path)
-    if candidate.is_absolute() or ".." in candidate.parts:
+    posix_candidate = PurePosixPath(path)
+    windows_candidate = PureWindowsPath(path)
+    if (
+        candidate.is_absolute()
+        or posix_candidate.is_absolute()
+        or windows_candidate.is_absolute()
+        or windows_candidate.drive
+        or ".." in candidate.parts
+        or ".." in posix_candidate.parts
+        or ".." in windows_candidate.parts
+    ):
         raise WorkspaceConfigError(f"{field_name} debe ser una ruta relativa dentro del proyecto")
     return path
 
