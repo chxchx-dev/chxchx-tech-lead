@@ -4,9 +4,9 @@ Bootstrapper y control plane local para repositorios de desarrollo asistido por 
 
 ChxChx prepara el contexto de un proyecto, conecta herramientas externas y administra un workspace ligero desde la terminal. No reemplaza a Git, Docker, Zellij, Sublime, Codex, Claude ni OpenCode: los detecta y los orquesta mediante adapters.
 
-## Estado actual
+## Funciones
 
-La base publicada sigue identificada como `0.2.0`. Sobre esa base ya está implementado el MVP de Terminal Workspace descrito en [docs/14-TERMINAL-WORKSPACE-PLAN.md](docs/14-TERMINAL-WORKSPACE-PLAN.md):
+La versión pública `0.2.0` incluye:
 
 - configuración `.ai/chxchx-tech.toml` v2 y migración v1 → v2;
 - trust local para impedir ejecutar comandos de repositorios no aprobados;
@@ -14,9 +14,8 @@ La base publicada sigue identificada como `0.2.0`. Sobre esa base ya está imple
 - adapters para Zellij, fallback de subprocess, Sublime, agentes CLI, Docker Compose y Git;
 - comandos CLI de workspace, procesos, agentes, editor y recursos;
 - dashboard inicial con Textual;
-- instalación reproducible con `uv`, pruebas unitarias y smoke test.
-
-La operación multiproyecto (`projects list`, `projects current`, `projects switch`, suspensión y recuperación) y la TUI operativa ya están disponibles. El hardening multiplataforma permanece en el roadmap.
+- instalación reproducible con `uv` y una TUI operativa.
+- operación multiproyecto mediante proyectos registrados y sesiones recuperables.
 
 ## Requisitos
 
@@ -137,7 +136,7 @@ chxchx-tech init --minimal .
 
 El modo mínimo crea únicamente `.ai/chxchx-tech.toml` y `.ai/memory`. El modo normal también genera reglas, documentación base e integración de OpenCode.
 
-El primer `init --dry-run` muestra los cambios sin escribir archivos. La ejecución real genera o actualiza `AGENTS.md`, `CLAUDE.md`, `.ai/`, `docs/adr/` y registra el proyecto en `~/.chxchx-tech-lead/projects.json`.
+El primer `init --dry-run` muestra los cambios sin escribir archivos. La ejecución real prepara el contexto local y registra el proyecto en `~/.chxchx-tech-lead/projects.json`.
 
 ## Flujo recomendado para probar un proyecto
 
@@ -160,7 +159,7 @@ $EDITOR .ai/chxchx-tech.toml
 # 4. Aprobar localmente los comandos de este repositorio
 chxchx-tech workspace trust .
 
-# 5. Ver el plan/estado antes de ejecutar
+# 5. Revisar el estado antes de ejecutar
 chxchx-tech workspace status .
 chxchx-tech process list .
 
@@ -548,7 +547,7 @@ h        actualizar handoff
 e        abrir Sublime
 ```
 
-La TUI muestra estado de confianza, sesión, procesos, agentes, recursos y handoff. Todas las acciones pasan por `WorkspaceService` y los adapters existentes; la CLI continúa siendo la interfaz recomendada para scripts y CI. El comando raíz sin subcomando todavía muestra ayuda; el lanzamiento automático de la TUI queda para una iteración posterior, condicionado a terminal interactiva.
+La TUI muestra estado de confianza, sesión, procesos, agentes, recursos y handoff. Todas las acciones pasan por el servicio de workspace y sus adapters; la CLI continúa siendo la interfaz recomendada para scripts y CI.
 
 ## MCP, Basic Memory y Serena
 
@@ -602,7 +601,7 @@ basic-memory mcp --project NOMBRE_DEL_PROYECTO
 
 Así ambos agentes consultan y escriben el mismo conocimiento. En modo local, Basic Memory usa SQLite para su índice y configuración, mientras las notas fuente se conservan en `.ai/memory` como Markdown portable. No se debe escribir directamente en la base SQLite desde ChxChx.
 
-Si esos servidores MCP ya estaban registrados antes de preparar la memoria compartida, actualízalos con la CLI oficial después de revisar el plan:
+Si esos servidores MCP ya estaban registrados antes de preparar la memoria compartida, actualízalos con la CLI oficial después de revisar el `--dry-run`:
 
 ```bash
 chxchx-tech integrate --dry-run --refresh --client codex .
@@ -744,7 +743,7 @@ chxchx-tech agent start --all --path .
 chxchx-tech workspace attach .
 ```
 
-Si el proyecto fue inicializado antes de que se añadieran los agentes por defecto, sus bloques deben agregarse manualmente o mediante la próxima migración de configuración.
+Si el proyecto fue inicializado antes de que se añadieran los agentes por defecto, agrega sus bloques manualmente en `.ai/chxchx-tech.toml`.
 
 ### Serena muestra `Error loading configuration` o errores de estadísticas
 
@@ -806,36 +805,3 @@ chxchx-tech workspace stop .
 ```
 
 Esto no ejecuta `docker compose down`, no borra contenedores y no mata procesos que no hayan sido registrados por ChxChx.
-
-## Desarrollo y calidad
-
-```bash
-uv sync --dev
-uv lock --check
-uv run python -m compileall -q src tests scripts
-uv run pytest -q
-uv run python scripts/lab_smoke.py
-git diff --check
-```
-
-La suite usa mocks para adapters externos y el smoke test trabaja dentro de un directorio temporal. No necesita abrir Sublime, Zellij, Docker ni agentes reales.
-
-La documentación de arquitectura, seguridad y desarrollo está en:
-
-- [docs/03-ARCHITECTURE.md](docs/03-ARCHITECTURE.md)
-- [docs/04-DEVELOPMENT.md](docs/04-DEVELOPMENT.md)
-- [docs/06-SECURITY.md](docs/06-SECURITY.md)
-- [docs/14-TERMINAL-WORKSPACE-PLAN.md](docs/14-TERMINAL-WORKSPACE-PLAN.md)
-- [docs/15-TERMINAL-WORKSPACE-USAGE.md](docs/15-TERMINAL-WORKSPACE-USAGE.md)
-- [CHANGELOG.md](CHANGELOG.md)
-
-## Límites de esta fase
-
-Esta entrega no declara `v1.0` ni pretende resolver todavía:
-
-- suspensión y recuperación automática completa fuera del flujo explícito de `projects switch`;
-- logs rotativos y recuperación tras crash;
-- validación completa en Windows, macOS y WSL;
-- supervisor autónomo de múltiples agentes.
-
-Esos trabajos permanecen en el roadmap. El siguiente paso práctico es probar el flujo de arriba en un proyecto laboratorio y reportar cualquier salida de `doctor`, `workspace status` o `workspace start` que no sea clara.
