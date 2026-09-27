@@ -362,6 +362,17 @@ chxchx-tech workspace start .
 chxchx-tech workspace attach .
 ```
 
+Para ahorrar tokens, abre una conversación limpia y haz que el agente reconstruya el contexto guardado del proyecto:
+
+```bash
+chxchx-tech agent start codex --new-chat --path .
+# o para Codex y Claude configurados:
+chxchx-tech agent start --all --new-chat --path .
+chxchx-tech workspace attach .
+```
+
+`--new-chat` está disponible para las CLIs oficiales `codex` y `claude`. Les pasa una instrucción inicial para leer las reglas y el estado del proyecto, consultar en Basic Memory solo notas relevantes del proyecto actual y continuar desde el handoff; no carga la transcripción anterior. Al terminar trabajo sustancial, las instrucciones piden al agente guardar un checkpoint sin acción manual: actualizar `.ai/CURRENT_STATE.md` y `.ai/HANDOFF.md` y usar `write_memory` de Basic Memory para conocimiento duradero. No guarda saludos, preguntas triviales ni conversaciones completas. Esto lo ejecuta el agente y depende de que Basic Memory MCP esté conectado; no es una captura infalible de cada mensaje. Basic Memory mantiene sus notas fuente en Markdown y su índice/configuración en SQLite; no almacena cada mensaje del chat. Por eso un chat nuevo recupera lo que se haya persistido, no mensajes o decisiones nunca guardados. Los agentes distintos de Codex/Claude siguen pudiendo iniciarse normalmente, pero aún no reciben este bootstrap de nuevo chat.
+
 Para iniciar un proceso manualmente:
 
 ```bash
@@ -493,6 +504,7 @@ chxchx-tech process start ID --path .  inicia un proceso configurado
 chxchx-tech process stop ID --path .   detiene un proceso gestionado
 chxchx-tech editor open [PATH]         abre el proyecto en Sublime
 chxchx-tech agent start ID --path .    inicia un agente configurado
+chxchx-tech agent start ID --new-chat --path . inicia conversación nueva con contexto persistido (Codex/Claude)
 chxchx-tech agent start --all --path . inicia todos los agentes configurados
 chxchx-tech agent start --preset ID --path . inicia un preset de agentes
 chxchx-tech agent list --path .       muestra disponibilidad y panes de agentes
@@ -537,6 +549,8 @@ chxchx-tech tui .
 ```
 
 La TUI incluye pestañas de Resumen, Proyectos, Agentes, Procesos, Recursos, Handoff y Memoria. Desde Proyectos puedes cambiar el contexto por alias o ruta; desde Agentes puedes revisar disponibilidad de Codex/Claude, sesión Zellij, pane y preset; Handoff permite leer o actualizar `.ai/HANDOFF.md`; y Memoria muestra, filtra y abre las notas persistentes del proyecto activo en `.ai/memory`.
+
+En Agentes, `Nuevo chat + contexto` abre un pane nuevo para el ID indicado y solicita a Codex o Claude reconstruir el contexto desde los archivos y Basic Memory del proyecto activo. El panel `Checkpoint automático` verifica que las reglas de guardado estén presentes, que Basic Memory aparezca configurado para cada cliente y muestra la nota más reciente encontrada. Es un diagnóstico estático más evidencia de escritura; no puede certificar que el modelo haya guardado cada turno ni que el servidor MCP responda en vivo.
 
 Recursos distingue el uso general del equipo del consumo estimado de los procesos administrados del proyecto, con RAM RSS y CPU por proceso y totales. También compara los proyectos registrados. La estimación actual usa los PID principales declarados; no incluye procesos hijos ni agentes que se ejecutan dentro de panes Zellij.
 

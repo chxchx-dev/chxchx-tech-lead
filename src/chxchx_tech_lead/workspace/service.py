@@ -241,7 +241,7 @@ class WorkspaceService:
         except ProcessManagerError as exc:
             raise WorkspaceOperationError(str(exc)) from exc
 
-    def start_agent(self, agent_id: str, dry_run: bool = False):
+    def start_agent(self, agent_id: str, dry_run: bool = False, new_chat: bool = False):
         inspection = self.inspect()
         self._require_trust(inspection)
         if inspection.config is None:
@@ -257,17 +257,20 @@ class WorkspaceService:
             result = terminal.create_session(session, self.project.root)
             if result.returncode != 0 and not _session_already_exists(result):
                 raise WorkspaceOperationError(result.stderr or f"No pude crear la sesión `{session}`")
+        try:
+            pane_command = agent_pane_command(
+                agent_id,
+                config.command,
+                label=inspection.config.header.label,
+                logo=inspection.config.header.logo,
+                new_chat=new_chat,
+            )
+        except ValueError as exc:
+            raise WorkspaceOperationError(str(exc)) from exc
         adapter = CliAgentAdapter(
             agent_id,
             sys.executable,
-            arguments=[
-                *agent_pane_command(
-                    agent_id,
-                    config.command,
-                    label=inspection.config.header.label,
-                    logo=inspection.config.header.logo,
-                )[1:],
-            ],
+            arguments=pane_command[1:],
             terminal=terminal,
         )
         direction = "right" if inspection.config.layout.orientation == "horizontal" else "down"
@@ -303,10 +306,10 @@ class WorkspaceService:
         attach_result = self.attach(dry_run=dry_run) if attach else None
         return action, agent_results, attach_result
 
-    def start_agents(self, dry_run: bool = False) -> list[tuple[str, object]]:
+    def start_agents(self, dry_run: bool = False, new_chat: bool = False) -> list[tuple[str, object]]:
         """Inicia todos los agentes declarados en la configuración del proyecto."""
         return self._start_agent_ids(
-            [agent.id for agent in self._configured_agents()], dry_run=dry_run
+            [agent.id for agent in self._configured_agents()], dry_run=dry_run, new_chat=new_chat
         )
 
     def start_preset(self, preset_id: str, dry_run: bool = False) -> list[tuple[str, object]]:
@@ -371,11 +374,13 @@ class WorkspaceService:
             raise WorkspaceOperationError("No hay agentes configurados en .ai/chxchx-tech.toml")
         return inspection.config.agents
 
-    def _start_agent_ids(self, agent_ids: list[str], dry_run: bool) -> list[tuple[str, object]]:
+    def _start_agent_ids(
+        self, agent_ids: list[str], dry_run: bool, new_chat: bool = False
+    ) -> list[tuple[str, object]]:
         if not agent_ids:
             raise WorkspaceOperationError("El preset no contiene agentes configurados")
         results = [
-            (agent_id, self.start_agent(agent_id, dry_run=dry_run))
+            (agent_id, self.start_agent(agent_id, dry_run=dry_run, new_chat=new_chat))
             for agent_id in agent_ids
         ]
         if not dry_run:

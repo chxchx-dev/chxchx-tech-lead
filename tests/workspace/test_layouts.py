@@ -55,3 +55,15 @@ def test_vertical_orientation_stacks_the_main_panes(tmp_path: Path):
     assert layout is not None
     assert 'split_direction="horizontal"' in layout
     assert "command=" in layout
+
+
+def test_agent_pane_command_omits_empty_brand_arguments():
+    from chxchx_tech_lead.workspace.agent_commands import agent_pane_command
+
+    command = agent_pane_command("codex", ["codex"], label="", logo="", new_chat=True)
+
+    assert all(part for part in command)
+    assert "--label" not in command
+    assert "--logo" not in command
+    assert command[-2] == "codex"
+    assert "Basic Memory" in command[-1]
