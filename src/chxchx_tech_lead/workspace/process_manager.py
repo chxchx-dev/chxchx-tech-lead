@@ -202,14 +202,18 @@ class ProcessManager:
             return ProcessActionResult(record, False, f"`{process_id}` ya está detenido")
         if dry_run:
             return ProcessActionResult(record, True, f"DRY RUN: detener `{process_id}` (PID {record.pid})")
-        if not self._pid_matches(record.pid, record.command, record.shell):
+        handle = self._handles.get(process_id)
+        # A retained Popen handle identifies the exact child created by this
+        # manager. Re-parsing `ps` output here is both redundant and brittle
+        # across platforms (macOS may display a different executable path).
+        # Recovered processes have no handle and still require PID validation.
+        if handle is None and not self._pid_matches(record.pid, record.command, record.shell):
             record.status = ProcessStatus.UNKNOWN
             self._persist()
             raise ProcessManagerError(
                 f"No detuve `{process_id}`: el PID {record.pid} ya no coincide con el comando administrado"
             )
 
-        handle = self._handles.get(process_id)
         try:
             if os.name == "nt":
                 if handle is not None:

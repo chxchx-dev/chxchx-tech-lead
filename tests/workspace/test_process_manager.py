@@ -42,6 +42,28 @@ def test_process_manager_starts_does_not_duplicate_and_stops_process(tmp_path: P
     assert manager.list()[0].status is ProcessStatus.EXITED
 
 
+def test_owned_process_handle_does_not_depend_on_platform_command_line_format(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    manager = ProcessManager(
+        project,
+        [_config([sys.executable, "-c", "import time; time.sleep(30)"])],
+        trusted=True,
+    )
+    started = manager.start("worker")
+    monkeypatch.setattr(
+        manager,
+        "_pid_matches",
+        lambda *_args: pytest.fail("un handle propio ya identifica el proceso"),
+    )
+
+    stopped = manager.stop("worker")
+
+    assert started.process.pid == stopped.process.pid
+    assert stopped.process.status is ProcessStatus.EXITED
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="la shell y la comprobación de PID difieren en Windows")
 def test_process_manager_can_stop_an_explicit_shell_command(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
