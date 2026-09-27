@@ -5,6 +5,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -91,6 +92,7 @@ class ProcessActionResult:
 
 
 PopenFactory = Callable[..., subprocess.Popen[Any]]
+_PROCESS_STOP_TIMEOUT_SECONDS = 5
 
 
 class ProcessManager:
@@ -209,13 +211,26 @@ class ProcessManager:
 
         handle = self._handles.get(process_id)
         try:
-            if handle is not None:
-                handle.terminate()
-                handle.wait(timeout=5)
-            elif os.name == "nt":
-                subprocess.run(["taskkill", "/PID", str(record.pid), "/T"], check=False, capture_output=True)
+            if os.name == "nt":
+                if handle is not None:
+                    handle.terminate()
+                    try:
+                        handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
+                    except subprocess.TimeoutExpired:
+                        subprocess.run(
+                            ["taskkill", "/PID", str(record.pid), "/T", "/F"],
+                            check=False,
+                            capture_output=True,
+                        )
+                        handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
+                else:
+                    subprocess.run(
+                        ["taskkill", "/PID", str(record.pid), "/T", "/F"],
+                        check=False,
+                        capture_output=True,
+                    )
             else:
-                os.kill(record.pid, signal.SIGTERM)
+                _terminate_posix_process_group(record.pid, handle)
         except (OSError, subprocess.TimeoutExpired) as exc:
             record.status = ProcessStatus.UNKNOWN
             self._persist()
@@ -280,11 +295,58 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
+def _process_group_alive(process_group_id: int) -> bool:
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _signal_process_group(process_group_id: int, process_signal: int) -> bool:
+    try:
+        os.killpg(process_group_id, process_signal)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def _terminate_posix_process_group(
+    process_group_id: int,
+    handle: subprocess.Popen[Any] | None,
+) -> None:
+    """Stop only the isolated process group created for this managed process."""
+    if not _signal_process_group(process_group_id, signal.SIGTERM):
+        return
+
+    if handle is not None:
+        try:
+            handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            _signal_process_group(process_group_id, signal.SIGKILL)
+            handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
+            return
+
+    deadline = time.monotonic() + _PROCESS_STOP_TIMEOUT_SECONDS
+    while _process_group_alive(process_group_id) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if _process_group_alive(process_group_id):
+        _signal_process_group(process_group_id, signal.SIGKILL)
+        if handle is not None and handle.poll() is None:
+            handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
+
+
 def _pid_matches_command(pid: int, command: list[str] | str, shell: bool) -> bool:
     if not _pid_alive(pid):
         return False
-    expected = command if isinstance(command, str) else command[0]
-    expected_name = Path(expected.split()[0]).name
+    if shell:
+        shell_executable = os.environ.get("COMSPEC", "cmd.exe") if os.name == "nt" else "sh"
+        expected_name = Path(shell_executable).name
+    else:
+        expected = command if isinstance(command, str) else command[0]
+        expected_name = Path(expected.split()[0]).name
     if sys.platform.startswith("linux"):
         try:
             raw = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
