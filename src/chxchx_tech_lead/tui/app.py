@@ -335,6 +335,8 @@ def run_tui(project: ProjectInfo) -> None:
                     yield Static(id="resources-detail", classes="summary")
                     yield Static(id="resources-project-summary", classes="summary")
                     yield DataTable(id="resources-processes")
+                    yield Static(id="resources-all-summary", classes="summary")
+                    yield DataTable(id="resources-all-projects")
                     with Horizontal(classes="toolbar"):
                         yield Button("Actualizar recursos", id="btn-resources-refresh")
                         yield Button("Detener workspace", id="btn-resources-stop", variant="error")
@@ -390,6 +392,9 @@ def run_tui(project: ProjectInfo) -> None:
             )
             self._query("#resources-processes", DataTable).add_columns(
                 "Proceso", "Estado", "PID", "RAM RSS", "CPU"
+            )
+            self._query("#resources-all-projects", DataTable).add_columns(
+                "Actual", "Alias", "Proyecto", "Estado", "Activos", "RAM RSS", "CPU"
             )
             self._query("#memory-list", DataTable).add_columns(
                 "Nota", "Modificada", "Resumen"
@@ -753,6 +758,8 @@ def run_tui(project: ProjectInfo) -> None:
                     f"Stack: {', '.join(self.project.stacks) or 'sin detectar'}\n"
                     f"Ruta: {self.project.root}"
                 )
+                if self._query("#tabs", TabbedContent).active == "resources":
+                    self._refresh_aggregated_resources()
                 if inspection.config is None:
                     self._set_log("No hay configuración válida de workspace")
                     return
@@ -820,6 +827,90 @@ def run_tui(project: ProjectInfo) -> None:
                     format_bytes(metric.rss_bytes),
                     cpu_value,
                 )
+
+        def _refresh_aggregated_resources(self) -> None:
+            table = self._query("#resources-all-projects", DataTable)
+            table.clear()
+            registry = load_registry()
+            entries = list(registry.get("projects", []))
+            current_root = self.project.root.resolve()
+            known_paths = {
+                str(Path(str(item.get("path", ""))).expanduser().resolve())
+                for item in entries
+                if item.get("path")
+            }
+            if str(current_root) not in known_paths:
+                entries.append(
+                    {
+                        "alias": self.project.name,
+                        "name": self.project.name,
+                        "path": str(current_root),
+                    }
+                )
+
+            rows: list[tuple[str, str, str, str, str, int, float | None]] = []
+            for item in entries:
+                raw_path = item.get("path")
+                if not isinstance(raw_path, str) or not raw_path.strip():
+                    continue
+                root = Path(raw_path).expanduser()
+                alias = str(item.get("alias", root.name))
+                name = str(item.get("name", root.name))
+                if not root.is_dir():
+                    rows.append(("*" if root.resolve() == current_root else "", alias, name, "NO EXISTE", "-", 0, None))
+                    continue
+
+                try:
+                    root = root.resolve()
+                    project = ProjectInfo(root=root, name=name)
+                    inspection = WorkspaceService(project).inspect()
+                    if inspection.config is None:
+                        rows.append(("*" if root == current_root else "", alias, name, "ERROR CONFIG", "-", 0, None))
+                        continue
+                    managed = ProcessManager(
+                        root,
+                        inspection.config.processes,
+                        trusted=inspection.trusted,
+                    ).list(persist=False)
+                    manager = ResourceManager(inspection.config.resources)
+                    usage = summarize_process_resources(manager.processes(managed))
+                    rows.append(
+                        (
+                            "*" if root == current_root else "",
+                            alias,
+                            name,
+                            inspection.state.status.value,
+                            str(usage.running_count),
+                            usage.rss_bytes,
+                            usage.cpu_percent,
+                        )
+                    )
+                except (WorkspaceOperationError, OSError, ValueError):
+                    rows.append(("*" if root.resolve() == current_root else "", alias, name, "ERROR", "-", 0, None))
+
+            rows.sort(key=lambda row: (row[0] != "*", row[1].casefold()))
+            for active, alias, name, status, running, rss_bytes, cpu_percent in rows:
+                cpu = "N/D" if cpu_percent is None else f"{cpu_percent:.1f}%"
+                table.add_row(
+                    active,
+                    alias,
+                    name,
+                    status,
+                    running,
+                    format_bytes(rss_bytes),
+                    cpu,
+                )
+
+            valid_rows = [row for row in rows if row[3] not in {"ERROR", "ERROR CONFIG", "NO EXISTE"}]
+            total_processes = sum(int(row[4]) for row in valid_rows)
+            total_rss = sum(row[5] for row in valid_rows)
+            cpu_values = [row[6] for row in valid_rows if row[6] is not None]
+            total_cpu = "N/D" if not cpu_values else f"{sum(cpu_values):.1f}%"
+            self._query("#resources-all-summary", Static).update(
+                f"Todos los proyectos registrados: {len(rows)}  |  Procesos activos: {total_processes}  |  "
+                f"Suma RSS aprox.: {format_bytes(total_rss)}  |  CPU: {total_cpu}\n"
+                "La suma puede diferir del uso físico por memoria compartida; son PID principales administrados."
+            )
 
         def _refresh_process_table(self, records, metrics, selector: str) -> None:
             table = self._query(selector, DataTable)

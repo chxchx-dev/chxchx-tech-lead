@@ -538,7 +538,7 @@ chxchx-tech tui .
 
 La TUI incluye pestañas de Resumen, Proyectos, Agentes, Procesos, Recursos, Handoff y Memoria. Desde Proyectos puedes cambiar el contexto por alias o ruta; desde Agentes puedes revisar disponibilidad de Codex/Claude, sesión Zellij, pane y preset; Handoff permite leer o actualizar `.ai/HANDOFF.md`; y Memoria muestra, filtra y abre las notas persistentes del proyecto activo en `.ai/memory`.
 
-Recursos distingue el uso general del equipo del consumo estimado de los procesos administrados del proyecto, con RAM RSS y CPU por proceso y totales. La estimación actual usa los PID principales declarados; no incluye procesos hijos ni agentes que se ejecutan dentro de panes Zellij.
+Recursos distingue el uso general del equipo del consumo estimado de los procesos administrados del proyecto, con RAM RSS y CPU por proceso y totales. También compara los proyectos registrados. La estimación actual usa los PID principales declarados; no incluye procesos hijos ni agentes que se ejecutan dentro de panes Zellij.
 
 La vista Resumen muestra el sello ASCII de CHXCHX-DEV. Las acciones no son decorativas: `Iniciar workspace` prepara el workspace y levanta los agentes configurados, `Reintentar agentes` permite recuperarlos si una CLI terminó, la pestaña Procesos permite iniciar o detener un proceso por ID, y Handoff permite editar resumen, pendientes y validación antes de guardarlos.
 

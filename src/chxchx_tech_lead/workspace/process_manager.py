@@ -118,11 +118,11 @@ class ProcessManager:
             if (process := ManagedProcess.from_mapping(raw)) is not None
         }
 
-    def list(self) -> list[ManagedProcess]:
+    def list(self, *, persist: bool = True) -> list[ManagedProcess]:
         before = {key: record.to_mapping() for key, record in self._records.items()}
         records = [self._refresh(record) for record in self._records.values()]
         after = {key: record.to_mapping() for key, record in self._records.items()}
-        if before != after:
+        if persist and before != after:
             self._persist()
         return sorted(records, key=lambda item: item.id)
 
