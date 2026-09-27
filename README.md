@@ -580,6 +580,11 @@ chxchx-tech integrate --client opencode .
 
 ChxChx no guarda tokens, no copia `.env` y no instala automáticamente clientes que tienen su propio instalador.
 
+Para publicar un repositorio preparado, revisa siempre `git status` y `git diff --cached`.
+El `.gitignore` excluye `.ai/`, `.serena/`, memorias, SQLite, logs, credenciales,
+material criptográfico y reglas generadas de agentes. No reemplaza una auditoría:
+si un secreto llegó a entrar en Git, debe revocarse y retirarse también del historial.
+
 ### Memoria compartida entre Codex y Claude
 
 Ejecuta la integración para ambos clientes:

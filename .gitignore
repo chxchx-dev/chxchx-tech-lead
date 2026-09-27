@@ -14,3 +14,44 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Contexto generado por ChxChx en proyectos preparados. El AGENTS.md y
+# CLAUDE.md propios de este repositorio ya están versionados y no se eliminan.
+**/.ai/
+**/.serena/
+**/.basic-memory/
+**/AGENTS.md
+**/CLAUDE.md
+**/GEMINI.md
+**/CODEX.md
+**/*-ai.md
+**/*.ai.md
+**/docs/architecture/
+**/docs/adr/
+**/docs/security/
+**/docs/database/
+**/docs/api/
+
+# Estado local, bases de datos, caches y logs.
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.log
+.cache/
+.local/
+.direnv/
+
+# Secretos y material criptográfico local.
+*.key
+*.pem
+*.p12
+*.pfx
+*.secret
+*credentials*.json
+*secrets*.json
+**/secrets/
+**/credentials/
