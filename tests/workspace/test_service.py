@@ -193,8 +193,44 @@ def test_agent_start_uses_configured_session_and_cwd(tmp_path: Path, monkeypatch
     ]
     assert run_calls[0][2][-2:] == ["--", "codex"]
     assert "--label" in run_calls[0][2]
-    assert "--logo" in run_calls[0][2]
+    assert "--logo" not in run_calls[0][2]
+    assert all(run_calls[0][2])
     assert run_calls[0][3] == project.resolve()
+
+
+def test_agent_new_chat_passes_context_bootstrap_prompt(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project, auto_start=False)
+    trust_project(project)
+    terminal = FakeTerminal()
+
+    WorkspaceService(ProjectInfo(project, "project"), terminal=terminal, editor=FakeEditor()).start_agent(
+        "codex", dry_run=True, new_chat=True
+    )
+
+    command = next(call[2] for call in terminal.calls if call[0] == "run")
+    assert command[-2] == "codex"
+    assert "conversación nueva" in command[-1]
+    assert ".ai/CURRENT_STATE.md" in command[-1]
+    assert "Basic Memory" in command[-1]
+
+
+def test_new_chat_rejects_unrecognized_agent_cli(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project, auto_start=False)
+    config = project / ".ai" / "chxchx-tech.toml"
+    content = config.read_text(encoding="utf-8").replace('id = "codex"\ncommand = ["codex"]', 'id = "other"\ncommand = ["opencode"]')
+    config.write_text(content, encoding="utf-8")
+    trust_project(project)
+
+    with pytest.raises(WorkspaceOperationError, match="solo está configurado para Codex y Claude"):
+        WorkspaceService(ProjectInfo(project, "project"), terminal=FakeTerminal(), editor=FakeEditor()).start_agent(
+            "other", dry_run=True, new_chat=True
+        )
 
 
 def test_start_agents_starts_all_configured_agents(tmp_path: Path, monkeypatch):

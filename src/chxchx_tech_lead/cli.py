@@ -499,6 +499,7 @@ def agent_start(
     dry_run: bool = typer.Option(False, "--dry-run", help="Muestra el inicio sin ejecutarlo."),
     all_agents: bool = typer.Option(False, "--all", help="Inicia todos los agentes configurados."),
     preset: str | None = typer.Option(None, "--preset", help="Inicia el preset declarado en el proyecto."),
+    new_chat: bool = typer.Option(False, "--new-chat", help="Abre una conversación nueva recuperando el contexto persistido del proyecto."),
 ):
     """Inicia un agente, o todos los agentes configurados, dentro del workspace."""
     selected = sum(value is not None for value in (agent_id, preset)) + int(all_agents)
@@ -511,12 +512,18 @@ def agent_start(
     try:
         service = _workspace_service(path)
         if preset is not None:
+            if new_chat:
+                console.print("[red]✗ --new-chat se admite con un ID o --all, no con --preset.[/]")
+                raise typer.Exit(code=2)
             results = service.start_preset(preset, dry_run=dry_run)
         elif all_agents:
-            results = service.start_agents(dry_run=dry_run)
+            results = service.start_agents(dry_run=dry_run, new_chat=new_chat)
         else:
-            result = service.start_agent(agent_id, dry_run=dry_run)
+            result = service.start_agent(agent_id, dry_run=dry_run, new_chat=new_chat)
     except WorkspaceOperationError as exc:
+        console.print(f"[red]✗ {exc}[/]")
+        raise typer.Exit(code=1)
+    except ValueError as exc:
         console.print(f"[red]✗ {exc}[/]")
         raise typer.Exit(code=1)
     if preset is not None or all_agents:

@@ -58,6 +58,7 @@ def run_tui(project: ProjectInfo) -> None:
     from ..core.registry import load_registry, resolve_project_reference
     from ..core.trust import trust_project
     from ..workspace.agent_status import AgentRuntimeStatus
+    from ..workspace.autosave_status import diagnose_autosave, format_autosave_status
     from ..workspace.handoff import update_handoff
     from ..workspace.memory_history import MemoryNote, list_memory_notes
     from ..workspace.process_manager import ProcessManager
@@ -312,16 +313,18 @@ def run_tui(project: ProjectInfo) -> None:
                     yield DataTable(id="projects-table")
                 with TabPane("Agentes", id="agents"):
                     yield Static(
-                        "Disponibilidad CLI, sesión Zellij y pane detectado",
+                        "Selecciona una fila para elegir el agente; el ID se completa automáticamente. Disponibilidad CLI, sesión y pane detectado.",
                         classes="summary",
                     )
+                    yield Static(id="autosave-status", classes="summary")
                     with Horizontal(classes="toolbar"):
                         yield Label("ID de agente:", classes="input-label")
                         yield Input(placeholder="codex o claude", id="agent-id", classes="field")
                         yield Button("Iniciar seleccionado", id="btn-agent-start", variant="primary")
+                        yield Button("Nuevo chat + contexto", id="btn-agent-new-chat")
                         yield Button("Iniciar todos", id="btn-agents", variant="success")
                         yield Button("Actualizar", id="btn-agents-refresh")
-                    yield DataTable(id="agents-table")
+                    yield DataTable(id="agents-table", cursor_type="row")
                 with TabPane("Procesos", id="processes"):
                     yield Static("Procesos declarados en .ai/chxchx-tech.toml", classes="summary")
                     with Horizontal(classes="toolbar"):
@@ -557,6 +560,19 @@ def run_tui(project: ProjectInfo) -> None:
             )
             self._refresh_agents()
 
+        def action_start_new_chat(self) -> None:
+            agent_id = self._query("#agent-id", Input).value.strip()
+            if not agent_id:
+                self._set_log("Escribe codex o claude para iniciar un chat nuevo con contexto")
+                self.notify("Falta el ID del agente", severity="warning")
+                return
+            self._perform(
+                f"Chat nuevo de `{agent_id}` iniciado con contexto persistido",
+                lambda: self.service.start_agent(agent_id, new_chat=True),
+                refresh=False,
+            )
+            self._refresh_agents()
+
         def _selected_process_action(self, *, start: bool) -> None:
             process_id = self._query("#process-id", Input).value.strip()
             if not process_id:
@@ -633,6 +649,10 @@ def run_tui(project: ProjectInfo) -> None:
         def button_agent_start(self) -> None:
             self.action_start_agent_selected()
 
+        @on(Button.Pressed, "#btn-agent-new-chat")
+        def button_agent_new_chat(self) -> None:
+            self.action_start_new_chat()
+
         @on(Button.Pressed, "#btn-agents-refresh")
         def button_agents_refresh(self) -> None:
             self._refresh_agents()
@@ -695,6 +715,12 @@ def run_tui(project: ProjectInfo) -> None:
                 f"{note.content}"
             )
             self._query("#memory-detail", Static).update(detail)
+
+        @on(DataTable.RowHighlighted, "#agents-table")
+        def agent_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+            agent_id = str(event.row_key.value)
+            self._query("#agent-id", Input).value = agent_id
+            self._set_log(f"Agente seleccionado: {agent_id} · puedes iniciar uno nuevo con contexto")
 
         def _switch_project(self) -> None:
             reference = self._query("#project-ref", Input).value.strip()
@@ -950,6 +976,13 @@ def run_tui(project: ProjectInfo) -> None:
 
         def _refresh_agents(self) -> None:
             try:
+                autosave = diagnose_autosave(self.project)
+                self._query("#autosave-status", Static).update(format_autosave_status(autosave))
+            except (OSError, ValueError) as exc:
+                self._query("#autosave-status", Static).update(
+                    f"Checkpoint automático · no se pudo verificar: {exc}"
+                )
+            try:
                 statuses = self.service.agent_statuses()
             except (WorkspaceOperationError, OSError) as exc:
                 self._set_log(f"Agentes: {exc}")
@@ -966,6 +999,7 @@ def run_tui(project: ProjectInfo) -> None:
                     agent.pane,
                     agent.preset,
                     agent.version or "-",
+                    key=agent.id,
                 )
 
         def _refresh_handoff(self) -> None:

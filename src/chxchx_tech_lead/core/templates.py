@@ -37,11 +37,14 @@ Basic Memory project: `{memory}`
 2. Consulta `docs/adr/` y Basic Memory antes de contradecir decisiones existentes.
 3. Haz cambios pequeños, verificables y con pruebas cuando corresponda.
 4. Valida el resultado y deja `.ai/HANDOFF.md` actualizado si queda trabajo incompleto.
+5. Antes de dar por terminada una tarea con cambios, decisiones o hallazgos útiles, guarda un checkpoint sin pedirle al usuario que lo haga: actualiza `.ai/CURRENT_STATE.md` y `.ai/HANDOFF.md`, y usa la herramienta `write_memory` de Basic Memory para decisiones y conocimiento reutilizable de este proyecto.
 
 ## Reglas
 
 - No introduzcas secretos en código, documentación, logs o commits.
 - Si la tarea depende de decisiones anteriores, consulta Basic Memory usando el proyecto `{memory}`.
+- No asumas que Basic Memory conserva transcripciones: guarda allí solo conocimiento duradero, y no mezcles información de otros proyectos.
+- No guardes saludos, preguntas triviales, secretos ni transcripciones completas; si no hubo cambios ni conocimiento reutilizable, no crees una nota vacía.
 - Usa Serena para navegación semántica del código cuando esté disponible.
 {profile_section}"""
 
@@ -52,6 +55,8 @@ def claude_body() -> str:
 @AGENTS.md
 
 - Usa Basic Memory para recuperar decisiones anteriores cuando la tarea dependa de contexto persistente.
+- Antes de responder al terminar trabajo sustancial, persiste un checkpoint sin pedir una acción manual: usa `write_memory` para decisiones reutilizables y actualiza `.ai/CURRENT_STATE.md` / `.ai/HANDOFF.md` cuando reflejen el estado o pendientes actuales.
+- No guardes saludos, preguntas triviales, secretos ni transcripciones completas; si no hubo cambio o conocimiento reutilizable, no crees una nota.
 - Usa Serena para explorar símbolos y referencias antes de hacer búsquedas masivas por texto.
 """
 
