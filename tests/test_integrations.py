@@ -39,7 +39,7 @@ def test_install_dry_run_does_not_require_uv():
 def test_mcp_integration_skips_existing_servers(tmp_path: Path):
     calls = []
 
-    def fake_run(command, dry_run=False):
+    def fake_run(command, dry_run=False, cwd=None):
         calls.append(command)
         return CommandResult(command, 0, "basic-memory\nserena", "")
 
@@ -56,7 +56,7 @@ def test_mcp_integration_verifies_new_servers(tmp_path: Path):
     calls = []
     list_count = 0
 
-    def fake_run(command, dry_run=False):
+    def fake_run(command, dry_run=False, cwd=None):
         nonlocal list_count
         calls.append(command)
         if command == ["claude", "mcp", "list"]:
@@ -73,10 +73,13 @@ def test_mcp_integration_verifies_new_servers(tmp_path: Path):
     assert len(results) == 2
     assert calls[0] == ["claude", "mcp", "list"]
     assert calls[-1] == ["claude", "mcp", "list"]
+    additions = [call for call in calls if call[0:3] == ["claude", "mcp", "add"]]
+    assert len(additions) == 2
+    assert all(call[3:5] == ["--scope", "local"] for call in additions)
 
 
 def test_mcp_integration_reports_list_failure(tmp_path: Path):
-    def fake_run(command, dry_run=False):
+    def fake_run(command, dry_run=False, cwd=None):
         return CommandResult(command, 1, "", "client unavailable")
 
     with patch("chxchx_tech_lead.integrations.mcp.executable", return_value="/fake"), patch(
@@ -85,28 +88,37 @@ def test_mcp_integration_reports_list_failure(tmp_path: Path):
         integrate(ProjectInfo(tmp_path, "project"), "claude")
 
 
-def test_mcp_refresh_replaces_existing_servers(tmp_path: Path):
-    calls = []
-    list_count = 0
+def test_codex_mcp_integration_is_project_scoped_and_preserves_other_config(tmp_path: Path):
+    project_config = tmp_path / ".codex" / "config.toml"
+    project_config.parent.mkdir()
+    project_config.write_text('model = "keep-this"\n\n[mcp_servers.other]\ncommand = "other"\nargs = []\n', encoding="utf-8")
 
-    def fake_run(command, dry_run=False):
-        nonlocal list_count
-        calls.append(command)
-        if command == ["codex", "mcp", "list"]:
-            list_count += 1
-            return CommandResult(command, 0, "basic-memory\nserena" if list_count == 1 else "basic-memory\nserena", "")
-        return CommandResult(command, 0, "ok", "")
+    with patch("chxchx_tech_lead.integrations.mcp.executable", return_value="/fake"):
+        results = integrate(ProjectInfo(tmp_path, "project"), "codex")
 
-    with patch("chxchx_tech_lead.integrations.mcp.executable", return_value="/fake"), patch(
-        "chxchx_tech_lead.integrations.mcp.run", side_effect=fake_run
+    content = project_config.read_text(encoding="utf-8")
+    assert len(results) == 2
+    assert 'model = "keep-this"' in content
+    assert "[mcp_servers.other]" in content
+    assert '[mcp_servers.basic-memory]' in content
+    assert "project-" in content
+    assert "[mcp_servers.serena]" in content
+
+
+def test_codex_mcp_integration_requires_refresh_for_conflicting_local_server(tmp_path: Path):
+    project_config = tmp_path / ".codex" / "config.toml"
+    project_config.parent.mkdir()
+    project_config.write_text('[mcp_servers.basic-memory]\ncommand = "old"\nargs = []\n', encoding="utf-8")
+
+    with patch("chxchx_tech_lead.integrations.mcp.executable", return_value="/fake"), pytest.raises(
+        RuntimeError, match="--refresh"
     ):
-        results = integrate(ProjectInfo(tmp_path, "project"), "codex", refresh=True)
+        integrate(ProjectInfo(tmp_path, "project"), "codex")
 
-    assert len(results) == 4
-    assert [command for command in calls if command[:3] == ["codex", "mcp", "remove"]] == [
-        ["codex", "mcp", "remove", "basic-memory"],
-        ["codex", "mcp", "remove", "serena"],
-    ]
+    with patch("chxchx_tech_lead.integrations.mcp.executable", return_value="/fake"):
+        integrate(ProjectInfo(tmp_path, "project"), "codex", refresh=True)
+
+    assert 'command = "basic-memory"' in project_config.read_text(encoding="utf-8")
 
 
 def test_existing_basic_memory_project_is_reported_as_skipped(tmp_path: Path):

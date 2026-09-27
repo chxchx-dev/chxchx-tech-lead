@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 from pathlib import Path
 
 from chxchx_tech_lead.core.models import ProjectInfo
 from chxchx_tech_lead.core.project_config import memory_project_name
-from chxchx_tech_lead.core.runner import executable, run
+from chxchx_tech_lead.core.runner import CommandResult, executable, run
 
 
 def server_commands(info: ProjectInfo) -> dict[str, list[str]]:
@@ -33,7 +34,7 @@ def _list_servers(client: str, allow_failure: bool = False):
 
 def _client_command(client: str, name: str, command: list[str]) -> list[str]:
     if client == "claude":
-        return ["claude", "mcp", "add", name, "--", *command]
+        return ["claude", "mcp", "add", "--scope", "local", name, "--", *command]
     if client == "codex":
         return ["codex", "mcp", "add", name, "--", *command]
     if client == "opencode":
@@ -55,32 +56,124 @@ def integrate(info: ProjectInfo, client: str, dry_run: bool = False, refresh: bo
     if executable("serena") is None:
         raise RuntimeError("Serena no está instalado. Ejecuta `chxchx-tech install`.")
 
-    listed = _list_servers(client, allow_failure=dry_run)
+    if client == "codex":
+        return _integrate_codex_project(info, dry_run=dry_run, refresh=refresh)
+
+    listed = run([client, "mcp", "list"], dry_run=dry_run, cwd=info.root)
+    if listed.returncode != 0 and not dry_run:
+        detail = listed.stderr or listed.stdout or "sin detalles"
+        raise RuntimeError(f"No se pudo consultar MCP en '{client}': {detail}")
     known = listed.stdout + "\n" + listed.stderr if listed.returncode == 0 else ""
     results = []
     added_names = []
     for name, command in server_commands(info).items():
         if _contains_server(known, name):
             if refresh:
-                removed = run(_remove_command(client, name), dry_run=dry_run)
+                removed = run(_remove_command(client, name), dry_run=dry_run, cwd=info.root)
                 results.append(removed)
                 if removed.returncode != 0 and not dry_run:
                     detail = removed.stderr or removed.stdout or "sin detalles"
                     raise RuntimeError(f"No se pudo actualizar el servidor MCP '{name}': {detail}")
             else:
                 continue
-        result = run(_client_command(client, name, command), dry_run=dry_run)
+        result = run(_client_command(client, name, command), dry_run=dry_run, cwd=info.root)
         results.append(result)
         if result.returncode == 0 and not dry_run:
             added_names.append(name)
 
     if added_names:
-        verified = _list_servers(client)
+        verified = run([client, "mcp", "list"], cwd=info.root)
+        if verified.returncode != 0:
+            detail = verified.stderr or verified.stdout or "sin detalles"
+            raise RuntimeError(f"No se pudo verificar MCP en '{client}': {detail}")
         missing = [name for name in added_names if not _contains_server(verified.stdout + "\n" + verified.stderr, name)]
         if missing:
             raise RuntimeError(
                 f"El cliente '{client}' no confirmó los servidores: {', '.join(missing)}"
             )
+    return results
+
+
+def _toml_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _codex_server_block(name: str, command: list[str]) -> str:
+    args = ", ".join(_toml_string(arg) for arg in command[1:])
+    return (
+        f"[mcp_servers.{name}]\n"
+        f"command = {_toml_string(command[0])}\n"
+        f"args = [{args}]\n"
+    )
+
+
+def _integrate_codex_project(
+    info: ProjectInfo,
+    *,
+    dry_run: bool,
+    refresh: bool,
+):
+    """Write MCP servers to Codex's trusted, project-scoped config layer."""
+    target = info.root / ".codex" / "config.toml"
+    current = target.read_text(encoding="utf-8") if target.exists() else ""
+    try:
+        parsed = tomllib.loads(current)
+    except tomllib.TOMLDecodeError as exc:
+        raise RuntimeError(f"No se pudo leer la configuración Codex {target}: {exc}") from exc
+    servers = parsed.get("mcp_servers", {})
+    if not isinstance(servers, dict):
+        raise RuntimeError(f"La tabla mcp_servers de {target} no es válida")
+
+    desired = server_commands(info)
+    missing: list[tuple[str, list[str]]] = []
+    for name, command in desired.items():
+        existing = servers.get(name)
+        expected = {"command": command[0], "args": command[1:]}
+        if existing is None:
+            missing.append((name, command))
+        elif not isinstance(existing, dict):
+            raise RuntimeError(f"mcp_servers.{name} en {target} no es una tabla")
+        elif existing.get("command") == expected["command"] and existing.get("args", []) == expected["args"]:
+            continue
+        elif refresh:
+            missing.append((name, command))
+        else:
+            raise RuntimeError(
+                f"mcp_servers.{name} ya existe con otra configuración en {target}; "
+                "revisa el archivo o ejecuta `chxchx-tech integrate --refresh --client codex`."
+            )
+
+    if not missing:
+        return []
+
+    updated = current
+    for name, command in missing:
+        header = f"[mcp_servers.{name}]"
+        block = _codex_server_block(name, command).rstrip()
+        if header in updated:
+            lines = updated.splitlines(keepends=True)
+            starts = [i for i, line in enumerate(lines) if line.strip() == header]
+            start = starts[0]
+            end = start + 1
+            while end < len(lines) and not lines[end].lstrip().startswith("["):
+                end += 1
+            updated = "".join(lines[:start]) + block + "\n\n" + "".join(lines[end:])
+        else:
+            updated = updated.rstrip() + ("\n\n" if updated.strip() else "") + block + "\n"
+
+    results = [
+        CommandResult(
+            ["codex", "project-config", name],
+            0,
+            "DRY RUN: se actualizaría .codex/config.toml" if dry_run else f"MCP {name} configurado para este proyecto",
+            "",
+            skipped=False,
+        )
+        for name, _command in missing
+    ]
+    if not dry_run:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(updated, encoding="utf-8")
     return results
 
 

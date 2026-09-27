@@ -59,8 +59,13 @@ def run_tui(project: ProjectInfo) -> None:
     from ..core.trust import trust_project
     from ..workspace.agent_status import AgentRuntimeStatus
     from ..workspace.handoff import update_handoff
+    from ..workspace.memory_history import MemoryNote, list_memory_notes
     from ..workspace.process_manager import ProcessManager
-    from ..workspace.resources import ResourceManager, format_bytes
+    from ..workspace.resources import (
+        ResourceManager,
+        format_bytes,
+        summarize_process_resources,
+    )
     from ..workspace.service import WorkspaceOperationError, WorkspaceService
     from ..workspace.state import load_state
 
@@ -93,7 +98,8 @@ def run_tui(project: ProjectInfo) -> None:
             ("processes", "Ver procesos", "4"),
             ("resources", "Ver recursos", "5"),
             ("handoff", "Ver handoff", "6"),
-            ("brand", "Ver sello CHXCHX-DEV", "7"),
+            ("memory", "Ver memoria e historial", "7"),
+            ("brand", "Ver sello CHXCHX-DEV", "8"),
             ("refresh", "Actualizar panel", "r"),
             ("open_workspace", "Abrir workspace", "o"),
             ("attach_workspace", "Adjuntar a Zellij", "j"),
@@ -191,6 +197,16 @@ def run_tui(project: ProjectInfo) -> None:
             padding: 1 2;
             color: $primary;
         }
+        #memory-list { width: 48%; min-width: 30; }
+        #memory-detail {
+            width: 1fr;
+            height: 1fr;
+            margin-left: 1;
+            padding: 1 2;
+            border: round $secondary;
+            overflow-y: auto;
+        }
+        #memory-summary { height: auto; min-height: 2; }
         .toolbar { height: auto; margin: 1 0; }
         .toolbar Button { margin-right: 1; }
         .wide { width: 1fr; height: 1fr; }
@@ -221,7 +237,8 @@ def run_tui(project: ProjectInfo) -> None:
             ("4", "show_processes", "Procesos"),
             ("5", "show_resources", "Recursos"),
             ("6", "show_handoff", "Handoff"),
-            ("7", "show_brand", "Marca"),
+            ("7", "show_memory", "Memoria"),
+            ("8", "show_brand", "Marca"),
             ("o", "open_workspace", "Abrir"),
             ("j", "attach_workspace", "Zellij"),
             ("y", "trust_workspace", "Confiar"),
@@ -244,6 +261,7 @@ def run_tui(project: ProjectInfo) -> None:
             self.service = WorkspaceService(project)
             self._last_inspection = None
             self._last_agents: list[AgentRuntimeStatus] = []
+            self._memory_notes: dict[str, MemoryNote] = {}
             self._palette_open = False
             self._attach_pending = False
             self._start_pending = False
@@ -315,6 +333,8 @@ def run_tui(project: ProjectInfo) -> None:
                     yield DataTable(id="processes-table")
                 with TabPane("Recursos", id="resources"):
                     yield Static(id="resources-detail", classes="summary")
+                    yield Static(id="resources-project-summary", classes="summary")
+                    yield DataTable(id="resources-processes")
                     with Horizontal(classes="toolbar"):
                         yield Button("Actualizar recursos", id="btn-resources-refresh")
                         yield Button("Detener workspace", id="btn-resources-stop", variant="error")
@@ -329,6 +349,22 @@ def run_tui(project: ProjectInfo) -> None:
                     with Horizontal(classes="toolbar"):
                         yield Button("Actualizar handoff", id="btn-handoff", variant="primary")
                         yield Button("Recargar", id="btn-handoff-refresh")
+                with TabPane("Memoria", id="memory"):
+                    yield Static(
+                        "Historial de notas persistentes de este proyecto · solo lectura · ordenado por última modificación",
+                        id="memory-summary",
+                        classes="summary",
+                    )
+                    with Horizontal(classes="toolbar"):
+                        yield Input(placeholder="Buscar en títulos y notas...", id="memory-search")
+                        yield Button("Actualizar", id="btn-memory-refresh")
+                    with Horizontal(classes="wide"):
+                        yield DataTable(id="memory-list", cursor_type="row")
+                        yield Static(
+                            "Selecciona una nota para ver su contenido.",
+                            id="memory-detail",
+                            markup=False,
+                        )
                 with TabPane("Marca", id="brand-tab"):
                     yield Static(BRAND_BANNER, id="brand-banner", markup=False)
             yield Footer()
@@ -351,6 +387,12 @@ def run_tui(project: ProjectInfo) -> None:
             )
             self._query("#agents-table", DataTable).add_columns(
                 "Agente", "CLI", "Disponible", "Sesión", "Pane", "Preset", "Versión"
+            )
+            self._query("#resources-processes", DataTable).add_columns(
+                "Proceso", "Estado", "PID", "RAM RSS", "CPU"
+            )
+            self._query("#memory-list", DataTable).add_columns(
+                "Nota", "Modificada", "Resumen"
             )
 
         def _query(self, selector: str, expect_type):
@@ -392,6 +434,10 @@ def run_tui(project: ProjectInfo) -> None:
         def action_show_handoff(self) -> None:
             self._show("handoff")
             self._refresh_handoff()
+
+        def action_show_memory(self) -> None:
+            self._show("memory")
+            self._refresh_memory_history()
 
         def action_show_brand(self) -> None:
             self._show("brand-tab")
@@ -622,6 +668,29 @@ def run_tui(project: ProjectInfo) -> None:
         def button_handoff_refresh(self) -> None:
             self._refresh_handoff()
 
+        @on(Button.Pressed, "#btn-memory-refresh")
+        def button_memory_refresh(self) -> None:
+            self._refresh_memory_history()
+
+        @on(Input.Changed, "#memory-search")
+        def memory_search_changed(self, _event: Input.Changed) -> None:
+            self._refresh_memory_history()
+
+        @on(DataTable.RowHighlighted, "#memory-list")
+        def memory_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+            note = self._memory_notes.get(str(event.row_key.value))
+            if note is None:
+                return
+            relative_path = note.path.relative_to(self.project.root)
+            detail = (
+                f"{note.title}\n"
+                f"Ruta: {relative_path}\n"
+                f"Modificada: {note.modified_at.strftime('%Y-%m-%d %H:%M %Z')}\n"
+                f"{'─' * 40}\n\n"
+                f"{note.content}"
+            )
+            self._query("#memory-detail", Static).update(detail)
+
         def _switch_project(self) -> None:
             reference = self._query("#project-ref", Input).value.strip()
             try:
@@ -640,6 +709,7 @@ def run_tui(project: ProjectInfo) -> None:
             self.refresh_dashboard()
             self._refresh_projects()
             self._refresh_handoff()
+            self._refresh_memory_history()
 
         def _perform(
             self,
@@ -689,8 +759,15 @@ def run_tui(project: ProjectInfo) -> None:
                 resources = ResourceManager(inspection.config.resources)
                 system = resources.system()
                 self._update_resources(resources, system)
-                self._refresh_process_table(inspection, resources, "#overview-processes")
-                self._refresh_process_table(inspection, resources, "#processes-table")
+                records = ProcessManager(
+                    self.project.root,
+                    inspection.config.processes,
+                    trusted=inspection.trusted,
+                ).list()
+                process_metrics = resources.processes(records)
+                self._update_project_resources(process_metrics, system.total_bytes)
+                self._refresh_process_table(records, process_metrics, "#overview-processes")
+                self._refresh_process_table(records, process_metrics, "#processes-table")
                 self._refresh_agents()
                 self._refresh_projects()
                 self._refresh_handoff()
@@ -709,28 +786,52 @@ def run_tui(project: ProjectInfo) -> None:
             )
             self._query("#overview-resources", Static).update(text)
             self._query("#resources-detail", Static).update(
+                f"Uso general del equipo (no exclusivo de este proyecto)\n"
                 f"Proyecto: {self.project.name}\n\n{text}\n\n"
                 f"Umbral RAM aviso: {resources.config.warn_memory_percent}%\n"
                 f"Umbral RAM crítico: {resources.config.critical_memory_percent}%\n"
                 f"Umbral swap aviso: {resources.config.warn_swap_percent}%"
             )
 
-        def _refresh_process_table(self, inspection, resources, selector: str) -> None:
+        def _update_project_resources(self, metrics, total_memory_bytes: int) -> None:
+            summary = summarize_process_resources(metrics)
+            memory_percent = summary.memory_percent(total_memory_bytes)
+            memory_share = (
+                "N/D" if memory_percent is None else f"{memory_percent:.1f}% de la RAM del equipo"
+            )
+            cpu = (
+                "N/D"
+                if summary.cpu_percent is None
+                else f"{summary.cpu_percent:.1f}% ({summary.measured_cpu_count} medido(s); puede superar 100% en varios núcleos)"
+            )
+            self._query("#resources-project-summary", Static).update(
+                f"Consumo de procesos administrados de {self.project.name}\n"
+                f"Activos: {summary.running_count}  |  RAM RSS: {format_bytes(summary.rss_bytes)} ({memory_share})  |  CPU: {cpu}\n"
+                "Estimación de PID principales configurados; no incluye procesos hijos ni agentes dentro de Zellij."
+            )
+            table = self._query("#resources-processes", DataTable)
+            table.clear()
+            for metric in metrics:
+                cpu_value = "N/D" if metric.cpu_percent is None else f"{metric.cpu_percent:.1f}%"
+                table.add_row(
+                    metric.label,
+                    metric.status.value,
+                    str(metric.pid or "-"),
+                    format_bytes(metric.rss_bytes),
+                    cpu_value,
+                )
+
+        def _refresh_process_table(self, records, metrics, selector: str) -> None:
             table = self._query(selector, DataTable)
             table.clear()
-            records = ProcessManager(
-                self.project.root,
-                inspection.config.processes,
-                trusted=inspection.trusted,
-            ).list()
-            metrics = resources.processes(records)
+            ports = {item.id: item.port for item in records}
             for metric in metrics:
                 cpu = "N/D" if metric.cpu_percent is None else f"{metric.cpu_percent:.1f}%"
                 table.add_row(
                     metric.process_id,
                     metric.status.value,
                     str(metric.pid or "-"),
-                    str(next((item.port or "-" for item in records if item.id == metric.process_id), "-")),
+                    str(ports.get(metric.process_id) or "-"),
                     format_bytes(metric.rss_bytes),
                     cpu,
                 )
@@ -789,6 +890,34 @@ def run_tui(project: ProjectInfo) -> None:
                 self._query("#handoff", Static).update(f"No se pudo leer handoff: {exc}")
                 return
             self._query("#handoff", Static).update(content)
+
+        def _refresh_memory_history(self) -> None:
+            query = self._query("#memory-search", Input).value
+            notes = list_memory_notes(self.project.root, query=query)
+            table = self._query("#memory-list", DataTable)
+            table.clear()
+            self._memory_notes = {}
+            for note in notes:
+                key = str(note.path)
+                self._memory_notes[key] = note
+                table.add_row(
+                    note.title,
+                    note.modified_at.strftime("%Y-%m-%d %H:%M"),
+                    note.preview,
+                    key=key,
+                )
+
+            memory_path = self.project.root / ".ai" / "memory"
+            if not memory_path.is_dir():
+                message = f"Este proyecto todavía no tiene memoria local:\n{memory_path}"
+            elif not notes:
+                message = "No hay notas que coincidan con la búsqueda."
+            else:
+                message = f"{len(notes)} nota(s) de {self.project.name} · {memory_path}"
+            self._query("#memory-summary", Static).update(message)
+            self._query("#memory-detail", Static).update(
+                "Selecciona una nota para ver su contenido."
+            )
 
         def _set_log(self, message: str) -> None:
             self._query("#log", Static).update(message)

@@ -8,6 +8,7 @@ from chxchx_tech_lead.workspace.resources import (
     ResourceSeverity,
     SystemResources,
     format_bytes,
+    summarize_process_resources,
 )
 
 
@@ -43,3 +44,19 @@ def test_resource_manager_reads_metrics_only_for_running_processes(tmp_path: Pat
 def test_format_bytes_is_human_readable():
     assert format_bytes(0) == "0.0 B"
     assert format_bytes(1024 * 1024) == "1.0 MB"
+
+
+def test_process_resource_summary_sums_running_managed_processes_only(tmp_path: Path):
+    summary = summarize_process_resources(
+        [
+            ProcessResources("api", "API", 10, 20_000, 12.5, ProcessStatus.RUNNING),
+            ProcessResources("web", "Web", 11, 30_000, 5.0, ProcessStatus.RUNNING),
+            ProcessResources("worker", "Worker", None, 0, None, ProcessStatus.STOPPED),
+        ]
+    )
+
+    assert summary.running_count == 2
+    assert summary.rss_bytes == 50_000
+    assert summary.cpu_percent == 17.5
+    assert summary.measured_cpu_count == 2
+    assert summary.memory_percent(1_000_000) == 5
