@@ -93,6 +93,8 @@ class ProcessActionResult:
 
 PopenFactory = Callable[..., subprocess.Popen[Any]]
 _PROCESS_STOP_TIMEOUT_SECONDS = 5
+_PROCESS_LOG_MAX_BYTES = 5 * 1024 * 1024
+_PROCESS_LOG_BACKUPS = 3
 
 
 class ProcessManager:
@@ -166,6 +168,7 @@ class ProcessManager:
             return ProcessActionResult(record, True, f"DRY RUN: iniciar `{process_id}`")
 
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        _rotate_log(log_path)
         log_file = log_path.open("ab")
         try:
             process = self._popen(
@@ -276,6 +279,19 @@ class ProcessManager:
 def _log_path(project_root: Path, process_id: str) -> Path:
     safe_name = "".join(char if char.isalnum() or char in "-_." else "-" for char in project_root.name)
     return home_dir() / "logs" / "workspaces" / f"{safe_name}-{process_id}.log"
+
+
+def _rotate_log(path: Path) -> None:
+    if not path.exists() or path.stat().st_size < _PROCESS_LOG_MAX_BYTES:
+        return
+
+    oldest = Path(f"{path}.{_PROCESS_LOG_BACKUPS}")
+    oldest.unlink(missing_ok=True)
+    for index in range(_PROCESS_LOG_BACKUPS - 1, 0, -1):
+        source = Path(f"{path}.{index}")
+        if source.exists():
+            source.replace(Path(f"{path}.{index + 1}"))
+    path.replace(Path(f"{path}.1"))
 
 
 def _command_available(command: list[str] | str, cwd: Path, shell: bool) -> bool:

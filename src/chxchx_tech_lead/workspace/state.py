@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -78,11 +80,36 @@ def save_state(state: WorkspaceState, dry_run: bool = False) -> None:
     state.touch()
     states = load_states()
     states[state.project_path] = state
-    if not dry_run:
-        ensure_home()
-        payload = {"workspaces": {key: asdict(value) for key, value in states.items()}}
-        payload["workspaces"][state.project_path]["status"] = state.status.value
-        state_path().write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if dry_run:
+        return
+
+    ensure_home()
+    payload = {"workspaces": {key: asdict(value) for key, value in states.items()}}
+    payload["workspaces"][state.project_path]["status"] = state.status.value
+    content = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    path = state_path()
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            temporary_file.write(content)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.replace(temporary_path, path)
+    except OSError:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
 
 
 def set_workspace_status(

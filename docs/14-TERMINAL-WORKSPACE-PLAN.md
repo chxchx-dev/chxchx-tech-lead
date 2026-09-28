@@ -4,7 +4,7 @@
 >
 > Este documento describe **qué construir, en qué orden, qué no construir, criterios de aceptación, arquitectura, seguridad y estrategia de migración**. Las casillas de las fases reflejan el estado real del MVP implementado; lo que permanece abierto sigue siendo roadmap.
 
-> **Estado de esta entrega:** están implementadas las fases de dominio/configuración, adaptadores, MVP CLI, TUI operativa multipestaña, operación multiproyecto, agentes y métricas básicas de recursos. El hardening cross-platform sigue pendiente.
+> **Estado de esta entrega:** las fases 1–7 están implementadas. El hardening local incluye ahora persistencia atómica del estado, rotación acotada de logs, terminación de procesos por plataforma, argumentos seguros y migración versionada de config. La validación nativa en Windows/macOS/Linux y la evidencia de uso diario siguen pendientes.
 
 ---
 
@@ -883,18 +883,18 @@ Tener una línea base verificable antes de tocar arquitectura.
 
 ### Tareas
 
-- [ ] Etiquetar/confirmar `v0.2.0` estable.
-- [ ] Ejecutar suite actual.
+- [x] Confirmar la etiqueta `v0.2.0` estable.
+- [x] Ejecutar la suite actual (117 pruebas pasan en el entorno Linux disponible).
 - [ ] Añadir test de CLI de regresión para todos los comandos existentes.
 - [ ] Confirmar que `init`, `setup`, `sync`, `doctor`, `rollback` y `projects` mantienen comportamiento.
 - [ ] Excluir `.venv`, `__pycache__`, `.pytest_cache` y `.git` de cualquier release ZIP.
-- [ ] Crear ADR: “Terminal-first workspace sin reimplementar terminal/editor”.
+- [x] Crear ADR: terminal-first sin reimplementar terminal/editor ([ADR-0001](adr/0001-terminal-first-workspace.md)).
 
 ### Definition of Done
 
 El branch de desarrollo puede romper internamente sin perder una referencia estable y reproducible de `v0.2.0`.
 
-> Nota: esta fase conserva tareas de release/ADR que no se ejecutan automáticamente durante el desarrollo del MVP.
+> Pendiente de esta fase: ampliar la regresión del CLI a todos los comandos heredados y verificar el contenido final de cualquier ZIP de release.
 
 ---
 
@@ -1108,14 +1108,15 @@ El usuario puede iniciar el agente correcto para el proyecto desde una sola inte
 
 ### Tareas
 
-- [ ] paths multiplataforma.
-- [ ] señales y terminación de procesos.
-- [ ] quoting.
-- [ ] tests Windows/macOS/Linux.
-- [ ] handling de shells.
-- [ ] logs rotativos.
-- [ ] recuperación tras crash.
-- [ ] migraciones de config versionadas.
+- [x] Validar rutas relativas POSIX/Windows y bloquear escapes del proyecto.
+- [x] Separar argumentos por defecto y permitir shell solo de forma explícita.
+- [x] Detener grupos POSIX y árboles de procesos en Windows con verificación de propiedad.
+- [x] Guardar el estado global mediante escritura temporal y reemplazo atómico.
+- [x] Rotar logs de procesos al superar 5 MiB y conservar hasta tres copias.
+- [x] Migrar configuración v1 → v2 de forma validada e idempotente.
+- [x] Recuperar el estado de procesos administrados desde disco tras reiniciar el manager.
+- [ ] Ejecutar la suite en Windows, macOS y Linux; documentar resultados y corregir diferencias.
+- [ ] Validar comportamiento sostenido de shells y sesiones en Windows/WSL y macOS.
 
 ---
 
@@ -1497,52 +1498,16 @@ La instalación debe recrear dependencias mediante `uv`.
 
 ---
 
-# 32. Milestones de release
+# 32. Estado de milestones de release
 
-## `v0.3.0` — Terminal Workspace MVP
+El siguiente mapa refleja implementación en la rama `dev`, no publicación de esas versiones:
 
-Debe incluir:
-
-- config v2;
-- trust;
-- Zellij adapter;
-- Sublime adapter;
-- process manager;
-- agentes básicos;
-- workspace CLI;
-- compatibilidad v0.2.
-
-## `v0.3.1` — TUI inicial
-
-- Textual dashboard;
-- projects;
-- processes;
-- agents.
-
-## `v0.3.2` — Resource Manager
-
-- métricas;
-- warnings;
-- Docker stats.
-
-## `v0.4.0` — Multi-project Operations
-
-- ACTIVE/SUSPENDED/STOPPED;
-- switch;
-- recuperación de sesiones;
-- vista agregada.
-
-## `v0.5.0` — Daily Driver Hardening
-
-- fallos/recovery;
-- mejoras UX;
-- logs;
-- cross-platform;
-- performance.
-
-## `v1.0.0`
-
-Solo tras uso real prolongado y estabilidad operacional.
+- `v0.3.0` — Terminal Workspace MVP: implementado.
+- `v0.3.1` — TUI inicial: implementado.
+- `v0.3.2` — Resource Manager: implementado.
+- `v0.4.0` — Operación multiproyecto: implementada.
+- `v0.5.0` — Hardening para uso diario: en curso; falta validación nativa en Windows/macOS/Linux y evidencia sostenida de uso real.
+- `v1.0.0` — solo después de cumplir los criterios de la fase 9 y publicar los resultados de validación.
 
 ---
 

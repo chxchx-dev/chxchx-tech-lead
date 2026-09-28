@@ -46,7 +46,7 @@ Estado humano y operativo del proyecto, no una base de datos paralela.
 
 ### chxchx-tech-lead
 
-Instala, detecta, genera, sincroniza, diagnostica y configura adaptadores.
+Instala, detecta, genera, sincroniza y diagnostica. El CLI y la TUI operan el workspace mediante servicios de dominio y adapters aislados.
 
 ## Cadena de orientación de la IA
 
@@ -70,23 +70,25 @@ Cambio verificable             pruebas, smoke test y reporte de pendientes
 
 ## Capas del código
 
-```text
+~~~text
 src/chxchx_tech_lead/
 ├── cli.py
-├── core/
-│   ├── detector.py
-│   ├── models.py
-│   ├── managed.py
-│   ├── registry.py
-│   ├── backup.py
-│   ├── runner.py
-│   └── templates.py
-└── integrations/
-    ├── base.py
-    ├── tools.py
-    ├── installers.py
-    └── mcp.py
-```
+├── core/             configuración, detección, trust, migraciones y estado base
+├── workspace/        procesos, sesiones, recursos, agentes y handoff
+├── adapters/         terminal, editor, agentes, Docker Compose y Git
+├── integrations/     Basic Memory, Serena, instaladores y MCP
+└── tui/              interfaz Textual
+~~~
+
+Dirección de dependencias:
+
+~~~text
+CLI / TUI ──> core / workspace ──> adapters ──> herramientas externas
+                    │
+                    └────────────> integrations
+~~~
+
+La TUI presenta estado y solicita acciones a los servicios de workspace. No inicia subprocess directamente. La CLI funciona de forma independiente a la TUI.
 
 ## Regla arquitectónica
 
@@ -97,9 +99,15 @@ Una integración externa nunca debe filtrarse por todo el código. Si Claude/Cod
 ```text
 ~/.chxchx-tech-lead/
 ├── projects.json
+├── trusted_projects.json
+├── workspace-state.json
 ├── backups/
-├── logs/
+├── logs/workspaces/
 └── profiles/
 ```
 
 No guardes credenciales aquí.
+
+## Registro de decisiones
+
+- [ADR-0001: Terminal-first workspace con herramientas externas](adr/0001-terminal-first-workspace.md)
