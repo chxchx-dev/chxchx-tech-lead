@@ -26,6 +26,14 @@ priority = 10
 stacks = ["python"]
 priority = 10
 
+[profiles.rust]
+stacks = ["rust"]
+priority = 10
+
+[profiles.go]
+stacks = ["go"]
+priority = 10
+
 [profiles.next-dotnet]
 stacks = ["nextjs", "dotnet"]
 priority = 20

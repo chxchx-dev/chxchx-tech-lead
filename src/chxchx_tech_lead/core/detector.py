@@ -106,6 +106,10 @@ def detect_project(root: Path) -> ProjectInfo:
         info.stacks.append("dotnet")
     if (root / "pyproject.toml").exists() or (root / "requirements.txt").exists():
         info.stacks.append("python")
+    if (root / "Cargo.toml").exists():
+        info.stacks.append("rust")
+    if (root / "go.mod").exists():
+        info.stacks.append("go")
     if _detect_postgres(root, package):
         info.stacks.append("postgres")
     if _detect_ai(root, package):
@@ -131,6 +135,8 @@ def detect_project(root: Path) -> ProjectInfo:
         ".kt": "kotlin",
         ".swift": "swift",
         ".sql": "sql",
+        ".rs": "rust",
+        ".go": "go",
     }
     for suffix, language in mapping.items():
         if suffix in suffixes and language not in info.languages:

@@ -1,17 +1,11 @@
 # Changelog
 
-## Próximo release — Fase 6 multiproyecto
-
-- alias automáticos y resolución de proyectos por alias o ruta;
-- persistencia del último proyecto activado;
-- estados `ACTIVE`, `SUSPENDED` y `STOPPED`;
-- `projects current`, `projects switch`, `workspace suspend` y `workspace resume`;
-- recuperación de sesiones Zellij al reanudar un workspace.
-- estado y disponibilidad de agentes con `agent list/status`;
-- presets de agentes por proyecto;
-- handoff administrado mediante `workspace handoff`.
-
 ## Unreleased
+
+- Escribe el estado persistente mediante archivo temporal y reemplazo atómico para tolerar interrupciones.
+- Rota los logs de procesos al superar 5 MiB y conserva hasta tres copias anteriores.
+- Añade pruebas de recuperación del estado de procesos tras reiniciar el manager.
+- Actualiza roadmap y guía: la validación multiplataforma y la evidencia de uso real son los pendientes para v1.0.
 
 - Renombra el proyecto, paquete y CLI a `chxchx-tech`, incluyendo su configuración, estado global, instaladores y documentación.
 - Introduce el dominio inicial de Terminal Workspace y la configuración `chxchx-tech.toml` v2.

@@ -2,7 +2,7 @@
 
 > Guía operativa para el flujo terminal-first de `chxchx-tech-lead`.
 >
-> **Estado:** la base del repositorio continúa identificada como `v0.2.0`, y el MVP de Terminal Workspace ya está implementado sobre ella. Los apartados marcados como **Objetivo v0.3+** siguen describiendo funciones futuras que todavía no forman parte del contrato actual.
+> **Estado:** `v0.2.0` es la última base publicada. Terminal Workspace está implementado en la rama `dev`; esta guía describe su uso actual y las funciones que deben validarse en el rollout multiplataforma antes de `v1.0`.
 
 ---
 
@@ -297,8 +297,12 @@ docs/adr/
 
 En la rama de desarrollo del Terminal Workspace, `.ai/chxchx-tech.toml` se genera en
 `version = 2` y las configuraciones existentes `version = 1` se migran durante
-`chxchx-tech init`. Esta etapa solo valida y persiste configuración: todavía no
-inicia procesos, sesiones Zellij ni agentes.
+`chxchx-tech init`. Para una configuración nueva, el análisis sugiere un proceso
+inicial cuando reconoce un comando convencional (por ejemplo, React Native usa
+el script `start` con el gestor detectado, como `pnpm start`; también reconoce
+Vite, Next.js, NestJS, Django, .NET, Rust y Go). Las sugerencias quedan visibles
+en la TUI y se inician al iniciar el workspace, después de confiar el repositorio.
+La inicialización nunca ejecuta esos comandos por sí sola.
 
 También registra el repositorio en:
 
@@ -335,9 +339,9 @@ ChxChx no debe guardar tokens de estos clientes.
 
 ---
 
-# 12. Objetivo `v0.3+`: primer uso de Terminal Workspace
+# 12. Uso actual: primer uso de Terminal Workspace
 
-Una vez implementada la fase Workspace, el flujo será:
+Con Terminal Workspace instalado desde la rama de desarrollo, el flujo es:
 
 ```bash
 cd ~/Projects/mi-proyecto
@@ -365,7 +369,7 @@ El proyecto no debe arrancar comandos automáticamente hasta haber sido marcado 
 
 ---
 
-# 13. Objetivo `v0.3+`: configurar el workspace
+# 13. Uso actual: configurar el workspace
 
 Ejemplo Full Stack:
 
@@ -493,7 +497,7 @@ No intentar meter Android Studio/Xcode completos dentro de la TUI. ChxChx puede 
 
 ---
 
-# 17. Objetivo `v0.3+`: flujo diario
+# 17. Uso actual: flujo diario
 
 ## Iniciar
 
@@ -524,7 +528,7 @@ chxchx-tech agent start codex
 
 ---
 
-# 18. Objetivo `v0.3+`: trabajar con sesiones
+# 18. Uso actual: trabajar con sesiones
 
 Adjuntar al workspace actual:
 
@@ -546,7 +550,7 @@ No usar nombres generados aleatoriamente en cada inicio porque impediría recupe
 
 ---
 
-# 19. Objetivo `v0.3+`: detener sin destruir
+# 19. Uso actual: detener sin destruir
 
 Para dejar de consumir RAM pero mantener configuración:
 
@@ -639,7 +643,7 @@ Mantener bajo control pestañas de documentación, DevTools y aplicaciones pesad
 
 ---
 
-# 22. Objetivo `v0.3+`: ver consumo
+# 22. Uso actual: ver consumo
 
 ```bash
 chxchx-tech resources
@@ -664,7 +668,7 @@ ChxChx solo debe sugerir acciones. No debe matar procesos automáticamente por c
 
 ---
 
-# 23. Objetivo `v0.3+`: abrir Sublime
+# 23. Uso actual: abrir Sublime
 
 Desde cualquier proyecto configurado:
 
@@ -713,7 +717,7 @@ No es obligatorio generar este archivo para el MVP.
 
 ---
 
-# 25. Objetivo `v0.3+`: iniciar agentes
+# 25. Uso actual: iniciar agentes
 
 Codex:
 
@@ -771,7 +775,9 @@ agentes y procesos:
 4       Procesos
 5       Recursos
 6       Handoff
-7       Marca / sello CHXCHX-DEV
+7       Notas del proyecto
+8       Chats
+9       Marca / sello CHXCHX-DEV
 Ctrl+P  Paleta de comandos
 r       Actualizar
 o       Abrir/preparar workspace
@@ -781,6 +787,7 @@ s       Iniciar workspace
 t       Iniciar workspace y agentes
 a       Iniciar agentes
 c       Iniciar agente indicado
+g       Abrir terminal del agente seleccionado
 i       Iniciar proceso indicado
 k       Detener proceso indicado
 u       Suspender workspace
@@ -808,8 +815,14 @@ Detener el workspace debe ser una acción distinta y explícita.
 
 # 27. TUI: Command Palette
 
-La paleta local se abre con `Ctrl+P`, permite filtrar por texto y ejecuta las
-acciones del mismo `WorkspaceService` que usa la CLI.
+La paleta local se abre con `Ctrl+P`, permite filtrar por texto y ejecuta las acciones del mismo `WorkspaceService` que usa la CLI.
+
+La pestaña **Chats** muestra, en modo lectura, las sesiones locales de Codex y
+Claude Code asociadas al proyecto seleccionado. Permite buscar por título o
+último mensaje y leer el transcript de cada sesión. La pestaña **Notas** conserva
+el historial persistente de `.ai/memory`. En **Agentes**, selecciona Codex o
+Claude y pulsa **Abrir terminal del agente seleccionado** (o `g`) para entrar
+a su pane interactivo de Zellij; al salir, vuelve a la TUI.
 
 El Resumen muestra el flujo guiado `Confiar → Iniciar workspace + agentes →
 Reintentar agentes → Adjuntar Zellij`; esas acciones no requieren introducir texto. La pestaña
@@ -942,7 +955,7 @@ Un proyecto Python/Node sin Docker no debe ser marcado como roto.
 
 ---
 
-# 34. `doctor` esperado en `v0.3+`
+# 34. `doctor` para Terminal Workspace
 
 ```bash
 chxchx-tech doctor
@@ -1010,27 +1023,23 @@ ChxChx:
 
 # 37. Logs
 
-Ruta sugerida:
+Los logs de procesos se guardan en:
 
 ```text
-~/.chxchx-tech-lead/logs/
+~/.chxchx-tech-lead/logs/workspaces/
 ```
 
-Para diagnóstico:
+Cada archivo rota al alcanzar 5 MiB y conserva hasta tres copias anteriores. Los logs pueden contener la salida de los procesos configurados; no se deben imprimir secretos desde esos procesos.
+
+Para diagnosticar:
 
 ```bash
 chxchx-tech doctor
 chxchx-tech workspace status
+chxchx-tech process list
 ```
 
-Una futura opción puede ser:
-
-```bash
-chxchx-tech logs
-chxchx-tech logs frontend
-```
-
-Los logs deberán rotar y permanecer acotados.
+Todavía no existe un subcomando dedicado para consultar logs.
 
 ---
 
@@ -1084,41 +1093,20 @@ Antes de cada release futura deberán mantenerse estas verificaciones y extender
 
 ---
 
-# 40. Flujo de desarrollo recomendado de `v0.3.0`
+# 40. Cierre de Terminal Workspace
 
-Implementar por PRs pequeñas.
+Las fases de dominio, adapters, CLI, TUI, recursos, multiproyecto y agentes ya están implementadas en `dev`. El trabajo pendiente está registrado en [05-ROADMAP.md](05-ROADMAP.md): ejecutar validación nativa en Linux/macOS/Windows + WSL y recopilar evidencia de uso diario para `v1.0`.
 
-## PR 1
-
-```text
-feat(workspace): introduce workspace domain and config v2
-```
-
-Verificar:
+Antes de preparar una release, ejecuta desde la raíz:
 
 ```bash
+uv run python -m compileall -q src tests scripts
 uv run pytest -q
+uv run python scripts/lab_smoke.py
+uv lock --check
 ```
 
-## PR 2
-
-```text
-feat(workspace): add terminal and editor adapters
-```
-
-## PR 3
-
-```text
-feat(workspace): add process manager and workspace CLI
-```
-
-## PR 4
-
-```text
-feat(tui): add Textual dashboard
-```
-
-No mezclar dominio, Zellij y TUI completa en una sola PR.
+El plan de fases y sus criterios de aceptación permanecen en [14-TERMINAL-WORKSPACE-PLAN.md](14-TERMINAL-WORKSPACE-PLAN.md).
 
 ---
 
@@ -1209,9 +1197,11 @@ administrados. Los umbrales solo generan advertencias: ChxChx no mata procesos
 automáticamente.
 
 La TUI se inicia con `chxchx-tech tui [PATH]` y requiere la dependencia runtime
-`textual`. Incluye pestañas de resumen, proyectos, agentes, procesos, recursos y
-handoff. Si no está instalada, el comando informa cómo completar el entorno sin
-afectar el resto del CLI.
+`textual`. Incluye pestañas de resumen, proyectos, agentes, procesos, recursos,
+handoff, notas, chats y marca. El análisis también propone procesos de desarrollo
+para stacks reconocidos en configuraciones nuevas; solo se ejecutan al iniciar
+manualmente un proyecto confiable. Si Textual no está instalado, el comando
+informa cómo completar el entorno sin afectar el resto del CLI.
 
 ```bash
 # interfaz

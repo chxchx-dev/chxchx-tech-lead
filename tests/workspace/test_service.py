@@ -197,6 +197,36 @@ def test_agent_start_uses_configured_session_and_cwd(tmp_path: Path, monkeypatch
     assert all(run_calls[0][2])
     assert run_calls[0][3] == project.resolve()
 
+def test_attach_agent_focuses_and_opens_named_zellij_pane(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project, auto_start=False)
+    calls = []
+
+    def fake_runner(command, **kwargs):
+        calls.append((command, kwargs))
+        if command == ["zellij", "list-sessions"]:
+            return CommandResult(list(command), 0, "demo-workspace\n", "")
+        if command[-1] == "--json":
+            return CommandResult(
+                list(command),
+                0,
+                '[{"pane_id":"codex_3","pane_name":"codex"}]',
+                "",
+            )
+        return CommandResult(list(command), 0, "attached", "")
+
+    terminal = ZellijAdapter(runner=fake_runner, lookup=lambda _: "/usr/bin/zellij")
+    result = WorkspaceService(
+        ProjectInfo(project, "project"), terminal=terminal, editor=FakeEditor()
+    ).attach_agent("codex")
+
+    assert result.returncode == 0
+    assert any(call[0][-2:] == ["focus-pane-id", "codex_3"] for call in calls)
+    assert calls[-1][0] == ["zellij", "attach", "--force-run-commands", "demo-workspace"]
+    assert calls[-1][1]["interactive"] is True
+
 
 def test_agent_new_chat_passes_context_bootstrap_prompt(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))

@@ -61,6 +61,7 @@ def run_tui(project: ProjectInfo) -> None:
     from ..workspace.autosave_status import diagnose_autosave, format_autosave_status
     from ..workspace.handoff import update_handoff
     from ..workspace.memory_history import MemoryNote, list_memory_notes
+    from ..integrations.chat_history import Conversation, list_conversations
     from ..workspace.process_manager import ProcessManager
     from ..workspace.resources import (
         ResourceManager,
@@ -99,8 +100,10 @@ def run_tui(project: ProjectInfo) -> None:
             ("processes", "Ver procesos", "4"),
             ("resources", "Ver recursos", "5"),
             ("handoff", "Ver handoff", "6"),
-            ("memory", "Ver memoria e historial", "7"),
-            ("brand", "Ver sello CHXCHX-DEV", "8"),
+            ("memory", "Ver notas del proyecto", "7"),
+            ("conversations", "Ver historial de chats", "8"),
+            ("attach_agent_terminal", "Abrir terminal del agente", "g"),
+            ("brand", "Ver sello CHXCHX-DEV", "9"),
             ("refresh", "Actualizar panel", "r"),
             ("open_workspace", "Abrir workspace", "o"),
             ("attach_workspace", "Adjuntar a Zellij", "j"),
@@ -199,6 +202,16 @@ def run_tui(project: ProjectInfo) -> None:
             color: $primary;
         }
         #memory-list { width: 48%; min-width: 30; }
+        #chat-list { width: 55%; min-width: 35; }
+        #chat-detail {
+            width: 1fr;
+            height: 1fr;
+            margin-left: 1;
+            padding: 1 2;
+            border: round $secondary;
+            overflow-y: auto;
+        }
+        #chat-summary { height: auto; min-height: 2; }
         #memory-detail {
             width: 1fr;
             height: 1fr;
@@ -238,8 +251,10 @@ def run_tui(project: ProjectInfo) -> None:
             ("4", "show_processes", "Procesos"),
             ("5", "show_resources", "Recursos"),
             ("6", "show_handoff", "Handoff"),
-            ("7", "show_memory", "Memoria"),
-            ("8", "show_brand", "Marca"),
+            ("7", "show_memory", "Notas"),
+            ("8", "show_conversations", "Chats"),
+            ("9", "show_brand", "Marca"),
+            ("g", "attach_agent_terminal", "Terminal del agente"),
             ("o", "open_workspace", "Abrir"),
             ("j", "attach_workspace", "Zellij"),
             ("y", "trust_workspace", "Confiar"),
@@ -263,6 +278,7 @@ def run_tui(project: ProjectInfo) -> None:
             self._last_inspection = None
             self._last_agents: list[AgentRuntimeStatus] = []
             self._memory_notes: dict[str, MemoryNote] = {}
+            self._conversations: dict[str, Conversation] = {}
             self._palette_open = False
             self._attach_pending = False
             self._start_pending = False
@@ -324,6 +340,12 @@ def run_tui(project: ProjectInfo) -> None:
                         yield Button("Nuevo chat + contexto", id="btn-agent-new-chat")
                         yield Button("Iniciar todos", id="btn-agents", variant="success")
                         yield Button("Actualizar", id="btn-agents-refresh")
+                    with Horizontal(classes="toolbar"):
+                        yield Button(
+                            "Abrir terminal del agente seleccionado",
+                            id="btn-agent-attach",
+                            variant="primary",
+                        )
                     yield DataTable(id="agents-table", cursor_type="row")
                 with TabPane("Procesos", id="processes"):
                     yield Static("Procesos declarados en .ai/chxchx-tech.toml", classes="summary")
@@ -354,7 +376,7 @@ def run_tui(project: ProjectInfo) -> None:
                     with Horizontal(classes="toolbar"):
                         yield Button("Actualizar handoff", id="btn-handoff", variant="primary")
                         yield Button("Recargar", id="btn-handoff-refresh")
-                with TabPane("Memoria", id="memory"):
+                with TabPane("Notas", id="memory"):
                     yield Static(
                         "Historial de notas persistentes de este proyecto · solo lectura · ordenado por última modificación",
                         id="memory-summary",
@@ -370,6 +392,22 @@ def run_tui(project: ProjectInfo) -> None:
                             id="memory-detail",
                             markup=False,
                         )
+                with TabPane("Chats", id="conversations"):
+                    yield Static(
+                        "Conversaciones guardadas localmente por proyecto · solo lectura",
+                        id="chat-summary",
+                        classes="summary",
+                    )
+                    with Horizontal(classes="toolbar"):
+                        yield Input(placeholder="Buscar en chats...", id="chat-search")
+                        yield Button("Actualizar", id="btn-chat-refresh")
+                    with Horizontal(classes="wide"):
+                        yield DataTable(id="chat-list", cursor_type="row")
+                        yield Static(
+                            "Selecciona una conversación para leerla.",
+                            id="chat-detail",
+                            markup=False,
+                        )
                 with TabPane("Marca", id="brand-tab"):
                     yield Static(BRAND_BANNER, id="brand-banner", markup=False)
             yield Footer()
@@ -379,6 +417,7 @@ def run_tui(project: ProjectInfo) -> None:
             self._setup_tables()
             self.set_interval(3, self.refresh_dashboard)
             self.refresh_dashboard()
+            self._refresh_conversations()
 
         def _setup_tables(self) -> None:
             self._query("#overview-processes", DataTable).add_columns(
@@ -386,6 +425,9 @@ def run_tui(project: ProjectInfo) -> None:
             )
             self._query("#processes-table", DataTable).add_columns(
                 "ID", "Estado", "PID", "Puerto", "RAM", "CPU"
+            )
+            self._query("#chat-list", DataTable).add_columns(
+                "Agente", "Último uso", "Chat", "Último mensaje",
             )
             self._query("#projects-table", DataTable).add_columns(
                 "Actual", "Alias", "Proyecto", "Estado", "Perfil", "Ruta"
@@ -447,6 +489,10 @@ def run_tui(project: ProjectInfo) -> None:
             self._show("memory")
             self._refresh_memory_history()
 
+        def action_show_conversations(self) -> None:
+            self._show("conversations")
+            self._refresh_conversations()
+
         def action_show_brand(self) -> None:
             self._show("brand-tab")
 
@@ -467,6 +513,35 @@ def run_tui(project: ProjectInfo) -> None:
             # Let Textual paint the instruction before the interactive Zellij
             # process takes control of the terminal.
             self.set_timer(0.1, self._attach_workspace_now)
+
+        def action_attach_agent_terminal(self) -> None:
+            agent_id = self._query("#agent-id", Input).value.strip()
+            if not agent_id:
+                self._set_log("Selecciona un agente de la tabla antes de abrir su terminal")
+                self.notify("Falta seleccionar un agente", severity="warning")
+                return
+            if self._attach_pending:
+                return
+            self._attach_pending = True
+            message = f"Abriendo la terminal de {agent_id}… Para volver a la TUI: Ctrl+O y después D."
+            self._set_log(message)
+            self.notify(message, severity="information")
+            self.set_timer(0.1, lambda: self._attach_agent_terminal_now(agent_id))
+
+        def _attach_agent_terminal_now(self, agent_id: str) -> None:
+            self._attach_pending = False
+            try:
+                with self.suspend():
+                    self.service.attach_agent(agent_id)
+            except (WorkspaceOperationError, OSError) as exc:
+                self._set_log(f"Error: {exc}")
+                self.notify(str(exc), severity="error")
+                self._restore_after_external_terminal()
+                return
+            message = f"Terminal de {agent_id} cerrada; regresaste a la TUI."
+            self._set_log(message)
+            self.notify(message, severity="information")
+            self._restore_after_external_terminal()
 
         def _attach_workspace_now(self) -> None:
             self._attach_pending = False
@@ -653,6 +728,10 @@ def run_tui(project: ProjectInfo) -> None:
         def button_agent_new_chat(self) -> None:
             self.action_start_new_chat()
 
+        @on(Button.Pressed, "#btn-agent-attach")
+        def button_agent_attach(self) -> None:
+            self.action_attach_agent_terminal()
+
         @on(Button.Pressed, "#btn-agents-refresh")
         def button_agents_refresh(self) -> None:
             self._refresh_agents()
@@ -697,6 +776,32 @@ def run_tui(project: ProjectInfo) -> None:
         def button_memory_refresh(self) -> None:
             self._refresh_memory_history()
 
+        @on(Button.Pressed, "#btn-chat-refresh")
+        def button_chat_refresh(self) -> None:
+            self._refresh_conversations()
+
+        @on(Input.Changed, "#chat-search")
+        def chat_search_changed(self, _event: Input.Changed) -> None:
+            self._refresh_conversations()
+
+        @on(DataTable.RowHighlighted, "#chat-list")
+        def chat_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+            conversation = self._conversations.get(str(event.row_key.value))
+            if conversation is None:
+                return
+            detail = [
+                f"{conversation.title}",
+                f"{conversation.provider} · {conversation.modified_at.strftime('%Y-%m-%d %H:%M %Z')}",
+                f"Sesión: {conversation.session_id}",
+                "─" * 48,
+                "",
+            ]
+            detail.extend(
+                f"{'Tú' if item.role == 'user' else conversation.provider}:\n{item.text}"
+                for item in conversation.messages
+            )
+            self._query("#chat-detail", Static).update("\n\n".join(detail))
+
         @on(Input.Changed, "#memory-search")
         def memory_search_changed(self, _event: Input.Changed) -> None:
             self._refresh_memory_history()
@@ -720,7 +825,7 @@ def run_tui(project: ProjectInfo) -> None:
         def agent_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
             agent_id = str(event.row_key.value)
             self._query("#agent-id", Input).value = agent_id
-            self._set_log(f"Agente seleccionado: {agent_id} · puedes iniciar uno nuevo con contexto")
+            self._set_log(f"Agente seleccionado: {agent_id} · inicia o abre su terminal aquí")
 
         def _switch_project(self) -> None:
             reference = self._query("#project-ref", Input).value.strip()
@@ -741,6 +846,7 @@ def run_tui(project: ProjectInfo) -> None:
             self._refresh_projects()
             self._refresh_handoff()
             self._refresh_memory_history()
+            self._refresh_conversations()
 
         def _perform(
             self,
@@ -782,6 +888,9 @@ def run_tui(project: ProjectInfo) -> None:
                     f"Proyecto: {self.project.name}  |  Perfil: {self.project.profile_name}\n"
                     f"Workspace: {inspection.state.status.value}  |  Trust: {'sí' if inspection.trusted else 'no'}\n"
                     f"Stack: {', '.join(self.project.stacks) or 'sin detectar'}\n"
+                    f"Lenguajes: {', '.join(self.project.languages) or 'sin detectar'}  |  "
+                    f"Gestor: {', '.join(self.project.package_managers) or 'sin detectar'}\n"
+                    f"Arranque: {self._startup_summary(inspection)}\n"
                     f"Ruta: {self.project.root}"
                 )
                 if self._query("#tabs", TabbedContent).active == "resources":
@@ -806,6 +915,14 @@ def run_tui(project: ProjectInfo) -> None:
                 self._refresh_handoff()
             except (WorkspaceOperationError, OSError) as exc:
                 self._set_log(f"Error: {exc}")
+
+        def _startup_summary(self, inspection) -> str:
+            if inspection.config is None or not inspection.config.processes:
+                return "sin comando sugerido; revisa .ai/chxchx-tech.toml"
+            return " · ".join(
+                f"{item.id}: {' '.join(item.command)} ({'al iniciar' if item.auto_start else 'manual'})"
+                for item in inspection.config.processes
+            )
 
         def _update_resources(self, resources, system) -> None:
             cpu = "N/D" if system.cpu_percent is None else f"{system.cpu_percent:.0f}%"
@@ -1015,6 +1132,33 @@ def run_tui(project: ProjectInfo) -> None:
                 self._query("#handoff", Static).update(f"No se pudo leer handoff: {exc}")
                 return
             self._query("#handoff", Static).update(content)
+
+        def _refresh_conversations(self) -> None:
+            query = self._query("#chat-search", Input).value
+            try:
+                conversations = list_conversations(self.project.root, query=query)
+            except (OSError, ValueError) as exc:
+                self._query("#chat-summary", Static).update(f"No se pudo leer el historial local: {exc}")
+                return
+            table = self._query("#chat-list", DataTable)
+            table.clear()
+            self._conversations = {}
+            for conversation in conversations:
+                key = f"{conversation.provider}:{conversation.session_id}"
+                self._conversations[key] = conversation
+                table.add_row(
+                    conversation.provider,
+                    conversation.modified_at.strftime("%Y-%m-%d %H:%M"),
+                    conversation.title,
+                    conversation.preview,
+                    key=key,
+                )
+            if conversations:
+                message = f"{len(conversations)} conversación(es) de {self.project.name} · Codex y Claude Code"
+            else:
+                message = "No hay conversaciones locales para este proyecto o no coinciden con la búsqueda."
+            self._query("#chat-summary", Static).update(message)
+            self._query("#chat-detail", Static).update("Selecciona una conversación para leerla.")
 
         def _refresh_memory_history(self) -> None:
             query = self._query("#memory-search", Input).value

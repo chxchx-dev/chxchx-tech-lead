@@ -5,7 +5,9 @@ import sys
 import pytest
 
 from chxchx_tech_lead.workspace.models import ProcessConfig
+from chxchx_tech_lead.workspace import process_manager as process_manager_module
 from chxchx_tech_lead.workspace.process_manager import (
+    _rotate_log,
     ManagedProcess,
     ProcessManager,
     ProcessManagerError,
@@ -227,3 +229,49 @@ def test_process_manager_can_refresh_status_without_persisting(tmp_path: Path, m
     monkeypatch.setattr(manager, "_persist", lambda: pytest.fail("persist should not be called"))
 
     assert manager.list(persist=False)[0].status is ProcessStatus.EXITED
+
+
+def test_process_logs_rotate_with_a_bounded_number_of_backups(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(process_manager_module, "_PROCESS_LOG_MAX_BYTES", 8)
+    monkeypatch.setattr(process_manager_module, "_PROCESS_LOG_BACKUPS", 2)
+    log = tmp_path / "worker.log"
+
+    log.write_bytes(b"first-log")
+    _rotate_log(log)
+    assert not log.exists()
+    assert (tmp_path / "worker.log.1").read_bytes() == b"first-log"
+
+    log.write_bytes(b"second-log")
+    _rotate_log(log)
+    assert (tmp_path / "worker.log.1").read_bytes() == b"second-log"
+    assert (tmp_path / "worker.log.2").read_bytes() == b"first-log"
+
+    log.write_bytes(b"third-log")
+    _rotate_log(log)
+    assert (tmp_path / "worker.log.1").read_bytes() == b"third-log"
+    assert (tmp_path / "worker.log.2").read_bytes() == b"second-log"
+    assert not (tmp_path / "worker.log.3").exists()
+
+
+def test_process_manager_recovers_process_state_after_restart(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    command = [sys.executable, "-c", "import time; time.sleep(30)"]
+    original = ProcessManager(project, [_config(command)], trusted=True)
+    started = original.start("worker")
+
+    recovered = ProcessManager(
+        project,
+        [_config(command)],
+        trusted=True,
+        pid_matches=lambda pid, expected, shell: True,
+    )
+    try:
+        assert started.process.pid is not None
+        assert recovered.list()[0].status is ProcessStatus.RUNNING
+
+        stopped = recovered.stop("worker")
+        assert stopped.process.status is ProcessStatus.EXITED
+    finally:
+        original.stop("worker")

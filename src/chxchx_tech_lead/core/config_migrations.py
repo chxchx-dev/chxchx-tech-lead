@@ -27,6 +27,7 @@ class ConfigMigrationResult:
 
 def default_config_data(info: ProjectInfo) -> dict[str, Any]:
     from .project_config import memory_project_name
+    from .project_commands import suggested_processes
 
     return {
         "version": CURRENT_CONFIG_VERSION,
@@ -59,7 +60,7 @@ def default_config_data(info: ProjectInfo) -> dict[str, Any]:
                 "compose_file": "compose.yaml",
                 "auto_start": False,
             },
-            "processes": [],
+            "processes": suggested_processes(info),
             "agents": [
                 {
                     "id": "codex",

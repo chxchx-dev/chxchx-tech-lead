@@ -28,6 +28,9 @@ Thumbs.db
 **/*.ai.md
 **/docs/architecture/
 **/docs/adr/
+# Keep architecture decisions authored by this repository; prepared repos still ignore generated ADR folders.
+!docs/adr/
+!docs/adr/*.md
 **/docs/security/
 **/docs/database/
 **/docs/api/

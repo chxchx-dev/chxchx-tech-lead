@@ -30,16 +30,16 @@ ChxChx Tech Lead prepara el contexto de un proyecto, conecta herramientas extern
 
 ## Funciones
 
-La versión pública `0.2.0` incluye:
+La versión pública estable `0.2.0` incluye preparación idempotente de proyectos, perfiles y detección de stack, backups y rollback, integraciones MCP, registro multiproyecto, diagnóstico y smoke test. Terminal Workspace todavía no forma parte de esa release.
+
+La rama `dev` añade el Terminal Workspace, pendiente de validación multiplataforma antes de publicar una versión nueva:
 
 - configuración `.ai/chxchx-tech.toml` v2 y migración v1 → v2;
 - trust local para impedir ejecutar comandos de repositorios no aprobados;
-- Process Manager con estado persistente, logs y protección contra PIDs ajenos;
+- Process Manager con estado persistente, logs rotativos y protección contra PIDs ajenos;
 - adapters para Zellij, fallback de subprocess, Sublime, agentes CLI, Docker Compose y Git;
 - comandos CLI de workspace, procesos, agentes, editor y recursos;
-- dashboard inicial con Textual;
-- instalación reproducible con `uv` y una TUI operativa.
-- operación multiproyecto mediante proyectos registrados y sesiones recuperables.
+- dashboard con Textual y operación multiproyecto mediante sesiones recuperables.
 
 ## Requisitos
 

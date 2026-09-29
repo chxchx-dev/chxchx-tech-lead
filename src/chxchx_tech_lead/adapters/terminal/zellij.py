@@ -94,6 +94,25 @@ class ZellijAdapter:
             interactive=True,
         )
 
+    def focus_named_pane(self, session: str, pane_name: str, dry_run: bool = False) -> CommandResult:
+        """Focus a named agent pane before handing the user's TTY to Zellij."""
+        panes = self._runner(
+            [self.command, "--session", session, "action", "list-panes", "--all", "--json"],
+            dry_run=dry_run,
+        )
+        pane_id = self._find_named_pane_id(panes.stdout, pane_name.casefold())
+        if pane_id is None:
+            return CommandResult(
+                [self.command, "--session", session, "action", "focus-pane-id"],
+                1,
+                "",
+                f"No encontré la terminal del agente `{pane_name}` en la sesión `{session}`.",
+            )
+        return self._runner(
+            [self.command, "--session", session, "action", "focus-pane-id", pane_id],
+            dry_run=dry_run,
+        )
+
     def focus_terminal_pane(self, name: str, dry_run: bool = False) -> CommandResult:
         """Focus the pane named ``terminal`` before handing over the TTY."""
         panes = self._runner(
