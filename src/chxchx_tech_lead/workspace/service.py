@@ -284,6 +284,27 @@ class WorkspaceService:
             raise WorkspaceOperationError(result.stderr or f"No se pudo iniciar el agente `{agent_id}`")
         return result
 
+    def attach_agent(self, agent_id: str, dry_run: bool = False):
+        """Attach to the named Zellij pane for one configured agent."""
+        inspection = self.inspect()
+        if inspection.config is None:
+            raise WorkspaceOperationError("No hay configuración de workspace")
+        if not any(item.id == agent_id for item in inspection.config.agents):
+            raise WorkspaceOperationError(f"No existe el agente configurado: {agent_id}")
+        terminal = self._terminal_adapter(inspection)
+        if not isinstance(terminal, ZellijAdapter):
+            raise WorkspaceOperationError("Abrir la terminal del agente requiere Zellij")
+        session = self._session_name(inspection)
+        if not dry_run:
+            self._require_active_zellij_session(terminal, session, operation="adjuntar")
+            focused = terminal.focus_named_pane(session, agent_id)
+            if focused.returncode != 0:
+                raise WorkspaceOperationError(focused.stderr or f"No pude enfocar la terminal de `{agent_id}`")
+        result = terminal.attach_session(session, dry_run=dry_run)
+        if result.returncode != 0:
+            raise WorkspaceOperationError(result.stderr or f"No pude abrir la terminal de `{agent_id}`")
+        return result
+
     def run_all(self, dry_run: bool = False, attach: bool = True, recreate: bool = False):
         """Run the standard workspace recipe: start, agents and optional attach."""
         if recreate:

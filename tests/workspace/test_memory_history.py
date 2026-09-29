@@ -41,3 +41,48 @@ def test_empty_or_missing_project_memory_returns_no_notes(tmp_path: Path):
     project = tmp_path / "project"
     (project / ".ai" / "memory").mkdir(parents=True)
     assert list_memory_notes(project) == []
+
+
+
+def test_lists_local_chat_history_for_selected_project(tmp_path: Path, monkeypatch):
+    import json
+
+    from chxchx_tech_lead.integrations.chat_history import list_conversations
+
+    project = tmp_path / "demo"
+    project.mkdir()
+    codex_home = tmp_path / "codex"
+    rollout = codex_home / "sessions" / "2026" / "09" / "29" / "rollout-test.jsonl"
+    rollout.parent.mkdir(parents=True)
+    rollout.write_text(
+        "\n".join(
+            [
+                json.dumps({"type": "session_meta", "payload": {"id": "codex-1", "cwd": str(project)}}),
+                json.dumps({"type": "event_msg", "payload": {"type": "user_message", "message": "Fix React Native startup"}}),
+                json.dumps({"type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Use pnpm start."}]}}),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    claude_dir = tmp_path / "claude" / "projects" / str(project).replace("/", "-")
+    claude_dir.mkdir(parents=True)
+    transcript = claude_dir / "claude-1.jsonl"
+    transcript.write_text(
+        "\n".join(
+            [
+                json.dumps({"type": "user", "message": {"role": "user", "content": "Review the auth flow"}}),
+                json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "I found two issues."}]}}),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+
+    conversations = list_conversations(project)
+    assert {item.provider for item in conversations} == {"Codex", "Claude"}
+    assert {item.title for item in conversations} == {"Fix React Native startup", "Review the auth flow"}
+    assert len(list_conversations(project, query="pnpm")) == 1
+    assert len(list_conversations(project, query="AUTH")) == 1
+    codex = next(item for item in conversations if item.provider == "Codex")
+    assert codex.messages[-1].text == "Use pnpm start."

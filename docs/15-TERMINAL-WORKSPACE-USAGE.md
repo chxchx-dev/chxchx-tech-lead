@@ -297,8 +297,12 @@ docs/adr/
 
 En la rama de desarrollo del Terminal Workspace, `.ai/chxchx-tech.toml` se genera en
 `version = 2` y las configuraciones existentes `version = 1` se migran durante
-`chxchx-tech init`. Esta etapa solo valida y persiste configuración: todavía no
-inicia procesos, sesiones Zellij ni agentes.
+`chxchx-tech init`. Para una configuración nueva, el análisis sugiere un proceso
+inicial cuando reconoce un comando convencional (por ejemplo, React Native usa
+el script `start` con el gestor detectado, como `pnpm start`; también reconoce
+Vite, Next.js, NestJS, Django, .NET, Rust y Go). Las sugerencias quedan visibles
+en la TUI y se inician al iniciar el workspace, después de confiar el repositorio.
+La inicialización nunca ejecuta esos comandos por sí sola.
 
 También registra el repositorio en:
 
@@ -771,7 +775,9 @@ agentes y procesos:
 4       Procesos
 5       Recursos
 6       Handoff
-7       Marca / sello CHXCHX-DEV
+7       Notas del proyecto
+8       Chats
+9       Marca / sello CHXCHX-DEV
 Ctrl+P  Paleta de comandos
 r       Actualizar
 o       Abrir/preparar workspace
@@ -781,6 +787,7 @@ s       Iniciar workspace
 t       Iniciar workspace y agentes
 a       Iniciar agentes
 c       Iniciar agente indicado
+g       Abrir terminal del agente seleccionado
 i       Iniciar proceso indicado
 k       Detener proceso indicado
 u       Suspender workspace
@@ -808,8 +815,14 @@ Detener el workspace debe ser una acción distinta y explícita.
 
 # 27. TUI: Command Palette
 
-La paleta local se abre con `Ctrl+P`, permite filtrar por texto y ejecuta las
-acciones del mismo `WorkspaceService` que usa la CLI.
+La paleta local se abre con `Ctrl+P`, permite filtrar por texto y ejecuta las acciones del mismo `WorkspaceService` que usa la CLI.
+
+La pestaña **Chats** muestra, en modo lectura, las sesiones locales de Codex y
+Claude Code asociadas al proyecto seleccionado. Permite buscar por título o
+último mensaje y leer el transcript de cada sesión. La pestaña **Notas** conserva
+el historial persistente de `.ai/memory`. En **Agentes**, selecciona Codex o
+Claude y pulsa **Abrir terminal del agente seleccionado** (o `g`) para entrar
+a su pane interactivo de Zellij; al salir, vuelve a la TUI.
 
 El Resumen muestra el flujo guiado `Confiar → Iniciar workspace + agentes →
 Reintentar agentes → Adjuntar Zellij`; esas acciones no requieren introducir texto. La pestaña
@@ -1184,9 +1197,11 @@ administrados. Los umbrales solo generan advertencias: ChxChx no mata procesos
 automáticamente.
 
 La TUI se inicia con `chxchx-tech tui [PATH]` y requiere la dependencia runtime
-`textual`. Incluye pestañas de resumen, proyectos, agentes, procesos, recursos y
-handoff. Si no está instalada, el comando informa cómo completar el entorno sin
-afectar el resto del CLI.
+`textual`. Incluye pestañas de resumen, proyectos, agentes, procesos, recursos,
+handoff, notas, chats y marca. El análisis también propone procesos de desarrollo
+para stacks reconocidos en configuraciones nuevas; solo se ejecutan al iniciar
+manualmente un proyecto confiable. Si Textual no está instalado, el comando
+informa cómo completar el entorno sin afectar el resto del CLI.
 
 ```bash
 # interfaz

@@ -136,6 +136,26 @@ def test_zellij_focuses_named_terminal_pane():
     assert result.returncode == 0
     assert calls[1][0] == ["zellij", "--session", "demo", "action", "focus-pane-id", "terminal_7"]
 
+def test_zellij_focuses_selected_agent_pane():
+    calls = []
+
+    def fake_runner(command, **kwargs):
+        calls.append((command, kwargs))
+        if command[-1] == "--json":
+            return CommandResult(
+                list(command),
+                0,
+                '[{"pane_id":"codex_3","pane_name":"codex"}]',
+                "",
+            )
+        return CommandResult(list(command), 0, "focused", "")
+
+    adapter = ZellijAdapter(runner=fake_runner, lookup=lambda _: "/usr/bin/zellij")
+    result = adapter.focus_named_pane("demo", "codex")
+
+    assert result.returncode == 0
+    assert calls[1][0] == ["zellij", "--session", "demo", "action", "focus-pane-id", "codex_3"]
+
 
 def test_zellij_focuses_shell_from_documented_json_fields():
     raw = '[{"id":1,"is_plugin":false,"title":"/bin/bash","pane_command":"bash"}]'
