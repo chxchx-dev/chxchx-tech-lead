@@ -69,9 +69,9 @@ critical_memory_percent = 90
 warn_swap_percent = 40
 
 [workspace.docker]
-enabled = false
-compose_file = "compose.yaml"
-auto_start = false
+enabled = true
+compose_file = "missing-compose.yaml"
+auto_start = true
 
 [[workspace.processes]]
 id = "api"
@@ -102,6 +102,29 @@ def test_untrusted_workspace_never_starts_auto_processes(tmp_path: Path, monkeyp
 
     assert action.process_results == []
     assert any(call[0] == "create" for call in terminal.calls)
+
+
+def test_stop_ignores_legacy_docker_settings(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project, auto_start=False)
+
+    action = WorkspaceService(ProjectInfo(project, "project"), terminal=FakeTerminal()).stop()
+
+    assert action.messages == []
+
+
+def test_start_ignores_legacy_docker_settings(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project, auto_start=False)
+    trust_project(project)
+
+    action = WorkspaceService(ProjectInfo(project, "project"), terminal=FakeTerminal()).start()
+
+    assert "Docker Compose iniciado" not in action.messages
 
 
 def test_trusted_workspace_starts_auto_process_in_dry_run(tmp_path: Path, monkeypatch):

@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+from ..cli_context import (
+    Path,
+    TUIUnavailableError,
+    WorkspaceOperationError,
+    __version__,
+    app,
+    console,
+    run_tui,
+    typer,
+    _print_recipe,
+    _print_workspace_action,
+    _project,
+    _workspace_service,
+)
+
+@app.command("run")
+def run_workspace(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Muestra la receta sin ejecutarla."),
+    attach: bool = typer.Option(True, "--attach/--no-attach", help="Entra en Zellij al finalizar."),
+    recreate: bool = typer.Option(False, "--recreate", help="Recrea la sesión Zellij para aplicar el layout actual."),
+):
+    """Arranca workspace, agentes configurados y adjunta Zellij."""
+    try:
+        action, agents, attached = _workspace_service(path).run_all(
+            dry_run=dry_run, attach=attach, recreate=recreate
+        )
+    except WorkspaceOperationError as exc:
+        console.print(f"[red]✗ {exc}[/]")
+        raise typer.Exit(code=1)
+    _print_recipe(action, agents, attached)
+
+@app.command("attach")
+def attach_workspace(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+):
+    """Adjunta rápidamente la sesión Zellij del proyecto actual."""
+    try:
+        result = _workspace_service(path).attach()
+    except WorkspaceOperationError as exc:
+        console.print(f"[red]✗ {exc}[/]")
+        raise typer.Exit(code=1)
+    console.print(f"[green]✓[/] {' '.join(result.command)}")
+
+@app.command("stop")
+def stop_workspace(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Muestra la parada sin ejecutarla."),
+):
+    """Detiene los procesos gestionados del proyecto."""
+    try:
+        action = _workspace_service(path).stop(dry_run=dry_run)
+    except WorkspaceOperationError as exc:
+        console.print(f"[red]✗ {exc}[/]")
+        raise typer.Exit(code=1)
+    _print_workspace_action(action)
+
+@app.command()
+def version():
+    """Muestra la versión instalada."""
+    console.print(f"chxchx-tech-lead {__version__}")
+
+@app.command("tui")
+def tui(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+):
+    """Abre el dashboard TUI cuando Textual está instalado."""
+    try:
+        run_tui(_project(path))
+    except TUIUnavailableError as exc:
+        console.print(f"[yellow]! {exc}[/]")
+        raise typer.Exit(code=1)

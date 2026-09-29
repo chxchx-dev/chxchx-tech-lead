@@ -13,7 +13,6 @@ TOOLS = [
     ("OpenCode", "opencode"),
     ("Zellij", "zellij"),
     ("Sublime Text", "subl"),
-    ("Docker", "docker"),
 ]
 
 

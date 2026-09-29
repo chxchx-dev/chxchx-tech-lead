@@ -21,9 +21,9 @@ def test_version_command():
 def test_doctor_reports_project_scoped_mcp_diagnostics_without_mutating(tmp_path: Path, monkeypatch):
     project = tmp_path / "project"
     project.mkdir()
-    monkeypatch.setattr("chxchx_tech_lead.cli.check_tools", lambda: [])
+    monkeypatch.setattr("chxchx_tech_lead.commands.setup.check_tools", lambda: [])
     monkeypatch.setattr(
-        "chxchx_tech_lead.cli.diagnose_project_mcp",
+        "chxchx_tech_lead.commands.setup.diagnose_project_mcp",
         lambda _info: [
             McpDiagnostic("Codex", "basic-memory", "AVISO", "usuario/global", "solo global")
         ],
@@ -59,7 +59,7 @@ def test_init_is_stable_on_second_run(tmp_path: Path, monkeypatch):
     project = tmp_path / "project"
     project.mkdir()
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
-    monkeypatch.setattr("chxchx_tech_lead.cli.basic_memory_available", lambda: False)
+    monkeypatch.setattr("chxchx_tech_lead.commands.setup.basic_memory_available", lambda: False)
 
     first = runner.invoke(app, ["init", str(project)])
     second = runner.invoke(app, ["init", str(project)])
@@ -100,9 +100,9 @@ def test_init_does_not_warn_for_existing_basic_memory_project(tmp_path: Path, mo
     project = tmp_path / "project"
     project.mkdir()
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
-    monkeypatch.setattr("chxchx_tech_lead.cli.basic_memory_available", lambda: True)
+    monkeypatch.setattr("chxchx_tech_lead.commands.setup.basic_memory_available", lambda: True)
     monkeypatch.setattr(
-        "chxchx_tech_lead.cli.ensure_memory_project",
+        "chxchx_tech_lead.commands.setup.ensure_memory_project",
         lambda info, dry_run=False: __import__(
             "chxchx_tech_lead.core.runner", fromlist=["CommandResult"]
         ).CommandResult(["basic-memory", "project", "info"], 0, "{}", "", skipped=True),
@@ -118,7 +118,7 @@ def test_init_minimal_only_creates_compact_project_context(tmp_path: Path, monke
     project = tmp_path / "project"
     project.mkdir()
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
-    monkeypatch.setattr("chxchx_tech_lead.cli.basic_memory_available", lambda: False)
+    monkeypatch.setattr("chxchx_tech_lead.commands.setup.basic_memory_available", lambda: False)
 
     result = runner.invoke(app, ["init", str(project), "--minimal"])
 

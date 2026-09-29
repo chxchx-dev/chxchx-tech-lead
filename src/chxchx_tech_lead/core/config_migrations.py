@@ -55,11 +55,6 @@ def default_config_data(info: ProjectInfo) -> dict[str, Any]:
                 "critical_memory_percent": 90,
                 "warn_swap_percent": 40,
             },
-            "docker": {
-                "enabled": False,
-                "compose_file": "compose.yaml",
-                "auto_start": False,
-            },
             "processes": suggested_processes(info),
             "agents": [
                 {
@@ -180,12 +175,6 @@ def render_config(data: dict[str, Any]) -> str:
         lines,
         "workspace.resources",
         {key: resources[key] for key in ("warn_memory_percent", "critical_memory_percent", "warn_swap_percent") if key in resources},
-    )
-    docker = workspace.get("docker", {})
-    _render_table(
-        lines,
-        "workspace.docker",
-        {key: docker[key] for key in ("enabled", "compose_file", "auto_start") if key in docker},
     )
     for section, items in (("workspace.processes", workspace.get("processes", [])), ("workspace.agents", workspace.get("agents", []))):
         for item in items:

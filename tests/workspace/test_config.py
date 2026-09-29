@@ -18,6 +18,16 @@ def test_new_project_config_is_v2_and_idempotent(tmp_path: Path):
     assert first.source_version is None
     assert second.changed is False
     assert "version = 2" in (tmp_path / ".ai" / "chxchx-tech.toml").read_text(encoding="utf-8")
+    assert "[workspace.docker]" not in first.content
+
+
+def test_legacy_docker_config_is_ignored(tmp_path: Path):
+    config = WorkspaceConfig.from_mapping(
+        {"name": "demo", "docker": {"enabled": True, "compose_file": "missing.yaml", "auto_start": True}},
+        project_root=tmp_path,
+    )
+
+    assert not hasattr(config, "docker")
 
 
 def test_v1_config_migrates_without_executing_commands(tmp_path: Path):

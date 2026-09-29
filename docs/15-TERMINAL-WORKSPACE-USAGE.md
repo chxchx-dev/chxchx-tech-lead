@@ -16,7 +16,6 @@ Terminal          → interfaz principal
 Zellij            → sesiones, panes y persistencia
 ChxChx           → orquestación
 Codex/Claude      → agentes IA
-Docker            → infraestructura solo cuando se necesita
 Git CLI           → control de versiones
 ```
 
@@ -51,7 +50,6 @@ Sublime + procesos + agentes
 
 - Zellij.
 - Sublime Text.
-- Docker + Compose cuando el proyecto lo necesite.
 - Codex CLI, Claude Code u OpenCode según el flujo personal.
 
 ## Opcionales
@@ -63,7 +61,7 @@ ChxChx no debe instalar automáticamente herramientas de escritorio ni clientes 
 
 Los scripts `scripts/install.sh` y `scripts/install.ps1` sí instalan
 automáticamente `uv`, ChxChx y las herramientas gestionadas por ChxChx
-(Basic Memory y Serena). Zellij, Sublime, Docker y los clientes IA se detectan
+(Basic Memory y Serena). Zellij, Sublime y los clientes IA se detectan
 con `doctor` y se instalan siguiendo sus instrucciones oficiales.
 
 ---
@@ -133,7 +131,7 @@ chxchx-tech version
 uv run pytest -q
 ```
 
-Textual ya está incluido como dependencia runtime porque `chxchx-tech tui` es una función disponible. Las herramientas externas (Zellij, Sublime, Docker y agentes) siguen siendo opcionales y se detectan, no se instalan desde el paquete Python.
+Textual ya está incluido como dependencia runtime porque `chxchx-tech tui` es una función disponible. Las herramientas externas (Zellij, Sublime y agentes) siguen siendo opcionales y se detectan, no se instalan desde el paquete Python.
 
 ---
 
@@ -391,11 +389,6 @@ auto_start = false
 warn_memory_percent = 75
 critical_memory_percent = 90
 
-[workspace.docker]
-enabled = true
-compose_file = "compose.yaml"
-auto_start = false
-
 [[workspace.processes]]
 id = "backend"
 label = "Backend"
@@ -560,22 +553,6 @@ chxchx-tech workspace stop
 
 Esto debe detener procesos gestionados, pero no borrar configuración ni archivos del proyecto.
 
-Docker debe preferir:
-
-```text
-stop
-```
-
-sobre:
-
-```text
-down
-```
-
-para un cambio temporal de proyecto.
-
-`down` será una acción explícita.
-
 ---
 
 # 20. Suspender y cambiar de proyecto
@@ -623,12 +600,6 @@ Agentes:
 ```text
 Codex o Claude activo según tarea
 no mantener ambos por costumbre
-```
-
-Docker:
-
-```text
-solo servicios necesarios del proyecto activo
 ```
 
 Editor:
@@ -768,6 +739,11 @@ La TUI operativa se inicia con `chxchx-tech tui [PATH]` y conserva el workspace
 al cerrarse. El layout usa pestañas para evitar mezclar el estado de proyectos,
 agentes y procesos:
 
+La interfaz usa fondo oscuro, paneles con bordes rectos y títulos integrados,
+botones delineados y una barra de estado inferior. Los colores tenues de los
+botones distinguen acciones principales, de inicio y de detención; el foco y la
+selección se resaltan para navegar también con teclado.
+
 ```text
 1       Resumen
 2       Proyectos
@@ -783,7 +759,7 @@ r       Actualizar
 o       Abrir/preparar workspace
 j       Adjuntar a Zellij
 y       Marcar proyecto como confiable
-s       Iniciar workspace
+s       Iniciar proyecto
 t       Iniciar workspace y agentes
 a       Iniciar agentes
 c       Iniciar agente indicado
@@ -797,6 +773,13 @@ h       Actualizar handoff
 e       Abrir Sublime
 q       Cerrar TUI
 ```
+
+La pestaña **Consola** muestra el stack, el gestor de paquetes y los comandos
+definidos para el proyecto. `s` o **Iniciar proyecto** ejecuta los comandos de
+`workspace.processes`; si aún no existe configuración guardada, muestra las
+sugerencias detectadas en los scripts de `package.json` o en los archivos de
+.NET, Python, Rust y Go. La salida se actualiza en la consola y el proyecto debe
+estar marcado como confiable antes de ejecutar comandos.
 
 `q` cierra la interfaz, **no mata el workspace**.
 
@@ -947,14 +930,6 @@ Editor: unavailable
 
 ---
 
-# 33. Si Docker no está instalado
-
-Solo los proyectos que hayan configurado Docker deben mostrar advertencia.
-
-Un proyecto Python/Node sin Docker no debe ser marcado como roto.
-
----
-
 # 34. `doctor` para Terminal Workspace
 
 ```bash
@@ -972,7 +947,6 @@ CORE
 WORKSPACE
 ✓ Zellij
 ✓ Sublime
-✓ Docker
 
 AGENTS
 ✓ Codex
@@ -1188,7 +1162,7 @@ chxchx-tech rollback
 
 En la implementación actual ya están disponibles `workspace status`,
 `workspace trust`, `process list/start/stop` y los adapters internos para
-agentes, Docker Compose y Git informativo. También están disponibles
+agentes y Git informativo. También están disponibles
 `workspace open/start/stop/suspend/resume/attach`, `editor open`, `agent start`,
 `agent list`, `agent status` y la operación multiproyecto mediante `projects switch`.
 
@@ -1261,7 +1235,6 @@ Abrir:
 Sublime
 backend
 frontend
-Docker necesario
 Codex
 ```
 
@@ -1278,7 +1251,6 @@ No mantener por costumbre:
 ACore frontend + backend
 OLAN frontend + backend
 AlanIA frontend + backend
-2-3 Docker Compose
 Codex
 Claude
 VS Code x3
@@ -1308,7 +1280,7 @@ qué detener
 qué proyecto activar después
 ```
 
-Sin reimplementar las herramientas que ya resuelven bien terminal, edición, Git, Docker o IA.
+Sin reimplementar las herramientas que ya resuelven bien terminal, edición, Git o IA.
 
 ---
 
@@ -1322,3 +1294,26 @@ Sin reimplementar las herramientas que ya resuelven bien terminal, edición, Git
 - Zellij Layouts: https://zellij.dev/documentation/layouts.html
 - Sublime Text: https://www.sublimetext.com/download
 - uv: https://docs.astral.sh/uv/
+
+---
+
+# Panel de uso de agentes
+
+Cuando el layout inicia agentes, Zellij agrega un panel que se actualiza cada
+tres segundos. Muestra el contexto y la cuota restante de Claude Code en cuanto
+la sesión entrega esas métricas; los datos solo se guardan temporalmente en el
+directorio temporal del sistema. En Codex, el pie de cada pane muestra contexto
+y límites mediante los elementos oficiales `context-remaining` y
+`rate-limits`; `/status` sigue disponible para consultar el detalle.
+
+La instrumentación es por ejecución: no modifica `settings.json` ni
+`config.toml`. Si Claude se inicia con `--settings` propio, se respeta esa
+configuración y el panel remite a `/usage`. Las métricas de límites de Claude
+pueden no estar disponibles para algunos planes o antes de la primera
+respuesta; el panel lo indica en vez de estimarlas. La status line configurada
+por ChxChx reemplaza cualquier status line personalizada solo durante esa
+ejecución.
+
+El panel no lee credenciales ni envía comandos a las conversaciones. Si un
+proveedor no escribe un dato verificable en sus métricas locales, aparece como
+no disponible.

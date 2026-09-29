@@ -5,6 +5,8 @@
 > Este documento describe **qué construir, en qué orden, qué no construir, criterios de aceptación, arquitectura, seguridad y estrategia de migración**. Las casillas de las fases reflejan el estado real del MVP implementado; lo que permanece abierto sigue siendo roadmap.
 
 > **Estado de esta entrega:** las fases 1–7 están implementadas. El hardening local incluye ahora persistencia atómica del estado, rotación acotada de logs, terminación de procesos por plataforma, argumentos seguros y migración versionada de config. La validación nativa en Windows/macOS/Linux y la evidencia de uso diario siguen pendientes.
+>
+> **Cambio de alcance:** la integración y gestión de Docker fue retirada. Las referencias a Docker/Compose en este plan son históricas y no forman parte de la herramienta actual ni deben reimplementarse.
 
 ---
 

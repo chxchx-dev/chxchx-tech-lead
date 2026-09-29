@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+
+import pytest
 
 from chxchx_tech_lead.adapters.agents.claude import ClaudeAdapter
 from chxchx_tech_lead.adapters.agents.codex import CodexAdapter
@@ -34,4 +37,17 @@ def test_unavailable_agent_is_reported_without_execution(tmp_path: Path):
 
     assert info.available is False
     assert result.returncode == 127
+    assert calls == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Los shims .cmd solo aplican en Windows")
+def test_windows_batch_shim_does_not_run_version_probe():
+    calls = []
+    adapter = CodexAdapter(
+        runner=lambda *args, **kwargs: calls.append((args, kwargs)),
+        lookup=lambda _: r"C:\tools\codex.cmd",
+    )
+
+    assert adapter.available() is True
+    assert adapter.version() is None
     assert calls == []

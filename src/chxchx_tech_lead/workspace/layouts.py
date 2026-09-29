@@ -78,12 +78,36 @@ def workspace_layout(
             ]
         )
 
-    if agents:
+    configured_agents = [
+        agent for agent in agents if isinstance(agent.command, list) and agent.command
+    ]
+    if configured_agents:
+        usage_args = [
+            "-m",
+            "chxchx_tech_lead.workspace.usage_panel",
+            "--root",
+            str(root.resolve()),
+        ]
+        for agent in configured_agents:
+            executable = Path(agent.command[0].replace("\\", "/")).name.casefold()
+            provider = executable.removesuffix(".exe")
+            if provider not in {"codex", "claude"}:
+                provider = "other"
+            usage_args.extend(["--agent", f"{agent.id}={provider}"])
+        usage_command = json.dumps(sys.executable, ensure_ascii=False)
+        usage_command_args = " ".join(json.dumps(value, ensure_ascii=False) for value in usage_args)
+        lines.extend(
+            [
+                f"  pane size=8 borderless=true cwd={cwd} command={usage_command} {{",
+                f"    args {usage_command_args};",
+                "  }",
+            ]
+        )
+
+    if configured_agents:
         split_direction = "vertical" if orientation == "horizontal" else "horizontal"
         lines.append(f'  pane split_direction={json.dumps(split_direction)} {{')
-        for agent in agents:
-            if not isinstance(agent.command, list) or not agent.command:
-                continue
+        for agent in configured_agents:
             agent_cwd = json.dumps(str((root / agent.cwd).resolve()), ensure_ascii=False)
             command_parts = agent_pane_command(
                 agent.id,

@@ -72,10 +72,12 @@ Cambio verificable             pruebas, smoke test y reporte de pendientes
 
 ~~~text
 src/chxchx_tech_lead/
-├── cli.py
+├── cli.py             # punto de entrada público
+├── cli_context.py     # registro Typer y presentación compartida
+├── commands/          # setup, workspace, agentes, procesos, proyectos e integraciones
 ├── core/             configuración, detección, trust, migraciones y estado base
-├── workspace/        procesos, sesiones, recursos, agentes y handoff
-├── adapters/         terminal, editor, agentes, Docker Compose y Git
+├── workspace/        fachada y casos de uso para agentes/procesos, modelos y estado
+├── adapters/         terminal, editor, agentes y Git
 ├── integrations/     Basic Memory, Serena, instaladores y MCP
 └── tui/              interfaz Textual
 ~~~

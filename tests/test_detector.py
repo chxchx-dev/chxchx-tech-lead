@@ -19,6 +19,16 @@ def test_detect_dotnet(tmp_path: Path):
     assert "dotnet" in info.stacks
     assert "csharp" in info.languages
 
+
+def test_docker_files_do_not_activate_infrastructure_detection(tmp_path: Path):
+    (tmp_path / "Dockerfile").write_text("FROM python:3.13\n", encoding="utf-8")
+    (tmp_path / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+
+    info = detect_project(tmp_path)
+
+    assert "docker" not in info.infrastructure
+    assert "postgres" not in info.stacks
+
 def test_detect_next_dotnet_postgres_profile(tmp_path: Path):
     (tmp_path / "package.json").write_text(
         '{"dependencies":{"next":"1","react":"1","pg":"1"}}',

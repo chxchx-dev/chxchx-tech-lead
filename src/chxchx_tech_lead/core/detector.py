@@ -47,15 +47,6 @@ def _detect_postgres(root: Path, package: dict) -> bool:
     if dependencies.intersection({"pg", "postgres", "postgresql"}):
         return True
 
-    for filename in ("docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"):
-        path = root / filename
-        if path.exists():
-            try:
-                if "postgres" in path.read_text(encoding="utf-8").lower():
-                    return True
-            except OSError:
-                pass
-
     for path in root.rglob("*.csproj"):
         try:
             if "npgsql" in path.read_text(encoding="utf-8").lower():
@@ -142,8 +133,6 @@ def detect_project(root: Path) -> ProjectInfo:
         if suffix in suffixes and language not in info.languages:
             info.languages.append(language)
 
-    if (root / "Dockerfile").exists() or (root / "docker-compose.yml").exists() or (root / "compose.yml").exists():
-        info.infrastructure.append("docker")
     if (root / ".github" / "workflows").exists():
         info.infrastructure.append("github-actions")
 

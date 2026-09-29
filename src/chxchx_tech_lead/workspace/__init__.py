@@ -3,7 +3,6 @@
 from .models import (
     AgentConfig,
     AgentPresetConfig,
-    DockerConfig,
     ProcessConfig,
     ResourceConfig,
     WorkspaceConfig,
@@ -13,7 +12,6 @@ from .models import (
 __all__ = [
     "AgentConfig",
     "AgentPresetConfig",
-    "DockerConfig",
     "ProcessConfig",
     "ResourceConfig",
     "WorkspaceConfig",

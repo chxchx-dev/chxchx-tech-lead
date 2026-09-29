@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import os
+import json
+import shlex
 import subprocess
 import sys
+from pathlib import Path
+
+from ..integrations.agent_usage import usage_snapshot_path
 
 
 def banner(name: str, label: str = "CHXCHX TECH", logo: str = "") -> str:
@@ -37,8 +42,40 @@ def main() -> int:
         return 2
     print(f"\033[1;36m{banner(name, label, logo)}\033[0m", flush=True)
     print(flush=True)
-    completed = subprocess.run(command, cwd=os.getcwd(), check=False)
+    command, environment = _usage_instrumentation(command, name)
+    completed = subprocess.run(command, cwd=os.getcwd(), env=environment, check=False)
     return completed.returncode
+
+
+def _usage_instrumentation(command: list[str], name: str) -> tuple[list[str], dict[str, str]]:
+    executable = Path(command[0].replace("\\", "/")).name.casefold()
+    for suffix in (".exe", ".cmd", ".bat"):
+        executable = executable.removesuffix(suffix)
+    if executable == "codex":
+        status_items = 'tui.status_line=["model","context-remaining","rate-limits"]'
+        return [command[0], "--config", status_items, *command[1:]], os.environ.copy()
+    if executable != "claude":
+        return command, os.environ.copy()
+    if "--settings" in command:
+        return command, os.environ.copy()
+
+    snapshot = usage_snapshot_path(Path.cwd(), name)
+    statusline_command = shlex.join(
+        [sys.executable, "-m", "chxchx_tech_lead.workspace.usage_statusline"]
+    )
+    settings = json.dumps(
+        {
+            "statusLine": {
+                "type": "command",
+                "command": statusline_command,
+                "refreshInterval": 3,
+            }
+        },
+        separators=(",", ":"),
+    )
+    environment = os.environ.copy()
+    environment["CHXCHX_USAGE_SNAPSHOT"] = str(snapshot)
+    return [command[0], "--settings", settings, *command[1:]], environment
 
 
 if __name__ == "__main__":

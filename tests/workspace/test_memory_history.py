@@ -64,7 +64,8 @@ def test_lists_local_chat_history_for_selected_project(tmp_path: Path, monkeypat
         ),
         encoding="utf-8",
     )
-    claude_dir = tmp_path / "claude" / "projects" / str(project).replace("/", "-")
+    project_key = str(project).replace("\\", "-").replace(":", "-").replace("/", "-")
+    claude_dir = tmp_path / "claude" / "projects" / project_key
     claude_dir.mkdir(parents=True)
     transcript = claude_dir / "claude-1.jsonl"
     transcript.write_text(

@@ -36,6 +36,12 @@ def test_install_dry_run_does_not_require_uv():
     assert result.stdout == "DRY RUN"
 
 
+def test_doctor_does_not_probe_docker():
+    from chxchx_tech_lead.integrations.tools import TOOLS
+
+    assert all(command != "docker" for _name, command in TOOLS)
+
+
 def test_mcp_integration_skips_existing_servers(tmp_path: Path):
     calls = []
 
