@@ -4,7 +4,7 @@
 >
 > Este documento describe **qué construir, en qué orden, qué no construir, criterios de aceptación, arquitectura, seguridad y estrategia de migración**. Las casillas de las fases reflejan el estado real del MVP implementado; lo que permanece abierto sigue siendo roadmap.
 
-> **Estado de esta entrega:** las fases 1–7 están implementadas. El hardening local incluye ahora persistencia atómica del estado, rotación acotada de logs, terminación de procesos por plataforma, argumentos seguros y migración versionada de config. La validación nativa en Windows/macOS/Linux y la evidencia de uso diario siguen pendientes.
+> **Estado de esta entrega:** las fases 1–7 están implementadas. El hardening local incluye persistencia atómica del estado, rotación acotada de logs, terminación de procesos por plataforma, argumentos seguros y migración versionada de config. El usuario reportó prueba manual exitosa en macOS y Windows 11 Pro nativo el 2026-09-30; la regresión CLI heredada y la salida segura de la TUI ya tienen cobertura automatizada local. Falta precisar si Windows fue nativo o WSL, confirmar CI verde por plataforma y acumular evidencia de uso diario.
 >
 > **Cambio de alcance:** la integración y gestión de Docker fue retirada. Las referencias a Docker/Compose en este plan son históricas y no forman parte de la herramienta actual ni deben reimplementarse.
 
@@ -887,16 +887,18 @@ Tener una línea base verificable antes de tocar arquitectura.
 
 - [x] Confirmar la etiqueta `v0.2.0` estable.
 - [x] Ejecutar la suite actual (117 pruebas pasan en el entorno Linux disponible).
-- [ ] Añadir test de CLI de regresión para todos los comandos existentes.
-- [ ] Confirmar que `init`, `setup`, `sync`, `doctor`, `rollback` y `projects` mantienen comportamiento.
-- [ ] Excluir `.venv`, `__pycache__`, `.pytest_cache` y `.git` de cualquier release ZIP.
+- [x] Añadir regresión CLI heredada para `init`, `setup`, `sync`, `doctor`, `rollback` y `projects`.
+- [x] Confirmar mediante pruebas aisladas que `init`, `setup --dry-run`, `sync --dry-run`, `rollback` y `projects` mantienen sus comportamientos básicos.
+- [x] ZIP no aplica a la distribución actual: se instala desde Git con `uv` ([guía de publicación](10-PUBLISH-GIT.md)); no hay artefacto ZIP de release que verificar.
 - [x] Crear ADR: terminal-first sin reimplementar terminal/editor ([ADR-0001](adr/0001-terminal-first-workspace.md)).
 
 ### Definition of Done
 
 El branch de desarrollo puede romper internamente sin perder una referencia estable y reproducible de `v0.2.0`.
 
-> Pendiente de esta fase: ampliar la regresión del CLI a todos los comandos heredados y verificar el contenido final de cualquier ZIP de release.
+> Validación local de cierre (2026-09-30): `compileall`, `pytest` (137 passed, 1 skipped), `uv lock --check` y `scripts/lab_smoke.py` completados correctamente en Linux.
+
+> Fase 0 cerrada: la distribución documentada usa Git/`uv`; no publica ZIP.
 
 ---
 
@@ -1112,13 +1114,15 @@ El usuario puede iniciar el agente correcto para el proyecto desde una sola inte
 
 - [x] Validar rutas relativas POSIX/Windows y bloquear escapes del proyecto.
 - [x] Separar argumentos por defecto y permitir shell solo de forma explícita.
-- [x] Detener grupos POSIX y árboles de procesos en Windows con verificación de propiedad.
+- [x] Detener grupos POSIX y árboles de procesos en Windows con verificación de propiedad; Windows usa `taskkill /T` antes de terminar el proceso padre y escala a `/F` si vence el tiempo de espera.
 - [x] Guardar el estado global mediante escritura temporal y reemplazo atómico.
 - [x] Rotar logs de procesos al superar 5 MiB y conservar hasta tres copias.
 - [x] Migrar configuración v1 → v2 de forma validada e idempotente.
 - [x] Recuperar el estado de procesos administrados desde disco tras reiniciar el manager.
-- [ ] Ejecutar la suite en Windows, macOS y Linux; documentar resultados y corregir diferencias.
-- [ ] Validar comportamiento sostenido de shells y sesiones en Windows/WSL y macOS.
+- [ ] Confirmar y documentar una ejecución verde de la matriz CI Windows, macOS y Linux (Python 3.11–3.13).
+- [x] Registrar la prueba manual reportada como exitosa en macOS y Windows 11 Pro nativo (2026-09-30).
+- [ ] Cuando la versión esté más avanzada, anotar los escenarios manuales y revalidar en Windows 11 Pro la terminación de un proceso con hijos; WSL sigue pendiente si permanece en el alcance.
+- [ ] Validar comportamiento sostenido de shells y sesiones en WSL/macOS, recuperación tras cierres inesperados y cierre seguro de árboles de procesos.
 
 ---
 
@@ -1129,14 +1133,14 @@ No declarar `v1.0` por tener muchas funciones.
 Declararlo solo cuando:
 
 - [ ] se usa diariamente en proyectos reales;
-- [ ] no destruye procesos ajenos;
-- [ ] recupera sesiones correctamente;
-- [ ] las migraciones son seguras;
-- [ ] el CLI tradicional sigue estable;
-- [ ] TUI puede cerrarse sin matar accidentalmente el workspace;
+- [x] no detiene PIDs ajenos; cubierto por `tests/workspace/test_process_manager.py`.
+- [x] recupera estado/procesos y reutiliza la sesión al reanudar; cubierto por `tests/workspace/test_process_manager.py` y `tests/workspace/test_service.py`.
+- [x] las migraciones v1 → v2 son idempotentes y no ejecutan comandos; cubierto por `tests/workspace/test_config.py`.
+- [x] el CLI tradicional mantiene sus flujos básicos; cubierto por `tests/test_cli.py`.
+- [x] La TUI puede cerrarse sin detener el workspace; cubierto por `tests/tui/test_lifecycle.py`.
 - [ ] el consumo propio de ChxChx es bajo;
-- [ ] Linux/macOS/WSL están validados;
-- [ ] existe documentación de recuperación.
+- [ ] Linux/macOS y Windows 11 Pro están validados para la versión actual y documentados; validar WSL si se mantiene en el alcance;
+- [x] existe documentación operativa de recuperación en [08-TROUBLESHOOTING.md](08-TROUBLESHOOTING.md).
 
 ---
 
@@ -1508,7 +1512,7 @@ El siguiente mapa refleja implementación en la rama `dev`, no publicación de e
 - `v0.3.1` — TUI inicial: implementado.
 - `v0.3.2` — Resource Manager: implementado.
 - `v0.4.0` — Operación multiproyecto: implementada.
-- `v0.5.0` — Hardening para uso diario: en curso; falta validación nativa en Windows/macOS/Linux y evidencia sostenida de uso real.
+- `v0.5.0` — Hardening para uso diario: en curso; existe prueba manual exitosa reportada en macOS y Windows, falta cerrar la evidencia CI/manual y el uso sostenido real.
 - `v1.0.0` — solo después de cumplir los criterios de la fase 9 y publicar los resultados de validación.
 
 ---

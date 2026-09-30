@@ -14,6 +14,7 @@ from .process_runtime import command_available as _command_available
 from .process_runtime import pid_alive as _pid_alive
 from .process_runtime import pid_matches_command as _pid_matches_command
 from .process_runtime import terminate_posix_process_group as _terminate_posix_process_group
+from .process_runtime import terminate_windows_process_tree as _terminate_windows_process_tree
 from .state import WorkspaceState, load_state, save_state
 
 
@@ -130,6 +131,11 @@ class ProcessManager:
         if record is None:
             raise ProcessManagerError(f"No hay estado para el proceso: {process_id}")
         self._refresh(record)
+        if record.status is ProcessStatus.UNKNOWN and record.pid is not None:
+            self._persist()
+            raise ProcessManagerError(
+                f"No detuve `{process_id}`: el PID {record.pid} no coincide con el comando administrado"
+            )
         if record.status is not ProcessStatus.RUNNING or record.pid is None:
             return ProcessActionResult(record, False, f"`{process_id}` ya está detenido")
         if dry_run:
@@ -148,23 +154,11 @@ class ProcessManager:
 
         try:
             if os.name == "nt":
-                if handle is not None:
-                    handle.terminate()
-                    try:
-                        handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
-                    except subprocess.TimeoutExpired:
-                        subprocess.run(
-                            ["taskkill", "/PID", str(record.pid), "/T", "/F"],
-                            check=False,
-                            capture_output=True,
-                        )
-                        handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
-                else:
-                    subprocess.run(
-                        ["taskkill", "/PID", str(record.pid), "/T", "/F"],
-                        check=False,
-                        capture_output=True,
-                    )
+                _terminate_windows_process_tree(
+                    record.pid,
+                    handle,
+                    timeout_seconds=_PROCESS_STOP_TIMEOUT_SECONDS,
+                )
             else:
                 _terminate_posix_process_group(
                     record.pid,
@@ -213,9 +207,13 @@ class ProcessManager:
             return record
         if record.pid is None:
             record.status = ProcessStatus.STOPPED
-        elif _pid_alive(record.pid) and self._pid_matches(record.pid, record.command, record.shell):
-            record.status = ProcessStatus.RUNNING
-        elif record.status is ProcessStatus.RUNNING:
+        elif _pid_alive(record.pid):
+            record.status = (
+                ProcessStatus.RUNNING
+                if self._pid_matches(record.pid, record.command, record.shell)
+                else ProcessStatus.UNKNOWN
+            )
+        elif record.status in {ProcessStatus.RUNNING, ProcessStatus.UNKNOWN}:
             record.status = ProcessStatus.EXITED
         return record
 

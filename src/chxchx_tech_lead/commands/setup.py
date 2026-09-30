@@ -130,7 +130,9 @@ def setup(
     console.print("\n[bold cyan]2/3 Inicialización del proyecto[/]")
     init_command(path=path, dry_run=dry_run, no_backup=False, minimal=minimal)
     console.print("\n[bold cyan]3/3 Integraciones MCP[/]")
-    integrate(path=path, client="all", dry_run=dry_run)
+    from .integrations import integrate as integrate_command
+
+    integrate_command(path=path, client="all", dry_run=dry_run, refresh=False)
 
 @app.command()
 def doctor(

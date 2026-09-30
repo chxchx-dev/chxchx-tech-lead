@@ -59,6 +59,46 @@ def terminate_posix_process_group(
             handle.wait(timeout=timeout_seconds)
 
 
+def terminate_windows_process_tree(
+    pid: int,
+    handle: subprocess.Popen[Any] | None,
+    *,
+    timeout_seconds: float,
+) -> None:
+    """Stop a managed Windows process and its descendants."""
+    command = ["taskkill", "/PID", str(pid), "/T"]
+    if handle is None:
+        result = subprocess.run(
+            [*command, "/F"], check=False, capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip()
+            raise OSError(detail or f"taskkill no pudo detener el árbol del PID {pid}")
+        return
+
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    if result.returncode == 0:
+        try:
+            handle.wait(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            forced = subprocess.run(
+                [*command, "/F"], check=False, capture_output=True, text=True
+            )
+            if forced.returncode != 0:
+                detail = forced.stderr.strip() or forced.stdout.strip()
+                raise OSError(detail or f"taskkill no pudo forzar el árbol del PID {pid}")
+            handle.wait(timeout=timeout_seconds)
+        return
+
+    # Keep the direct child cleanup attempt, but report that its descendants
+    # could not be confirmed stopped instead of silently claiming success.
+    if handle.poll() is None:
+        handle.terminate()
+    handle.wait(timeout=timeout_seconds)
+    detail = result.stderr.strip() or result.stdout.strip()
+    raise OSError(detail or f"taskkill no pudo confirmar el cierre del árbol del PID {pid}")
+
+
 def pid_matches_command(pid: int, command: list[str] | str, shell: bool) -> bool:
     if not pid_alive(pid):
         return False
