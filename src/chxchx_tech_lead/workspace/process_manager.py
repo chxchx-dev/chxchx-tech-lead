@@ -1,95 +1,25 @@
 from __future__ import annotations
 
 import os
-import shutil
-import signal
 import subprocess
-import sys
-import time
-from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from enum import StrEnum
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from ..core.paths import ensure_home, home_dir
+from ..core.paths import home_dir
 from ..core.trust import is_trusted
 from .models import ProcessConfig, WorkspaceStatus
+from .process_models import ManagedProcess, ProcessActionResult, ProcessStatus
+from .process_runtime import command_available as _command_available
+from .process_runtime import pid_alive as _pid_alive
+from .process_runtime import pid_matches_command as _pid_matches_command
+from .process_runtime import terminate_posix_process_group as _terminate_posix_process_group
+from .process_runtime import terminate_windows_process_tree as _terminate_windows_process_tree
 from .state import WorkspaceState, load_state, save_state
-
-
-class ProcessStatus(StrEnum):
-    RUNNING = "RUNNING"
-    STOPPED = "STOPPED"
-    EXITED = "EXITED"
-    FAILED = "FAILED"
-    UNKNOWN = "UNKNOWN"
 
 
 class ProcessManagerError(RuntimeError):
     """Error accionable al administrar un proceso del workspace."""
-
-
-@dataclass(slots=True)
-class ManagedProcess:
-    id: str
-    label: str
-    command: list[str] | str
-    cwd: Path
-    status: ProcessStatus = ProcessStatus.STOPPED
-    pid: int | None = None
-    port: int | None = None
-    started_at: datetime | None = None
-    exit_code: int | None = None
-    log_path: Path | None = None
-    shell: bool = False
-
-    def to_mapping(self) -> dict[str, Any]:
-        data = asdict(self)
-        data["cwd"] = str(self.cwd)
-        data["status"] = self.status.value
-        data["started_at"] = self.started_at.isoformat() if self.started_at else None
-        data["log_path"] = str(self.log_path) if self.log_path else None
-        return data
-
-    @classmethod
-    def from_mapping(cls, raw: dict[str, Any]) -> "ManagedProcess | None":
-        try:
-            status = ProcessStatus(raw.get("status", ProcessStatus.STOPPED))
-        except ValueError:
-            status = ProcessStatus.UNKNOWN
-        command = raw.get("command")
-        if not isinstance(command, (str, list)) or (isinstance(command, list) and not all(isinstance(item, str) for item in command)):
-            return None
-        if not isinstance(raw.get("id"), str) or not isinstance(raw.get("label"), str) or not isinstance(raw.get("cwd"), str):
-            return None
-        started_at = None
-        if isinstance(raw.get("started_at"), str):
-            try:
-                started_at = datetime.fromisoformat(raw["started_at"])
-            except ValueError:
-                pass
-        return cls(
-            id=raw["id"],
-            label=raw["label"],
-            command=list(command) if isinstance(command, list) else command,
-            cwd=Path(raw["cwd"]),
-            status=status,
-            pid=raw.get("pid") if isinstance(raw.get("pid"), int) else None,
-            port=raw.get("port") if isinstance(raw.get("port"), int) else None,
-            started_at=started_at,
-            exit_code=raw.get("exit_code") if isinstance(raw.get("exit_code"), int) else None,
-            log_path=Path(raw["log_path"]) if isinstance(raw.get("log_path"), str) else None,
-            shell=raw.get("shell") is True,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class ProcessActionResult:
-    process: ManagedProcess
-    changed: bool
-    message: str
-
 
 PopenFactory = Callable[..., subprocess.Popen[Any]]
 _PROCESS_STOP_TIMEOUT_SECONDS = 5
@@ -201,6 +131,11 @@ class ProcessManager:
         if record is None:
             raise ProcessManagerError(f"No hay estado para el proceso: {process_id}")
         self._refresh(record)
+        if record.status is ProcessStatus.UNKNOWN and record.pid is not None:
+            self._persist()
+            raise ProcessManagerError(
+                f"No detuve `{process_id}`: el PID {record.pid} no coincide con el comando administrado"
+            )
         if record.status is not ProcessStatus.RUNNING or record.pid is None:
             return ProcessActionResult(record, False, f"`{process_id}` ya está detenido")
         if dry_run:
@@ -219,25 +154,17 @@ class ProcessManager:
 
         try:
             if os.name == "nt":
-                if handle is not None:
-                    handle.terminate()
-                    try:
-                        handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
-                    except subprocess.TimeoutExpired:
-                        subprocess.run(
-                            ["taskkill", "/PID", str(record.pid), "/T", "/F"],
-                            check=False,
-                            capture_output=True,
-                        )
-                        handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
-                else:
-                    subprocess.run(
-                        ["taskkill", "/PID", str(record.pid), "/T", "/F"],
-                        check=False,
-                        capture_output=True,
-                    )
+                _terminate_windows_process_tree(
+                    record.pid,
+                    handle,
+                    timeout_seconds=_PROCESS_STOP_TIMEOUT_SECONDS,
+                )
             else:
-                _terminate_posix_process_group(record.pid, handle)
+                _terminate_posix_process_group(
+                    record.pid,
+                    handle,
+                    timeout_seconds=_PROCESS_STOP_TIMEOUT_SECONDS,
+                )
         except (OSError, subprocess.TimeoutExpired) as exc:
             record.status = ProcessStatus.UNKNOWN
             self._persist()
@@ -247,6 +174,25 @@ class ProcessManager:
         self._handles.pop(process_id, None)
         self._persist()
         return ProcessActionResult(record, True, f"Detenido `{process_id}`")
+
+    def read_log(self, process_id: str, *, max_bytes: int = 16_000) -> str:
+        if process_id not in self.configs:
+            raise ProcessManagerError(f"No existe el proceso configurado: {process_id}")
+        record = self._records.get(process_id)
+        log_path = record.log_path if record and record.log_path else _log_path(
+            self.project_root, process_id
+        )
+        try:
+            with log_path.open("rb") as log_file:
+                log_file.seek(0, os.SEEK_END)
+                size = log_file.tell()
+                log_file.seek(max(0, size - max_bytes))
+                content = log_file.read(max_bytes)
+        except FileNotFoundError:
+            return ""
+        except OSError as exc:
+            raise ProcessManagerError(f"No pude leer el log de `{process_id}`: {exc}") from exc
+        return "\n".join(content.decode("utf-8", errors="replace").splitlines()[-300:])
 
     def _refresh(self, record: ManagedProcess) -> ManagedProcess:
         handle = self._handles.get(record.id)
@@ -261,9 +207,13 @@ class ProcessManager:
             return record
         if record.pid is None:
             record.status = ProcessStatus.STOPPED
-        elif _pid_alive(record.pid) and self._pid_matches(record.pid, record.command, record.shell):
-            record.status = ProcessStatus.RUNNING
-        elif record.status is ProcessStatus.RUNNING:
+        elif _pid_alive(record.pid):
+            record.status = (
+                ProcessStatus.RUNNING
+                if self._pid_matches(record.pid, record.command, record.shell)
+                else ProcessStatus.UNKNOWN
+            )
+        elif record.status in {ProcessStatus.RUNNING, ProcessStatus.UNKNOWN}:
             record.status = ProcessStatus.EXITED
         return record
 
@@ -292,95 +242,3 @@ def _rotate_log(path: Path) -> None:
         if source.exists():
             source.replace(Path(f"{path}.{index + 1}"))
     path.replace(Path(f"{path}.1"))
-
-
-def _command_available(command: list[str] | str, cwd: Path, shell: bool) -> bool:
-    if shell:
-        return isinstance(command, str) and bool(command.strip())
-    if not isinstance(command, list) or not command:
-        return False
-    executable = command[0]
-    if "/" in executable or "\\" in executable:
-        return (cwd / executable).exists() if not Path(executable).is_absolute() else Path(executable).exists()
-    return shutil.which(executable) is not None
-
-
-def _pid_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except (OSError, ProcessLookupError):
-        return False
-    return True
-
-
-def _process_group_alive(process_group_id: int) -> bool:
-    try:
-        os.killpg(process_group_id, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def _signal_process_group(process_group_id: int, process_signal: int) -> bool:
-    try:
-        os.killpg(process_group_id, process_signal)
-    except ProcessLookupError:
-        return False
-    return True
-
-
-def _terminate_posix_process_group(
-    process_group_id: int,
-    handle: subprocess.Popen[Any] | None,
-) -> None:
-    """Stop only the isolated process group created for this managed process."""
-    if not _signal_process_group(process_group_id, signal.SIGTERM):
-        return
-
-    if handle is not None:
-        try:
-            handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
-        except subprocess.TimeoutExpired:
-            _signal_process_group(process_group_id, signal.SIGKILL)
-            handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
-            return
-
-    deadline = time.monotonic() + _PROCESS_STOP_TIMEOUT_SECONDS
-    while _process_group_alive(process_group_id) and time.monotonic() < deadline:
-        time.sleep(0.05)
-    if _process_group_alive(process_group_id):
-        _signal_process_group(process_group_id, signal.SIGKILL)
-        if handle is not None and handle.poll() is None:
-            handle.wait(timeout=_PROCESS_STOP_TIMEOUT_SECONDS)
-
-
-def _pid_matches_command(pid: int, command: list[str] | str, shell: bool) -> bool:
-    if not _pid_alive(pid):
-        return False
-    if shell:
-        shell_executable = os.environ.get("COMSPEC", "cmd.exe") if os.name == "nt" else "sh"
-        expected_name = Path(shell_executable).name
-    else:
-        expected = command if isinstance(command, str) else command[0]
-        expected_name = Path(expected.split()[0]).name
-    if sys.platform.startswith("linux"):
-        try:
-            raw = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
-            return bool(raw) and Path(raw.split()[0]).name == expected_name
-        except OSError:
-            return False
-    if os.name != "nt":
-        result = subprocess.run(["ps", "-p", str(pid), "-o", "command="], capture_output=True, text=True, check=False)
-        raw = result.stdout.strip()
-        return result.returncode == 0 and bool(raw) and Path(raw.split()[0]).name == expected_name
-    result = subprocess.run(
-        ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return result.returncode == 0 and expected_name.lower() in result.stdout.lower()

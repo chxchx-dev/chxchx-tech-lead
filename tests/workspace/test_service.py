@@ -11,7 +11,7 @@ from chxchx_tech_lead.core.runner import CommandResult
 from chxchx_tech_lead.core.trust import trust_project
 from chxchx_tech_lead.workspace.service import WorkspaceOperationError, WorkspaceService
 from chxchx_tech_lead.workspace.models import WorkspaceStatus
-from chxchx_tech_lead.workspace.state import load_state, save_state
+from chxchx_tech_lead.workspace.state import load_state, save_state, set_workspace_status
 
 
 class FakeTerminal:
@@ -69,9 +69,9 @@ critical_memory_percent = 90
 warn_swap_percent = 40
 
 [workspace.docker]
-enabled = false
-compose_file = "compose.yaml"
-auto_start = false
+enabled = true
+compose_file = "missing-compose.yaml"
+auto_start = true
 
 [[workspace.processes]]
 id = "api"
@@ -102,6 +102,54 @@ def test_untrusted_workspace_never_starts_auto_processes(tmp_path: Path, monkeyp
 
     assert action.process_results == []
     assert any(call[0] == "create" for call in terminal.calls)
+
+
+class ExistingSessionTerminal(FakeTerminal):
+    def session_exists(self, name):
+        self.calls.append(("exists", name))
+        return True
+
+
+def test_resume_reuses_persisted_session_after_service_restart(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project, auto_start=False)
+    trust_project(project)
+    set_workspace_status(project, WorkspaceStatus.SUSPENDED, session_name="demo-workspace")
+    terminal = ExistingSessionTerminal()
+
+    action = WorkspaceService(
+        ProjectInfo(project, "project"), terminal=terminal, editor=FakeEditor()
+    ).resume()
+
+    assert "Sesión existente: demo-workspace" in action.messages
+    assert not any(call[0] == "create" for call in terminal.calls)
+    assert load_state(project).status is WorkspaceStatus.ACTIVE
+    assert load_state(project).session_name == "demo-workspace"
+
+
+def test_stop_ignores_legacy_docker_settings(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project, auto_start=False)
+
+    action = WorkspaceService(ProjectInfo(project, "project"), terminal=FakeTerminal()).stop()
+
+    assert action.messages == []
+
+
+def test_start_ignores_legacy_docker_settings(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project, auto_start=False)
+    trust_project(project)
+
+    action = WorkspaceService(ProjectInfo(project, "project"), terminal=FakeTerminal()).start()
+
+    assert "Docker Compose iniciado" not in action.messages
 
 
 def test_trusted_workspace_starts_auto_process_in_dry_run(tmp_path: Path, monkeypatch):

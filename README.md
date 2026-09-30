@@ -26,7 +26,7 @@
 ║                                                                                            ║
 ╚════════════════════════════════════════════════════════════════════════════════════════════╝
 ```
-ChxChx Tech Lead prepara el contexto de un proyecto, conecta herramientas externas y administra un workspace ligero desde la terminal. No reemplaza a Git, Docker, Zellij, Sublime, Codex, Claude ni OpenCode: los detecta y los orquesta mediante adapters.
+ChxChx Tech Lead prepara el contexto de un proyecto, conecta herramientas externas y administra un workspace ligero desde la terminal. No reemplaza a Git, Zellij, Sublime, Codex, Claude ni OpenCode: los detecta y los orquesta mediante adapters.
 
 ## Funciones
 
@@ -37,7 +37,7 @@ La rama `dev` añade el Terminal Workspace, pendiente de validación multiplataf
 - configuración `.ai/chxchx-tech.toml` v2 y migración v1 → v2;
 - trust local para impedir ejecutar comandos de repositorios no aprobados;
 - Process Manager con estado persistente, logs rotativos y protección contra PIDs ajenos;
-- adapters para Zellij, fallback de subprocess, Sublime, agentes CLI, Docker Compose y Git;
+- adapters para Zellij, fallback de subprocess, Sublime, agentes CLI y Git;
 - comandos CLI de workspace, procesos, agentes, editor y recursos;
 - dashboard con Textual y operación multiproyecto mediante sesiones recuperables.
 
@@ -54,10 +54,9 @@ Para usar todas las funciones del workspace, instala también según necesidad:
 
 - Zellij para sesiones persistentes;
 - Sublime Text para editar;
-- Docker y Compose para infraestructura;
 - Codex CLI, Claude Code u OpenCode para agentes.
 
-ChxChx instala únicamente las herramientas gestionadas por él: Basic Memory y Serena. Los clientes de escritorio, Docker, Zellij y agentes mantienen su instalación oficial separada.
+ChxChx instala únicamente las herramientas gestionadas por él: Basic Memory y Serena. Los clientes de escritorio, Zellij y agentes mantienen su instalación oficial separada.
 
 ### Instalador reducido
 
@@ -129,7 +128,7 @@ chxchx-tech version
 chxchx-tech doctor
 ```
 
-La instalación desde Git no incluye herramientas externas como Zellij, Sublime, Docker o los agentes.
+La instalación desde Git no incluye herramientas externas como Zellij, Sublime o los agentes.
 
 ## Verificación inicial
 
@@ -290,11 +289,6 @@ warn_memory_percent = 75
 critical_memory_percent = 90
 warn_swap_percent = 40
 
-[workspace.docker]
-enabled = false
-compose_file = "compose.yaml"
-auto_start = false
-
 [[workspace.processes]]
 id = "backend"
 label = "Backend"
@@ -388,7 +382,7 @@ chxchx-tech workspace trust .
 chxchx-tech workspace start .
 ```
 
-Detener el workspace detiene procesos gestionados y Docker configurado, pero conserva la sesión Zellij para poder recuperarla con `workspace attach`.
+Detener el workspace detiene los procesos gestionados y conserva la sesión Zellij para poder recuperarla con `workspace attach`.
 
 ## Uso correcto de Codex
 
@@ -485,7 +479,7 @@ chxchx-tech projects switch ALIAS      suspende el activo y activa otro proyecto
 chxchx-tech projects sync              sincroniza proyectos registrados
 chxchx-tech run [PATH]                 start + agentes + attach
 chxchx-tech attach [PATH]              atajo para entrar a Zellij
-chxchx-tech stop [PATH]                atajo para detener procesos y Docker
+chxchx-tech stop [PATH]                atajo para detener procesos gestionados
 ```
 
 ### Workspace y procesos
@@ -494,8 +488,8 @@ chxchx-tech stop [PATH]                atajo para detener procesos y Docker
 chxchx-tech workspace status [PATH|ALIAS]  inspección sin ejecutar procesos
 chxchx-tech workspace trust [PATH]         aprueba el proyecto localmente
 chxchx-tech workspace open [PATH|ALIAS]    prepara sesión y acciones auto_start
-chxchx-tech workspace start [PATH|ALIAS]   inicia sesión, procesos y Docker configurado
-chxchx-tech workspace stop [PATH|ALIAS]    detiene procesos y Docker del proyecto
+chxchx-tech workspace start [PATH|ALIAS]   inicia sesión y procesos configurados
+chxchx-tech workspace stop [PATH|ALIAS]    detiene procesos gestionados
 chxchx-tech workspace suspend [PATH|ALIAS] detiene procesos y conserva el workspace recuperable
 chxchx-tech workspace resume [PATH|ALIAS]  reanuda un workspace suspendido
 chxchx-tech workspace attach [PATH|ALIAS]  se adjunta a la sesión existente
@@ -672,8 +666,6 @@ Comprueba su disponibilidad con:
 ```bash
 zellij --version
 subl --version
-docker --version
-docker compose version
 codex --version
 claude --version
 opencode --version
@@ -850,4 +842,4 @@ chxchx-tech doctor .
 chxchx-tech workspace stop .
 ```
 
-Esto no ejecuta `docker compose down`, no borra contenedores y no mata procesos que no hayan sido registrados por ChxChx.
+Esto no elimina datos del proyecto ni mata procesos que no hayan sido registrados por ChxChx.

@@ -59,6 +59,21 @@ python -m compileall src
 pytest
 ```
 
+## Organización del código
+
+- Mantén los módulos Python por debajo de 300 líneas; si una extracción queda
+  pendiente, documenta la excepción y el siguiente paso en
+  `docs/16-CODE-ORGANIZATION.md`.
+- Separa composición de UI, casos de uso y adapters. Los callbacks de la TUI y
+  los comandos CLI no deben contener lógica de procesos o integraciones.
+- Prefiere módulos por responsabilidad y nombres de dominio; evita nuevos
+  `utils.py`, `helpers.py` o archivos monolíticos.
+- Haz las extracciones en pasos pequeños y conserva las interfaces públicas
+  mientras se migra la implementación.
+
+La arquitectura objetivo y el orden de extracción están en
+`docs/16-CODE-ORGANIZATION.md`.
+
 ## Arquitectura
 
 Ver `docs/03-ARCHITECTURE.md`.

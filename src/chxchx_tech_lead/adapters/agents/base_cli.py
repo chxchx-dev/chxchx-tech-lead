@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Callable
 
@@ -29,9 +30,15 @@ class CliAgentAdapter:
         return self._lookup(self.command) is not None
 
     def version(self) -> str | None:
-        if not self.available():
+        resolved = self._lookup(self.command)
+        if not resolved:
             return None
-        result = self._runner([self.command, "--version"], dry_run=False)
+        if os.name == "nt" and Path(resolved).suffix.lower() in {".bat", ".cmd"}:
+            return None
+        try:
+            result = self._runner([self.command, "--version"], dry_run=False)
+        except OSError:
+            return None
         if result.returncode != 0:
             return None
         return result.stdout or result.stderr or None

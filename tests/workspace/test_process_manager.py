@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 import signal
 import sys
 
@@ -86,7 +87,7 @@ def test_process_manager_can_stop_an_explicit_shell_command(tmp_path: Path, monk
 
 @pytest.mark.skipif(sys.platform == "win32", reason="los grupos de procesos POSIX no existen en Windows")
 def test_process_manager_stops_the_isolated_process_group(tmp_path: Path, monkeypatch):
-    import chxchx_tech_lead.workspace.process_manager as process_manager_module
+    import chxchx_tech_lead.workspace.process_runtime as process_runtime_module
 
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
     project = tmp_path / "project"
@@ -120,7 +121,7 @@ def test_process_manager_stops_the_isolated_process_group(tmp_path: Path, monkey
     signals = []
     monkeypatch.setattr(manager, "_pid_matches", lambda *_args: True)
     monkeypatch.setattr(process_manager_module.os, "killpg", lambda pid, sig: signals.append((pid, sig)))
-    monkeypatch.setattr(process_manager_module, "_process_group_alive", lambda _pid: False)
+    monkeypatch.setattr(process_runtime_module, "_process_group_alive", lambda _pid: False)
 
     result = manager.stop("worker")
 
@@ -130,7 +131,7 @@ def test_process_manager_stops_the_isolated_process_group(tmp_path: Path, monkey
 
 @pytest.mark.skipif(sys.platform == "win32", reason="los grupos de procesos POSIX no existen en Windows")
 def test_process_manager_escalates_only_after_graceful_group_stop_times_out(tmp_path: Path, monkeypatch):
-    import chxchx_tech_lead.workspace.process_manager as process_manager_module
+    import chxchx_tech_lead.workspace.process_runtime as process_runtime_module
 
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
     project = tmp_path / "project"
@@ -164,7 +165,7 @@ def test_process_manager_escalates_only_after_graceful_group_stop_times_out(tmp_
     signals = []
     monkeypatch.setattr(manager, "_pid_matches", lambda *_args: True)
     monkeypatch.setattr(process_manager_module.os, "killpg", lambda pid, sig: signals.append((pid, sig)))
-    monkeypatch.setattr(process_manager_module, "_process_group_alive", lambda _pid: True)
+    monkeypatch.setattr(process_runtime_module, "_process_group_alive", lambda _pid: True)
     monkeypatch.setattr(process_manager_module, "_PROCESS_STOP_TIMEOUT_SECONDS", 0)
 
     manager.stop("worker")
@@ -270,8 +271,84 @@ def test_process_manager_recovers_process_state_after_restart(tmp_path: Path, mo
     try:
         assert started.process.pid is not None
         assert recovered.list()[0].status is ProcessStatus.RUNNING
+        terminations = []
+        with monkeypatch.context() as patcher:
+            patcher.setattr(
+                process_manager_module,
+                "_terminate_posix_process_group",
+                lambda pid, handle, *, timeout_seconds: terminations.append(
+                    (pid, handle, timeout_seconds)
+                ),
+            )
+            stopped = recovered.stop("worker")
 
-        stopped = recovered.stop("worker")
         assert stopped.process.status is ProcessStatus.EXITED
+        assert terminations == [
+            (started.process.pid, None, process_manager_module._PROCESS_STOP_TIMEOUT_SECONDS)
+        ]
     finally:
         original.stop("worker")
+
+
+def test_recovered_foreign_pid_is_not_stopped(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    manager = ProcessManager(
+        project,
+        [_config([sys.executable, "-c", "pass"])],
+        trusted=True,
+        pid_matches=lambda *_args: False,
+    )
+    record = ManagedProcess(
+        id="worker",
+        label="Worker",
+        command=[sys.executable, "-c", "pass"],
+        cwd=project,
+        status=ProcessStatus.RUNNING,
+        pid=4747,
+    )
+    manager._records[record.id] = record
+    monkeypatch.setattr(process_manager_module, "_pid_alive", lambda _pid: True)
+
+    with pytest.raises(ProcessManagerError, match="no coincide"):
+        manager.stop("worker")
+
+    assert record.status is ProcessStatus.UNKNOWN
+
+
+def test_process_manager_routes_windows_stop_to_tree_terminator(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    manager = ProcessManager(project, [_config([sys.executable, "-c", "pass"])], trusted=True)
+
+    class FakeHandle:
+        pid = 4848
+        returncode = None
+
+        def poll(self):
+            return self.returncode
+
+    handle = FakeHandle()
+    manager._records["worker"] = ManagedProcess(
+        id="worker",
+        label="Worker",
+        command=[sys.executable, "-c", "pass"],
+        cwd=project,
+        status=ProcessStatus.RUNNING,
+        pid=handle.pid,
+    )
+    manager._handles["worker"] = handle
+    calls = []
+    monkeypatch.setattr(process_manager_module, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        process_manager_module,
+        "_terminate_windows_process_tree",
+        lambda pid, process, *, timeout_seconds: calls.append((pid, process, timeout_seconds))
+        or setattr(process, "returncode", 0),
+    )
+    monkeypatch.setattr(manager, "_persist", lambda: None)
+
+    stopped = manager.stop("worker")
+
+    assert stopped.process.status is ProcessStatus.EXITED
+    assert calls == [(handle.pid, handle, process_manager_module._PROCESS_STOP_TIMEOUT_SECONDS)]

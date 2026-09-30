@@ -17,14 +17,14 @@ ChxChx será un control plane local terminal-first:
 - El CLI y la TUI presentan acciones y estado; no contienen la lógica de ejecución de procesos.
 - `core/` administra detección, configuración, confianza, estado y migraciones.
 - `workspace/` coordina sesiones, procesos, recursos, agentes y handoff.
-- `adapters/` aísla Zellij, subprocess, Sublime, Git, Docker Compose y las CLI de agentes.
+- `adapters/` aísla Zellij, subprocess, Sublime, Git y las CLI de agentes.
 - `integrations/` mantiene las integraciones de instalación y MCP existentes.
 - `setup` e `init` preparan configuración; las operaciones de workspace ejecutan procesos.
 - Los comandos se pasan como argumentos separados por defecto. El uso de shell debe declararse de forma explícita.
 - Los proyectos requieren confianza local antes de ejecutar procesos configurados.
 - El estado y los logs viven fuera del repositorio preparado.
 
-ChxChx no implementará un emulador de terminal, editor, cliente Git, runtime propio de agentes ni daemon de Docker.
+ChxChx no implementará un emulador de terminal, editor, cliente Git ni runtime propio de agentes.
 
 ## Consecuencias
 
