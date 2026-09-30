@@ -271,9 +271,21 @@ def test_process_manager_recovers_process_state_after_restart(tmp_path: Path, mo
     try:
         assert started.process.pid is not None
         assert recovered.list()[0].status is ProcessStatus.RUNNING
+        terminations = []
+        with monkeypatch.context() as patcher:
+            patcher.setattr(
+                process_manager_module,
+                "_terminate_posix_process_group",
+                lambda pid, handle, *, timeout_seconds: terminations.append(
+                    (pid, handle, timeout_seconds)
+                ),
+            )
+            stopped = recovered.stop("worker")
 
-        stopped = recovered.stop("worker")
         assert stopped.process.status is ProcessStatus.EXITED
+        assert terminations == [
+            (started.process.pid, None, process_manager_module._PROCESS_STOP_TIMEOUT_SECONDS)
+        ]
     finally:
         original.stop("worker")
 
