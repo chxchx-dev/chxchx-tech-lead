@@ -32,7 +32,7 @@ ChxChx Tech Lead prepara el contexto de un proyecto, conecta herramientas extern
 
 La versión pública estable `0.2.0` incluye preparación idempotente de proyectos, perfiles y detección de stack, backups y rollback, integraciones MCP, registro multiproyecto, diagnóstico y smoke test. Terminal Workspace todavía no forma parte de esa release.
 
-La rama `dev` añade el Terminal Workspace, pendiente de validación multiplataforma antes de publicar una versión nueva:
+La rama `dev` añade el Terminal Workspace. El PR pasó la matriz automatizada de Linux, macOS y Windows (Python 3.11–3.13); la validación manual de release y el uso sostenido en proyectos reales siguen antes de publicar una versión nueva:
 
 - configuración `.ai/chxchx-tech.toml` v2 y migración v1 → v2;
 - trust local para impedir ejecutar comandos de repositorios no aprobados;
@@ -120,15 +120,59 @@ chxchx-tech version
 
 ### Instalación desde Git
 
-Sustituye `TU_USUARIO` por la URL real del repositorio:
+La instalación estable publicada sigue en `v0.2.0`:
 
 ```bash
-uv tool install "git+https://github.com/TU_USUARIO/chxchx-tech-lead.git@v0.2.0"
+uv tool install "git+https://github.com/chxchx-dev/chxchx-tech-lead.git@v0.2.0"
 chxchx-tech version
 chxchx-tech doctor
 ```
 
 La instalación desde Git no incluye herramientas externas como Zellij, Sublime o los agentes.
+
+### Actualizar una instalación existente para probar `dev`
+
+El build actual de la rama `dev` se identifica como `0.5.0.dev0`. No es una
+release estable; úsalo para las pruebas de Terminal Workspace y registra los
+resultados en [docs/17-REAL-WORLD-VALIDATION.md](docs/17-REAL-WORLD-VALIDATION.md).
+
+Cierra la TUI. Si el CLI instalado ya ofrece el comando, suspende primero el
+workspace para detener los procesos gestionados y poder reanudarlo después:
+
+```bash
+chxchx-tech workspace suspend .
+```
+
+Luego, tanto en Linux/macOS como en Windows PowerShell, reemplaza la instalación
+global de ChxChx por la de `dev`:
+
+```bash
+uv tool install --force "git+https://github.com/chxchx-dev/chxchx-tech-lead.git@dev"
+chxchx-tech version
+chxchx-tech doctor .
+chxchx-tech workspace status .
+```
+
+`version` debe mostrar `chxchx-tech-lead 0.5.0.dev0`. Si suspendiste el workspace,
+reanúdalo y continúa la prueba:
+
+```bash
+chxchx-tech workspace resume .
+```
+
+`--force` reemplaza el entorno de la herramienta ChxChx. La actualización no
+modifica la configuración `.ai/` de tus proyectos ni actualiza Basic Memory,
+Serena, Zellij, Sublime o los clientes de agentes. No ejecutes de nuevo los
+scripts de instalación general para actualizar solo ChxChx.
+
+Si ya lo instalaste en modo editable desde un clon, actualiza ese checkout limpio
+en la rama `dev` con `git pull --ff-only origin dev` y reinstala desde su raíz:
+
+```bash
+uv tool install --force --editable .
+```
+
+Consulta la [guía oficial de herramientas de uv](https://docs.astral.sh/uv/guides/tools/) para más detalles sobre la reinstalación forzada.
 
 ## Verificación inicial
 

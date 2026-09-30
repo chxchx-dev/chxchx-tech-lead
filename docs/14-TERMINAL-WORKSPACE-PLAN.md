@@ -4,7 +4,7 @@
 >
 > Este documento describe **qué construir, en qué orden, qué no construir, criterios de aceptación, arquitectura, seguridad y estrategia de migración**. Las casillas de las fases reflejan el estado real del MVP implementado; lo que permanece abierto sigue siendo roadmap.
 
-> **Estado de esta entrega:** las fases 1–7 están implementadas. El hardening local incluye persistencia atómica del estado, rotación acotada de logs, terminación de procesos por plataforma, argumentos seguros y migración versionada de config. El usuario reportó prueba manual exitosa en macOS y Windows 11 Pro nativo el 2026-09-30; la regresión CLI heredada y la salida segura de la TUI ya tienen cobertura automatizada local. Falta precisar si Windows fue nativo o WSL, confirmar CI verde por plataforma y acumular evidencia de uso diario.
+> **Estado de esta entrega:** las fases 1–7 están implementadas. El hardening local incluye persistencia atómica del estado, rotación acotada de logs, terminación de procesos por plataforma, argumentos seguros y migración versionada de config. El usuario reportó pruebas manuales exitosas en macOS y Windows 11 Pro nativo el 2026-09-30. El PR pasó la matriz CI de Linux, macOS y Windows con Python 3.11, 3.12 y 3.13 (9 combinaciones; resultado reportado por el usuario). La regresión CLI heredada y la salida segura de la TUI tienen cobertura automatizada. Quedan la evidencia de uso sostenido y la validación manual de release; WSL está pendiente de confirmar como plataforma objetivo.
 >
 > **Cambio de alcance:** la integración y gestión de Docker fue retirada. Las referencias a Docker/Compose en este plan son históricas y no forman parte de la herramienta actual ni deben reimplementarse.
 
@@ -1119,10 +1119,10 @@ El usuario puede iniciar el agente correcto para el proyecto desde una sola inte
 - [x] Rotar logs de procesos al superar 5 MiB y conservar hasta tres copias.
 - [x] Migrar configuración v1 → v2 de forma validada e idempotente.
 - [x] Recuperar el estado de procesos administrados desde disco tras reiniciar el manager.
-- [ ] Confirmar y documentar una ejecución verde de la matriz CI Windows, macOS y Linux (Python 3.11–3.13).
+- [x] Confirmar y documentar el PR verde en la matriz CI Windows, macOS y Linux (Python 3.11–3.13; 9 combinaciones, 2026-09-30).
 - [x] Registrar la prueba manual reportada como exitosa en macOS y Windows 11 Pro nativo (2026-09-30).
-- [ ] Cuando la versión esté más avanzada, anotar los escenarios manuales y revalidar en Windows 11 Pro la terminación de un proceso con hijos; WSL sigue pendiente si permanece en el alcance.
-- [ ] Validar comportamiento sostenido de shells y sesiones en WSL/macOS, recuperación tras cierres inesperados y cierre seguro de árboles de procesos.
+- [ ] Antes de `v1.0`, anotar los escenarios manuales y revalidar en Windows 11 Pro la terminación de un proceso con hijos; decidir si WSL permanece en el alcance y validarlo si corresponde.
+- [ ] Durante el uso real, registrar sesiones con la checklist de [17-REAL-WORLD-VALIDATION.md](17-REAL-WORLD-VALIDATION.md), validar comportamiento sostenido de shells/sesiones y recuperación tras cierres inesperados; validar WSL si permanece en el alcance.
 
 ---
 
@@ -1512,7 +1512,7 @@ El siguiente mapa refleja implementación en la rama `dev`, no publicación de e
 - `v0.3.1` — TUI inicial: implementado.
 - `v0.3.2` — Resource Manager: implementado.
 - `v0.4.0` — Operación multiproyecto: implementada.
-- `v0.5.0` — Hardening para uso diario: en curso; existe prueba manual exitosa reportada en macOS y Windows, falta cerrar la evidencia CI/manual y el uso sostenido real.
+- `v0.5.0` — Hardening para uso diario: en curso; CI verde en los tres sistemas y pruebas manuales exitosas reportadas en macOS y Windows 11 Pro. Pendientes: evidencia de uso sostenido y validación manual de release.
 - `v1.0.0` — solo después de cumplir los criterios de la fase 9 y publicar los resultados de validación.
 
 ---

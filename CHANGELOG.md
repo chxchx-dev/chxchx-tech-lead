@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Identifica el build de pruebas de Terminal Workspace como `0.5.0.dev0` y documenta cómo actualizar instalaciones existentes desde `dev`.
 - Escribe el estado persistente mediante archivo temporal y reemplazo atómico para tolerar interrupciones.
 - Rota los logs de procesos al superar 5 MiB y conserva hasta tres copias anteriores.
 - Añade pruebas de recuperación del estado de procesos tras reiniciar el manager.
