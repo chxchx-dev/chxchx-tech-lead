@@ -65,6 +65,27 @@ def test_windows_tree_stop_forces_only_after_graceful_timeout(monkeypatch):
     assert not handle.terminated
 
 
+def test_windows_tree_stop_escalates_when_graceful_taskkill_fails(monkeypatch):
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        status = 1 if len(calls) == 1 else 0
+        return subprocess.CompletedProcess(command, status, "", "se requiere /F")
+
+    monkeypatch.setattr(process_runtime.subprocess, "run", run)
+    handle = FakeHandle()
+
+    process_runtime.terminate_windows_process_tree(4353, handle, timeout_seconds=5)
+
+    assert calls == [
+        ["taskkill", "/PID", "4353", "/T"],
+        ["taskkill", "/PID", "4353", "/T", "/F"],
+    ]
+    assert handle.wait_calls == 1
+    assert not handle.terminated
+
+
 def test_recovered_windows_process_uses_forced_tree_stop(monkeypatch):
     calls = []
     monkeypatch.setattr(
@@ -80,13 +101,13 @@ def test_recovered_windows_process_uses_forced_tree_stop(monkeypatch):
 
 
 def test_windows_tree_stop_reports_unconfirmed_descendants(monkeypatch):
-    monkeypatch.setattr(
-        process_runtime.subprocess,
-        "run",
-        lambda command, **kwargs: subprocess.CompletedProcess(
-            command, 1, "", "acceso denegado"
-        ),
-    )
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 1, "", "acceso denegado")
+
+    monkeypatch.setattr(process_runtime.subprocess, "run", run)
     handle = FakeHandle()
 
     try:
@@ -98,3 +119,7 @@ def test_windows_tree_stop_reports_unconfirmed_descendants(monkeypatch):
 
     assert handle.terminated
     assert handle.returncode == 0
+    assert calls == [
+        ["taskkill", "/PID", "4545", "/T"],
+        ["taskkill", "/PID", "4545", "/T", "/F"],
+    ]

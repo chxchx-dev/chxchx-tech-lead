@@ -77,21 +77,30 @@ def terminate_windows_process_tree(
         return
 
     result = subprocess.run(command, check=False, capture_output=True, text=True)
-    if result.returncode == 0:
-        try:
-            handle.wait(timeout=timeout_seconds)
-        except subprocess.TimeoutExpired:
-            forced = subprocess.run(
+    if result.returncode != 0:
+        # Windows can reject graceful tree termination when a descendant
+        # requires forceful termination. Escalate while the owned root is live.
+        if handle.poll() is None:
+            result = subprocess.run(
                 [*command, "/F"], check=False, capture_output=True, text=True
             )
-            if forced.returncode != 0:
-                detail = forced.stderr.strip() or forced.stdout.strip()
-                raise OSError(detail or f"taskkill no pudo forzar el árbol del PID {pid}")
+            if result.returncode == 0:
+                handle.wait(timeout=timeout_seconds)
+                return
+    else:
+        try:
             handle.wait(timeout=timeout_seconds)
-        return
+            return
+        except subprocess.TimeoutExpired:
+            result = subprocess.run(
+                [*command, "/F"], check=False, capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                handle.wait(timeout=timeout_seconds)
+                return
 
-    # Keep the direct child cleanup attempt, but report that its descendants
-    # could not be confirmed stopped instead of silently claiming success.
+    # Retain direct-child cleanup, but report that the whole tree was not
+    # confirmed stopped if both taskkill attempts failed.
     if handle.poll() is None:
         handle.terminate()
     handle.wait(timeout=timeout_seconds)
