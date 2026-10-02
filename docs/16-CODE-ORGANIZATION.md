@@ -70,9 +70,13 @@ más. `workspace.models` conserva imports compatibles y reexporta los tipos de
 procesos del sistema operativo vive en `process_runtime.py`.
 
 La aplicación TUI ya está distribuida en `application.py`, `actions.py`,
-`events.py`, `dashboard.py`, `panels.py`, `project_console.py`, `palette.py`,
-`branding.py` y `style.py`. Los modelos `ManagedProcess`, `ProcessActionResult` y
-`ProcessStatus` ahora viven en `workspace/process_models.py`.
+`setup_actions.py`, `terminal_actions.py`, `events.py`, `dashboard.py`,
+`panels.py`, `project_console.py`, `palette.py`, `branding.py` y `style.py`.
+El caso de uso compartido de bootstrap vive en `core/bootstrap.py`. Los modelos
+`ManagedProcess`, `ProcessActionResult` y `ProcessStatus` ahora viven en
+`workspace/process_models.py`.
+Zellij session tabs and layout construction are isolated in
+`workspace/layouts.py` and `workspace/zellij_tabs.py`.
 
 `cli.py` conserva el punto de entrada público; `commands/` registra comandos
 por dominio y `cli_context.py` mantiene las apps Typer y las operaciones

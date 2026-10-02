@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Callable
 
-from textual import on
 from textual.widgets import Button, DataTable, Input, Static
 
 from ..core.detector import detect_project
@@ -12,120 +11,121 @@ from ..workspace.state import load_state
 
 
 class WorkspaceEvents:
-    @on(Button.Pressed, "#btn-open")
+    def button_init_preview(self) -> None:
+        self.action_init_preview()
+
+    def button_init(self) -> None:
+        self.action_init_project()
+
+    def button_init_minimal(self) -> None:
+        self.action_init_minimal()
+
+    def button_install_tools(self) -> None:
+        self.action_install_tools()
+
+    def button_integrate(self) -> None:
+        self.action_integrate_clients()
+
+    def button_setup_all(self) -> None:
+        self.action_setup_all()
+
+    def button_doctor(self) -> None:
+        self.action_run_doctor()
+
     def button_open(self) -> None:
         self.action_open_workspace()
 
-    @on(Button.Pressed, "#btn-attach")
     def button_attach(self) -> None:
         self.action_attach_workspace()
 
-    @on(Button.Pressed, "#btn-trust")
+    def button_attach_agents(self) -> None:
+        self.action_attach_agents_workspace()
+
+    def button_terminal(self) -> None:
+        self.action_open_terminal()
+
     def button_trust(self) -> None:
         self.action_trust_workspace()
 
-    @on(Button.Pressed, "#btn-start")
     def button_start(self) -> None:
         self.action_start_project()
 
-    @on(Button.Pressed, "#btn-console-start")
     def button_console_start(self) -> None:
         self.action_start_project()
 
-    @on(Button.Pressed, "#btn-console-stop")
     def button_console_stop(self) -> None:
         self.action_stop_project()
 
-    @on(Button.Pressed, "#btn-console-trust")
     def button_console_trust(self) -> None:
         self.action_trust_workspace()
         self._refresh_project_console()
 
-    @on(Button.Pressed, "#btn-console-refresh")
     def button_console_refresh(self) -> None:
         self._refresh_project_console()
 
-    @on(Button.Pressed, "#btn-start-all")
     def button_start_all(self) -> None:
         self.action_start_workspace_all()
 
-    @on(Button.Pressed, "#btn-stop")
     def button_stop(self) -> None:
         self.action_stop_workspace()
 
-    @on(Button.Pressed, "#btn-refresh")
     def button_refresh(self) -> None:
         self.action_refresh()
 
-    @on(Button.Pressed, "#btn-agents")
     def button_agents(self) -> None:
         self.action_start_agents()
 
-    @on(Button.Pressed, "#btn-agent-start")
     def button_agent_start(self) -> None:
         self.action_start_agent_selected()
 
-    @on(Button.Pressed, "#btn-agent-new-chat")
     def button_agent_new_chat(self) -> None:
         self.action_start_new_chat()
 
-    @on(Button.Pressed, "#btn-agent-attach")
     def button_agent_attach(self) -> None:
         self.action_attach_agent_terminal()
 
-    @on(Button.Pressed, "#btn-agents-refresh")
     def button_agents_refresh(self) -> None:
         self._refresh_agents()
 
-    @on(Button.Pressed, "#btn-process-start")
     def button_process_start(self) -> None:
         self.action_start_process()
 
-    @on(Button.Pressed, "#btn-process-stop")
     def button_process_stop(self) -> None:
         self.action_stop_process()
 
-    @on(Button.Pressed, "#btn-process-refresh")
     def button_process_refresh(self) -> None:
         self.refresh_dashboard()
 
-    @on(Button.Pressed, "#btn-resources-refresh")
     def button_resources_refresh(self) -> None:
         self.refresh_dashboard()
 
-    @on(Button.Pressed, "#btn-resources-stop")
     def button_resources_stop(self) -> None:
         self.action_stop_workspace()
 
-    @on(Button.Pressed, "#btn-projects-refresh")
     def button_projects_refresh(self) -> None:
         self._refresh_projects()
 
-    @on(Button.Pressed, "#btn-switch")
     def button_switch(self) -> None:
         self._switch_project()
 
-    @on(Button.Pressed, "#btn-handoff")
     def button_handoff(self) -> None:
         self.action_write_handoff()
 
-    @on(Button.Pressed, "#btn-handoff-refresh")
     def button_handoff_refresh(self) -> None:
         self._refresh_handoff()
 
-    @on(Button.Pressed, "#btn-memory-refresh")
     def button_memory_refresh(self) -> None:
         self._refresh_memory_history()
 
-    @on(Button.Pressed, "#btn-chat-refresh")
     def button_chat_refresh(self) -> None:
         self._refresh_conversations()
 
-    @on(Input.Changed, "#chat-search")
+    def button_errors_refresh(self) -> None:
+        self._refresh_errors()
+
     def chat_search_changed(self, _event: Input.Changed) -> None:
         self._refresh_conversations()
 
-    @on(DataTable.RowHighlighted, "#chat-list")
     def chat_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         conversation = self._conversations.get(str(event.row_key.value))
         if conversation is None:
@@ -143,15 +143,23 @@ class WorkspaceEvents:
         )
         self._query("#chat-detail", Static).update("\n\n".join(detail))
 
-    @on(DataTable.RowHighlighted, "#console-processes")
+    def error_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        error = self._cached_errors.get(str(event.row_key.value))
+        if error is None:
+            return
+        self._query("#error-detail", Static).update(
+            f"{error.operation}\n"
+            f"Proyecto: {error.project} · {error.project_path}\n"
+            f"Fecha UTC: {error.occurred_at}\n"
+            f"{'─' * 48}\n\n{error.message}"
+        )
+
     def console_process_highlighted(self, event: DataTable.RowHighlighted) -> None:
         self._select_console_process(str(event.row_key.value))
 
-    @on(Input.Changed, "#memory-search")
     def memory_search_changed(self, _event: Input.Changed) -> None:
         self._refresh_memory_history()
 
-    @on(DataTable.RowHighlighted, "#memory-list")
     def memory_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         note = self._memory_notes.get(str(event.row_key.value))
         if note is None:
@@ -166,11 +174,9 @@ class WorkspaceEvents:
         )
         self._query("#memory-detail", Static).update(detail)
 
-    @on(DataTable.RowHighlighted, "#agents-table")
     def agent_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         agent_id = str(event.row_key.value)
         self._query("#agent-id", Input).value = agent_id
-        self._set_log(f"Agente seleccionado: {agent_id} · inicia o abre su terminal aquí")
 
     def _switch_project(self) -> None:
         reference = self._query("#project-ref", Input).value.strip()

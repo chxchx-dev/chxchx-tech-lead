@@ -53,10 +53,13 @@ TUI_CSS = """
         background: #2e303d;
         border: solid #777b8e;
     }
-    .action-guide {
-        height: auto;
-        padding: 0 1 1 1;
-        color: #aeb1c2;
+    .usage-guide {
+        height: 1fr;
+        min-height: 12;
+        padding: 1 2;
+        background: #2e303d;
+        border: solid #777b8e;
+        overflow-y: auto;
     }
     .input-label {
         width: auto;
@@ -93,7 +96,7 @@ TUI_CSS = """
         border: solid #aeb1c2;
         overflow-y: auto;
     }
-    #chat-detail, #memory-detail {
+    #chat-detail, #memory-detail, #error-detail {
         width: 1fr;
         height: 1fr;
         margin-left: 1;
@@ -172,6 +175,7 @@ TUI_CSS = """
         border-top: solid #777b8e;
     }
     #project-ref { width: 1fr; }
+    #errors-table { height: 1fr; }
     Static#handoff {
         height: 1fr;
         padding: 1 2;
@@ -194,12 +198,16 @@ TUI_BINDINGS = [
         ("7", "show_memory", "Notas"),
         ("8", "show_conversations", "Chats"),
         ("9", "show_brand", "Marca"),
+        ("0", "show_setup", "Configuración"),
+        ("f1", "show_guide", "Guía de uso"),
+        ("f2", "show_errors", "Errores"),
         ("g", "attach_agent_terminal", "Terminal del agente"),
         ("o", "open_workspace", "Abrir"),
-        ("j", "attach_workspace", "Zellij"),
+        ("j", "attach_workspace", "Terminales"),
+        ("n", "open_terminal", "Nueva terminal Zellij"),
         ("y", "trust_workspace", "Confiar"),
         ("s", "start_project", "Iniciar proyecto"),
-        ("t", "start_workspace_all", "Workspace + agentes"),
+        ("t", "start_workspace_all", "Abrir Zellij + agentes"),
         ("a", "start_agents", "Agentes"),
         ("c", "start_agent_selected", "Agente"),
         ("i", "start_process", "Proceso"),

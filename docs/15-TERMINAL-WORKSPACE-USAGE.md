@@ -754,13 +754,16 @@ selección se resaltan para navegar también con teclado.
 7       Notas del proyecto
 8       Chats
 9       Marca / sello CHXCHX-DEV
+0       Configuración: init, instalación, MCP y diagnóstico
+F1      Guía de uso
+F2      Errores recientes del proyecto
 Ctrl+P  Paleta de comandos
 r       Actualizar
 o       Abrir/preparar workspace
-j       Adjuntar a Zellij
+j       Adjuntar a Terminales
 y       Marcar proyecto como confiable
 s       Iniciar proyecto
-t       Iniciar workspace y agentes
+t       Abrir Zellij + agentes
 a       Iniciar agentes
 c       Iniciar agente indicado
 g       Abrir terminal del agente seleccionado
@@ -781,16 +784,46 @@ sugerencias detectadas en los scripts de `package.json` o en los archivos de
 .NET, Python, Rust y Go. La salida se actualiza en la consola y el proyecto debe
 estar marcado como confiable antes de ejecutar comandos.
 
+En **Resumen**, **Preparar sesión** crea una sesión de Zellij con una terminal.
+**Abrir Zellij + agentes** inicia los procesos de autoarranque y los agentes
+configurados (como Codex y Claude), y luego entra a Zellij para trabajar.
+**Iniciar procesos** ejecuta los procesos declarados en el proyecto. Esta última
+acción no inicia Zellij ni los agentes.
+
+Zellij separa la sesión en dos pestañas: **Agentes** aloja las CLI configuradas
+y el panel vivo de contexto y cuota de tokens; **Terminales** contiene la shell
+principal y las terminales paralelas. **Adjuntar agentes** abre el grupo de
+agentes y **Adjuntar terminales** (`j`) abre el grupo normal. Abrir un agente
+desde la pestaña Agentes del TUI lleva a su pane dentro de ese grupo. Las barras
+de estado de Codex y Claude y el panel de uso siguen mostrando contexto y
+límites de uso cuando el proveedor los reporta.
+
+La pestaña **Configuración** (tecla `0`) concentra `init`, instalación de las
+herramientas base, integración MCP y diagnóstico. **Previsualizar init** no
+escribe cambios; **Inicializar proyecto** conserva el backup automático de los
+archivos administrados; **Init mínimo** crea la estructura compacta. **Preparación
+completa** ejecuta instalación, init e integraciones en orden.
+
 `q` cierra la interfaz, **no mata el workspace**.
 
-Al usar `j` o `Adjuntar Zellij`, la TUI muestra la instrucción de retorno. Desde
-Zellij pulsa `Ctrl+O`, suelta las teclas y después pulsa `D`; eso te devuelve a
-la TUI sin detener el workspace. La TUI suspende y restaura su control del
+Al usar `t` o **Abrir Zellij + agentes**, la TUI muestra la instrucción de
+retorno. Desde Zellij pulsa `Ctrl+O`, suelta las teclas y después pulsa `D`;
+eso te devuelve a la TUI sin detener el workspace. **Adjuntar terminales** (`j`)
+solo entra a una sesión ya preparada. La TUI suspende y restaura su control del
 terminal alrededor del adjunto para que el teclado siga funcionando al volver.
 Antes de adjuntar se comprueba que la sesión
 exista y esté activa. Si Zellij no la reconoce, la operación termina con un
 error accionable y recomienda revisar `zellij list-sessions` y volver a iniciar
 el workspace.
+
+Para abrir una terminal de shell paralela en la misma sesión, usa **Nueva
+terminal Zellij** en el Resumen (o pulsa `n`), o ejecuta
+`chxchx-tech workspace terminal .`. La nueva pane inicia en la carpeta del
+proyecto y permanece disponible al volver a la TUI con `Ctrl+O` y `D`.
+La TUI informa antes de ceder el terminal y muestra el resultado al regresar.
+Los errores de acciones quedan en la pestaña **Errores** y se guardan en
+`~/.chxchx-tech-lead/cache/errors.jsonl`, con un máximo de 200 registros; la
+vista filtra los errores del proyecto seleccionado.
 
 Detener el workspace debe ser una acción distinta y explícita.
 
@@ -807,12 +840,12 @@ el historial persistente de `.ai/memory`. En **Agentes**, selecciona Codex o
 Claude y pulsa **Abrir terminal del agente seleccionado** (o `g`) para entrar
 a su pane interactivo de Zellij; al salir, vuelve a la TUI.
 
-El Resumen muestra el flujo guiado `Confiar → Iniciar workspace + agentes →
-Reintentar agentes → Adjuntar Zellij`; esas acciones no requieren introducir texto. La pestaña
-Procesos incluye controles para iniciar y detener un proceso por su
-ID. Recursos permite actualizar las métricas o detener el workspace. Handoff
-permite editar resumen, pendientes y validación antes de actualizar el bloque
-administrado de `.ai/HANDOFF.md`.
+La pestaña **Guía de uso** explica cómo confiar el proyecto, preparar o iniciar
+el workspace, entrar a Zellij, abrir terminales paralelas y detener procesos.
+Está disponible en la pestaña o con `F1`. La pestaña **Procesos** permite
+iniciar y detener un proceso por su ID. **Recursos** muestra las métricas del
+equipo y los procesos registrados. **Handoff** permite actualizar el resumen,
+los pendientes y la validación en `.ai/HANDOFF.md`.
 
 Ejemplos:
 

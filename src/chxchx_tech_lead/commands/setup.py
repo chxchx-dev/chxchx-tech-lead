@@ -1,27 +1,18 @@
 from __future__ import annotations
 
+from ..core.bootstrap import initialize_project
+
 from ..cli_context import (
     Path,
     Table,
     WorkspaceManager,
     app,
-    backup_project,
     basic_memory_available,
     check_tools,
-    claude_body,
     console,
-    create_project_structure,
     diagnose_project_mcp,
-    ensure_memory_project,
-    ensure_project_config,
     install_tool,
-    project_config_needs_update,
-    project_rule_body,
-    register_project,
     typer,
-    upsert_managed_block,
-    write_opencode_example,
-    _opencode_example_needs_update,
     _project,
     _show_project,
 )
@@ -62,61 +53,13 @@ def init_command(
     """Inicializa el proyecto; usa --minimal para una huella compacta."""
     info = _project(path)
     _show_project(info)
-
-    planned_structure = create_project_structure(info, dry_run=True, minimal=minimal)
-    planned_config = project_config_needs_update(info)
-    planned_agents = False
-    planned_claude = False
-    planned_opencode = False
-    if not minimal:
-        planned_agents = upsert_managed_block(
-            info.root / "AGENTS.md", "project-rules", project_rule_body(info), dry_run=True
-        )
-        planned_claude = upsert_managed_block(
-            info.root / "CLAUDE.md", "claude-rules", claude_body(), dry_run=True
-        )
-        planned_opencode = _opencode_example_needs_update(info)
-
-    if not dry_run and not no_backup and any(
-        (planned_structure, planned_config, planned_agents, planned_claude, planned_opencode)
-    ):
-        backup = backup_project(info.root)
-        if backup:
-            console.print(f"[dim]Backup: {backup}[/]")
-
-    actions = create_project_structure(info, dry_run=dry_run, minimal=minimal)
-    planned_memory = not (info.root / ".ai" / "memory").exists()
-    ensure_project_config(info, dry_run=dry_run)
-    if planned_config or planned_memory:
-        actions.append("ensure .ai/chxchx-tech.toml + .ai/memory")
-    if basic_memory_available():
-        memory_result = ensure_memory_project(info, dry_run=dry_run)
-        if memory_result is not None:
-            if memory_result.returncode != 0:
-                console.print(f"[yellow]! Basic Memory project:[/] {memory_result.stderr or memory_result.stdout}")
-            elif not memory_result.skipped:
-                actions.append("ensure Basic Memory project")
-    else:
-        console.print("[yellow]! Basic Memory no está instalado; ejecuta `chxchx-tech install`.[/]")
-
-    if not minimal:
-        if upsert_managed_block(info.root / "AGENTS.md", "project-rules", project_rule_body(info), dry_run=dry_run):
-            actions.append("update AGENTS.md")
-        if upsert_managed_block(info.root / "CLAUDE.md", "claude-rules", claude_body(), dry_run=dry_run):
-            actions.append("update CLAUDE.md")
-    if register_project(info, dry_run=dry_run):
-        actions.append("register project")
-    if not minimal and write_opencode_example(info, dry_run=dry_run):
-        actions.append("ensure OpenCode MCP example")
-
-    if actions:
-        for action in actions:
-            console.print(f"[green]✓[/] {action}")
-    else:
-        console.print("[green]✓ Todo está actualizado.[/]")
-
-    if dry_run:
-        console.print("[yellow]No se realizaron cambios (--dry-run).[/]")
+    result = initialize_project(info, dry_run=dry_run, no_backup=no_backup, minimal=minimal)
+    if result.backup:
+        console.print(f"[dim]Backup: {result.backup}[/]")
+    for action in result.actions:
+        console.print(f"[green]✓[/] {action}")
+    for warning in result.warnings:
+        console.print(f"[yellow]![/] {warning}")
 
 @app.command()
 def setup(

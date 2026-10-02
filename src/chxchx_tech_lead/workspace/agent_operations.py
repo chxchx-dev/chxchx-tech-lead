@@ -4,10 +4,13 @@ import sys
 
 from ..adapters.agents.base_cli import CliAgentAdapter
 from ..adapters.terminal.zellij import ZellijAdapter
+from ..core.runner import CommandResult
 from .agent_commands import agent_pane_command
 from .agent_status import AgentRuntimeStatus
+from .layouts import agents_tab_layout
 from .manager import WorkspaceInspection
 from .service_models import WorkspaceOperationError, session_already_exists
+from .zellij_tabs import ensure_layout_tab, has_named_tab
 
 
 class WorkspaceAgentOperations:
@@ -29,6 +32,14 @@ class WorkspaceAgentOperations:
             result = terminal.create_session(session, self.project.root)
             if result.returncode != 0 and not session_already_exists(result):
                 raise WorkspaceOperationError(result.stderr or f"No pude crear la sesión `{session}`")
+        self._ensure_agents_tab(inspection, terminal, session, dry_run=dry_run)
+        if isinstance(terminal, ZellijAdapter):
+            focused_tab = terminal.focus_tab(session, "Agentes", dry_run=dry_run)
+            if focused_tab.returncode != 0:
+                raise WorkspaceOperationError(focused_tab.stderr or "No pude abrir la pestaña Agentes")
+            panes = terminal.list_panes(session, dry_run=dry_run)
+            if self._pane_is_active(panes.stdout, agent_id) and not new_chat and not dry_run:
+                return CommandResult(panes.command, 0, f"Agente `{agent_id}` ya está en la pestaña Agentes", "", skipped=True)
         try:
             pane_command = agent_pane_command(
                 agent_id,
@@ -67,8 +78,21 @@ class WorkspaceAgentOperations:
         if not isinstance(terminal, ZellijAdapter):
             raise WorkspaceOperationError("Abrir la terminal del agente requiere Zellij")
         session = self._session_name(inspection)
+        if not dry_run and not terminal.session_exists(session):
+            self.start(include_agents=True)
         if not dry_run:
             self._require_active_zellij_session(terminal, session, operation="adjuntar")
+        self._ensure_agents_tab(inspection, terminal, session, dry_run=dry_run)
+        panes = terminal.list_panes(session, dry_run=dry_run)
+        if not self._pane_is_active(panes.stdout, agent_id) and not dry_run:
+            started = self.start_agent(agent_id)
+            if started.returncode != 0:
+                raise WorkspaceOperationError(started.stderr or f"No se pudo iniciar `{agent_id}`")
+        if not dry_run:
+            self._require_active_zellij_session(terminal, session, operation="adjuntar")
+            focused_tab = terminal.focus_tab(session, "Agentes")
+            if focused_tab.returncode != 0:
+                raise WorkspaceOperationError(focused_tab.stderr or "No pude abrir la pestaña Agentes")
             focused = terminal.focus_named_pane(session, agent_id)
             if focused.returncode != 0:
                 raise WorkspaceOperationError(focused.stderr or f"No pude enfocar la terminal de `{agent_id}`")
@@ -88,14 +112,78 @@ class WorkspaceAgentOperations:
                 result = terminal.close_session(session, dry_run=dry_run)
                 if result.returncode != 0 and not dry_run:
                     raise WorkspaceOperationError(result.stderr or f"No pude recrear `{session}`")
-        action = self.start(dry_run=dry_run, include_agents=True)
-        agent_results = (
-            self.start_agents(dry_run=dry_run)
-            if action.inspection.config and action.inspection.config.agents and not action.session_created
-            else []
+        action, agent_results = self.prepare_agents(dry_run=dry_run)
+        attach_result = (
+            self.attach_agents(dry_run=dry_run, prepared=True)
+            if attach and action.inspection.config and action.inspection.config.agents
+            else self.attach(dry_run=dry_run) if attach else None
         )
-        attach_result = self.attach(dry_run=dry_run) if attach else None
         return action, agent_results, attach_result
+
+    def prepare_agents(self, dry_run: bool = False):
+        """Create the workspace and make every configured agent pane available."""
+        action = self.start(dry_run=dry_run, include_agents=True)
+        agent_results = []
+        if action.inspection.config and action.inspection.config.agents and not action.session_created:
+            terminal = self._terminal_adapter(action.inspection)
+            session = self._session_name(action.inspection)
+            self._ensure_agents_tab(action.inspection, terminal, session, dry_run=dry_run)
+            existing = {item.id: item for item in self.agent_statuses()}
+            missing = [
+                item.id for item in action.inspection.config.agents
+                if existing.get(item.id) is None or existing[item.id].pane != "RUNNING"
+            ]
+            if missing:
+                agent_results = self._start_agent_ids(missing, dry_run=dry_run)
+        return action, agent_results
+
+    def attach_agents(self, dry_run: bool = False, prepared: bool = False):
+        inspection = self.inspect()
+        if inspection.config is None or not inspection.config.agents:
+            raise WorkspaceOperationError("No hay agentes configurados")
+        terminal = self._terminal_adapter(inspection)
+        if not isinstance(terminal, ZellijAdapter):
+            raise WorkspaceOperationError("Adjuntar a los agentes requiere Zellij")
+        session = self._session_name(inspection)
+        self._require_active_zellij_session(terminal, session, operation="adjuntar a agentes") if not dry_run else None
+        if not prepared:
+            self._ensure_agents_tab(inspection, terminal, session, dry_run=dry_run)
+            statuses = {item.id: item for item in self.agent_statuses()}
+            missing = [
+                item.id for item in inspection.config.agents
+                if statuses.get(item.id) is None or statuses[item.id].pane != "RUNNING"
+            ]
+            if missing and not dry_run:
+                self._start_agent_ids(missing, dry_run=False)
+        if not dry_run:
+            focused = terminal.focus_tab(session, "Agentes")
+            if focused.returncode != 0:
+                raise WorkspaceOperationError(focused.stderr or "No pude abrir la pestaña Agentes")
+        result = terminal.attach_session(session, dry_run=dry_run)
+        if result.returncode != 0:
+            raise WorkspaceOperationError(result.stderr or f"No pude adjuntar a `{session}`")
+        return result
+
+    def _ensure_agents_tab(self, inspection, terminal, session: str, *, dry_run: bool) -> None:
+        if not isinstance(terminal, ZellijAdapter) or inspection.config is None:
+            return
+        tabs = terminal.list_tabs(session, dry_run=dry_run)
+        if has_named_tab(tabs.stdout, "Agentes"):
+            return
+        layout = agents_tab_layout(
+            self.project.root,
+            inspection.config.header,
+            self.project.name,
+            self.project.profile_name,
+            inspection.config.layout.orientation,
+            inspection.config.agents,
+        )
+        ensure_layout_tab(terminal, session, "Agentes", layout, dry_run=dry_run)
+
+    @staticmethod
+    def _pane_is_active(raw: str, agent_id: str) -> bool:
+        matches = [line for line in raw.splitlines() if agent_id.casefold() in line.casefold()]
+        return any("EXITED" not in line.upper() for line in matches)
 
     def start_agents(self, dry_run: bool = False, new_chat: bool = False) -> list[tuple[str, object]]:
         """Inicia todos los agentes declarados en la configuración del proyecto."""
@@ -178,10 +266,10 @@ class WorkspaceAgentOperations:
             inspection = self.inspect()
             terminal = self._terminal_adapter(inspection)
             if isinstance(terminal, ZellijAdapter):
-                focused = terminal.focus_terminal_pane(self._session_name(inspection))
+                focused = terminal.focus_tab(self._session_name(inspection), "Agentes")
                 if focused.returncode != 0:
                     raise WorkspaceOperationError(
-                        focused.stderr or "No pude devolver el foco a la pane `terminal`"
+                        focused.stderr or "No pude devolver el foco a la pestaña Agentes"
                     )
         return results
 

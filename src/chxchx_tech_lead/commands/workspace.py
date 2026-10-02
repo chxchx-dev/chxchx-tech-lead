@@ -14,6 +14,7 @@ from ..cli_context import (
     _workspace_inspection,
     _workspace_service,
 )
+from ..workspace.error_cache import record_error
 
 @workspace_app.command("status")
 def workspace_status(
@@ -124,6 +125,36 @@ def workspace_attach(
         _workspace_service(path).attach()
     except WorkspaceOperationError as exc:
         console.print(f"[red]✗ {exc}[/]")
+        raise typer.Exit(code=1)
+
+
+@workspace_app.command("terminal")
+def workspace_terminal(
+    path: str = typer.Argument("."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Muestra la acción sin crear el pane."),
+):
+    """Abre otra terminal interactiva dentro de la sesión Zellij del proyecto."""
+    service = None
+    try:
+        service = _workspace_service(path)
+        console.print(f"[cyan]Preparando terminal paralela para {path}…[/]")
+        result = service.open_terminal(dry_run=dry_run)
+        if dry_run:
+            console.print(f"[yellow]DRY RUN:[/] {' '.join(result.command)}")
+            return
+        console.print("[green]✓ Terminal abierta; al salir de Zellij volverás a esta consola.[/]")
+    except (WorkspaceOperationError, OSError) as exc:
+        console.print(f"[red]✗ {exc}[/]")
+        if service is not None:
+            try:
+                record_error(
+                    project=service.project.name,
+                    project_path=service.project.root,
+                    operation="workspace terminal",
+                    message=f"{type(exc).__name__}: {exc}",
+                )
+            except OSError:
+                pass
         raise typer.Exit(code=1)
 
 

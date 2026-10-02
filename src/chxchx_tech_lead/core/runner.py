@@ -29,6 +29,18 @@ def run(
     cmd = [str(part) for part in command]
     if dry_run:
         return CommandResult(cmd, 0, "DRY RUN", "")
+    if interactive:
+        # Keep stdout attached to the user's TTY for full-screen programs,
+        # while capturing stderr so adapters can report failed launches.
+        proc = subprocess.run(
+            cmd,
+            cwd=cwd,
+            text=True,
+            stdout=None,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        return CommandResult(cmd, proc.returncode, "", (proc.stderr or "").strip())
     proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=not interactive, check=False)
     return CommandResult(
         cmd,

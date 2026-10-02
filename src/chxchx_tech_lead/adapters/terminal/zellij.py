@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 from typing import Callable, Sequence
 
 from ...core.runner import CommandResult, executable, run
+from .zellij_layouts import ZellijLayoutOperations
 
 
-class ZellijAdapter:
+class ZellijAdapter(ZellijLayoutOperations):
     """Controla sesiones Zellij sin construir comandos fuera del adapter."""
 
     _ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -94,6 +94,18 @@ class ZellijAdapter:
             interactive=True,
         )
 
+    def list_tabs(self, name: str, dry_run: bool = False) -> CommandResult:
+        return self._runner(
+            [self.command, "--session", name, "action", "list-tabs", "--json"],
+            dry_run=dry_run,
+        )
+
+    def focus_tab(self, name: str, tab_name: str, dry_run: bool = False) -> CommandResult:
+        return self._runner(
+            [self.command, "--session", name, "action", "go-to-tab-name", "--create", tab_name],
+            dry_run=dry_run,
+        )
+
     def focus_named_pane(self, session: str, pane_name: str, dry_run: bool = False) -> CommandResult:
         """Focus a named agent pane before handing the user's TTY to Zellij."""
         panes = self._runner(
@@ -138,6 +150,48 @@ class ZellijAdapter:
             [self.command, "--session", name, "action", "list-panes", "--all"],
             dry_run=dry_run,
         )
+
+    def open_terminal_pane(self, name: str, cwd: Path, dry_run: bool = False) -> CommandResult:
+        """Open a shell in the dedicated Terminales tab."""
+        target = cwd.expanduser().resolve()
+        if not target.is_dir():
+            return CommandResult([self.command, "--session", name, "action", "new-pane"], 2, "", f"No existe el cwd: {target}")
+        focused = self.focus_tab(name, "Terminales", dry_run=dry_run)
+        if focused.returncode != 0:
+            return focused
+        panes = self._runner(
+            [self.command, "--session", name, "action", "list-panes", "--all", "--json"]
+        )
+        pane_name = self._next_terminal_name(panes.stdout)
+        return self._runner([
+            self.command, "--session", name, "action", "new-pane",
+            "--cwd", str(target), "--name", pane_name,
+        ], dry_run=dry_run)
+
+    @staticmethod
+    def _next_terminal_name(raw: str) -> str:
+        try:
+            payload = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            payload = []
+        names: set[str] = set()
+
+        def walk(value):
+            if isinstance(value, dict):
+                candidate = value.get("pane_name") or value.get("name")
+                if isinstance(candidate, str):
+                    names.add(candidate.casefold())
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+
+        walk(payload)
+        index = 1
+        while f"terminal-{index}" in names:
+            index += 1
+        return f"terminal-{index}"
 
     def focus_last_pane(self, name: str, dry_run: bool = False) -> CommandResult:
         """Restore the pane that was focused before dynamic panes were added."""

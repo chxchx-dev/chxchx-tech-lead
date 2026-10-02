@@ -25,6 +25,8 @@ class TerminalWorkspaceAdapter(Protocol):
 
     def list_panes(self, name: str, dry_run: bool = False) -> CommandResult: ...
 
+    def open_terminal_pane(self, name: str, cwd: Path, dry_run: bool = False) -> CommandResult: ...
+
     def run_in_session(
         self,
         name: str,

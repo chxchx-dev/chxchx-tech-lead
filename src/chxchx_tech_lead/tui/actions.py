@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from textual import work
 from textual.widgets import Input, TabbedContent
 
 from ..core.detector import detect_project
@@ -28,6 +29,12 @@ class WorkspaceActions:
 
     def action_show_overview(self) -> None:
         self._show("overview")
+
+    def action_show_guide(self) -> None:
+        self._show("guide")
+
+    def action_show_setup(self) -> None:
+        self._show("setup")
 
     def action_show_projects(self) -> None:
         self._show("projects")
@@ -57,6 +64,10 @@ class WorkspaceActions:
         self._show("conversations")
         self._refresh_conversations()
 
+    def action_show_errors(self) -> None:
+        self._show("errors")
+        self._refresh_errors()
+
     def action_show_brand(self) -> None:
         self._show("brand-tab")
 
@@ -67,73 +78,6 @@ class WorkspaceActions:
 
     def action_open_workspace(self) -> None:
         self._perform("Workspace preparado", lambda: self.service.open())
-
-    def action_attach_workspace(self) -> None:
-        if self._attach_pending:
-            return
-        self._attach_pending = True
-        message = "Entrando a Zellij… Para volver al TUI: Ctrl+O y después D."
-        self._set_log(message)
-        self.notify(message, severity="information")
-        # Let Textual paint the instruction before the interactive Zellij
-        # process takes control of the terminal.
-        self.set_timer(0.1, self._attach_workspace_now)
-
-    def action_attach_agent_terminal(self) -> None:
-        agent_id = self._query("#agent-id", Input).value.strip()
-        if not agent_id:
-            self._set_log("Selecciona un agente de la tabla antes de abrir su terminal")
-            self.notify("Falta seleccionar un agente", severity="warning")
-            return
-        if self._attach_pending:
-            return
-        self._attach_pending = True
-        message = f"Abriendo la terminal de {agent_id}… Para volver a la TUI: Ctrl+O y después D."
-        self._set_log(message)
-        self.notify(message, severity="information")
-        self.set_timer(0.1, lambda: self._attach_agent_terminal_now(agent_id))
-
-    def _attach_agent_terminal_now(self, agent_id: str) -> None:
-        self._attach_pending = False
-        try:
-            with self.suspend():
-                self.service.attach_agent(agent_id)
-        except (WorkspaceOperationError, OSError) as exc:
-            self._set_log(f"Error: {exc}")
-            self.notify(str(exc), severity="error")
-            self._restore_after_external_terminal()
-            return
-        message = f"Terminal de {agent_id} cerrada; regresaste a la TUI."
-        self._set_log(message)
-        self.notify(message, severity="information")
-        self._restore_after_external_terminal()
-
-    def _attach_workspace_now(self) -> None:
-        self._attach_pending = False
-        try:
-            # Textual owns the terminal in raw mode. Suspend it while
-            # Zellij owns the terminal, then let Textual restore its
-            # screen and keyboard handling after detach.
-            with self.suspend():
-                self.service.attach()
-        except (WorkspaceOperationError, OSError) as exc:
-            self._set_log(f"Error: {exc}")
-            self.notify(str(exc), severity="error")
-            self._restore_after_external_terminal()
-            return
-        message = "Zellij finalizado; regresaste al TUI. La sesión sigue disponible."
-        self._set_log(message)
-        self.notify(message, severity="information")
-        self._restore_after_external_terminal()
-
-    def _restore_after_external_terminal(self) -> None:
-        """Force a repaint/layout pass after Zellij returns the terminal."""
-        self.refresh_dashboard()
-        self.refresh(repaint=True, layout=True)
-        # Some terminal drivers deliver the resume event before the first
-        # repaint. A second pass prevents controls from appearing only
-        # after a mouse hover.
-        self.set_timer(0.05, lambda: self.refresh(repaint=True, layout=True))
 
     def action_trust_workspace(self) -> None:
         try:
@@ -154,10 +98,54 @@ class WorkspaceActions:
         )
 
     def action_start_workspace_all(self) -> None:
-        self._queue_workspace_start(
-            "Workspace y agentes iniciados",
-            lambda: self.service.run_all(attach=False),
-        )
+        if self._attach_pending or self._start_pending:
+            return
+        self._attach_pending = True
+        message = "Iniciando workspace y agentes… Zellij se abrirá al terminar."
+        self._set_log(message)
+        self.notify(message, severity="information")
+        self.set_timer(0.1, self._launch_workspace_with_agents)
+
+    def _launch_workspace_with_agents(self) -> None:
+        try:
+            # Prepara la sesión con la TUI visible. Solo cede el TTY al adjuntar.
+            self._set_log("Preparando sesión y agentes; la TUI seguirá visible…")
+            self._prepare_agents_for_attach()
+        except (WorkspaceOperationError, OSError) as exc:
+            self._set_log(f"Error: {exc}")
+            self.notify(str(exc), severity="error")
+            self._attach_pending = False
+            self._refresh_agents()
+
+    @work(thread=True, group="workspace-agents", exclusive=True)
+    def _prepare_agents_for_attach(self) -> None:
+        try:
+            self.service.prepare_agents()
+        except Exception as exc:
+            self.call_from_thread(self._agents_prepare_failed, exc)
+            return
+        self.call_from_thread(self._attach_prepared_agents)
+
+    def _agents_prepare_failed(self, exc: Exception) -> None:
+        self._set_log(f"Error preparando agentes: {type(exc).__name__}: {exc}")
+        self.notify(str(exc), severity="error")
+        self._attach_pending = False
+        self._refresh_agents()
+
+    def _attach_prepared_agents(self) -> None:
+        try:
+            with self.suspend():
+                self.service.attach_agents(prepared=True)
+        except Exception as exc:
+            self._set_log(f"Error al abrir Zellij: {type(exc).__name__}: {exc}")
+            self.notify(str(exc), severity="error")
+        else:
+            message = "Zellij cerrado; regresaste al TUI. Los agentes siguen en la sesión."
+            self._set_log(message)
+            self.notify(message, severity="information")
+        finally:
+            self._attach_pending = False
+            self._restore_after_external_terminal()
 
     def _queue_workspace_start(self, success: str, action: Callable[[], object]) -> None:
         if self._start_pending:
@@ -252,5 +240,3 @@ class WorkspaceActions:
             return
         self._set_log("Handoff actualizado")
         self._refresh_handoff()
-
-

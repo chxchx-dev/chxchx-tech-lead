@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from textual.widgets import DataTable, Input, Static
+from textual.widgets import DataTable, Input, Static, TabbedContent
 
 from ..core.registry import load_registry
 from ..integrations.chat_history import list_conversations
 from ..workspace.autosave_status import diagnose_autosave, format_autosave_status
+from ..workspace.error_cache import error_cache_path, list_errors, record_error
 from ..workspace.memory_history import list_memory_notes
 from ..workspace.service import WorkspaceOperationError
 from ..workspace.state import load_state
@@ -131,6 +132,51 @@ class WorkspacePanels:
             "Selecciona una nota para ver su contenido."
         )
 
+    def _refresh_errors(self) -> None:
+        table = self._query("#errors-table", DataTable)
+        table.clear()
+        self._cached_errors = {}
+        try:
+            errors = list_errors(project_path=self.project.root)
+        except OSError as exc:
+            self._query("#errors-summary", Static).update(f"No se pudo leer la caché: {exc}")
+            return
+        for index, error in enumerate(errors):
+            key = f"{index}:{error.occurred_at}"
+            self._cached_errors[key] = error
+            table.add_row(
+                error.occurred_at.replace("T", " ")[:19],
+                error.project,
+                error.operation,
+                error.message.replace("\n", " ")[:100],
+                key=key,
+            )
+        cache_path = error_cache_path()
+        summary = (
+            f"{len(errors)} error(es) de {self.project.name} · caché: {cache_path}"
+            if errors
+            else f"No hay errores guardados para {self.project.name} · caché: {cache_path}"
+        )
+        self._query("#errors-summary", Static).update(summary)
+        self._query("#error-detail", Static).update("Selecciona un error para ver el detalle.")
+
     def _set_log(self, message: str) -> None:
         self._query("#log", Static).update(message)
-
+        normalized = message.casefold()
+        if normalized.startswith((
+            "error:", "error al ", "error ", "no se pudo ", "no pude ", "falló ", "fallo "
+        )):
+            try:
+                record_error(
+                    project=self.project.name,
+                    project_path=self.project.root,
+                    operation="TUI",
+                    message=message,
+                )
+            except OSError:
+                pass
+            try:
+                if self._query("#tabs", TabbedContent).active == "errors":
+                    self._refresh_errors()
+            except Exception:
+                pass
