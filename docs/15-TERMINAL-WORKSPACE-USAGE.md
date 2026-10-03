@@ -755,10 +755,10 @@ r       Actualizar
 q       Cerrar TUI
 ```
 
-En **Inicio**, usa **Iniciar y abrir** para preparar el workspace e iniciar los
-agentes configurados antes de entrar a Zellij. Si el proyecto todavía no es
-confiable, usa **Confiar proyecto** primero. **Detener procesos** cierra los
-procesos administrados del proyecto.
+En **Inicio**, inicializa el proyecto y confíalo si hace falta. Luego usa
+**Iniciar y abrir terminal** para preparar el workspace y entrar a la shell del
+proyecto. Los agentes se inician aparte desde **Trabajo → Agentes** cuando los
+necesites. **Detener procesos** cierra los procesos administrados del proyecto.
 
 La pestaña **Trabajo → Proyecto** muestra el stack, el gestor de paquetes y los comandos
 definidos para el proyecto. **Iniciar procesos** ejecuta los comandos de
@@ -767,12 +767,12 @@ sugerencias detectadas en los scripts de `package.json` o en los archivos de
 .NET, Python, Rust y Go. La salida se actualiza en la consola y el proyecto debe
 estar marcado como confiable antes de ejecutar comandos.
 
-Zellij separa la sesión en dos pestañas: **Agentes** aloja las CLI configuradas
-y el panel vivo de contexto y cuota de tokens; **Terminales** contiene la shell
-principal y las terminales paralelas. Desde Trabajo puedes adjuntar terminales,
-crear otra terminal o abrir un agente seleccionado. Las barras de estado de
-Codex y Claude y el panel de uso muestran contexto y límites cuando el proveedor
-los reporta.
+Al iniciar agentes, Zellij crea la pestaña **Agentes** con las CLI configuradas
+y el panel vivo de contexto y cuota de tokens. **Terminales** contiene la shell
+principal y las terminales paralelas. Desde Trabajo puedes iniciar agentes,
+adjuntar terminales, crear otra terminal o abrir un agente seleccionado. Las
+barras de estado de Codex y Claude y el panel de uso muestran contexto y límites
+cuando el proveedor los reporta.
 
 En **Más → Configuración** se concentran `init`, instalación de herramientas,
 integración MCP y diagnóstico. **Previsualizar init** no
@@ -782,7 +782,7 @@ completa** ejecuta instalación, init e integraciones en orden.
 
 `q` cierra la interfaz, **no mata el workspace**.
 
-Al usar **Iniciar y abrir**, la TUI muestra la instrucción de
+Al usar **Iniciar y abrir terminal**, la TUI muestra la instrucción de
 retorno. Desde Zellij pulsa `Ctrl+O`, suelta las teclas y después pulsa `D`;
 eso te devuelve a la TUI sin detener el workspace. **Terminales Zellij** solo
 entra a una sesión ya preparada. La TUI suspende y restaura su control del

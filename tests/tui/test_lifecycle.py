@@ -5,12 +5,15 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
 
 from chxchx_tech_lead.core.models import ProjectInfo
+from chxchx_tech_lead.workspace.manager import WorkspaceManager
+from chxchx_tech_lead.tui import actions
 from chxchx_tech_lead.tui import dashboard
 from chxchx_tech_lead.tui.application import WorkspaceConsole
 from chxchx_tech_lead.tui.palette import CommandPalette
-from textual.widgets import Static, TabbedContent
+from textual.widgets import Button, Static, TabbedContent
 
 
 def test_quit_key_exits_tui_without_stopping_workspace(tmp_path: Path, monkeypatch):
@@ -229,3 +232,140 @@ def test_workspace_start_without_agents_attaches_to_terminal_session(tmp_path: P
     asyncio.run(attach())
 
     assert calls == ["terminal"]
+
+
+def test_start_workspace_prepares_only_workspace_before_opening_terminal(tmp_path: Path, monkeypatch):
+    app = WorkspaceConsole(ProjectInfo(tmp_path, "project"))
+    calls = []
+
+    class ServiceSpy:
+        def start(self):
+            calls.append("workspace")
+
+        def prepare_agents(self):
+            calls.append("agents")
+            raise AssertionError("el inicio habitual no debe lanzar agentes")
+
+    app.service = ServiceSpy()
+    monkeypatch.setattr(
+        app,
+        "_attach_prepared_agents",
+        lambda include_agents: calls.append("agents" if include_agents else "terminal"),
+    )
+
+    async def prepare():
+        pool = ThreadPoolExecutor(max_workers=1)
+        asyncio.get_running_loop().set_default_executor(pool)
+        try:
+            await WorkspaceConsole._prepare_workspace_for_attach.__wrapped__(app)
+        finally:
+            pool.shutdown(wait=True)
+
+    asyncio.run(prepare())
+
+    assert calls == ["workspace", "terminal"]
+
+
+def test_explicit_agents_attach_still_prepares_and_opens_agents(tmp_path: Path, monkeypatch):
+    app = WorkspaceConsole(ProjectInfo(tmp_path, "project"))
+    calls = []
+    config = SimpleNamespace(agents=[object()])
+
+    class ServiceSpy:
+        def prepare_agents(self):
+            calls.append("agents")
+            return SimpleNamespace(inspection=SimpleNamespace(config=config)), []
+
+    app.service = ServiceSpy()
+    monkeypatch.setattr(
+        app,
+        "_attach_prepared_agents",
+        lambda include_agents: calls.append("attach-agents" if include_agents else "terminal"),
+    )
+
+    async def prepare():
+        pool = ThreadPoolExecutor(max_workers=1)
+        asyncio.get_running_loop().set_default_executor(pool)
+        try:
+            await WorkspaceConsole._prepare_agents_workspace.__wrapped__(app)
+        finally:
+            pool.shutdown(wait=True)
+
+    asyncio.run(prepare())
+
+    assert calls == ["agents", "attach-agents"]
+
+
+def test_start_workspace_without_config_reports_setup_instead_of_opening_terminal(tmp_path: Path, monkeypatch):
+    app = WorkspaceConsole(ProjectInfo(tmp_path, "project"))
+    monkeypatch.setattr(WorkspaceConsole, "on_mount", lambda _self: None)
+    calls = []
+    messages = []
+
+    class ServiceSpy:
+        def inspect(self):
+            return SimpleNamespace(
+                config_path=tmp_path / ".ai" / "chxchx-tech.toml",
+                config=object(),
+                trusted=False,
+            )
+
+        def start(self):
+            calls.append("start")
+
+    app.service = ServiceSpy()
+    monkeypatch.setattr(app, "_set_log", messages.append)
+
+    async def refuse_start():
+        async with app.run_test():
+            app.action_start_workspace_all()
+
+    asyncio.run(refuse_start())
+
+    assert not calls
+    assert any("Falta .ai/chxchx-tech.toml" in message for message in messages)
+
+
+def test_trust_without_config_does_not_mark_project_trusted(tmp_path: Path, monkeypatch):
+    app = WorkspaceConsole(ProjectInfo(tmp_path, "project"))
+    monkeypatch.setattr(WorkspaceConsole, "on_mount", lambda _self: None)
+    trust_calls = []
+    messages = []
+
+    class ServiceSpy:
+        def inspect(self):
+            return SimpleNamespace(
+                config_path=tmp_path / ".ai" / "chxchx-tech.toml",
+                config=object(),
+                trusted=False,
+            )
+
+    app.service = ServiceSpy()
+    monkeypatch.setattr(app, "_set_log", messages.append)
+    monkeypatch.setattr(actions, "trust_project", lambda _root: trust_calls.append(_root))
+
+    async def refuse_trust():
+        async with app.run_test():
+            app.action_trust_workspace()
+
+    asyncio.run(refuse_trust())
+
+    assert not trust_calls
+    assert any("Falta .ai/chxchx-tech.toml" in message for message in messages)
+
+
+def test_dashboard_disables_start_and_trust_without_saved_config(tmp_path: Path, monkeypatch):
+    project = ProjectInfo(tmp_path, "project")
+    app = WorkspaceConsole(project)
+    monkeypatch.setattr(WorkspaceConsole, "on_mount", lambda _self: None)
+    inspection = WorkspaceManager(project).inspect()
+    snapshot = dashboard.DashboardSnapshot(inspection, None, None, None, [], [], None)
+
+    async def render():
+        async with app.run_test():
+            app._render_dashboard(snapshot)
+            assert app.query_one("#btn-trust", Button).disabled
+            assert app.query_one("#btn-console-trust", Button).disabled
+            assert app.query_one("#btn-start-all", Button).disabled
+
+    asyncio.run(render())

@@ -38,12 +38,12 @@ def _overview() -> ComposeResult:
     with TabPane("Inicio", id="overview"):
         yield Static("CHXCHX-DEV SYSTEM · BUILD • AUTOMATE • CREATE", id="brand")
         yield Static(
-            "Empieza aquí: confía el proyecto si hace falta y luego inicia tu sesión de trabajo.",
+            "Empieza con la terminal del proyecto. Los agentes se inician aparte cuando los necesites.",
             classes="summary",
         )
         with Horizontal(classes="toolbar"):
             yield Button("Confiar proyecto", id="btn-trust")
-            yield Button("Iniciar y abrir", id="btn-start-all", variant="primary")
+            yield Button("Iniciar y abrir terminal", id="btn-start-all", variant="primary")
             yield Button("Detener procesos", id="btn-stop", variant="error")
             yield Button("Actualizar", id="btn-refresh")
         yield Static(id="summary", classes="summary")

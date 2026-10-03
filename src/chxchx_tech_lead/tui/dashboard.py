@@ -90,11 +90,28 @@ class WorkspaceDashboard:
             inspection = snapshot.inspection
             self._last_inspection = inspection
             summary = self._query("#summary", Static)
-            self._query("#btn-trust", Button).disabled = inspection.trusted
-            self._query("#btn-console-trust", Button).disabled = inspection.trusted
+            has_valid_config = inspection.config_path.is_file() and inspection.config is not None
+            config_status = (
+                "válida"
+                if has_valid_config
+                else "falta"
+                if not inspection.config_path.is_file()
+                else "inválida"
+            )
+            config_hint = (
+                "Siguiente: Más → Configuración → Inicializar proyecto\n"
+                if not inspection.config_path.is_file()
+                else "Siguiente: revisa Más → Configuración\n"
+                if not has_valid_config
+                else ""
+            )
+            self._query("#btn-trust", Button).disabled = inspection.trusted or not has_valid_config
+            self._query("#btn-console-trust", Button).disabled = inspection.trusted or not has_valid_config
+            self._query("#btn-start-all", Button).disabled = not (inspection.trusted and has_valid_config)
             summary.update(
                 f"Proyecto: {self.project.name}  |  Perfil: {self.project.profile_name}\n"
-                f"Workspace: {inspection.state.status.value}  |  Trust: {'sí' if inspection.trusted else 'no'}\n"
+                f"Workspace: {inspection.state.status.value}  |  Trust: {'sí' if inspection.trusted else 'no'}  |  Config: {config_status}\n"
+                f"{config_hint}"
                 f"Stack: {', '.join(self.project.stacks) or 'sin detectar'}\n"
                 f"Lenguajes: {', '.join(self.project.languages) or 'sin detectar'}  |  "
                 f"Gestor: {', '.join(self.project.package_managers) or 'sin detectar'}\n"

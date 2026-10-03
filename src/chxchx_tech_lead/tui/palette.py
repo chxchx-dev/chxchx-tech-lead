@@ -77,7 +77,7 @@ class CommandPalette(ModalScreen[str | None]):
         ("attach_agents_workspace", "Adjuntar a pestaña Agentes", ""),
         ("trust_workspace", "Confiar este proyecto", ""),
         ("start_project", "Iniciar proyecto", ""),
-        ("start_workspace_all", "Iniciar y abrir", ""),
+        ("start_workspace_all", "Iniciar y abrir terminal", ""),
         ("start_agents", "Iniciar agentes", ""),
         ("start_agent_selected", "Iniciar agente seleccionado", ""),
         ("start_process", "Iniciar proceso seleccionado", ""),

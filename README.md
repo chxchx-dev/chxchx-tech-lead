@@ -594,10 +594,10 @@ Recursos distingue el uso general del equipo del consumo estimado de los proceso
 
 La TUI agrupa la operación habitual en **Inicio**, **Trabajo** y **Proyectos**.
 La pestaña **Más** contiene configuración, recursos, historial, notas y ayuda.
-En Inicio, confía el proyecto si hace falta y pulsa **Iniciar y abrir** para
-preparar el workspace e iniciar los agentes configurados. Trabajo reúne los
-comandos del proyecto, agentes y terminales Zellij. La paleta permite buscar
-acciones menos frecuentes.
+En Inicio, inicializa y confía el proyecto si hace falta; luego pulsa
+**Iniciar y abrir terminal** para entrar a la shell del proyecto. Los agentes
+se inician aparte desde **Trabajo → Agentes**, cuando los necesites. La paleta
+permite buscar acciones menos frecuentes.
 
 Al adjuntarte a Zellij, la TUI suspende temporalmente su control del terminal y
 muestra cómo regresar: pulsa `Ctrl+O`, suelta las teclas y luego pulsa `D`. Al

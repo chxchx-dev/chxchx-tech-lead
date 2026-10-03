@@ -11,6 +11,7 @@ from ..workspace.handoff import update_handoff
 from ..workspace.service import WorkspaceOperationError
 from ..workspace.state import load_state
 from .palette import CommandPalette
+from .workspace_preflight import workspace_start_blocker
 
 
 class WorkspaceActions:
@@ -103,6 +104,17 @@ class WorkspaceActions:
 
     def action_trust_workspace(self) -> None:
         try:
+            inspection = self.service.inspect()
+        except (WorkspaceOperationError, OSError) as exc:
+            self._set_log(f"No se pudo revisar la configuración: {exc}")
+            self.notify(str(exc), severity="error")
+            return
+        blocker = workspace_start_blocker(inspection, require_trust=False)
+        if blocker:
+            self._set_log(blocker)
+            self.notify(blocker, severity="warning")
+            return
+        try:
             changed = trust_project(self.project.root)
         except OSError as exc:
             self._set_log(f"Error al confiar el proyecto: {exc}")
@@ -122,35 +134,47 @@ class WorkspaceActions:
     def action_start_workspace_all(self) -> None:
         if self._attach_pending or self._start_pending or self._operation_pending or self._setup_pending:
             return
+        try:
+            inspection = self.service.inspect()
+        except (WorkspaceOperationError, OSError) as exc:
+            message = f"No se pudo revisar la configuración: {exc}"
+            self._set_log(message)
+            self.notify(str(exc), severity="error")
+            return
+        blocker = workspace_start_blocker(inspection, require_trust=True)
+        if blocker:
+            self._set_log(blocker)
+            self.notify(blocker, severity="warning")
+            return
         self._attach_pending = True
-        message = "Iniciando workspace y agentes… Zellij se abrirá al terminar."
+        message = "Iniciando workspace… abriré la terminal del proyecto al terminar."
         self._set_log(message)
         self.notify(message, severity="information")
-        self.set_timer(0.1, self._launch_workspace_with_agents)
+        self.set_timer(0.1, self._launch_workspace_for_attach)
 
-    def _launch_workspace_with_agents(self) -> None:
+    def _launch_workspace_for_attach(self) -> None:
         try:
-            # Prepara la sesión con la TUI visible. Solo cede el TTY al adjuntar.
-            self._set_log("Preparando sesión y agentes; la TUI seguirá visible…")
-            self._prepare_agents_for_attach()
+            # Prepara solo el workspace con la TUI visible. Los agentes se
+            # inician desde Trabajo → Agentes para que el arranque sea simple.
+            self._set_log("Preparando la terminal del proyecto…")
+            self._prepare_workspace_for_attach()
         except (WorkspaceOperationError, OSError) as exc:
             self._set_log(f"Error: {exc}")
             self.notify(str(exc), severity="error")
             self._attach_pending = False
             self._refresh_agents()
 
-    @work(group="workspace-agents", exclusive=True)
-    async def _prepare_agents_for_attach(self) -> None:
+    @work(group="workspace-start", exclusive=True)
+    async def _prepare_workspace_for_attach(self) -> None:
         try:
-            action, _agent_results = await asyncio.to_thread(self.service.prepare_agents)
+            await asyncio.to_thread(self.service.start)
         except Exception as exc:
-            self._agents_prepare_failed(exc)
+            self._workspace_prepare_failed(exc)
             return
-        config = action.inspection.config
-        self._attach_prepared_agents(bool(config and config.agents))
+        self._attach_prepared_agents(include_agents=False)
 
-    def _agents_prepare_failed(self, exc: Exception) -> None:
-        self._set_log(f"Error preparando agentes: {type(exc).__name__}: {exc}")
+    def _workspace_prepare_failed(self, exc: Exception) -> None:
+        self._set_log(f"Error preparando el workspace: {type(exc).__name__}: {exc}")
         self.notify(str(exc), severity="error")
         self._attach_pending = False
         self._refresh_agents()
@@ -166,7 +190,11 @@ class WorkspaceActions:
             self._set_log(f"Error al abrir Zellij: {type(exc).__name__}: {exc}")
             self.notify(str(exc), severity="error")
         else:
-            message = "Zellij cerrado; regresaste al TUI. Los agentes siguen en la sesión."
+            message = (
+                "Zellij cerrado; regresaste al TUI. Los agentes siguen en la sesión."
+                if include_agents
+                else "Zellij cerrado; regresaste al TUI. La sesión sigue disponible."
+            )
             self._set_log(message)
             self.notify(message, severity="information")
         finally:

@@ -21,8 +21,28 @@ class WorkspaceTerminalActions:
         self.set_timer(0.1, self._attach_workspace_now)
 
     def action_attach_agents_workspace(self) -> None:
-        # Recover an EXITED/missing session before trying to attach.
-        self.action_start_workspace_all()
+        if self._terminal_action_busy():
+            return
+        self._attach_pending = True
+        message = "Preparando los agentes… Para volver a la TUI: Ctrl+O y después D."
+        self._set_log(message)
+        self.notify(message, severity="information")
+        self.set_timer(0.1, self._prepare_agents_workspace)
+
+    @work(group="workspace-agents", exclusive=True)
+    async def _prepare_agents_workspace(self) -> None:
+        try:
+            action, _agent_results = await asyncio.to_thread(self.service.prepare_agents)
+            config = action.inspection.config
+            if not config or not config.agents:
+                raise WorkspaceOperationError("No hay agentes configurados en este proyecto")
+        except Exception as exc:
+            self._set_log(f"Error preparando agentes: {type(exc).__name__}: {exc}")
+            self.notify(str(exc), severity="error")
+            self._attach_pending = False
+            self._refresh_agents()
+            return
+        self._attach_prepared_agents(include_agents=True)
 
     def action_open_terminal(self) -> None:
         if self._terminal_action_busy():
