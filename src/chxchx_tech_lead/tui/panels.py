@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
+from textual import work
 from textual.widgets import DataTable, Input, Static, TabbedContent
 
 from ..core.registry import load_registry
 from ..integrations.chat_history import list_conversations
-from ..workspace.autosave_status import diagnose_autosave, format_autosave_status
 from ..workspace.error_cache import error_cache_path, list_errors, record_error
 from ..workspace.memory_history import list_memory_notes
-from ..workspace.service import WorkspaceOperationError
 from ..workspace.state import load_state
 
 
@@ -36,18 +36,9 @@ class WorkspacePanels:
             )
 
     def _refresh_agents(self) -> None:
-        try:
-            autosave = diagnose_autosave(self.project)
-            self._query("#autosave-status", Static).update(format_autosave_status(autosave))
-        except (OSError, ValueError) as exc:
-            self._query("#autosave-status", Static).update(
-                f"Checkpoint automático · no se pudo verificar: {exc}"
-            )
-        try:
-            statuses = self.service.agent_statuses()
-        except (WorkspaceOperationError, OSError) as exc:
-            self._set_log(f"Agentes: {exc}")
-            return
+        self.refresh_dashboard()
+
+    def _render_agents(self, statuses) -> None:
         self._last_agents = statuses
         table = self._query("#agents-table", DataTable)
         table.clear()
@@ -59,7 +50,6 @@ class WorkspacePanels:
                 agent.session,
                 agent.pane,
                 agent.preset,
-                agent.version or "-",
                 key=agent.id,
             )
 
@@ -67,7 +57,7 @@ class WorkspacePanels:
         path = self.project.root / ".ai" / "HANDOFF.md"
         if not path.exists():
             self._query("#handoff", Static).update(
-                f"No existe todavía:\n{path}\n\nPulsa `h` o el botón para generarlo."
+                f"No existe todavía:\n{path}\n\nUsa el botón para generarlo."
             )
             return
         try:
@@ -78,11 +68,30 @@ class WorkspacePanels:
         self._query("#handoff", Static).update(content)
 
     def _refresh_conversations(self) -> None:
+        if self._chat_search_timer is not None:
+            self._chat_search_timer.stop()
+            self._chat_search_timer = None
+        self._conversation_refresh_generation += 1
+        generation = self._conversation_refresh_generation
+        project = self.project
         query = self._query("#chat-search", Input).value
+        self._load_conversations(project, generation, query)
+
+    @work(group="conversation-refresh", exclusive=True)
+    async def _load_conversations(self, project, generation: int, query: str) -> None:
         try:
-            conversations = list_conversations(self.project.root, query=query)
+            conversations = await asyncio.to_thread(
+                list_conversations,
+                project.root,
+                query=query,
+            )
         except (OSError, ValueError) as exc:
-            self._query("#chat-summary", Static).update(f"No se pudo leer el historial local: {exc}")
+            if generation == self._conversation_refresh_generation and project is self.project:
+                self._query("#chat-summary", Static).update(
+                    f"No se pudo leer el historial local: {exc}"
+                )
+            return
+        if generation != self._conversation_refresh_generation or project is not self.project:
             return
         table = self._query("#chat-list", DataTable)
         table.clear()
@@ -105,8 +114,27 @@ class WorkspacePanels:
         self._query("#chat-detail", Static).update("Selecciona una conversación para leerla.")
 
     def _refresh_memory_history(self) -> None:
+        if self._memory_search_timer is not None:
+            self._memory_search_timer.stop()
+            self._memory_search_timer = None
+        self._memory_refresh_generation += 1
+        generation = self._memory_refresh_generation
+        project = self.project
         query = self._query("#memory-search", Input).value
-        notes = list_memory_notes(self.project.root, query=query)
+        self._load_memory_history(project, generation, query)
+
+    @work(group="memory-refresh", exclusive=True)
+    async def _load_memory_history(self, project, generation: int, query: str) -> None:
+        try:
+            notes = await asyncio.to_thread(list_memory_notes, project.root, query=query)
+        except (OSError, ValueError) as exc:
+            if generation == self._memory_refresh_generation and project is self.project:
+                self._query("#memory-summary", Static).update(
+                    f"No se pudo leer la memoria local: {exc}"
+                )
+            return
+        if generation != self._memory_refresh_generation or project is not self.project:
+            return
         table = self._query("#memory-list", DataTable)
         table.clear()
         self._memory_notes = {}
@@ -120,13 +148,13 @@ class WorkspacePanels:
                 key=key,
             )
 
-        memory_path = self.project.root / ".ai" / "memory"
+        memory_path = project.root / ".ai" / "memory"
         if not memory_path.is_dir():
             message = f"Este proyecto todavía no tiene memoria local:\n{memory_path}"
         elif not notes:
             message = "No hay notas que coincidan con la búsqueda."
         else:
-            message = f"{len(notes)} nota(s) de {self.project.name} · {memory_path}"
+            message = f"{len(notes)} nota(s) de {project.name} · {memory_path}"
         self._query("#memory-summary", Static).update(message)
         self._query("#memory-detail", Static).update(
             "Selecciona una nota para ver su contenido."
@@ -176,7 +204,10 @@ class WorkspacePanels:
             except OSError:
                 pass
             try:
-                if self._query("#tabs", TabbedContent).active == "errors":
+                if (
+                    self._query("#tabs", TabbedContent).active == "more"
+                    and self._query("#more-tabs", TabbedContent).active == "errors"
+                ):
                     self._refresh_errors()
             except Exception:
                 pass

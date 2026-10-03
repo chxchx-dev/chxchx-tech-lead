@@ -14,6 +14,7 @@ def test_agent_adapter_reports_version_and_starts_in_project(tmp_path: Path):
     def fake_runner(command, **kwargs):
         calls.append((command, kwargs))
         if command[-1] == "--version":
+            assert kwargs["timeout"] == 4
             return CommandResult(list(command), 0, "codex 1.2.3", "")
         return CommandResult(list(command), 0, "started", "")
 

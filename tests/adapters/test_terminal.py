@@ -39,6 +39,19 @@ def test_zellij_adapter_matches_colored_session_names():
     assert adapter.session_status("bokana") == "exited"
 
 
+def test_zellij_status_probe_has_a_short_timeout():
+    calls = []
+
+    def fake_runner(command, **kwargs):
+        calls.append(kwargs)
+        return CommandResult(list(command), 0, "demo\n", "")
+
+    adapter = ZellijAdapter(runner=fake_runner, lookup=lambda _: "/usr/bin/zellij")
+
+    assert adapter.session_exists("demo")
+    assert calls[0]["timeout"] == 3
+
+
 def test_zellij_pane_direction_can_be_configured(tmp_path: Path):
     calls = []
 

@@ -78,7 +78,7 @@ def initialize_project(
     if not minimal and write_opencode_example(info, dry_run=dry_run):
         result.actions.append("ensure OpenCode MCP example")
     if dry_run:
-        result.actions.append("DRY RUN: no se escribieron cambios")
+        result.actions.append("No se realizaron cambios (--dry-run)")
     if not result.actions:
         result.actions.append("Todo está actualizado")
     return result

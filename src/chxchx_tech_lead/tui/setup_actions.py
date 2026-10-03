@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from textual import work
 from textual.widgets import Static
 
@@ -85,6 +87,9 @@ class WorkspaceSetupActions:
         return "\n".join(rows)
 
     def _run_setup_action(self, title: str, action) -> None:
+        if self._operation_pending or self._attach_pending:
+            self.notify("Espera a que termine la acción actual", severity="warning")
+            return
         if self._setup_pending:
             self.notify("Ya hay una tarea de configuración en curso", severity="warning")
             return
@@ -93,14 +98,14 @@ class WorkspaceSetupActions:
         self.notify(f"Ejecutando: {title}…", severity="information")
         self._execute_setup_action(title, action)
 
-    @work(thread=True, group="setup")
-    def _execute_setup_action(self, title: str, action) -> None:
+    @work(group="setup")
+    async def _execute_setup_action(self, title: str, action) -> None:
         try:
-            result = action()
+            result = await asyncio.to_thread(action)
         except Exception as exc:
-            self.call_from_thread(self._finish_setup_action, title, None, exc)
+            self._finish_setup_action(title, None, exc)
             return
-        self.call_from_thread(self._finish_setup_action, title, result, None)
+        self._finish_setup_action(title, result, None)
 
     def _finish_setup_action(self, title: str, result, error: Exception | None) -> None:
         self._setup_pending = False

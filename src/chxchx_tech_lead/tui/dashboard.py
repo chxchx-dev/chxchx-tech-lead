@@ -1,26 +1,97 @@
 from __future__ import annotations
 
-from pathlib import Path
+import asyncio
 
-from textual.widgets import DataTable, Static, TabbedContent
+from textual import work
+from textual.widgets import Button, DataTable, Static, TabbedContent
 
-from ..core.models import ProjectInfo
-from ..core.registry import load_registry
-from ..workspace.process_manager import ProcessManager
 from ..workspace.resources import ResourceManager, format_bytes, summarize_process_resources
-from ..workspace.service import WorkspaceOperationError, WorkspaceService
+from ..workspace.service import WorkspaceOperationError
+from .dashboard_data import AggregatedResourceRow, DashboardSnapshot, collect_dashboard
 
 
 class WorkspaceDashboard:
     def refresh_dashboard(self) -> None:
         # The command palette is a modal screen. Its widgets replace the
         # main screen while it is open, so wait for the dismiss callback.
-        if self._palette_open:
+        if self._dashboard_pending:
+            self._dashboard_refresh_again = True
             return
+        if (
+            self._palette_open
+            or self._operation_pending
+            or self._setup_pending
+            or self._attach_pending
+            or self._start_pending
+        ):
+            return
+        self._dashboard_refresh_again = False
+        include_aggregated_resources = (
+            self._query("#tabs", TabbedContent).active == "more"
+            and self._query("#more-tabs", TabbedContent).active == "resources"
+        )
+        self._dashboard_pending = True
+        self._collect_dashboard_data(
+            self.project,
+            self.service,
+            include_aggregated_resources,
+        )
+
+    @work(group="dashboard-refresh", exclusive=True)
+    async def _collect_dashboard_data(self, project, service, include_aggregated_resources) -> None:
         try:
-            inspection = self.service.inspect()
+            snapshot = await asyncio.to_thread(
+                collect_dashboard,
+                project,
+                service,
+                include_aggregated_resources=include_aggregated_resources,
+            )
+        except Exception as exc:
+            self._finish_dashboard_refresh(project, service, None, exc)
+            return
+        self._finish_dashboard_refresh(project, service, snapshot, None)
+
+    def _finish_dashboard_refresh(
+        self,
+        project,
+        service,
+        snapshot: DashboardSnapshot | None,
+        error: Exception | None,
+    ) -> None:
+        self._dashboard_pending = False
+        refresh_again = self._dashboard_refresh_again
+        self._dashboard_refresh_again = False
+        if self._palette_open:
+            self._dashboard_refresh_again = True
+            return
+        if project is not self.project or service is not self.service:
+            self.refresh_dashboard()
+            return
+        if error is not None:
+            self._set_log(f"Error al actualizar el panel: {type(error).__name__}: {error}")
+            if refresh_again:
+                self.refresh_dashboard()
+            return
+        if snapshot is not None:
+            self._render_dashboard(snapshot)
+            if refresh_again or (
+                snapshot.aggregated_resources is None and self._resources_view_active()
+            ):
+                self.refresh_dashboard()
+
+    def _resources_view_active(self) -> bool:
+        return (
+            self._query("#tabs", TabbedContent).active == "more"
+            and self._query("#more-tabs", TabbedContent).active == "resources"
+        )
+
+    def _render_dashboard(self, snapshot: DashboardSnapshot) -> None:
+        try:
+            inspection = snapshot.inspection
             self._last_inspection = inspection
             summary = self._query("#summary", Static)
+            self._query("#btn-trust", Button).disabled = inspection.trusted
+            self._query("#btn-console-trust", Button).disabled = inspection.trusted
             summary.update(
                 f"Proyecto: {self.project.name}  |  Perfil: {self.project.profile_name}\n"
                 f"Workspace: {inspection.state.status.value}  |  Trust: {'sí' if inspection.trusted else 'no'}\n"
@@ -30,24 +101,25 @@ class WorkspaceDashboard:
                 f"Arranque: {self._startup_summary(inspection)}\n"
                 f"Ruta: {self.project.root}"
             )
-            if self._query("#tabs", TabbedContent).active == "resources":
-                self._refresh_aggregated_resources()
+            if snapshot.aggregated_resources is not None:
+                self._render_aggregated_resources(snapshot.aggregated_resources)
+            if snapshot.agent_statuses is not None:
+                self._render_agents(snapshot.agent_statuses)
+            elif snapshot.agent_status_error is not None:
+                self._set_log(f"Agentes: {snapshot.agent_status_error}")
             if inspection.config is None:
                 self._set_log("No hay configuración válida de workspace")
                 return
             resources = ResourceManager(inspection.config.resources)
-            system = resources.system()
+            system = snapshot.system
+            if system is None:
+                self._set_log("No se pudieron leer los recursos del sistema")
+                return
             self._update_resources(resources, system)
-            records = ProcessManager(
-                self.project.root,
-                inspection.config.processes,
-                trusted=inspection.trusted,
-            ).list()
-            process_metrics = resources.processes(records)
+            process_metrics = snapshot.process_metrics
             self._update_project_resources(process_metrics, system.total_bytes)
-            self._refresh_process_table(records, process_metrics, "#overview-processes")
-            self._refresh_process_table(records, process_metrics, "#processes-table")
-            self._refresh_agents()
+            self._refresh_process_table(snapshot.processes, process_metrics, "#overview-processes")
+            self._refresh_process_table(snapshot.processes, process_metrics, "#processes-table")
             self._refresh_projects()
             self._refresh_handoff()
         except (WorkspaceOperationError, OSError) as exc:
@@ -108,67 +180,9 @@ class WorkspaceDashboard:
                 cpu_value,
             )
 
-    def _refresh_aggregated_resources(self) -> None:
+    def _render_aggregated_resources(self, rows: list[AggregatedResourceRow]) -> None:
         table = self._query("#resources-all-projects", DataTable)
         table.clear()
-        registry = load_registry()
-        entries = list(registry.get("projects", []))
-        current_root = self.project.root.resolve()
-        known_paths = {
-            str(Path(str(item.get("path", ""))).expanduser().resolve())
-            for item in entries
-            if item.get("path")
-        }
-        if str(current_root) not in known_paths:
-            entries.append(
-                {
-                    "alias": self.project.name,
-                    "name": self.project.name,
-                    "path": str(current_root),
-                }
-            )
-
-        rows: list[tuple[str, str, str, str, str, int, float | None]] = []
-        for item in entries:
-            raw_path = item.get("path")
-            if not isinstance(raw_path, str) or not raw_path.strip():
-                continue
-            root = Path(raw_path).expanduser()
-            alias = str(item.get("alias", root.name))
-            name = str(item.get("name", root.name))
-            if not root.is_dir():
-                rows.append(("*" if root.resolve() == current_root else "", alias, name, "NO EXISTE", "-", 0, None))
-                continue
-
-            try:
-                root = root.resolve()
-                project = ProjectInfo(root=root, name=name)
-                inspection = WorkspaceService(project).inspect()
-                if inspection.config is None:
-                    rows.append(("*" if root == current_root else "", alias, name, "ERROR CONFIG", "-", 0, None))
-                    continue
-                managed = ProcessManager(
-                    root,
-                    inspection.config.processes,
-                    trusted=inspection.trusted,
-                ).list(persist=False)
-                manager = ResourceManager(inspection.config.resources)
-                usage = summarize_process_resources(manager.processes(managed))
-                rows.append(
-                    (
-                        "*" if root == current_root else "",
-                        alias,
-                        name,
-                        inspection.state.status.value,
-                        str(usage.running_count),
-                        usage.rss_bytes,
-                        usage.cpu_percent,
-                    )
-                )
-            except (WorkspaceOperationError, OSError, ValueError):
-                rows.append(("*" if root.resolve() == current_root else "", alias, name, "ERROR", "-", 0, None))
-
-        rows.sort(key=lambda row: (row[0] != "*", row[1].casefold()))
         for active, alias, name, status, running, rss_bytes, cpu_percent in rows:
             cpu = "N/D" if cpu_percent is None else f"{cpu_percent:.1f}%"
             table.add_row(
@@ -206,5 +220,3 @@ class WorkspaceDashboard:
                 format_bytes(metric.rss_bytes),
                 cpu,
             )
-
-

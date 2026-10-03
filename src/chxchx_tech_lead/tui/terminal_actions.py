@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+
+from textual import work
 from textual.widgets import Input
 
 from ..workspace.service import WorkspaceOperationError
@@ -9,7 +12,7 @@ class WorkspaceTerminalActions:
     """Suspend and restore the TUI around interactive terminal adapters."""
 
     def action_attach_workspace(self) -> None:
-        if self._attach_pending:
+        if self._terminal_action_busy():
             return
         self._attach_pending = True
         message = "Entrando a Zellij… Para volver al TUI: Ctrl+O y después D."
@@ -22,7 +25,7 @@ class WorkspaceTerminalActions:
         self.action_start_workspace_all()
 
     def action_open_terminal(self) -> None:
-        if self._attach_pending:
+        if self._terminal_action_busy():
             return
         self._attach_pending = True
         message = "Abriendo terminal paralela en Zellij… Para volver a la TUI: Ctrl+O y después D."
@@ -51,7 +54,7 @@ class WorkspaceTerminalActions:
             self._set_log("Selecciona un agente de la tabla antes de abrir su terminal")
             self.notify("Falta seleccionar un agente", severity="warning")
             return
-        if self._attach_pending:
+        if self._terminal_action_busy():
             return
         self._attach_pending = True
         message = f"Abriendo la terminal de {agent_id}… Para volver a la TUI: Ctrl+O y después D."
@@ -60,9 +63,21 @@ class WorkspaceTerminalActions:
         self.set_timer(0.1, lambda: self._attach_agent_terminal_now(agent_id))
 
     def _attach_agent_terminal_now(self, agent_id: str) -> None:
+        self._prepare_agent_terminal(agent_id)
+
+    @work(group="agent-terminal", exclusive=True)
+    async def _prepare_agent_terminal(self, agent_id: str) -> None:
         try:
-            # Las comprobaciones y el arranque ocurren antes de ceder el TTY.
-            self.service.prepare_agents()
+            # Keep the UI usable while checking and starting the selected agent.
+            await asyncio.to_thread(self.service.prepare_agents)
+        except Exception as exc:
+            self._set_log(f"Error: {type(exc).__name__}: {exc}")
+            self.notify(str(exc), severity="error")
+            self._attach_pending = False
+            self._refresh_agents()
+            self._restore_after_external_terminal()
+            return
+        try:
             with self.suspend():
                 self.service.attach_agent(agent_id)
         except Exception as exc:
@@ -77,6 +92,17 @@ class WorkspaceTerminalActions:
         self.notify(message, severity="information")
         self._attach_pending = False
         self._restore_after_external_terminal()
+
+    def _terminal_action_busy(self) -> bool:
+        if not (
+            self._attach_pending
+            or self._operation_pending
+            or self._setup_pending
+            or self._start_pending
+        ):
+            return False
+        self.notify("Espera a que termine la acción actual", severity="warning")
+        return True
 
     def _attach_workspace_now(self) -> None:
         self._attach_pending = False

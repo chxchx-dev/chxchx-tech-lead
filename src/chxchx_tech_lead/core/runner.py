@@ -25,6 +25,7 @@ def run(
     dry_run: bool = False,
     cwd: Path | None = None,
     interactive: bool = False,
+    timeout: float | None = None,
 ) -> CommandResult:
     cmd = [str(part) for part in command]
     if dry_run:
@@ -32,19 +33,49 @@ def run(
     if interactive:
         # Keep stdout attached to the user's TTY for full-screen programs,
         # while capturing stderr so adapters can report failed launches.
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=cwd,
+                text=True,
+                stdout=None,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stderr = _decode_output(exc.stderr)
+            limit = f"{timeout:g}" if timeout is not None else "el límite configurado"
+            detail = f"El comando superó el límite de {limit} segundos."
+            if stderr:
+                detail = f"{detail} {stderr}"
+            return CommandResult(cmd, 124, "", detail)
+        return CommandResult(cmd, proc.returncode, "", (proc.stderr or "").strip())
+    try:
         proc = subprocess.run(
             cmd,
             cwd=cwd,
             text=True,
-            stdout=None,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=False,
+            timeout=timeout,
         )
-        return CommandResult(cmd, proc.returncode, "", (proc.stderr or "").strip())
-    proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=not interactive, check=False)
+    except subprocess.TimeoutExpired as exc:
+        stdout = _decode_output(exc.stdout)
+        stderr = _decode_output(exc.stderr)
+        detail = f"El comando superó el límite de {timeout:g} segundos."
+        if stderr:
+            detail = f"{detail} {stderr}"
+        return CommandResult(cmd, 124, stdout, detail)
     return CommandResult(
         cmd,
         proc.returncode,
         (proc.stdout or "").strip(),
         (proc.stderr or "").strip(),
     )
+
+
+def _decode_output(value: str | bytes | None) -> str:
+    if isinstance(value, bytes):
+        return value.decode(errors="replace").strip()
+    return (value or "").strip()

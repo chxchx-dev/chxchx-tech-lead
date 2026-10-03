@@ -56,35 +56,37 @@ class CommandPalette(ModalScreen[str | None]):
     }
     """
     COMMANDS = (
-        ("overview", "Ver resumen", "1"),
-        ("projects", "Ver proyectos", "2"),
-        ("agents", "Ver agentes", "3"),
-        ("processes", "Ver procesos", "4"),
-        ("resources", "Ver recursos", "5"),
-        ("handoff", "Ver handoff", "6"),
-        ("memory", "Ver notas del proyecto", "7"),
-        ("conversations", "Ver historial de chats", "8"),
-        ("errors", "Ver errores recientes", "F2"),
-        ("guide", "Ver guía de uso", "F1"),
-        ("setup", "Abrir configuración e init", "0"),
-        ("attach_agent_terminal", "Abrir terminal del agente", "g"),
-        ("brand", "Ver sello CHXCHX-DEV", "9"),
+        ("show_overview", "Ir a Inicio", "1"),
+        ("show_work", "Ir a Trabajo", "2"),
+        ("show_projects", "Ir a Proyectos", "3"),
+        ("show_more", "Ir a Más", "4"),
+        ("show_agents", "Abrir agentes", ""),
+        ("show_processes", "Abrir procesos", ""),
+        ("show_resources", "Ver recursos", ""),
+        ("show_handoff", "Ver handoff", ""),
+        ("show_memory", "Ver notas del proyecto", ""),
+        ("show_conversations", "Ver historial de chats", ""),
+        ("show_errors", "Ver errores recientes", ""),
+        ("show_guide", "Ver guía de uso", ""),
+        ("show_setup", "Abrir configuración e init", ""),
+        ("attach_agent_terminal", "Abrir terminal del agente", ""),
+        ("show_brand", "Ver marca CHXCHX-DEV", ""),
         ("refresh", "Actualizar panel", "r"),
-        ("open_workspace", "Abrir workspace", "o"),
-        ("attach_workspace", "Adjuntar a terminales", "j"),
+        ("open_workspace", "Preparar workspace", ""),
+        ("attach_workspace", "Adjuntar a terminales", ""),
         ("attach_agents_workspace", "Adjuntar a pestaña Agentes", ""),
-        ("trust_workspace", "Confiar este proyecto", "y"),
-        ("start_project", "Iniciar proyecto", "s"),
-        ("start_workspace_all", "Abrir Zellij con agentes", "t"),
-        ("start_agents", "Iniciar agentes", "a"),
-        ("start_agent_selected", "Iniciar agente seleccionado", "c"),
-        ("start_process", "Iniciar proceso seleccionado", "i"),
-        ("stop_process", "Detener proceso seleccionado", "k"),
-        ("suspend_workspace", "Suspender workspace", "u"),
-        ("resume_workspace", "Reanudar workspace", "v"),
-        ("stop_workspace", "Detener workspace", "x"),
-        ("write_handoff", "Actualizar handoff", "h"),
-        ("open_editor", "Abrir Sublime Text", "e"),
+        ("trust_workspace", "Confiar este proyecto", ""),
+        ("start_project", "Iniciar proyecto", ""),
+        ("start_workspace_all", "Iniciar y abrir", ""),
+        ("start_agents", "Iniciar agentes", ""),
+        ("start_agent_selected", "Iniciar agente seleccionado", ""),
+        ("start_process", "Iniciar proceso seleccionado", ""),
+        ("stop_process", "Detener proceso seleccionado", ""),
+        ("suspend_workspace", "Suspender workspace", ""),
+        ("resume_workspace", "Reanudar workspace", ""),
+        ("stop_workspace", "Detener workspace", ""),
+        ("write_handoff", "Actualizar handoff", ""),
+        ("open_editor", "Abrir Sublime Text", ""),
     )
     BINDINGS = [("escape", "close", "Cerrar")]
 
@@ -123,9 +125,8 @@ class CommandPalette(ModalScreen[str | None]):
         for command_id, label, key in self.COMMANDS:
             if normalized and normalized not in f"{label} {command_id}".lower():
                 continue
-            list_view.mount(
-                ListItem(Label(f"{label:<28} [{key}]"), id=f"command-{command_id}")
-            )
+            shortcut = f" [{key}]" if key else ""
+            list_view.mount(ListItem(Label(f"{label}{shortcut}"), id=f"command-{command_id}"))
 
     def _choose(self, command_id: str) -> None:
         self.dismiss(command_id)

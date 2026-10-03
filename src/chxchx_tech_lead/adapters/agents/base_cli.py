@@ -8,6 +8,8 @@ from ...core.runner import CommandResult, executable, run
 from ..terminal.base import TerminalWorkspaceAdapter
 from .base import AgentInfo
 
+VERSION_PROBE_TIMEOUT_SECONDS = 4
+
 
 class CliAgentAdapter:
     def __init__(
@@ -36,8 +38,12 @@ class CliAgentAdapter:
         if os.name == "nt" and Path(resolved).suffix.lower() in {".bat", ".cmd"}:
             return None
         try:
-            result = self._runner([self.command, "--version"], dry_run=False)
-        except OSError:
+            result = self._runner(
+                [self.command, "--version"],
+                dry_run=False,
+                timeout=VERSION_PROBE_TIMEOUT_SECONDS,
+            )
+        except (OSError, TypeError):
             return None
         if result.returncode != 0:
             return None

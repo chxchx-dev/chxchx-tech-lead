@@ -5,6 +5,7 @@ import sys
 import pytest
 
 from chxchx_tech_lead.adapters.terminal.zellij import ZellijAdapter
+from chxchx_tech_lead.adapters.agents.base_cli import CliAgentAdapter
 from chxchx_tech_lead.core.models import ProjectInfo
 from chxchx_tech_lead.core.registry import register_project
 from chxchx_tech_lead.core.runner import CommandResult
@@ -89,6 +90,25 @@ auto_start = false
 ''',
         encoding="utf-8",
     )
+
+
+def test_agent_status_can_skip_slow_version_probe(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project)
+    calls = []
+    monkeypatch.setattr(
+        CliAgentAdapter,
+        "version",
+        lambda self: calls.append(self.agent_id) or "codex 1.2.3",
+    )
+    service = WorkspaceService(ProjectInfo(project, "project"), terminal=FakeTerminal())
+
+    statuses = service.agent_statuses(probe_versions=False)
+
+    assert statuses[0].id == "codex"
+    assert statuses[0].version is None
+    assert calls == []
 
 
 def test_untrusted_workspace_never_starts_auto_processes(tmp_path: Path, monkeypatch):
@@ -251,12 +271,18 @@ def test_attach_agent_focuses_and_opens_named_zellij_pane(tmp_path: Path, monkey
     project.mkdir()
     _write_config(project, auto_start=False)
     calls = []
+    tab_checks = 0
 
     def fake_runner(command, **kwargs):
+        nonlocal tab_checks
         calls.append((command, kwargs))
         if command == ["zellij", "list-sessions"]:
             return CommandResult(list(command), 0, "demo-workspace\n", "")
-        if command[-1] == "--json":
+        if "list-tabs" in command:
+            tab_checks += 1
+            tabs = "[]" if tab_checks == 1 else '[{"name":"Agentes"}]'
+            return CommandResult(list(command), 0, tabs, "")
+        if "list-panes" in command:
             return CommandResult(
                 list(command),
                 0,

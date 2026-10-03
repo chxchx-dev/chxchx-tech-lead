@@ -592,37 +592,25 @@ En Agentes, `Nuevo chat + contexto` abre un pane nuevo para el ID indicado y sol
 
 Recursos distingue el uso general del equipo del consumo estimado de los procesos administrados del proyecto, con RAM RSS y CPU por proceso y totales. También compara los proyectos registrados. La estimación actual usa los PID principales declarados; no incluye procesos hijos ni agentes que se ejecutan dentro de panes Zellij.
 
-La vista Resumen muestra el sello ASCII de CHXCHX-DEV. Las acciones no son decorativas: `Iniciar workspace` prepara el workspace y levanta los agentes configurados, `Reintentar agentes` permite recuperarlos si una CLI terminó, la pestaña Procesos permite iniciar o detener un proceso por ID, y Handoff permite editar resumen, pendientes y validación antes de guardarlos.
-
-Si el proyecto no tiene trust, usa el botón `1. Confiar proyecto` del Resumen antes de iniciar. `Preparar` crea la sesión sin entrar a ella; `4. Adjuntar Zellij` entra explícitamente. Las acciones del flujo inicial no requieren escribir texto: los IDs solo se solicitan en las pestañas Agentes y Procesos.
+La TUI agrupa la operación habitual en **Inicio**, **Trabajo** y **Proyectos**.
+La pestaña **Más** contiene configuración, recursos, historial, notas y ayuda.
+En Inicio, confía el proyecto si hace falta y pulsa **Iniciar y abrir** para
+preparar el workspace e iniciar los agentes configurados. Trabajo reúne los
+comandos del proyecto, agentes y terminales Zellij. La paleta permite buscar
+acciones menos frecuentes.
 
 Al adjuntarte a Zellij, la TUI suspende temporalmente su control del terminal y
 muestra cómo regresar: pulsa `Ctrl+O`, suelta las teclas y luego pulsa `D`. Al
-volver, la TUI restaura el teclado y muestra el resultado. Si Zellij no reconoce la sesión, la operación falla de inmediato
-con una instrucción para revisar `zellij list-sessions` y volver a iniciar el
-workspace; no queda esperando indefinidamente.
+volver, la TUI restaura el teclado y muestra el resultado. Las operaciones
+largas se ejecutan en segundo plano para mantener disponible la navegación.
 
-Atajos actuales:
+Atajos principales:
 
 ```text
 q        salir de la TUI (no detiene el workspace)
 Ctrl+P   abrir paleta de comandos
-1..7     cambiar de pestaña (7 muestra el sello completo)
+1..4     navegar Inicio, Trabajo, Proyectos y Más
 r        actualizar
-o        abrir/preparar workspace
-j        adjuntar a Zellij
-y        confiar el proyecto
-s        iniciar workspace
-t        iniciar workspace y agentes
-a        iniciar agentes
-c        iniciar agente indicado en la pestaña Agentes
-i        iniciar proceso indicado en la pestaña Procesos
-k        detener proceso indicado en la pestaña Procesos
-u        suspender workspace
-v        reanudar workspace
-x        detener workspace
-h        actualizar handoff
-e        abrir Sublime
 ```
 
 La TUI muestra estado de confianza, sesión, procesos, agentes, recursos y handoff. Todas las acciones pasan por el servicio de workspace y sus adapters; la CLI continúa siendo la interfaz recomendada para scripts y CI.

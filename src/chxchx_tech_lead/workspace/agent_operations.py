@@ -128,7 +128,7 @@ class WorkspaceAgentOperations:
             terminal = self._terminal_adapter(action.inspection)
             session = self._session_name(action.inspection)
             self._ensure_agents_tab(action.inspection, terminal, session, dry_run=dry_run)
-            existing = {item.id: item for item in self.agent_statuses()}
+            existing = {item.id: item for item in self.agent_statuses(probe_versions=False)}
             missing = [
                 item.id for item in action.inspection.config.agents
                 if existing.get(item.id) is None or existing[item.id].pane != "RUNNING"
@@ -142,13 +142,13 @@ class WorkspaceAgentOperations:
         if inspection.config is None or not inspection.config.agents:
             raise WorkspaceOperationError("No hay agentes configurados")
         terminal = self._terminal_adapter(inspection)
-        if not isinstance(terminal, ZellijAdapter):
+        if not isinstance(terminal, ZellijAdapter) and not dry_run:
             raise WorkspaceOperationError("Adjuntar a los agentes requiere Zellij")
         session = self._session_name(inspection)
         self._require_active_zellij_session(terminal, session, operation="adjuntar a agentes") if not dry_run else None
         if not prepared:
             self._ensure_agents_tab(inspection, terminal, session, dry_run=dry_run)
-            statuses = {item.id: item for item in self.agent_statuses()}
+            statuses = {item.id: item for item in self.agent_statuses(probe_versions=False)}
             missing = [
                 item.id for item in inspection.config.agents
                 if statuses.get(item.id) is None or statuses[item.id].pane != "RUNNING"
@@ -201,7 +201,7 @@ class WorkspaceAgentOperations:
             raise WorkspaceOperationError(f"No existe el preset de agentes: {preset_id}")
         return self._start_agent_ids(list(preset.agents), dry_run=dry_run)
 
-    def agent_statuses(self) -> list[AgentRuntimeStatus]:
+    def agent_statuses(self, *, probe_versions: bool = True) -> list[AgentRuntimeStatus]:
         inspection = self.inspect()
         if inspection.config is None:
             return []
@@ -238,7 +238,7 @@ class WorkspaceAgentOperations:
                     command=command,
                     cwd=str((self.project.root / config.cwd).resolve()),
                     available=adapter.available(),
-                    version=adapter.version(),
+                    version=adapter.version() if probe_versions else None,
                     session=session_state,
                     pane="RUNNING" if pane_running else "NOT_FOUND",
                     preset=presets.get(config.id, "-"),

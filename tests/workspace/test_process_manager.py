@@ -291,6 +291,7 @@ def test_process_manager_recovers_process_state_after_restart(tmp_path: Path, mo
 
 
 def test_recovered_foreign_pid_is_not_stopped(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
     project = tmp_path / "project"
     project.mkdir()
     manager = ProcessManager(

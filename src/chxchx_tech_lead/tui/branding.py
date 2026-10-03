@@ -4,4 +4,4 @@ Terminal workspace para preparar, observar y operar proyectos.
 
 BUILD  ·  AUTOMATE  ·  CREATE
 
-1–9  Vistas       Ctrl+P  Comandos       Q  Salir"""
+1–4  Secciones    Ctrl+P  Comandos       Q  Salir"""

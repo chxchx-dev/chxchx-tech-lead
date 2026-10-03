@@ -736,8 +736,9 @@ Serena
 # 26. TUI: navegación y teclas
 
 La TUI operativa se inicia con `chxchx-tech tui [PATH]` y conserva el workspace
-al cerrarse. El layout usa pestañas para evitar mezclar el estado de proyectos,
-agentes y procesos:
+al cerrarse. La navegación principal se limita a Inicio, Trabajo, Proyectos y
+Más. Trabajo reúne consola, agentes y procesos; Más contiene recursos,
+configuración, historial y ayuda.
 
 La interfaz usa fondo oscuro, paneles con bordes rectos y títulos integrados,
 botones delineados y una barra de estado inferior. Los colores tenues de los
@@ -745,71 +746,46 @@ botones distinguen acciones principales, de inicio y de detención; el foco y la
 selección se resaltan para navegar también con teclado.
 
 ```text
-1       Resumen
-2       Proyectos
-3       Agentes
-4       Procesos
-5       Recursos
-6       Handoff
-7       Notas del proyecto
-8       Chats
-9       Marca / sello CHXCHX-DEV
-0       Configuración: init, instalación, MCP y diagnóstico
-F1      Guía de uso
-F2      Errores recientes del proyecto
-Ctrl+P  Paleta de comandos
+1       Inicio
+2       Trabajo
+3       Proyectos
+4       Más
+Ctrl+P  Buscar y ejecutar una acción
 r       Actualizar
-o       Abrir/preparar workspace
-j       Adjuntar a Terminales
-y       Marcar proyecto como confiable
-s       Iniciar proyecto
-t       Abrir Zellij + agentes
-a       Iniciar agentes
-c       Iniciar agente indicado
-g       Abrir terminal del agente seleccionado
-i       Iniciar proceso indicado
-k       Detener proceso indicado
-u       Suspender workspace
-v       Reanudar workspace
-x       Detener workspace
-h       Actualizar handoff
-e       Abrir Sublime
 q       Cerrar TUI
 ```
 
-La pestaña **Consola** muestra el stack, el gestor de paquetes y los comandos
-definidos para el proyecto. `s` o **Iniciar proyecto** ejecuta los comandos de
+En **Inicio**, usa **Iniciar y abrir** para preparar el workspace e iniciar los
+agentes configurados antes de entrar a Zellij. Si el proyecto todavía no es
+confiable, usa **Confiar proyecto** primero. **Detener procesos** cierra los
+procesos administrados del proyecto.
+
+La pestaña **Trabajo → Proyecto** muestra el stack, el gestor de paquetes y los comandos
+definidos para el proyecto. **Iniciar procesos** ejecuta los comandos de
 `workspace.processes`; si aún no existe configuración guardada, muestra las
 sugerencias detectadas en los scripts de `package.json` o en los archivos de
 .NET, Python, Rust y Go. La salida se actualiza en la consola y el proyecto debe
 estar marcado como confiable antes de ejecutar comandos.
 
-En **Resumen**, **Preparar sesión** crea una sesión de Zellij con una terminal.
-**Abrir Zellij + agentes** inicia los procesos de autoarranque y los agentes
-configurados (como Codex y Claude), y luego entra a Zellij para trabajar.
-**Iniciar procesos** ejecuta los procesos declarados en el proyecto. Esta última
-acción no inicia Zellij ni los agentes.
-
 Zellij separa la sesión en dos pestañas: **Agentes** aloja las CLI configuradas
 y el panel vivo de contexto y cuota de tokens; **Terminales** contiene la shell
-principal y las terminales paralelas. **Adjuntar agentes** abre el grupo de
-agentes y **Adjuntar terminales** (`j`) abre el grupo normal. Abrir un agente
-desde la pestaña Agentes del TUI lleva a su pane dentro de ese grupo. Las barras
-de estado de Codex y Claude y el panel de uso siguen mostrando contexto y
-límites de uso cuando el proveedor los reporta.
+principal y las terminales paralelas. Desde Trabajo puedes adjuntar terminales,
+crear otra terminal o abrir un agente seleccionado. Las barras de estado de
+Codex y Claude y el panel de uso muestran contexto y límites cuando el proveedor
+los reporta.
 
-La pestaña **Configuración** (tecla `0`) concentra `init`, instalación de las
-herramientas base, integración MCP y diagnóstico. **Previsualizar init** no
+En **Más → Configuración** se concentran `init`, instalación de herramientas,
+integración MCP y diagnóstico. **Previsualizar init** no
 escribe cambios; **Inicializar proyecto** conserva el backup automático de los
 archivos administrados; **Init mínimo** crea la estructura compacta. **Preparación
 completa** ejecuta instalación, init e integraciones en orden.
 
 `q` cierra la interfaz, **no mata el workspace**.
 
-Al usar `t` o **Abrir Zellij + agentes**, la TUI muestra la instrucción de
+Al usar **Iniciar y abrir**, la TUI muestra la instrucción de
 retorno. Desde Zellij pulsa `Ctrl+O`, suelta las teclas y después pulsa `D`;
-eso te devuelve a la TUI sin detener el workspace. **Adjuntar terminales** (`j`)
-solo entra a una sesión ya preparada. La TUI suspende y restaura su control del
+eso te devuelve a la TUI sin detener el workspace. **Terminales Zellij** solo
+entra a una sesión ya preparada. La TUI suspende y restaura su control del
 terminal alrededor del adjunto para que el teclado siga funcionando al volver.
 Antes de adjuntar se comprueba que la sesión
 exista y esté activa. Si Zellij no la reconoce, la operación termina con un
@@ -817,11 +793,11 @@ error accionable y recomienda revisar `zellij list-sessions` y volver a iniciar
 el workspace.
 
 Para abrir una terminal de shell paralela en la misma sesión, usa **Nueva
-terminal Zellij** en el Resumen (o pulsa `n`), o ejecuta
+terminal** en Trabajo, o ejecuta
 `chxchx-tech workspace terminal .`. La nueva pane inicia en la carpeta del
 proyecto y permanece disponible al volver a la TUI con `Ctrl+O` y `D`.
 La TUI informa antes de ceder el terminal y muestra el resultado al regresar.
-Los errores de acciones quedan en la pestaña **Errores** y se guardan en
+Los errores de acciones quedan en **Más → Errores** y se guardan en
 `~/.chxchx-tech-lead/cache/errors.jsonl`, con un máximo de 200 registros; la
 vista filtra los errores del proyecto seleccionado.
 
@@ -833,17 +809,17 @@ Detener el workspace debe ser una acción distinta y explícita.
 
 La paleta local se abre con `Ctrl+P`, permite filtrar por texto y ejecuta las acciones del mismo `WorkspaceService` que usa la CLI.
 
-La pestaña **Chats** muestra, en modo lectura, las sesiones locales de Codex y
+**Más → Chats** muestra, en modo lectura, las sesiones locales de Codex y
 Claude Code asociadas al proyecto seleccionado. Permite buscar por título o
-último mensaje y leer el transcript de cada sesión. La pestaña **Notas** conserva
-el historial persistente de `.ai/memory`. En **Agentes**, selecciona Codex o
-Claude y pulsa **Abrir terminal del agente seleccionado** (o `g`) para entrar
+último mensaje y leer el transcript de cada sesión. **Más → Notas** conserva
+el historial persistente de `.ai/memory`. En **Trabajo → Agentes**, selecciona Codex o
+Claude y pulsa **Abrir terminal del agente** para entrar
 a su pane interactivo de Zellij; al salir, vuelve a la TUI.
 
-La pestaña **Guía de uso** explica cómo confiar el proyecto, preparar o iniciar
-el workspace, entrar a Zellij, abrir terminales paralelas y detener procesos.
-Está disponible en la pestaña o con `F1`. La pestaña **Procesos** permite
-iniciar y detener un proceso por su ID. **Recursos** muestra las métricas del
+**Más → Guía** explica cómo confiar el proyecto, preparar o iniciar el
+workspace, entrar a Zellij, abrir terminales paralelas y detener procesos.
+**Trabajo → Procesos** permite iniciar y detener un proceso por su ID.
+**Más → Recursos** muestra las métricas del
 equipo y los procesos registrados. **Handoff** permite actualizar el resumen,
 los pendientes y la validación en `.ai/HANDOFF.md`.
 

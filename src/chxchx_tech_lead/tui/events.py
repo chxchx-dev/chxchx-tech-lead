@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Callable
 
+from textual import work
 from textual.widgets import Button, DataTable, Input, Static
 
 from ..core.detector import detect_project
 from ..core.registry import resolve_project_reference
-from ..workspace.service import WorkspaceOperationError, WorkspaceService
+from ..workspace.service import WorkspaceService
 from ..workspace.state import load_state
 
 
@@ -124,7 +126,7 @@ class WorkspaceEvents:
         self._refresh_errors()
 
     def chat_search_changed(self, _event: Input.Changed) -> None:
-        self._refresh_conversations()
+        self._debounce_panel_refresh("chat")
 
     def chat_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         conversation = self._conversations.get(str(event.row_key.value))
@@ -158,7 +160,15 @@ class WorkspaceEvents:
         self._select_console_process(str(event.row_key.value))
 
     def memory_search_changed(self, _event: Input.Changed) -> None:
-        self._refresh_memory_history()
+        self._debounce_panel_refresh("memory")
+
+    def _debounce_panel_refresh(self, panel: str) -> None:
+        attribute = "_chat_search_timer" if panel == "chat" else "_memory_search_timer"
+        timer = getattr(self, attribute)
+        if timer is not None:
+            timer.stop()
+        callback = self._refresh_conversations if panel == "chat" else self._refresh_memory_history
+        setattr(self, attribute, self.set_timer(0.25, callback))
 
     def memory_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         note = self._memory_notes.get(str(event.row_key.value))
@@ -180,24 +190,32 @@ class WorkspaceEvents:
 
     def _switch_project(self) -> None:
         reference = self._query("#project-ref", Input).value.strip()
-        try:
-            root = resolve_project_reference(reference)
-            selected = detect_project(root)
-            self.service = WorkspaceService(selected)
-            self.service.start()
-        except (ValueError, WorkspaceOperationError, OSError) as exc:
-            self._set_log(f"Error al cambiar proyecto: {exc}")
-            self.notify(str(exc), severity="error")
-            return
+        self._perform(
+            "Proyecto cambiado",
+            lambda: self._resolve_and_start_project(reference),
+            refresh=False,
+            on_success=self._finish_project_switch,
+        )
+
+    @staticmethod
+    def _resolve_and_start_project(reference: str):
+        root = resolve_project_reference(reference)
+        selected = detect_project(root)
+        service = WorkspaceService(selected)
+        service.start()
+        return selected, service
+
+    def _finish_project_switch(self, result) -> None:
+        selected, service = result
+        self.service = service
         self.project = selected
         self.sub_title = self.subtitle
         self._query("#project-ref", Input).value = str(selected.root)
         self._set_log(f"Proyecto activo: {selected.name}")
+        self._show("overview")
         self.refresh_dashboard()
         self._refresh_projects()
         self._refresh_handoff()
-        self._refresh_memory_history()
-        self._refresh_conversations()
         self._refresh_project_console()
 
     def _perform(
@@ -206,12 +224,49 @@ class WorkspaceEvents:
         action: Callable[[], object],
         *,
         refresh: bool = True,
+        on_success: Callable[[object], None] | None = None,
+    ) -> None:
+        if (
+            self._operation_pending
+            or self._setup_pending
+            or self._attach_pending
+            or self._start_pending
+        ):
+            self.notify("Espera a que termine la acción actual", severity="warning")
+            return
+        self._operation_pending = True
+        self._set_log(f"Ejecutando: {success}…")
+        self.notify(f"Ejecutando: {success}…", severity="information")
+        self._execute_operation(success, action, refresh, on_success)
+
+    @work(group="workspace-action", exclusive=True)
+    async def _execute_operation(
+        self,
+        success: str,
+        action: Callable[[], object],
+        refresh: bool,
+        on_success: Callable[[object], None] | None,
     ) -> None:
         try:
-            result = action()
-        except (WorkspaceOperationError, OSError) as exc:
-            self._set_log(f"Error: {exc}")
-            self.notify(str(exc), severity="error")
+            result = await asyncio.to_thread(action)
+        except Exception as exc:
+            self._finish_operation(success, None, exc, refresh, on_success)
+            return
+        self._finish_operation(success, result, None, refresh, on_success)
+
+    def _finish_operation(
+        self,
+        success: str,
+        result: object | None,
+        error: Exception | None,
+        refresh: bool,
+        on_success: Callable[[object], None] | None,
+    ) -> None:
+        self._operation_pending = False
+        if error is not None:
+            message = f"Error: {type(error).__name__}: {error}"
+            self._set_log(message)
+            self.notify(str(error), severity="error")
             return
         messages = getattr(result, "messages", [])
         detail = f": {messages[-1]}" if messages else ""
@@ -220,9 +275,11 @@ class WorkspaceEvents:
             session = state.session_name or "sin sesión persistente"
             detail += f" · Estado {state.status.value} · sesión {session}"
             if state.status.value == "ACTIVE":
-                detail += " · usa `4. Adjuntar Zellij` para entrar"
+                detail += " · usa Trabajo > Proyecto > Terminales Zellij para entrar"
         self._set_log(f"{success}{detail}")
         self.notify(f"{success}{detail}", severity="information")
+        if on_success is not None:
+            on_success(result)
         if refresh:
             self.refresh_dashboard()
 

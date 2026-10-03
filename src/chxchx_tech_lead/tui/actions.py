@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Callable
 
 from textual import work
 from textual.widgets import Input, TabbedContent
 
-from ..core.detector import detect_project
-from ..core.registry import resolve_project_reference
 from ..core.trust import trust_project
 from ..workspace.handoff import update_handoff
 from ..workspace.service import WorkspaceOperationError
@@ -22,13 +21,44 @@ class WorkspaceActions:
     def _run_palette_command(self, command_id: str | None) -> None:
         self._palette_open = False
         if command_id:
-            getattr(self, f"action_{command_id}")()
+            handler = getattr(self, f"action_{command_id}", None)
+            if handler is None:
+                self.notify("No reconozco esa acción", severity="error")
+            else:
+                handler()
+        if self._dashboard_refresh_again and not self._dashboard_pending:
+            self.refresh_dashboard()
 
     def _show(self, tab_id: str) -> None:
+        nested_tabs = {
+            "console": ("work", "work-tabs"),
+            "agents": ("work", "work-tabs"),
+            "processes": ("work", "work-tabs"),
+            "resources": ("more", "more-tabs"),
+            "handoff": ("more", "more-tabs"),
+            "memory": ("more", "more-tabs"),
+            "conversations": ("more", "more-tabs"),
+            "errors": ("more", "more-tabs"),
+            "guide": ("more", "more-tabs"),
+            "setup": ("more", "more-tabs"),
+            "brand-tab": ("more", "more-tabs"),
+        }
+        destination = nested_tabs.get(tab_id)
+        if destination:
+            parent, child_tabs = destination
+            self._query("#tabs", TabbedContent).active = parent
+            self._query(f"#{child_tabs}", TabbedContent).active = tab_id
+            return
         self._query("#tabs", TabbedContent).active = tab_id
 
     def action_show_overview(self) -> None:
         self._show("overview")
+
+    def action_show_work(self) -> None:
+        self._show("work")
+
+    def action_show_more(self) -> None:
+        self._show("more")
 
     def action_show_guide(self) -> None:
         self._show("guide")
@@ -38,35 +68,27 @@ class WorkspaceActions:
 
     def action_show_projects(self) -> None:
         self._show("projects")
-        self._refresh_projects()
 
     def action_show_agents(self) -> None:
         self._show("agents")
-        self._refresh_agents()
 
     def action_show_processes(self) -> None:
         self._show("processes")
-        self.refresh_dashboard()
 
     def action_show_resources(self) -> None:
         self._show("resources")
-        self.refresh_dashboard()
 
     def action_show_handoff(self) -> None:
         self._show("handoff")
-        self._refresh_handoff()
 
     def action_show_memory(self) -> None:
         self._show("memory")
-        self._refresh_memory_history()
 
     def action_show_conversations(self) -> None:
         self._show("conversations")
-        self._refresh_conversations()
 
     def action_show_errors(self) -> None:
         self._show("errors")
-        self._refresh_errors()
 
     def action_show_brand(self) -> None:
         self._show("brand-tab")
@@ -98,7 +120,7 @@ class WorkspaceActions:
         )
 
     def action_start_workspace_all(self) -> None:
-        if self._attach_pending or self._start_pending:
+        if self._attach_pending or self._start_pending or self._operation_pending or self._setup_pending:
             return
         self._attach_pending = True
         message = "Iniciando workspace y agentes… Zellij se abrirá al terminar."
@@ -117,14 +139,15 @@ class WorkspaceActions:
             self._attach_pending = False
             self._refresh_agents()
 
-    @work(thread=True, group="workspace-agents", exclusive=True)
-    def _prepare_agents_for_attach(self) -> None:
+    @work(group="workspace-agents", exclusive=True)
+    async def _prepare_agents_for_attach(self) -> None:
         try:
-            self.service.prepare_agents()
+            action, _agent_results = await asyncio.to_thread(self.service.prepare_agents)
         except Exception as exc:
-            self.call_from_thread(self._agents_prepare_failed, exc)
+            self._agents_prepare_failed(exc)
             return
-        self.call_from_thread(self._attach_prepared_agents)
+        config = action.inspection.config
+        self._attach_prepared_agents(bool(config and config.agents))
 
     def _agents_prepare_failed(self, exc: Exception) -> None:
         self._set_log(f"Error preparando agentes: {type(exc).__name__}: {exc}")
@@ -132,10 +155,13 @@ class WorkspaceActions:
         self._attach_pending = False
         self._refresh_agents()
 
-    def _attach_prepared_agents(self) -> None:
+    def _attach_prepared_agents(self, include_agents: bool = True) -> None:
         try:
             with self.suspend():
-                self.service.attach_agents(prepared=True)
+                if include_agents:
+                    self.service.attach_agents(prepared=True)
+                else:
+                    self.service.attach()
         except Exception as exc:
             self._set_log(f"Error al abrir Zellij: {type(exc).__name__}: {exc}")
             self.notify(str(exc), severity="error")
@@ -172,8 +198,7 @@ class WorkspaceActions:
         self._perform("Workspace reanudado", lambda: self.service.resume())
 
     def action_start_agents(self) -> None:
-        self._perform("Agentes iniciados", lambda: self.service.start_agents(), refresh=False)
-        self._refresh_agents()
+        self._perform("Agentes iniciados", lambda: self.service.start_agents())
 
     def action_start_agent_selected(self) -> None:
         agent_id = self._query("#agent-id", Input).value.strip()
@@ -184,9 +209,7 @@ class WorkspaceActions:
         self._perform(
             f"Agente `{agent_id}` iniciado",
             lambda: self.service.start_agent(agent_id),
-            refresh=False,
         )
-        self._refresh_agents()
 
     def action_start_new_chat(self) -> None:
         agent_id = self._query("#agent-id", Input).value.strip()
@@ -197,9 +220,7 @@ class WorkspaceActions:
         self._perform(
             f"Chat nuevo de `{agent_id}` iniciado con contexto persistido",
             lambda: self.service.start_agent(agent_id, new_chat=True),
-            refresh=False,
         )
-        self._refresh_agents()
 
     def _selected_process_action(self, *, start: bool) -> None:
         process_id = self._query("#process-id", Input).value.strip()
@@ -224,19 +245,24 @@ class WorkspaceActions:
         self._perform("Editor abierto", lambda: self.service.open_editor())
 
     def action_write_handoff(self) -> None:
-        try:
+        summary = self._query("#handoff-summary", Input).value.strip()
+        pending = self._query("#handoff-pending", Input).value.strip()
+        validation = self._query("#handoff-validation", Input).value.strip()
+
+        def write():
             inspection = self.service.inspect()
-            update_handoff(
+            return update_handoff(
                 self.project,
                 inspection.state.status,
                 self.service.agent_statuses(),
-                summary=self._query("#handoff-summary", Input).value.strip(),
-                pending=self._query("#handoff-pending", Input).value.strip(),
-                validation=self._query("#handoff-validation", Input).value.strip(),
+                summary=summary,
+                pending=pending,
+                validation=validation,
             )
-        except (WorkspaceOperationError, OSError) as exc:
-            self._set_log(f"Error: {exc}")
-            self.notify(str(exc), severity="error")
-            return
-        self._set_log("Handoff actualizado")
-        self._refresh_handoff()
+
+        self._perform(
+            "Handoff actualizado",
+            write,
+            refresh=False,
+            on_success=lambda _result: self._refresh_handoff(),
+        )

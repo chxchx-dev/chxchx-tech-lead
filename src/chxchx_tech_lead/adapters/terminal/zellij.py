@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Callable, Sequence
@@ -28,7 +29,11 @@ class ZellijAdapter(ZellijLayoutOperations):
         return self._lookup(self.command) is not None
 
     def list_sessions(self, dry_run: bool = False) -> CommandResult:
-        return self._runner([self.command, "list-sessions"], dry_run=dry_run)
+        return self._runner(
+            [self.command, "list-sessions"],
+            dry_run=dry_run,
+            timeout=3,
+        )
 
     def session_exists(self, name: str) -> bool:
         return self.session_status(name) == "active"
@@ -98,6 +103,7 @@ class ZellijAdapter(ZellijLayoutOperations):
         return self._runner(
             [self.command, "--session", name, "action", "list-tabs", "--json"],
             dry_run=dry_run,
+            timeout=3,
         )
 
     def focus_tab(self, name: str, tab_name: str, dry_run: bool = False) -> CommandResult:
@@ -149,6 +155,7 @@ class ZellijAdapter(ZellijLayoutOperations):
         return self._runner(
             [self.command, "--session", name, "action", "list-panes", "--all"],
             dry_run=dry_run,
+            timeout=3,
         )
 
     def open_terminal_pane(self, name: str, cwd: Path, dry_run: bool = False) -> CommandResult:
