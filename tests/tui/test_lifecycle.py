@@ -17,6 +17,14 @@ from chxchx_tech_lead.tui.palette import CommandPalette
 from textual.widgets import Button, Static, TabbedContent
 
 
+async def _wait_for(pilot, predicate, *, timeout: float = 5.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not predicate():
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError("Timed out waiting for the expected TUI state")
+        await pilot.pause(0.05)
+
+
 def test_quit_key_exits_tui_without_stopping_workspace(tmp_path: Path, monkeypatch):
     project = ProjectInfo(tmp_path, "project")
     app = WorkspaceConsole(project)
@@ -121,10 +129,7 @@ def test_long_workspace_action_runs_without_blocking_navigation(tmp_path: Path, 
                 await pilot.press("2")
                 await pilot.pause()
                 assert app.query_one("#tabs", TabbedContent).active == "work"
-                for _ in range(20):
-                    await pilot.pause(0.02)
-                    if not app._operation_pending:
-                        break
+                await _wait_for(pilot, lambda: not app._operation_pending)
                 assert not app._operation_pending
                 assert "Tarea lenta" in str(app.query_one("#log", Static).render())
         finally:
@@ -175,10 +180,7 @@ def test_dashboard_collection_runs_without_blocking_navigation(tmp_path: Path, m
                 await pilot.press("2")
                 await pilot.pause()
                 assert app.query_one("#tabs", TabbedContent).active == "work"
-                for _ in range(20):
-                    await pilot.pause(0.02)
-                    if not app._dashboard_pending:
-                        break
+                await _wait_for(pilot, lambda: not app._dashboard_pending)
                 assert not app._dashboard_pending
                 assert any("simulated slow dashboard probe" in item for item in messages)
         finally:
@@ -204,18 +206,12 @@ def test_project_console_probe_runs_without_blocking_navigation(tmp_path: Path, 
         try:
             async with app.run_test() as pilot:
                 app.query_one("#tabs", TabbedContent).active = "work"
-                for _ in range(10):
-                    await pilot.pause(0.02)
-                    if app._console_pending:
-                        break
+                await _wait_for(pilot, lambda: app._console_pending)
                 assert app._console_pending
                 await pilot.press("2")
                 await pilot.pause()
                 assert app.query_one("#tabs", TabbedContent).active == "work"
-                for _ in range(20):
-                    await pilot.pause(0.02)
-                    if not app._console_pending:
-                        break
+                await _wait_for(pilot, lambda: not app._console_pending)
                 assert not app._console_pending
                 assert "simulated slow console probe" in str(
                     app.query_one("#console-technology", Static).render()
