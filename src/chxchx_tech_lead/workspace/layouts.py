@@ -66,6 +66,7 @@ def _header_pane(root: str, header: HeaderConfig, project: str, profile: str) ->
 
 
 def _usage_pane(root: str, agents: Sequence[AgentConfig]) -> list[str]:
+    cwd = json.dumps(root, ensure_ascii=False)
     usage_args = ["-m", "chxchx_tech_lead.workspace.usage_panel", "--root", root]
     for agent in agents:
         executable = Path(agent.command[0].replace("\\", "/")).name.casefold()
@@ -74,7 +75,7 @@ def _usage_pane(root: str, agents: Sequence[AgentConfig]) -> list[str]:
     command = json.dumps(sys.executable, ensure_ascii=False)
     args = " ".join(json.dumps(value, ensure_ascii=False) for value in usage_args)
     return [
-        f"    pane size=8 borderless=true cwd={root} command={command} {{",
+        f"    pane size=8 borderless=true cwd={cwd} command={command} {{",
         f"      args {args};",
         "    }",
     ]
@@ -114,16 +115,16 @@ def workspace_layout(
     configured_agents = [agent for agent in agents if isinstance(agent.command, list) and agent.command]
     if not header.enabled and not configured_agents:
         return None
-    cwd = json.dumps(str(root.resolve()), ensure_ascii=False)
+    root_path = str(root.resolve())
+    cwd = json.dumps(root_path, ensure_ascii=False)
     lines = ["layout {", '  tab name="Terminales" {']
     lines.extend(_header_pane(cwd, header, project, profile))
     lines.extend(_shell_pane(cwd))
     lines.append("  }")
     if configured_agents:
-        tab_direction = "vertical" if orientation == "horizontal" else "horizontal"
-        lines.extend([f'  tab name="Agentes" focus=true split_direction="{tab_direction}" {{'])
+        lines.append('  tab name="Agentes" focus=true {')
         lines.extend(_header_pane(cwd, header, project, profile))
-        lines.extend(_usage_pane(cwd, configured_agents))
+        lines.extend(_usage_pane(root_path, configured_agents))
         lines.extend(_agent_panes(root, cwd, header, configured_agents, orientation))
         lines.append("  }")
     lines.extend(["}", ""])
@@ -139,17 +140,19 @@ def agents_tab_layout(
     agents: Sequence[AgentConfig],
 ) -> str:
     """Return a layout that can add the dedicated agents tab to an active session."""
-    cwd = json.dumps(str(root.resolve()), ensure_ascii=False)
+    root_path = str(root.resolve())
+    cwd = json.dumps(root_path, ensure_ascii=False)
     configured = [agent for agent in agents if isinstance(agent.command, list) and agent.command]
-    tab_direction = "vertical" if orientation == "horizontal" else "horizontal"
-    lines = ["layout {", f'  tab name="Agentes" focus=true split_direction="{tab_direction}" {{']
+    # `action new-tab --layout` accepts a tab layout (pane nodes only). A
+    # top-level `tab` node is ignored there and Zellij creates an empty pane.
+    lines = ["layout {"]
     lines.extend(_header_pane(cwd, header, project, profile))
     if configured:
-        lines.extend(_usage_pane(cwd, configured))
+        lines.extend(_usage_pane(root_path, configured))
         lines.extend(_agent_panes(root, cwd, header, configured, orientation))
     else:
         lines.extend(_shell_pane(cwd, indent="    "))
-    lines.extend(["  }", "}", ""])
+    lines.extend(["}", ""])
     return "\n".join(lines)
 
 

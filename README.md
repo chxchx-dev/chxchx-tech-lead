@@ -249,6 +249,12 @@ chxchx-tech workspace stop .
 
 `workspace start` exige que el proyecto esté confiable. Prepara la sesión y arranca procesos `auto_start`, pero no entra de forma interactiva a Zellij. Para ver panes y agentes usa `workspace attach`.
 
+Puedes confiar el proyecto antes de inicializarlo desde la TUI o con
+`chxchx-tech workspace trust`. Esto no habilita el inicio hasta que exista una
+configuración válida. La confianza queda vinculada al contenido de
+`.ai/chxchx-tech.toml`; si se crea o cambia después, vuelve a confiar el
+proyecto antes de iniciar procesos.
+
 `workspace status`, `process list`, `resources` y los comandos `--dry-run` son de inspección y no deberían iniciar procesos.
 
 ## Recetas rápidas del workspace
@@ -276,15 +282,21 @@ recrea con el layout actual; una sesión activa se reutiliza. Para conservar la 
 usa `Ctrl+o` y después `d`; `Ctrl+D` o `exit` cierran el último shell y pueden terminar el
 workspace.
 
-El layout completo se aplica al crear la sesión: header arriba, Codex y Claude en columnas
-horizontales y una terminal de trabajo adicional. Si la sesión ya existía antes de este cambio,
-ejecuta una vez `chxchx-tech run . --recreate`; después `chxchx-tech run .` reutilizará ese layout.
-La terminal de trabajo se crea con el shell de inicio (`$SHELL`) en modo login para que la sesión
-no termine al crearla en segundo plano.
+La sesión ofrece dos pestañas: `Terminales`, con el header y el shell interactivo, y `Agentes`,
+con el header y el panel de uso arriba, más los agentes debajo. Si falta `Agentes` en una sesión
+activa, se crea al adjuntarse el cliente y queda enfocada. Los agentes se muestran lado a lado
+con `workspace.layout.orientation = "horizontal"` y apilados con `"vertical"`. Si la sesión ya
+tiene una pestaña `Agentes` creada con un layout anterior, ejecuta una vez
+`chxchx-tech run . --recreate`; después se reutilizará. El shell de trabajo usa `$SHELL` en modo
+interactivo.
 
 Cada pane de agente muestra un banner ASCII `CHXCHX TECH · CODEX` o `CHXCHX TECH · CLAUDE`
 antes de ejecutar la CLI real. El header general queda arriba y la orientación de los panes de
 agentes se controla con `workspace.layout.orientation`.
+
+La confianza registrada por ChxChx Tech Lead permite preparar el workspace. Codex y Claude Code
+pueden mostrar además su propia confirmación de confianza la primera vez que abren esa carpeta;
+respóndela dentro del pane del agente para continuar.
 
 `--recreate` solo elimina la sesión de terminal Zellij para volver a crearla con el layout
 actual; no elimina ni modifica archivos del proyecto.
@@ -594,9 +606,9 @@ Recursos distingue el uso general del equipo del consumo estimado de los proceso
 
 La TUI agrupa la operación habitual en **Inicio**, **Trabajo** y **Proyectos**.
 La pestaña **Más** contiene configuración, recursos, historial, notas y ayuda.
-En Inicio, inicializa y confía el proyecto si hace falta; luego pulsa
-**Iniciar y abrir terminal** para entrar a la shell del proyecto. Los agentes
-se inician aparte desde **Trabajo → Agentes**, cuando los necesites. La paleta
+En Inicio, inicializa y confía el proyecto si hace falta. Después puedes abrir
+la shell del proyecto o entrar directamente a la pestaña de agentes con los
+botones **Abrir terminal** y **Abrir agentes**, o las teclas `T` y `A`. La paleta
 permite buscar acciones menos frecuentes.
 
 Al adjuntarte a Zellij, la TUI suspende temporalmente su control del terminal y
@@ -609,6 +621,8 @@ Atajos principales:
 ```text
 q        salir de la TUI (no detiene el workspace)
 Ctrl+P   abrir paleta de comandos
+t        abrir la terminal del proyecto
+a        preparar y abrir agentes
 1..4     navegar Inicio, Trabajo, Proyectos y Más
 r        actualizar
 ```

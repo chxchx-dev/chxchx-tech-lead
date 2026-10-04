@@ -11,10 +11,22 @@ class ZellijLayoutOperations:
 
     command: str
 
-    def add_layout_tab(self, name: str, layout: str, dry_run: bool = False) -> CommandResult:
+    def add_layout_tab(
+        self, session: str, tab_name: str, layout: str, dry_run: bool = False
+    ) -> CommandResult:
         if dry_run:
             return CommandResult(
-                [self.command, "--session", name, "action", "new-tab", "--layout", "<layout generado>"],
+                [
+                    self.command,
+                    "--session",
+                    session,
+                    "action",
+                    "new-tab",
+                    "--name",
+                    tab_name,
+                    "--layout",
+                    "<layout generado>",
+                ],
                 0,
                 "DRY RUN",
                 "",
@@ -27,11 +39,21 @@ class ZellijLayoutOperations:
                 stream.write(layout)
                 path = stream.name
             return self._runner(
-                [self.command, "--session", name, "action", "new-tab", "--layout", path]
+                [
+                    self.command,
+                    "--session",
+                    session,
+                    "action",
+                    "new-tab",
+                    "--name",
+                    tab_name,
+                    "--layout",
+                    path,
+                ]
             )
         except OSError as exc:
             return CommandResult(
-                [self.command, "--session", name, "action", "new-tab"],
+                [self.command, "--session", session, "action", "new-tab", "--name", tab_name],
                 2,
                 "",
                 f"No pude preparar el layout de Zellij: {exc}",

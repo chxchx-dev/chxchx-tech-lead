@@ -36,7 +36,7 @@ def ensure_layout_tab(
     tabs = terminal.list_tabs(session, dry_run=dry_run)
     if has_named_tab(tabs.stdout, name):
         return
-    result = terminal.add_layout_tab(session, layout, dry_run=dry_run)
+    result = terminal.add_layout_tab(session, name, layout, dry_run=dry_run)
     if result.returncode != 0:
         raise WorkspaceOperationError(result.stderr or f"No pude crear la pestaña {name}")
     if not dry_run and not has_named_tab(terminal.list_tabs(session).stdout, name):

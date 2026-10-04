@@ -57,8 +57,9 @@ construir todos los managers dentro de cada callback de pantalla.
 3. Dividir los comandos CLI por dominio manteniendo los mismos entry points.
    **Hecho.**
 4. Dividir `WorkspaceService` por casos de uso y dejar una fachada compatible.
-   **Hecho:** agentes en `agent_operations.py` y procesos en
-   `process_operations.py`; `service.py` conserva la fachada.
+   **Hecho:** agentes en `agent_operations.py`, procesos en
+   `process_operations.py` y terminales en `terminal_operations.py`;
+   `service.py` conserva la fachada.
 5. Añadir una verificación de tamaño para evitar regresiones. **Hecho:**
    `tests/test_code_size.py` verifica todos los módulos Python de producción.
 
@@ -77,6 +78,7 @@ El caso de uso compartido de bootstrap vive en `core/bootstrap.py`. Los modelos
 `workspace/process_models.py`.
 Zellij session tabs and layout construction are isolated in
 `workspace/layouts.py` and `workspace/zellij_tabs.py`.
+Terminal pane use cases live in `workspace/terminal_operations.py`.
 
 `cli.py` conserva el punto de entrada público; `commands/` registra comandos
 por dominio y `cli_context.py` mantiene las apps Typer y las operaciones

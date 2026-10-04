@@ -68,7 +68,7 @@ class WorkspaceAgentOperations:
         return result
 
     def attach_agent(self, agent_id: str, dry_run: bool = False):
-        """Attach to the named Zellij pane for one configured agent."""
+        """Attach to the agents tab and focus the configured agent pane."""
         inspection = self.inspect()
         if inspection.config is None:
             raise WorkspaceOperationError("No hay configuración de workspace")
@@ -82,21 +82,17 @@ class WorkspaceAgentOperations:
             self.start(include_agents=True)
         if not dry_run:
             self._require_active_zellij_session(terminal, session, operation="adjuntar")
-        self._ensure_agents_tab(inspection, terminal, session, dry_run=dry_run)
-        panes = terminal.list_panes(session, dry_run=dry_run)
-        if not self._pane_is_active(panes.stdout, agent_id) and not dry_run:
-            started = self.start_agent(agent_id)
-            if started.returncode != 0:
-                raise WorkspaceOperationError(started.stderr or f"No se pudo iniciar `{agent_id}`")
-        if not dry_run:
-            self._require_active_zellij_session(terminal, session, operation="adjuntar")
-            focused_tab = terminal.focus_tab(session, "Agentes")
-            if focused_tab.returncode != 0:
-                raise WorkspaceOperationError(focused_tab.stderr or "No pude abrir la pestaña Agentes")
-            focused = terminal.focus_named_pane(session, agent_id)
-            if focused.returncode != 0:
-                raise WorkspaceOperationError(focused.stderr or f"No pude enfocar la terminal de `{agent_id}`")
-        result = terminal.attach_session(session, dry_run=dry_run)
+        layout = self._agents_tab_layout(inspection)
+        if isinstance(terminal, ZellijAdapter):
+            result = terminal.attach_session(
+                session,
+                dry_run=dry_run,
+                focus_tab="Agentes",
+                focus_pane=agent_id,
+                tab_layout=layout,
+            )
+        else:
+            result = terminal.attach_session(session, dry_run=dry_run)
         if result.returncode != 0:
             raise WorkspaceOperationError(result.stderr or f"No pude abrir la terminal de `{agent_id}`")
         return result
@@ -121,21 +117,9 @@ class WorkspaceAgentOperations:
         return action, agent_results, attach_result
 
     def prepare_agents(self, dry_run: bool = False):
-        """Create the workspace and make every configured agent pane available."""
+        """Prepare the workspace; agent panes load once the client opens their tab."""
         action = self.start(dry_run=dry_run, include_agents=True)
-        agent_results = []
-        if action.inspection.config and action.inspection.config.agents and not action.session_created:
-            terminal = self._terminal_adapter(action.inspection)
-            session = self._session_name(action.inspection)
-            self._ensure_agents_tab(action.inspection, terminal, session, dry_run=dry_run)
-            existing = {item.id: item for item in self.agent_statuses(probe_versions=False)}
-            missing = [
-                item.id for item in action.inspection.config.agents
-                if existing.get(item.id) is None or existing[item.id].pane != "RUNNING"
-            ]
-            if missing:
-                agent_results = self._start_agent_ids(missing, dry_run=dry_run)
-        return action, agent_results
+        return action, []
 
     def attach_agents(self, dry_run: bool = False, prepared: bool = False):
         inspection = self.inspect()
@@ -146,20 +130,15 @@ class WorkspaceAgentOperations:
             raise WorkspaceOperationError("Adjuntar a los agentes requiere Zellij")
         session = self._session_name(inspection)
         self._require_active_zellij_session(terminal, session, operation="adjuntar a agentes") if not dry_run else None
-        if not prepared:
-            self._ensure_agents_tab(inspection, terminal, session, dry_run=dry_run)
-            statuses = {item.id: item for item in self.agent_statuses(probe_versions=False)}
-            missing = [
-                item.id for item in inspection.config.agents
-                if statuses.get(item.id) is None or statuses[item.id].pane != "RUNNING"
-            ]
-            if missing and not dry_run:
-                self._start_agent_ids(missing, dry_run=False)
-        if not dry_run:
-            focused = terminal.focus_tab(session, "Agentes")
-            if focused.returncode != 0:
-                raise WorkspaceOperationError(focused.stderr or "No pude abrir la pestaña Agentes")
-        result = terminal.attach_session(session, dry_run=dry_run)
+        if isinstance(terminal, ZellijAdapter):
+            result = terminal.attach_session(
+                session,
+                dry_run=dry_run,
+                focus_tab="Agentes",
+                tab_layout=self._agents_tab_layout(inspection),
+            )
+        else:
+            result = terminal.attach_session(session, dry_run=dry_run)
         if result.returncode != 0:
             raise WorkspaceOperationError(result.stderr or f"No pude adjuntar a `{session}`")
         return result
@@ -170,7 +149,11 @@ class WorkspaceAgentOperations:
         tabs = terminal.list_tabs(session, dry_run=dry_run)
         if has_named_tab(tabs.stdout, "Agentes"):
             return
-        layout = agents_tab_layout(
+        layout = self._agents_tab_layout(inspection)
+        ensure_layout_tab(terminal, session, "Agentes", layout, dry_run=dry_run)
+
+    def _agents_tab_layout(self, inspection) -> str:
+        return agents_tab_layout(
             self.project.root,
             inspection.config.header,
             self.project.name,
@@ -178,7 +161,6 @@ class WorkspaceAgentOperations:
             inspection.config.layout.orientation,
             inspection.config.agents,
         )
-        ensure_layout_tab(terminal, session, "Agentes", layout, dry_run=dry_run)
 
     @staticmethod
     def _pane_is_active(raw: str, agent_id: str) -> bool:

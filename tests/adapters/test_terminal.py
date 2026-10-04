@@ -1,3 +1,5 @@
+import json
+from threading import Event
 from pathlib import Path
 
 from chxchx_tech_lead.adapters.terminal.subprocess import SubprocessAdapter
@@ -99,6 +101,89 @@ def test_zellij_attach_is_marked_interactive():
 
     assert calls[0][1]["interactive"] is True
     assert calls[0][0] == ["zellij", "attach", "--force-run-commands", "demo"]
+
+
+def test_zellij_attach_focuses_tab_and_agent_after_client_connects():
+    calls = []
+    attached = Event()
+    focused_pane = Event()
+    layout_added = Event()
+
+    def fake_runner(command, **kwargs):
+        calls.append((command, kwargs))
+        if command[:2] == ["zellij", "attach"]:
+            attached.set()
+            assert focused_pane.wait(2)
+            return CommandResult(list(command), 0, "attached", "")
+        if "new-tab" in command:
+            layout_added.set()
+            return CommandResult(list(command), 0, "1", "")
+        if "list-tabs" in command:
+            active = attached.is_set()
+            tabs = [{"name": "Terminales", "active": active}]
+            if layout_added.is_set():
+                tabs.append({"name": "Agentes", "active": active, "selectable_tiled_panes_count": 1})
+            return CommandResult(
+                list(command),
+                0,
+                json.dumps(tabs),
+                "",
+            )
+        if "list-panes" in command:
+            return CommandResult(
+                list(command),
+                0,
+                json.dumps(
+                    [
+                        {
+                            "id": 8,
+                            "tab_name": "Agentes",
+                            "pane_command": "python -m chxchx_tech_lead.workspace.agent_pane --name codex -- codex",
+                        }
+                    ]
+                ),
+                "",
+            )
+        if "focus-pane-id" in command:
+            focused_pane.set()
+        return CommandResult(list(command), 0, "", "")
+
+    adapter = ZellijAdapter(runner=fake_runner, lookup=lambda _: "/usr/bin/zellij")
+    result = adapter.attach_session(
+        "demo",
+        focus_tab="Agentes",
+        focus_pane="codex",
+        tab_layout="layout { pane }",
+    )
+
+    assert result.returncode == 0
+    focus_tab = [command for command, _kwargs in calls if "go-to-tab-name" in command]
+    assert focus_tab == [["zellij", "--session", "demo", "action", "go-to-tab-name", "--create", "Agentes"]]
+    assert any(command[-2:] == ["focus-pane-id", "8"] for command, _kwargs in calls)
+    assert any("new-tab" in command and "--name" in command for command, _kwargs in calls)
+
+
+def test_zellij_add_layout_tab_names_new_tab():
+    calls = []
+
+    def fake_runner(command, **kwargs):
+        calls.append((command, kwargs))
+        return CommandResult(list(command), 0, "1", "")
+
+    adapter = ZellijAdapter(runner=fake_runner, lookup=lambda _: "/usr/bin/zellij")
+    result = adapter.add_layout_tab("demo", "Agentes", "layout { pane }")
+
+    assert result.returncode == 0
+    assert calls[0][0][:7] == [
+        "zellij",
+        "--session",
+        "demo",
+        "action",
+        "new-tab",
+        "--name",
+        "Agentes",
+    ]
+    assert calls[0][0][-2] == "--layout"
 
 
 def test_zellij_lists_all_panes_for_agent_status():

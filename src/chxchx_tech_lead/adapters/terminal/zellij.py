@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from ...core.runner import CommandResult, executable, run
+from .zellij_attach import ZellijAttachOperations
 from .zellij_layouts import ZellijLayoutOperations
 
 
-class ZellijAdapter(ZellijLayoutOperations):
+class ZellijAdapter(ZellijAttachOperations, ZellijLayoutOperations):
     """Controla sesiones Zellij sin construir comandos fuera del adapter."""
 
     _ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -92,13 +93,6 @@ class ZellijAdapter(ZellijLayoutOperations):
             ]
         return self._runner(command, dry_run=dry_run)
 
-    def attach_session(self, name: str, dry_run: bool = False) -> CommandResult:
-        return self._runner(
-            [self.command, "attach", "--force-run-commands", name],
-            dry_run=dry_run,
-            interactive=True,
-        )
-
     def list_tabs(self, name: str, dry_run: bool = False) -> CommandResult:
         return self._runner(
             [self.command, "--session", name, "action", "list-tabs", "--json"],
@@ -112,8 +106,10 @@ class ZellijAdapter(ZellijLayoutOperations):
             dry_run=dry_run,
         )
 
+    def focus_pane_id(self, session: str, pane_id: str, dry_run: bool = False) -> CommandResult:
+        return self._runner([self.command, "--session", session, "action", "focus-pane-id", pane_id.strip()], dry_run=dry_run)
+
     def focus_named_pane(self, session: str, pane_name: str, dry_run: bool = False) -> CommandResult:
-        """Focus a named agent pane before handing the user's TTY to Zellij."""
         panes = self._runner(
             [self.command, "--session", session, "action", "list-panes", "--all", "--json"],
             dry_run=dry_run,

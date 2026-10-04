@@ -11,6 +11,12 @@ from ..workspace.service import WorkspaceOperationError
 class WorkspaceTerminalActions:
     """Suspend and restore the TUI around interactive terminal adapters."""
 
+    def action_quick_open_terminal(self) -> None:
+        self.action_start_workspace_all()
+
+    def action_quick_open_agents(self) -> None:
+        self.action_attach_agents_workspace()
+
     def action_attach_workspace(self) -> None:
         if self._terminal_action_busy():
             return
