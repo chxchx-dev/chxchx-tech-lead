@@ -30,10 +30,12 @@ def test_header_uses_project_profile_and_custom_label(tmp_path: Path):
     if os.name == "nt":
         shell = os.environ.get("COMSPEC", "cmd.exe")
         assert f"command={json.dumps(shell, ensure_ascii=False)} {{" in layout
-        assert 'args "-lc"' not in layout
+        assert 'args "-c"' not in layout
         assert "stty sane" not in layout
     else:
-        assert 'args "-lc"' in layout
+        assert 'args "-c"' in layout
+        assert "-i" in layout
+        assert "-l -i" not in layout
         assert "stty sane" in layout
         assert "exec" in layout
 

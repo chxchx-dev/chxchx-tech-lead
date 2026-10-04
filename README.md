@@ -112,11 +112,11 @@ chxchx-tech doctor
 
 ```bash
 uv sync --dev
-uv tool install --editable .
-chxchx-tech version
+uv run chxchx-tech version
+uv run chxchx-tech tui .
 ```
 
-`uv sync --dev` crea o actualiza `.venv` con las dependencias bloqueadas. `uv tool install --editable .` instala el ejecutable `chxchx-tech` apuntando al código local.
+`uv sync --dev` crea o actualiza `.venv` con las dependencias bloqueadas, incluida Textual para la TUI. `uv run chxchx-tech` ejecuta el código de este checkout, así que los cambios quedan disponibles al volver a correr el comando. No hace falta instalar el CLI globalmente para desarrollar.
 
 ### Instalación desde Git
 

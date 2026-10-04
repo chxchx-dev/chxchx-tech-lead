@@ -21,7 +21,7 @@ def header_text(header: HeaderConfig, project: str, profile: str) -> str:
 
 
 def _shell_command() -> tuple[str, tuple[str, ...]]:
-    """Return a login shell that keeps the main workspace pane alive."""
+    """Return an interactive shell that keeps the main workspace pane alive."""
     if os.name == "nt":
         return os.environ.get("COMSPEC", "cmd.exe"), ()
     # Explicitly request interactive mode and repair the PTY before starting
@@ -29,8 +29,11 @@ def _shell_command() -> tuple[str, tuple[str, ...]]:
     # Zellij session can inherit ``-echo``/raw terminal flags, which makes
     # commands execute without showing what the user types.
     user_shell = os.environ.get("SHELL", "sh")
-    bootstrap = f"stty sane 2>/dev/null || true; exec {shlex.quote(user_shell)} -l -i"
-    return "/bin/sh", ("-lc", bootstrap)
+    # The TUI inherits the user's login environment already. Starting another
+    # login shell here reloads profiles such as macOS ~/.zprofile in the pane,
+    # which can print errors over the fresh workspace terminal.
+    bootstrap = f"stty sane 2>/dev/null || true; exec {shlex.quote(user_shell)} -i"
+    return "/bin/sh", ("-c", bootstrap)
 
 
 def _shell_pane(cwd: str, *, indent: str = "  ", focus: bool = True) -> list[str]:

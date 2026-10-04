@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..core.bootstrap import initialize_project
+from ..core.project_config import project_config_needs_update
 
 from ..cli_context import (
     Path,

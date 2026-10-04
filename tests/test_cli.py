@@ -73,6 +73,22 @@ def test_init_is_stable_on_second_run(tmp_path: Path, monkeypatch):
     assert (project / ".ai" / "integrations" / "opencode-mcp.example.json").exists()
 
 
+def test_doctor_checks_config_after_init(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    monkeypatch.setattr("chxchx_tech_lead.core.bootstrap.basic_memory_available", lambda: False)
+    monkeypatch.setattr("chxchx_tech_lead.commands.setup.check_tools", lambda: [])
+    monkeypatch.setattr("chxchx_tech_lead.commands.setup.diagnose_project_mcp", lambda _info: [])
+
+    initialized = runner.invoke(app, ["init", str(project)])
+    diagnosed = runner.invoke(app, ["doctor", str(project)])
+
+    assert initialized.exit_code == 0, initialized.stdout
+    assert diagnosed.exit_code == 0, diagnosed.stdout
+    assert ".ai/chxchx-tech.toml válido" in diagnosed.stdout
+
+
 def test_install_dry_run_reports_commands_without_uv(monkeypatch):
     monkeypatch.setattr("chxchx_tech_lead.integrations.installers.executable", lambda name: None)
 

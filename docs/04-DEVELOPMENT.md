@@ -8,11 +8,14 @@ El proyecto usa Python y `uv`.
 uv sync --dev
 ```
 
-Para instalar el comando localmente en modo editable:
+Ejecuta el CLI y la TUI desde este checkout, sin instalar una copia global:
 
 ```bash
-uv tool install --editable .
+uv run chxchx-tech --help
+uv run chxchx-tech tui .
 ```
+
+`uv sync --dev` instala también Textual, requerido por la TUI. Después de cambiar el código, vuelve a ejecutar el comando para probar la versión actual del checkout.
 
 ## Verificaciones antes de publicar
 
