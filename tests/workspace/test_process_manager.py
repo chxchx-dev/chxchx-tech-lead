@@ -272,10 +272,15 @@ def test_process_manager_recovers_process_state_after_restart(tmp_path: Path, mo
         assert started.process.pid is not None
         assert recovered.list()[0].status is ProcessStatus.RUNNING
         terminations = []
+        terminator_name = (
+            "_terminate_windows_process_tree"
+            if sys.platform == "win32"
+            else "_terminate_posix_process_group"
+        )
         with monkeypatch.context() as patcher:
             patcher.setattr(
                 process_manager_module,
-                "_terminate_posix_process_group",
+                terminator_name,
                 lambda pid, handle, *, timeout_seconds: terminations.append(
                     (pid, handle, timeout_seconds)
                 ),
