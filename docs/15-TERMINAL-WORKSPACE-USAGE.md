@@ -757,8 +757,10 @@ q       Cerrar TUI
 
 En **Inicio**, inicializa el proyecto y confíalo si hace falta. Luego usa
 **Iniciar y abrir terminal** para preparar el workspace y entrar a la shell del
-proyecto. Los agentes se inician aparte desde **Trabajo → Agentes** cuando los
-necesites. **Detener procesos** cierra los procesos administrados del proyecto.
+proyecto. Zellij abre una shell interactiva que hereda el entorno desde el que
+se inició la TUI; no vuelve a cargar el perfil de inicio de sesión. Los agentes
+se inician aparte desde **Trabajo → Agentes** cuando los necesites. **Detener
+procesos** cierra los procesos administrados del proyecto.
 
 La pestaña **Trabajo → Proyecto** muestra el stack, el gestor de paquetes y los comandos
 definidos para el proyecto. **Iniciar procesos** ejecuta los comandos de

@@ -104,17 +104,6 @@ class WorkspaceActions:
 
     def action_trust_workspace(self) -> None:
         try:
-            inspection = self.service.inspect()
-        except (WorkspaceOperationError, OSError) as exc:
-            self._set_log(f"No se pudo revisar la configuración: {exc}")
-            self.notify(str(exc), severity="error")
-            return
-        blocker = workspace_start_blocker(inspection, require_trust=False)
-        if blocker:
-            self._set_log(blocker)
-            self.notify(blocker, severity="warning")
-            return
-        try:
             changed = trust_project(self.project.root)
         except OSError as exc:
             self._set_log(f"Error al confiar el proyecto: {exc}")

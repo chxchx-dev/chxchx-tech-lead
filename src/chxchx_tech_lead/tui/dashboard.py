@@ -99,15 +99,19 @@ class WorkspaceDashboard:
                 else "inválida"
             )
             config_hint = (
-                "Siguiente: Más → Configuración → Inicializar proyecto\n"
+                "Siguiente: Más → Configuración → Inicializar proyecto antes de iniciar\n"
                 if not inspection.config_path.is_file()
                 else "Siguiente: revisa Más → Configuración\n"
                 if not has_valid_config
                 else ""
             )
-            self._query("#btn-trust", Button).disabled = inspection.trusted or not has_valid_config
-            self._query("#btn-console-trust", Button).disabled = inspection.trusted or not has_valid_config
+            self._query("#btn-trust", Button).disabled = inspection.trusted
+            self._query("#btn-console-trust", Button).disabled = inspection.trusted
             self._query("#btn-start-all", Button).disabled = not (inspection.trusted and has_valid_config)
+            has_agents = bool(inspection.config and inspection.config.agents)
+            self._query("#btn-attach-agents", Button).disabled = not (
+                inspection.trusted and has_valid_config and has_agents
+            )
             summary.update(
                 f"Proyecto: {self.project.name}  |  Perfil: {self.project.profile_name}\n"
                 f"Workspace: {inspection.state.status.value}  |  Trust: {'sí' if inspection.trusted else 'no'}  |  Config: {config_status}\n"

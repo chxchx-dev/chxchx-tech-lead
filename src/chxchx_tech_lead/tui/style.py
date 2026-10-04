@@ -188,6 +188,8 @@ TUI_CSS = """
 TUI_BINDINGS = [
         ("q", "quit", "Salir"),
         ("ctrl+p", "command_palette", "Comandos"),
+        ("t", "quick_open_terminal", "Terminal"),
+        ("a", "quick_open_agents", "Agentes"),
         ("r", "refresh", "Actualizar"),
         ("1", "show_overview", "Resumen"),
         ("2", "show_work", "Trabajo"),

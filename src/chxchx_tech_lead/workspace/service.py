@@ -12,16 +12,20 @@ from ..core.models import ProjectInfo
 from ..core.registry import load_registry, set_last_project
 from .agent_operations import WorkspaceAgentOperations
 from .manager import WorkspaceInspection, WorkspaceManager
-from .layouts import terminal_tab_layout, workspace_layout
+from .layouts import workspace_layout
 from .process_manager import ProcessActionResult, ProcessManagerError, ProcessStatus
 from .process_operations import WorkspaceProcessOperations
 from .state import load_state, set_workspace_status
 from .models import WorkspaceStatus
 from .service_models import WorkspaceAction, WorkspaceOperationError, session_already_exists
-from .zellij_tabs import ensure_layout_tab
+from .terminal_operations import WorkspaceTerminalOperations
 
 
-class WorkspaceService(WorkspaceAgentOperations, WorkspaceProcessOperations):
+class WorkspaceService(
+    WorkspaceAgentOperations,
+    WorkspaceProcessOperations,
+    WorkspaceTerminalOperations,
+):
     """Orquesta adapters sin permitir que la CLI ejecute comandos directamente."""
 
     def __init__(
@@ -91,7 +95,14 @@ class WorkspaceService(WorkspaceAgentOperations, WorkspaceProcessOperations):
             else:
                 action.messages.append("Editor abierto")
         if attach:
-            result = terminal.attach_session(session, dry_run=dry_run)
+            if isinstance(terminal, ZellijAdapter):
+                result = terminal.attach_session(
+                    session,
+                    dry_run=dry_run,
+                    focus_tab="Terminales",
+                )
+            else:
+                result = terminal.attach_session(session, dry_run=dry_run)
             if result.returncode != 0:
                 raise WorkspaceOperationError(result.stderr or f"No pude adjuntar a `{session}`")
         return action
@@ -184,41 +195,17 @@ class WorkspaceService(WorkspaceAgentOperations, WorkspaceProcessOperations):
                     raise WorkspaceOperationError(
                         focused.stderr or f"No pude enfocar la pane `terminal` de `{session}`"
                     )
-        result = terminal.attach_session(session, dry_run=dry_run)
+        if isinstance(terminal, ZellijAdapter):
+            result = terminal.attach_session(
+                session,
+                dry_run=dry_run,
+                focus_tab="Terminales",
+            )
+        else:
+            result = terminal.attach_session(session, dry_run=dry_run)
         if result.returncode != 0:
             raise WorkspaceOperationError(result.stderr or f"No pude adjuntar a `{session}`")
         return result
-
-    def open_terminal(self, dry_run: bool = False):
-        """Create a parallel interactive terminal in the project's Zellij session."""
-        inspection = self.inspect()
-        terminal = self._terminal_adapter(inspection)
-        if not isinstance(terminal, ZellijAdapter):
-            raise WorkspaceOperationError("Abrir terminales paralelas requiere Zellij.")
-        session = self._session_name(inspection)
-        if not dry_run:
-            self._require_active_zellij_session(terminal, session, operation="abrir terminal en")
-        self._ensure_terminal_tab(inspection, terminal, session, dry_run=dry_run)
-        result = terminal.open_terminal_pane(session, self.project.root, dry_run=dry_run)
-        if result.returncode != 0:
-            raise WorkspaceOperationError(result.stderr or f"No pude abrir una terminal en `{session}`")
-        if dry_run:
-            return result
-        attached = terminal.attach_session(session)
-        if attached.returncode != 0:
-            raise WorkspaceOperationError(attached.stderr or f"No pude adjuntar a `{session}`")
-        return attached
-
-    def _ensure_terminal_tab(self, inspection, terminal, session: str, *, dry_run: bool = False) -> None:
-        if not isinstance(terminal, ZellijAdapter) or inspection.config is None:
-            return
-        layout = terminal_tab_layout(
-            self.project.root,
-            inspection.config.header,
-            self.project.name,
-            self.project.profile_name,
-        )
-        ensure_layout_tab(terminal, session, "Terminales", layout, dry_run=dry_run)
 
     def open_editor(self, dry_run: bool = False):
         self.inspect()

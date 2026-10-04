@@ -258,36 +258,61 @@ def test_process_manager_recovers_process_state_after_restart(tmp_path: Path, mo
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
     project = tmp_path / "project"
     project.mkdir()
-    command = [sys.executable, "-c", "import time; time.sleep(30)"]
-    original = ProcessManager(project, [_config(command)], trusted=True)
-    started = original.start("worker")
+    command = [sys.executable, "-c", "pass"]
 
+    class FakeHandle:
+        pid = 987654
+        returncode = None
+
+        def poll(self):
+            return self.returncode
+
+    handle = FakeHandle()
+    original = ProcessManager(
+        project,
+        [_config(command)],
+        trusted=True,
+        popen_factory=lambda *_args, **_kwargs: handle,
+    )
+    monkeypatch.setattr(process_manager_module, "_pid_alive", lambda _pid: True)
+    terminations = []
+    terminator_name = (
+        "_terminate_windows_process_tree"
+        if sys.platform == "win32"
+        else "_terminate_posix_process_group"
+    )
+
+    def record_termination(pid, process, *, timeout_seconds):
+        terminations.append((pid, process, timeout_seconds))
+        if process is not None:
+            process.returncode = 0
+
+    monkeypatch.setattr(process_manager_module, terminator_name, record_termination)
+    started = original.start("worker")
     recovered = ProcessManager(
         project,
         [_config(command)],
         trusted=True,
         pid_matches=lambda pid, expected, shell: True,
     )
-    try:
-        assert started.process.pid is not None
-        assert recovered.list()[0].status is ProcessStatus.RUNNING
-        terminations = []
-        with monkeypatch.context() as patcher:
-            patcher.setattr(
-                process_manager_module,
-                "_terminate_posix_process_group",
-                lambda pid, handle, *, timeout_seconds: terminations.append(
-                    (pid, handle, timeout_seconds)
-                ),
-            )
-            stopped = recovered.stop("worker")
 
-        assert stopped.process.status is ProcessStatus.EXITED
-        assert terminations == [
-            (started.process.pid, None, process_manager_module._PROCESS_STOP_TIMEOUT_SECONDS)
-        ]
-    finally:
-        original.stop("worker")
+    assert started.process.pid == handle.pid
+    assert recovered.list()[0].status is ProcessStatus.RUNNING
+    stopped = recovered.stop("worker")
+
+    assert stopped.process.status is ProcessStatus.EXITED
+    assert terminations == [
+        (started.process.pid, None, process_manager_module._PROCESS_STOP_TIMEOUT_SECONDS)
+    ]
+
+    original_stopped = original.stop("worker")
+
+    assert original_stopped.process.status is ProcessStatus.EXITED
+    assert terminations[-1] == (
+        started.process.pid,
+        handle,
+        process_manager_module._PROCESS_STOP_TIMEOUT_SECONDS,
+    )
 
 
 def test_recovered_foreign_pid_is_not_stopped(tmp_path: Path, monkeypatch):

@@ -130,3 +130,7 @@ class WorkspaceSetupActions:
         self._query("#setup-output", Static).update(detail)
         self._set_log(f"{title}: {len(result.actions)} acción(es), {len(result.warnings)} aviso(s)")
         self.notify(title, severity="warning" if result.warnings else "information")
+        # Init and setup change the project state shown on Inicio. Refresh it
+        # immediately so trust and workspace actions reflect the new config.
+        self.refresh_dashboard()
+        self._refresh_project_console()

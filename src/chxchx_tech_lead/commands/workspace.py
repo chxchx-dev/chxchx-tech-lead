@@ -37,11 +37,7 @@ def workspace_trust(
     path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
     dry_run: bool = typer.Option(False, "--dry-run", help="Muestra el cambio sin guardarlo."),
 ):
-    """Marca localmente un proyecto como confiable para poder ejecutar procesos."""
-    config_path = path / ".ai" / "chxchx-tech.toml"
-    if not config_path.exists():
-        console.print("[red]✗ Falta .ai/chxchx-tech.toml; ejecuta `chxchx-tech init` primero.[/]")
-        raise typer.Exit(code=1)
+    """Marca localmente un proyecto como confiable para habilitar su workspace."""
     changed = trust_project(path, dry_run=dry_run)
     if changed:
         console.print(f"[green]✓[/] {'DRY RUN: ' if dry_run else ''}proyecto confiable: {path.resolve()}")

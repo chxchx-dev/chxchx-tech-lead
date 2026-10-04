@@ -265,7 +265,7 @@ def test_agent_start_uses_configured_session_and_cwd(tmp_path: Path, monkeypatch
     assert all(run_calls[0][2])
     assert run_calls[0][3] == project.resolve()
 
-def test_attach_agent_focuses_and_opens_named_zellij_pane(tmp_path: Path, monkeypatch):
+def test_attach_agent_focuses_configured_pane_when_title_changed(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
     project = tmp_path / "project"
     project.mkdir()
@@ -286,20 +286,89 @@ def test_attach_agent_focuses_and_opens_named_zellij_pane(tmp_path: Path, monkey
             return CommandResult(
                 list(command),
                 0,
-                '[{"pane_id":"codex_3","pane_name":"codex"}]',
+                '[{"id":6,"title":"chichan-tech-lead","pane_command":"codex"}]',
                 "",
             )
         return CommandResult(list(command), 0, "attached", "")
 
     terminal = ZellijAdapter(runner=fake_runner, lookup=lambda _: "/usr/bin/zellij")
+    focus_requests = []
+
+    def fake_attach(name, dry_run=False, *, focus_tab=None, focus_pane=None, tab_layout=None):
+        focus_requests.append((name, dry_run, focus_tab, focus_pane, tab_layout))
+        return CommandResult(["zellij", "attach", name], 0, "attached", "")
+
+    monkeypatch.setattr(terminal, "attach_session", fake_attach)
     result = WorkspaceService(
         ProjectInfo(project, "project"), terminal=terminal, editor=FakeEditor()
     ).attach_agent("codex")
 
     assert result.returncode == 0
-    assert any(call[0][-2:] == ["focus-pane-id", "codex_3"] for call in calls)
-    assert calls[-1][0] == ["zellij", "attach", "--force-run-commands", "demo-workspace"]
-    assert calls[-1][1]["interactive"] is True
+    assert not any("focus-pane-id" in call[0] for call in calls)
+    assert len(focus_requests) == 1
+    assert focus_requests[0][:4] == ("demo-workspace", False, "Agentes", "codex")
+    assert 'pane name="codex"' in focus_requests[0][4]
+
+
+
+def test_attach_agent_does_not_create_a_duplicate_before_attaching(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project, auto_start=False)
+    calls = []
+
+    def fake_runner(command, **kwargs):
+        calls.append((command, kwargs))
+        if command == ["zellij", "list-sessions"]:
+            return CommandResult(list(command), 0, "demo-workspace\n", "")
+        if "list-tabs" in command:
+            return CommandResult(list(command), 0, '[{"name":"Agentes"}]', "")
+        if "list-panes" in command:
+            return CommandResult(list(command), 0, "[]", "")
+        if "new-pane" in command:
+            return CommandResult(list(command), 0, "terminal_9\n", "")
+        return CommandResult(list(command), 0, "attached", "")
+
+    terminal = ZellijAdapter(runner=fake_runner, lookup=lambda _: "/usr/bin/zellij")
+    focus_requests = []
+
+    def fake_attach(name, dry_run=False, *, focus_tab=None, focus_pane=None, tab_layout=None):
+        focus_requests.append((name, dry_run, focus_tab, focus_pane, tab_layout))
+        return CommandResult(["zellij", "attach", name], 0, "attached", "")
+
+    monkeypatch.setattr(terminal, "attach_session", fake_attach)
+    service = WorkspaceService(ProjectInfo(project, "project"), terminal=terminal, editor=FakeEditor())
+    service._require_trust = lambda inspection: None
+    result = service.attach_agent("codex")
+
+    assert result.returncode == 0
+    assert not any("new-pane" in call[0] for call in calls)
+    assert len(focus_requests) == 1
+    assert focus_requests[0][:4] == ("demo-workspace", False, "Agentes", "codex")
+    assert 'pane name="codex"' in focus_requests[0][4]
+
+
+def test_attach_agents_passes_layout_to_create_tab_after_attach(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_config(project, auto_start=False)
+    terminal = ZellijAdapter(runner=lambda command, **kwargs: CommandResult(list(command), 0, "", ""), lookup=lambda _: "/usr/bin/zellij")
+    focus_requests = []
+
+    def fake_attach(name, dry_run=False, *, focus_tab=None, focus_pane=None, tab_layout=None):
+        focus_requests.append((name, dry_run, focus_tab, focus_pane, tab_layout))
+        return CommandResult(["zellij", "attach", name], 0, "DRY RUN", "")
+
+    monkeypatch.setattr(terminal, "attach_session", fake_attach)
+    service = WorkspaceService(ProjectInfo(project, "project"), terminal=terminal, editor=FakeEditor())
+    result = service.attach_agents(dry_run=True, prepared=True)
+
+    assert result.returncode == 0
+    assert len(focus_requests) == 1
+    assert focus_requests[0][:4] == ("demo-workspace", True, "Agentes", None)
+    assert 'pane name="codex"' in focus_requests[0][4]
 
 
 def test_agent_new_chat_passes_context_bootstrap_prompt(tmp_path: Path, monkeypatch):

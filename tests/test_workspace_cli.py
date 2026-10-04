@@ -37,6 +37,18 @@ def test_workspace_trust_dry_run_does_not_write_global_state(tmp_path: Path, mon
     assert not (tmp_path / "global").exists()
 
 
+def test_workspace_trust_allows_uninitialized_project(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+
+    result = runner.invoke(app, ["workspace", "trust", str(project)])
+
+    assert result.exit_code == 0, result.stdout
+    assert "proyecto confiable" in result.stdout
+    assert (tmp_path / "global" / "trusted_projects.json").exists()
+
+
 def test_process_list_reports_empty_configuration(tmp_path: Path, monkeypatch):
     project = tmp_path / "project"
     project.mkdir()

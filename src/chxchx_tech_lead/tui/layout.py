@@ -38,12 +38,14 @@ def _overview() -> ComposeResult:
     with TabPane("Inicio", id="overview"):
         yield Static("CHXCHX-DEV SYSTEM · BUILD • AUTOMATE • CREATE", id="brand")
         yield Static(
-            "Empieza con la terminal del proyecto. Los agentes se inician aparte cuando los necesites.",
+            "Acceso directo: abre la terminal del proyecto o entra a tus agentes desde aquí.",
             classes="summary",
         )
         with Horizontal(classes="toolbar"):
+            yield Button("Abrir terminal · T", id="btn-start-all", variant="primary")
+            yield Button("Abrir agentes · A", id="btn-attach-agents", variant="success")
+        with Horizontal(classes="toolbar"):
             yield Button("Confiar proyecto", id="btn-trust")
-            yield Button("Iniciar y abrir terminal", id="btn-start-all", variant="primary")
             yield Button("Detener procesos", id="btn-stop", variant="error")
             yield Button("Actualizar", id="btn-refresh")
         yield Static(id="summary", classes="summary")
@@ -169,8 +171,9 @@ def _guide() -> ComposeResult:
         yield Static(
             "FLUJO RÁPIDO\n"
             "1. Confía el proyecto si ChxChx lo solicita.\n"
-            "2. Pulsa «Iniciar y abrir» para iniciar procesos, preparar agentes y entrar a Zellij.\n"
-            "3. Para volver al TUI, pulsa Ctrl+O y después D dentro de Zellij.\n\n"
+            "2. Desde Inicio, pulsa «Abrir terminal» o «Abrir agentes» para entrar directamente.\n"
+            "3. Atajos: T abre la terminal y A prepara y abre agentes.\n"
+            "4. Para volver al TUI, pulsa Ctrl+O y después D dentro de Zellij.\n\n"
             "TRABAJO\n"
             "La pestaña Trabajo reúne comandos del proyecto, agentes y terminales.\n"
             "Detener procesos cierra los procesos administrados y conserva los archivos.\n\n"

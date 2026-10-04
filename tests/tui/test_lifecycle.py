@@ -8,12 +8,21 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from chxchx_tech_lead.core.models import ProjectInfo
+from chxchx_tech_lead.core.trust import is_trusted
 from chxchx_tech_lead.workspace.manager import WorkspaceManager
 from chxchx_tech_lead.tui import actions
 from chxchx_tech_lead.tui import dashboard
 from chxchx_tech_lead.tui.application import WorkspaceConsole
 from chxchx_tech_lead.tui.palette import CommandPalette
 from textual.widgets import Button, Static, TabbedContent
+
+
+async def _wait_for(pilot, predicate, *, timeout: float = 5.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not predicate():
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError("Timed out waiting for the expected TUI state")
+        await pilot.pause(0.05)
 
 
 def test_quit_key_exits_tui_without_stopping_workspace(tmp_path: Path, monkeypatch):
@@ -64,6 +73,43 @@ def test_primary_navigation_groups_work_and_advanced_views(tmp_path: Path, monke
     asyncio.run(navigate())
 
 
+
+def test_home_has_direct_terminal_and_agent_actions(tmp_path: Path, monkeypatch):
+    app = WorkspaceConsole(ProjectInfo(tmp_path, "project"))
+    monkeypatch.setattr(WorkspaceConsole, "on_mount", lambda _self: None)
+    calls = []
+    monkeypatch.setattr(app, "action_attach_agents_workspace", lambda: calls.append("agents"))
+    monkeypatch.setattr(app, "action_start_workspace_all", lambda: calls.append("terminal"))
+
+    async def use_home_shortcuts():
+        async with app.run_test() as pilot:
+            await pilot.click("#btn-start-all")
+            await pilot.click("#btn-attach-agents")
+            await pilot.pause()
+
+    asyncio.run(use_home_shortcuts())
+
+    assert calls == ["terminal", "agents"]
+
+
+def test_t_and_a_shortcuts_open_terminal_and_agents(tmp_path: Path, monkeypatch):
+    app = WorkspaceConsole(ProjectInfo(tmp_path, "project"))
+    monkeypatch.setattr(WorkspaceConsole, "on_mount", lambda _self: None)
+    calls = []
+    monkeypatch.setattr(app, "action_start_workspace_all", lambda: calls.append("terminal"))
+    monkeypatch.setattr(app, "action_attach_agents_workspace", lambda: calls.append("agents"))
+
+    async def press_shortcuts():
+        async with app.run_test() as pilot:
+            await pilot.press("t")
+            await pilot.press("a")
+            await pilot.pause()
+
+    asyncio.run(press_shortcuts())
+
+    assert calls == ["terminal", "agents"]
+
+
 def test_long_workspace_action_runs_without_blocking_navigation(tmp_path: Path, monkeypatch):
     app = WorkspaceConsole(ProjectInfo(tmp_path, "project"))
     monkeypatch.setattr(WorkspaceConsole, "on_mount", lambda _self: None)
@@ -83,16 +129,32 @@ def test_long_workspace_action_runs_without_blocking_navigation(tmp_path: Path, 
                 await pilot.press("2")
                 await pilot.pause()
                 assert app.query_one("#tabs", TabbedContent).active == "work"
-                for _ in range(20):
-                    await pilot.pause(0.02)
-                    if not app._operation_pending:
-                        break
+                await _wait_for(pilot, lambda: not app._operation_pending)
                 assert not app._operation_pending
                 assert "Tarea lenta" in str(app.query_one("#log", Static).render())
         finally:
             pool.shutdown(wait=True)
 
     asyncio.run(interact())
+
+
+def test_setup_action_refreshes_dashboard_after_project_init(tmp_path: Path, monkeypatch):
+    app = WorkspaceConsole(ProjectInfo(tmp_path, "project"))
+    monkeypatch.setattr(WorkspaceConsole, "on_mount", lambda _self: None)
+    refreshes = []
+    monkeypatch.setattr(app, "refresh_dashboard", lambda: refreshes.append("dashboard"))
+    monkeypatch.setattr(app, "_refresh_project_console", lambda: refreshes.append("console"))
+
+    async def finish_setup():
+        async with app.run_test():
+            app._finish_setup_action(
+                "Proyecto inicializado",
+                SimpleNamespace(actions=["ensure config"], warnings=[], backup=None),
+                None,
+            )
+
+    asyncio.run(finish_setup())
+    assert refreshes == ["dashboard", "console"]
 
 
 def test_dashboard_collection_runs_without_blocking_navigation(tmp_path: Path, monkeypatch):
@@ -118,10 +180,7 @@ def test_dashboard_collection_runs_without_blocking_navigation(tmp_path: Path, m
                 await pilot.press("2")
                 await pilot.pause()
                 assert app.query_one("#tabs", TabbedContent).active == "work"
-                for _ in range(20):
-                    await pilot.pause(0.02)
-                    if not app._dashboard_pending:
-                        break
+                await _wait_for(pilot, lambda: not app._dashboard_pending)
                 assert not app._dashboard_pending
                 assert any("simulated slow dashboard probe" in item for item in messages)
         finally:
@@ -147,18 +206,12 @@ def test_project_console_probe_runs_without_blocking_navigation(tmp_path: Path, 
         try:
             async with app.run_test() as pilot:
                 app.query_one("#tabs", TabbedContent).active = "work"
-                for _ in range(10):
-                    await pilot.pause(0.02)
-                    if app._console_pending:
-                        break
+                await _wait_for(pilot, lambda: app._console_pending)
                 assert app._console_pending
                 await pilot.press("2")
                 await pilot.pause()
                 assert app.query_one("#tabs", TabbedContent).active == "work"
-                for _ in range(20):
-                    await pilot.pause(0.02)
-                    if not app._console_pending:
-                        break
+                await _wait_for(pilot, lambda: not app._console_pending)
                 assert not app._console_pending
                 assert "simulated slow console probe" in str(
                     app.query_one("#console-technology", Static).render()
@@ -326,35 +379,31 @@ def test_start_workspace_without_config_reports_setup_instead_of_opening_termina
     assert any("Falta .ai/chxchx-tech.toml" in message for message in messages)
 
 
-def test_trust_without_config_does_not_mark_project_trusted(tmp_path: Path, monkeypatch):
-    app = WorkspaceConsole(ProjectInfo(tmp_path, "project"))
+def test_trust_without_config_marks_project_trusted_from_button(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    app = WorkspaceConsole(ProjectInfo(project, "project"))
     monkeypatch.setattr(WorkspaceConsole, "on_mount", lambda _self: None)
-    trust_calls = []
-    messages = []
+    monkeypatch.setattr(app, "refresh_dashboard", lambda: None)
 
-    class ServiceSpy:
-        def inspect(self):
-            return SimpleNamespace(
-                config_path=tmp_path / ".ai" / "chxchx-tech.toml",
-                config=object(),
-                trusted=False,
-            )
+    async def trust_from_button():
+        async with app.run_test() as pilot:
+            inspection = WorkspaceManager(app.project).inspect()
+            snapshot = dashboard.DashboardSnapshot(inspection, None, None, None, [], [], None)
+            app._render_dashboard(snapshot)
+            assert not app.query_one("#btn-trust", Button).disabled
+            assert not app.query_one("#btn-console-trust", Button).disabled
+            assert app.query_one("#btn-start-all", Button).disabled
+            await pilot.click("#btn-trust")
+            await pilot.pause()
 
-    app.service = ServiceSpy()
-    monkeypatch.setattr(app, "_set_log", messages.append)
-    monkeypatch.setattr(actions, "trust_project", lambda _root: trust_calls.append(_root))
+    asyncio.run(trust_from_button())
 
-    async def refuse_trust():
-        async with app.run_test():
-            app.action_trust_workspace()
-
-    asyncio.run(refuse_trust())
-
-    assert not trust_calls
-    assert any("Falta .ai/chxchx-tech.toml" in message for message in messages)
+    assert is_trusted(project)
 
 
-def test_dashboard_disables_start_and_trust_without_saved_config(tmp_path: Path, monkeypatch):
+def test_dashboard_disables_start_but_allows_trust_without_saved_config(tmp_path: Path, monkeypatch):
     project = ProjectInfo(tmp_path, "project")
     app = WorkspaceConsole(project)
     monkeypatch.setattr(WorkspaceConsole, "on_mount", lambda _self: None)
@@ -364,8 +413,9 @@ def test_dashboard_disables_start_and_trust_without_saved_config(tmp_path: Path,
     async def render():
         async with app.run_test():
             app._render_dashboard(snapshot)
-            assert app.query_one("#btn-trust", Button).disabled
-            assert app.query_one("#btn-console-trust", Button).disabled
+            assert not app.query_one("#btn-trust", Button).disabled
+            assert not app.query_one("#btn-console-trust", Button).disabled
             assert app.query_one("#btn-start-all", Button).disabled
+            assert app.query_one("#btn-attach-agents", Button).disabled
 
     asyncio.run(render())
