@@ -37,6 +37,11 @@ def resources(
     console.print(f"CPU       {cpu}")
     mark = "[green]" if severity is ResourceSeverity.OK else "[yellow]" if severity is ResourceSeverity.WARNING else "[red]"
     console.print(f"Estado    {mark}{severity.value}[/]")
+    console.print(
+        f"Política  aviso {manager.config.warn_memory_percent}% / crítico "
+        f"{manager.config.critical_memory_percent}% / swap {manager.config.warn_swap_percent}% "
+        f"/ máximo {manager.config.max_agents} agentes"
+    )
 
     process_manager = ProcessManager(
         path,

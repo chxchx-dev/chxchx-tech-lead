@@ -11,6 +11,7 @@ from ..cli_context import (
     _print_agent_statuses,
     _workspace_service,
 )
+from .resource_guard import guard_cli_agent_start
 
 @agent_app.command("start")
 def agent_start(
@@ -20,6 +21,7 @@ def agent_start(
     all_agents: bool = typer.Option(False, "--all", help="Inicia todos los agentes configurados."),
     preset: str | None = typer.Option(None, "--preset", help="Inicia el preset declarado en el proyecto."),
     new_chat: bool = typer.Option(False, "--new-chat", help="Abre una conversación nueva recuperando el contexto persistido del proyecto."),
+    force: bool = typer.Option(False, "--force", help="Confirma el inicio cuando excede el presupuesto RAM/agentes."),
 ):
     """Inicia un agente, o todos los agentes configurados, dentro del workspace."""
     selected = sum(value is not None for value in (agent_id, preset)) + int(all_agents)
@@ -31,6 +33,14 @@ def agent_start(
         raise typer.Exit(code=2)
     try:
         service = _workspace_service(path)
+        guard_cli_agent_start(
+            service,
+            (agent_id,) if agent_id else None,
+            preset_id=preset,
+            new_chat=new_chat,
+            dry_run=dry_run,
+            force=force,
+        )
         if preset is not None:
             if new_chat:
                 console.print("[red]✗ --new-chat se admite con un ID o --all, no con --preset.[/]")
@@ -51,6 +61,28 @@ def agent_start(
             console.print(f"[green]✓[/] {current_id}: {'DRY RUN: ' if dry_run else ''}{' '.join(current_result.command)}")
     else:
         console.print(f"[green]✓[/] {'DRY RUN: ' if dry_run else ''}{' '.join(result.command)}")
+
+
+@agent_app.command("attach")
+def agent_attach(
+    agent_id: str = typer.Argument(..., metavar="ID"),
+    path: Path = typer.Option(Path.cwd(), "--path", exists=True, file_okay=False, resolve_path=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Previsualiza la preparación y el attach."),
+    force: bool = typer.Option(False, "--force", help="Confirma el inicio pese a avisos del RAM Governor."),
+):
+    """Prepara el workspace y adjunta una terminal al pane del agente."""
+    try:
+        service = _workspace_service(path)
+        guard_cli_agent_start(service, dry_run=dry_run, force=force)
+        service.prepare_agents(dry_run=dry_run)
+        result = service.attach_agent(agent_id, dry_run=dry_run)
+    except WorkspaceOperationError as exc:
+        console.print(f"[red]✗ {exc}[/]")
+        raise typer.Exit(code=1)
+    except ValueError as exc:
+        console.print(f"[red]✗ {exc}[/]")
+        raise typer.Exit(code=1)
+    console.print(f"[green]✓[/] {'DRY RUN: ' if dry_run else ''}{' '.join(result.command)}")
 
 @agent_app.command("list")
 def agent_list(

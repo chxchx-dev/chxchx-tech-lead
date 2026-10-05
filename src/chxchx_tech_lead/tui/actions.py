@@ -79,6 +79,9 @@ class WorkspaceActions:
     def action_show_resources(self) -> None:
         self._show("resources")
 
+    def action_show_skills(self) -> None:
+        self._show("skills")
+
     def action_show_handoff(self) -> None:
         self._show("handoff")
 
@@ -115,9 +118,12 @@ class WorkspaceActions:
         self.refresh_dashboard()
 
     def action_start_workspace(self) -> None:
-        self._queue_workspace_start(
-            "Workspace y agentes iniciados",
-            lambda: self.service.run_all(attach=False),
+        self._guard_agent_launch(
+            None,
+            lambda: self._queue_workspace_start(
+                "Workspace y agentes iniciados",
+                lambda: self.service.run_all(attach=False),
+            ),
         )
 
     def action_start_workspace_all(self) -> None:
@@ -214,31 +220,6 @@ class WorkspaceActions:
     def action_resume_workspace(self) -> None:
         self._perform("Workspace reanudado", lambda: self.service.resume())
 
-    def action_start_agents(self) -> None:
-        self._perform("Agentes iniciados", lambda: self.service.start_agents())
-
-    def action_start_agent_selected(self) -> None:
-        agent_id = self._query("#agent-id", Input).value.strip()
-        if not agent_id:
-            self._set_log("Escribe un ID de agente, por ejemplo `codex` o `claude`")
-            self.notify("Falta el ID del agente", severity="warning")
-            return
-        self._perform(
-            f"Agente `{agent_id}` iniciado",
-            lambda: self.service.start_agent(agent_id),
-        )
-
-    def action_start_new_chat(self) -> None:
-        agent_id = self._query("#agent-id", Input).value.strip()
-        if not agent_id:
-            self._set_log("Escribe codex o claude para iniciar un chat nuevo con contexto")
-            self.notify("Falta el ID del agente", severity="warning")
-            return
-        self._perform(
-            f"Chat nuevo de `{agent_id}` iniciado con contexto persistido",
-            lambda: self.service.start_agent(agent_id, new_chat=True),
-        )
-
     def _selected_process_action(self, *, start: bool) -> None:
         process_id = self._query("#process-id", Input).value.strip()
         if not process_id:
@@ -260,6 +241,9 @@ class WorkspaceActions:
 
     def action_open_editor(self) -> None:
         self._perform("Editor abierto", lambda: self.service.open_editor())
+
+    def action_setup_editor(self) -> None:
+        self._perform("Proyecto Sublime preparado", lambda: self.service.setup_editor())
 
     def action_write_handoff(self) -> None:
         summary = self._query("#handoff-summary", Input).value.strip()

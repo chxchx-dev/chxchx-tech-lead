@@ -1,0 +1,5 @@
+name = "prisma-data"
+description = "Guías para modelos Prisma, consultas y migraciones de datos."
+stacks = ["prisma"]
+languages = []
+skills = ["prisma", "postgres", "testing", "security-review"]

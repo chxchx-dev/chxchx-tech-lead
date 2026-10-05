@@ -15,6 +15,7 @@ from ..cli_context import (
     _project,
     _resolve_project_path,
 )
+from .resource_guard import guard_cli_agent_start
 
 @projects_app.command("list")
 def projects_list():
@@ -67,11 +68,14 @@ def projects_switch(
     dry_run: bool = typer.Option(False, "--dry-run", help="Muestra la transición sin ejecutarla."),
     attach: bool = typer.Option(True, "--attach/--no-attach", help="Adjunta el workspace después del cambio."),
     recreate: bool = typer.Option(False, "--recreate", help="Recrea la sesión del proyecto destino."),
+    force: bool = typer.Option(False, "--force", help="Confirma el inicio aunque exceda el presupuesto RAM/agentes."),
 ):
     """Suspende el workspace activo y activa otro proyecto registrado."""
     try:
         target = _resolve_project_path(alias)
         target_info = _project(target)
+        service = WorkspaceService(target_info)
+        guard_cli_agent_start(service, dry_run=dry_run, force=force)
         for project in load_registry().get("projects", []):
             raw_path = project.get("path")
             if not isinstance(raw_path, str) or Path(raw_path).resolve() == target:
@@ -81,7 +85,6 @@ def projects_switch(
                 continue
             WorkspaceService(_project(other)).suspend(dry_run=dry_run)
             console.print(f"[green]✓[/] workspace suspendido: {other}")
-        service = WorkspaceService(target_info)
         action, agents, attached = service.run_all(
             dry_run=dry_run, attach=attach, recreate=recreate
         )

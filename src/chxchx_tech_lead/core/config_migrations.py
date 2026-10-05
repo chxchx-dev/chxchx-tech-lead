@@ -51,9 +51,10 @@ def default_config_data(info: ProjectInfo) -> dict[str, Any]:
                 "orientation": "horizontal",
             },
             "resources": {
-                "warn_memory_percent": 75,
-                "critical_memory_percent": 90,
+                "warn_memory_percent": 70,
+                "critical_memory_percent": 85,
                 "warn_swap_percent": 40,
+                "max_agents": 2,
             },
             "processes": suggested_processes(info),
             "agents": [
@@ -174,7 +175,7 @@ def render_config(data: dict[str, Any]) -> str:
     _render_table(
         lines,
         "workspace.resources",
-        {key: resources[key] for key in ("warn_memory_percent", "critical_memory_percent", "warn_swap_percent") if key in resources},
+        {key: resources[key] for key in ("warn_memory_percent", "critical_memory_percent", "warn_swap_percent", "max_agents") if key in resources},
     )
     for section, items in (("workspace.processes", workspace.get("processes", [])), ("workspace.agents", workspace.get("agents", []))):
         for item in items:

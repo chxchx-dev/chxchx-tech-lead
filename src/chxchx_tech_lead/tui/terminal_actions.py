@@ -29,6 +29,11 @@ class WorkspaceTerminalActions:
     def action_attach_agents_workspace(self) -> None:
         if self._terminal_action_busy():
             return
+        self._guard_agent_launch(None, self._begin_agents_workspace_attach)
+
+    def _begin_agents_workspace_attach(self) -> None:
+        if self._terminal_action_busy():
+            return
         self._attach_pending = True
         message = "Preparando los agentes… Para volver a la TUI: Ctrl+O y después D."
         self._set_log(message)
@@ -80,6 +85,14 @@ class WorkspaceTerminalActions:
             self._set_log("Selecciona un agente de la tabla antes de abrir su terminal")
             self.notify("Falta seleccionar un agente", severity="warning")
             return
+        if self._terminal_action_busy():
+            return
+        self._guard_agent_launch(
+            None,
+            lambda: self._begin_agent_terminal_attach(agent_id),
+        )
+
+    def _begin_agent_terminal_attach(self, agent_id: str) -> None:
         if self._terminal_action_busy():
             return
         self._attach_pending = True

@@ -214,6 +214,19 @@ class WorkspaceService(
             raise WorkspaceOperationError(result.stderr or "No se pudo abrir Sublime")
         return result
 
+    def setup_editor(self, dry_run: bool = False, open_after: bool = True):
+        self.inspect()
+        adapter = self._editor_adapter()
+        project_file, generated = adapter.generate_project(self.project.root, dry_run=dry_run)
+        if generated.returncode != 0:
+            raise WorkspaceOperationError(generated.stderr or "No se pudo generar el proyecto Sublime")
+        opened = None
+        if open_after:
+            opened = adapter.open_project(project_file, dry_run=dry_run)
+            if opened.returncode != 0:
+                raise WorkspaceOperationError(opened.stderr or "No se pudo abrir el proyecto Sublime")
+        return project_file, generated, opened
+
     def start_process(self, process_id: str, dry_run: bool = False) -> ProcessActionResult:
         """Start one configured process through the workspace service."""
         inspection = self.inspect()

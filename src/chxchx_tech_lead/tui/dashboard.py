@@ -17,6 +17,9 @@ class WorkspaceDashboard:
         if self._dashboard_pending:
             self._dashboard_refresh_again = True
             return
+        if self._governor_pending:
+            self._dashboard_refresh_again = True
+            return
         if (
             self._palette_open
             or self._operation_pending
@@ -61,7 +64,7 @@ class WorkspaceDashboard:
         self._dashboard_pending = False
         refresh_again = self._dashboard_refresh_again
         self._dashboard_refresh_again = False
-        if self._palette_open:
+        if self._palette_open or self._governor_pending:
             self._dashboard_refresh_again = True
             return
         if project is not self.project or service is not self.service:
@@ -170,7 +173,8 @@ class WorkspaceDashboard:
             f"Proyecto: {self.project.name}\n\n{text}\n\n"
             f"Umbral RAM aviso: {resources.config.warn_memory_percent}%\n"
             f"Umbral RAM crítico: {resources.config.critical_memory_percent}%\n"
-            f"Umbral swap aviso: {resources.config.warn_swap_percent}%"
+            f"Umbral swap aviso: {resources.config.warn_swap_percent}%\n"
+            f"Límite sugerido de agentes: {resources.config.max_agents}"
         )
 
     def _update_project_resources(self, metrics, total_memory_bytes: int) -> None:

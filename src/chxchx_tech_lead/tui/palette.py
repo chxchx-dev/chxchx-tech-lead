@@ -6,6 +6,7 @@ from textual.containers import Container
 from textual.events import Key
 from textual.screen import ModalScreen
 from textual.widgets import Input, Label, ListItem, ListView
+from ..ui.theme import apply_tui_palette
 
 
 class PaletteInput(Input):
@@ -55,6 +56,7 @@ class CommandPalette(ModalScreen[str | None]):
         color: #ffffff;
     }
     """
+    CSS = apply_tui_palette(CSS)
     COMMANDS = (
         ("show_overview", "Ir a Inicio", "1"),
         ("show_work", "Ir a Trabajo", "2"),
@@ -63,6 +65,7 @@ class CommandPalette(ModalScreen[str | None]):
         ("show_agents", "Abrir agentes", ""),
         ("show_processes", "Abrir procesos", ""),
         ("show_resources", "Ver recursos", ""),
+        ("show_skills", "Ver catálogo de skills y Tech Packs", ""),
         ("show_handoff", "Ver handoff", ""),
         ("show_memory", "Ver notas del proyecto", ""),
         ("show_conversations", "Ver historial de chats", ""),
@@ -87,6 +90,7 @@ class CommandPalette(ModalScreen[str | None]):
         ("stop_workspace", "Detener workspace", ""),
         ("write_handoff", "Actualizar handoff", ""),
         ("open_editor", "Abrir Sublime Text", ""),
+        ("setup_editor", "Preparar proyecto de Sublime", ""),
     )
     BINDINGS = [("escape", "close", "Cerrar")]
 

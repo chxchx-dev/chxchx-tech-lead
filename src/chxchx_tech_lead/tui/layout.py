@@ -19,6 +19,7 @@ def compose_workspace(project: ProjectInfo) -> ComposeResult:
                 yield from _agents()
                 yield from _processes()
         yield from _projects(project)
+        yield from _skills()
         with TabPane("Más", id="more"):
             yield Static("Herramientas avanzadas y ayuda", classes="summary")
             with TabbedContent(initial="guide", id="more-tabs"):
@@ -118,6 +119,33 @@ def _resources() -> ComposeResult:
         with Horizontal(classes="toolbar"):
             yield Button("Actualizar recursos", id="btn-resources-refresh")
             yield Button("Detener workspace", id="btn-resources-stop", variant="error")
+
+
+def _skills() -> ComposeResult:
+    with TabPane("Skills", id="skills"):
+        yield Static(id="skills-summary", classes="skills-summary")
+        with TabbedContent(initial="skill-catalog", id="skills-tabs"):
+            with TabPane("Catálogo", id="skill-catalog"):
+                with Horizontal(classes="toolbar"):
+                    yield Input(placeholder="Buscar por nombre, tema o stack...", id="skills-search")
+                    yield Button("Actualizar", id="btn-skills-refresh")
+                with Horizontal(classes="toolbar"):
+                    yield Button("Habilitar", id="btn-skill-enable", variant="success")
+                    yield Button("Deshabilitar", id="btn-skill-disable", variant="error")
+                    yield Button("Sincronizar", id="btn-skills-sync", variant="primary")
+                with Horizontal(classes="wide"):
+                    yield DataTable(id="skills-table", cursor_type="row")
+                    yield Static("Selecciona una skill para ver detalles y por qué se recomienda.", id="skill-detail", markup=False)
+            with TabPane("Tech Packs", id="skill-packs"):
+                with Horizontal(classes="toolbar"):
+                    yield Button("Actualizar", id="btn-packs-refresh")
+                with Horizontal(classes="toolbar"):
+                    yield Button("Aplicar todos los detectados", id="btn-packs-apply-detected", variant="primary")
+                    yield Button("Aplicar pack seleccionado", id="btn-pack-apply", variant="success")
+                    yield Button("Sincronizar", id="btn-packs-sync", variant="primary")
+                with Horizontal(classes="wide"):
+                    yield DataTable(id="packs-table", cursor_type="row")
+                    yield Static("Selecciona un pack para consultar sus skills.", id="pack-detail", markup=False)
 
 
 def _handoff() -> ComposeResult:

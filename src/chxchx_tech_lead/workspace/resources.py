@@ -98,6 +98,39 @@ class ResourceManager:
             return ResourceSeverity.WARNING
         return ResourceSeverity.OK
 
+    def agent_start_warnings(
+        self,
+        active_agents: int,
+        planned_agents: int,
+        resources: SystemResources | None = None,
+    ) -> tuple[str, ...]:
+        """Explain resource pressure before launching more agent sessions."""
+        snapshot = resources or self.system()
+        warnings = []
+        severity = self.severity(snapshot)
+        if planned_agents > 0 and severity is ResourceSeverity.CRITICAL:
+            warnings.append(
+                f"RAM al {snapshot.memory_percent:.0f}% (crítico: "
+                f"{self.config.critical_memory_percent}%)."
+            )
+        elif planned_agents > 0 and severity is ResourceSeverity.WARNING:
+            causes = []
+            if snapshot.memory_percent >= self.config.warn_memory_percent:
+                causes.append(f"RAM al {snapshot.memory_percent:.0f}%")
+            if snapshot.swap_percent >= self.config.warn_swap_percent:
+                causes.append(f"swap al {snapshot.swap_percent:.0f}%")
+            warnings.append(
+                f"{', '.join(causes)}; umbral de aviso "
+                f"{self.config.warn_memory_percent}% RAM / {self.config.warn_swap_percent}% swap."
+            )
+        projected = active_agents + planned_agents
+        if planned_agents > 0 and projected > self.config.max_agents:
+            warnings.append(
+                f"Se proyectan {projected} agentes activos; el límite configurado es "
+                f"{self.config.max_agents}."
+            )
+        return tuple(warnings)
+
     def processes(self, managed: Iterable[ManagedProcess]) -> list[ProcessResources]:
         result = []
         for process in managed:

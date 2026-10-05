@@ -24,6 +24,20 @@ def test_resource_manager_classifies_memory_and_swap_thresholds():
     assert manager.severity(SystemResources(100, 95, 5)) is ResourceSeverity.CRITICAL
 
 
+def test_agent_start_warnings_cover_memory_and_agent_budget():
+    manager = ResourceManager(
+        ResourceConfig(warn_memory_percent=70, critical_memory_percent=85, max_agents=2)
+    )
+    high_memory = SystemResources(100, 88, 12, 100, 50)
+
+    warnings = manager.agent_start_warnings(1, 2, high_memory)
+
+    assert len(warnings) == 2
+    assert "RAM al 88%" in warnings[0]
+    assert "3 agentes activos" in warnings[1]
+    assert manager.agent_start_warnings(2, 0, high_memory) == ()
+
+
 def test_resource_manager_reads_metrics_only_for_running_processes(tmp_path: Path):
     seen = []
     manager = ResourceManager(

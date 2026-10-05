@@ -70,9 +70,10 @@ class LayoutConfig:
 
 @dataclass(frozen=True, slots=True)
 class ResourceConfig:
-    warn_memory_percent: int = 75
-    critical_memory_percent: int = 90
+    warn_memory_percent: int = 70
+    critical_memory_percent: int = 85
     warn_swap_percent: int = 40
+    max_agents: int = 2
 
     @classmethod
     def from_mapping(cls, raw: Any) -> "ResourceConfig":
@@ -82,14 +83,18 @@ class ResourceConfig:
             raise WorkspaceConfigError("workspace.resources debe ser una tabla")
         values: dict[str, int] = {}
         for name, default in (
-            ("warn_memory_percent", 75),
-            ("critical_memory_percent", 90),
+            ("warn_memory_percent", 70),
+            ("critical_memory_percent", 85),
             ("warn_swap_percent", 40),
         ):
             value = raw.get(name, default)
             if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 100:
                 raise WorkspaceConfigError(f"workspace.resources.{name} debe estar entre 0 y 100")
             values[name] = value
+        max_agents = raw.get("max_agents", 2)
+        if isinstance(max_agents, bool) or not isinstance(max_agents, int) or not 1 <= max_agents <= 16:
+            raise WorkspaceConfigError("workspace.resources.max_agents debe estar entre 1 y 16")
+        values["max_agents"] = max_agents
         if values["critical_memory_percent"] < values["warn_memory_percent"]:
             raise WorkspaceConfigError("critical_memory_percent no puede ser menor que warn_memory_percent")
         return cls(**values)

@@ -14,6 +14,7 @@ from ..cli_context import (
     _project,
     _workspace_service,
 )
+from .resource_guard import guard_cli_agent_start
 
 @app.command("run")
 def run_workspace(
@@ -21,10 +22,13 @@ def run_workspace(
     dry_run: bool = typer.Option(False, "--dry-run", help="Muestra la receta sin ejecutarla."),
     attach: bool = typer.Option(True, "--attach/--no-attach", help="Entra en Zellij al finalizar."),
     recreate: bool = typer.Option(False, "--recreate", help="Recrea la sesión Zellij para aplicar el layout actual."),
+    force: bool = typer.Option(False, "--force", help="Confirma el inicio aunque exceda el presupuesto RAM/agentes."),
 ):
     """Arranca workspace, agentes configurados y adjunta Zellij."""
     try:
-        action, agents, attached = _workspace_service(path).run_all(
+        service = _workspace_service(path)
+        guard_cli_agent_start(service, dry_run=dry_run, force=force)
+        action, agents, attached = service.run_all(
             dry_run=dry_run, attach=attach, recreate=recreate
         )
     except WorkspaceOperationError as exc:

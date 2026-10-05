@@ -17,19 +17,25 @@ from ..workspace.agent_status import AgentRuntimeStatus
 from ..workspace.error_cache import CachedError
 from ..workspace.memory_history import MemoryNote
 from ..workspace.service import WorkspaceService
+from .agent_actions import WorkspaceAgentActions
 from .actions import WorkspaceActions
 from .dashboard import WorkspaceDashboard
 from .events import WorkspaceEvents
+from .governor_actions import ResourceGovernorActions
 from .layout import compose_workspace
 from .panels import WorkspacePanels
 from .palette import CommandPalette
 from .project_console import WorkspaceProjectConsole
 from .style import TUI_BINDINGS, TUI_CSS
+from .skills_actions import SkillsActions
+from .skills_panel import SkillsPanel
 from .setup_actions import WorkspaceSetupActions
 from .terminal_actions import WorkspaceTerminalActions
 
 
 class WorkspaceConsole(
+    ResourceGovernorActions,
+    WorkspaceAgentActions,
     WorkspaceActions,
     WorkspaceSetupActions,
     WorkspaceTerminalActions,
@@ -37,6 +43,8 @@ class WorkspaceConsole(
     WorkspaceDashboard,
     WorkspacePanels,
     WorkspaceProjectConsole,
+    SkillsActions,
+    SkillsPanel,
     App[None],
 ):
     TITLE = "ChxChx Terminal Workspace"
@@ -55,6 +63,11 @@ class WorkspaceConsole(
         self._dashboard_refresh_again = False
         self._last_agents: list[AgentRuntimeStatus] = []
         self._memory_notes: dict[str, MemoryNote] = {}
+        self._skill_recommendations = {}
+        self._skill_active: set[str] = set()
+        self._skill_registry = None
+        self._tech_pack_registry = None
+        self._pack_matches = {}
         self._conversations: dict[str, Conversation] = {}
         self._cached_errors: dict[str, CachedError] = {}
         self._palette_open = False
@@ -62,6 +75,7 @@ class WorkspaceConsole(
         self._start_pending = False
         self._operation_pending = False
         self._setup_pending = False
+        self._governor_pending = False
         self._console_process_id: str | None = None
         self._console_processes = {}
         self._console_pending = False
@@ -110,7 +124,7 @@ class WorkspaceConsole(
 
     def _refresh_visible_panel(self) -> None:
         self._tab_refresh_timer = None
-        if self._palette_open:
+        if self._palette_open or self._governor_pending:
             return
         try:
             section = self._query("#tabs", TabbedContent).active
@@ -118,6 +132,8 @@ class WorkspaceConsole(
             return
         if section == "projects":
             self._refresh_projects()
+        elif section == "skills":
+            self._refresh_skills()
         elif section == "work":
             if self._query("#work-tabs", TabbedContent).active == "console":
                 self._refresh_project_console()
@@ -127,6 +143,8 @@ class WorkspaceConsole(
             active = self._query("#more-tabs", TabbedContent).active
             if active == "resources":
                 self.refresh_dashboard()
+            elif active == "skills":
+                self._refresh_skills()
             elif active == "handoff":
                 self._refresh_handoff()
             elif active == "memory":
@@ -167,6 +185,12 @@ class WorkspaceConsole(
         self._query("#errors-table", DataTable).add_columns(
             "Fecha UTC", "Proyecto", "Acción", "Error"
         )
+        self._query("#skills-table", DataTable).add_columns(
+            "Activa", "Skill", "Stack", "Descripción"
+        )
+        self._query("#packs-table", DataTable).add_columns(
+            "Tech Pack", "Coincidencias", "Skills"
+        )
 
     def _setup_panel_titles(self) -> None:
         titles = {
@@ -189,6 +213,10 @@ class WorkspaceConsole(
             "#chat-detail": "CONVERSACIÓN",
             "#errors-table": "ERRORES RECIENTES",
             "#error-detail": "DETALLE DEL ERROR",
+            "#skills-table": "CATÁLOGO",
+            "#packs-table": "RECOMENDADOS PARA EL PROYECTO",
+            "#skill-detail": "DETALLE DE SKILL",
+            "#pack-detail": "DETALLE DE TECH PACK",
             "#brand-banner": "CHXCHX",
         }
         for selector, title in titles.items():
@@ -218,6 +246,7 @@ class WorkspaceConsole(
         handlers = {
             "chat-search": self.chat_search_changed,
             "memory-search": self.memory_search_changed,
+            "skills-search": self.skills_search_changed,
         }
         handler = handlers.get(event.input.id)
         if handler is not None:
@@ -231,6 +260,8 @@ class WorkspaceConsole(
             "console-processes": self.console_process_highlighted,
             "memory-list": self.memory_row_highlighted,
             "agents-table": self.agent_row_highlighted,
+            "skills-table": self.skill_row_highlighted,
+            "packs-table": self.pack_row_highlighted,
         }
         handler = handlers.get(event.data_table.id)
         if handler is not None:

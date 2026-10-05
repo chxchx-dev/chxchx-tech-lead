@@ -94,3 +94,27 @@ def test_detect_rust_and_go_start_commands(tmp_path: Path):
     go = detect_project(other)
     assert "go" in go.stacks
     assert default_config_data(go)["workspace"]["processes"][0]["command"] == ["go", "run", "."]
+
+
+def test_detect_prisma_redis_and_docker(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"dependencies":{"@prisma/client":"^6","ioredis":"^5","react":"^19"}}',
+        encoding="utf-8",
+    )
+    (tmp_path / "Dockerfile").write_text("FROM node:22\n", encoding="utf-8")
+    (tmp_path / "main.tsx").write_text("export const App = () => null\n", encoding="utf-8")
+
+    info = detect_project(tmp_path)
+
+    assert {"react", "prisma", "redis", "docker"}.issubset(info.stacks)
+    assert "typescript" in info.languages
+
+def test_detect_python_redis_dependency(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "sample"\ndependencies = ["redis>=5"]\n',
+        encoding="utf-8",
+    )
+
+    info = detect_project(tmp_path)
+
+    assert {"python", "redis"}.issubset(info.stacks)

@@ -1,0 +1,6 @@
+name = "react"
+description = "React UI guidance for accessible, predictable component behavior."
+stacks = ["react", "react-vite", "nextjs", "react-native"]
+languages = ["typescript", "javascript"]
+tags = ["react", "components", "frontend"]
+origin = "chxchx"

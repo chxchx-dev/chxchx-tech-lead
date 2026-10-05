@@ -1,0 +1,7 @@
+name = "testing"
+description = "Choose focused checks that prove behavior without coupling tests to implementation details."
+stacks = []
+languages = []
+tags = ["pytest", "quality", "regression"]
+always_recommend = true
+origin = "chxchx"

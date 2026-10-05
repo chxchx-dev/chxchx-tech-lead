@@ -39,7 +39,46 @@ La rama `dev` añade el Terminal Workspace. El PR pasó la matriz automatizada d
 - Process Manager con estado persistente, logs rotativos y protección contra PIDs ajenos;
 - adapters para Zellij, fallback de subprocess, Sublime, agentes CLI y Git;
 - comandos CLI de workspace, procesos, agentes, editor y recursos;
-- dashboard con Textual y operación multiproyecto mediante sesiones recuperables.
+- dashboard con Textual y operación multiproyecto mediante sesiones recuperables;
+- Skill Registry local con búsqueda, consulta de instrucciones y recomendaciones por stack.
+
+El catálogo contiene 17 skills generales y para Python, TypeScript, React/Next.js,
+NestJS, .NET, React Native, PostgreSQL, Prisma, Redis, Docker y diseño UI/UX de
+producto. La skill UI/UX se recomienda para proyectos React, Next.js y React
+Native y forma parte de sus Tech Packs.
+Las recomendaciones no cambian el proyecto. Habilita de forma explícita las
+skills que quieres añadir al contexto:
+
+```bash
+chxchx-tech skill list
+chxchx-tech skill search python
+chxchx-tech skill info python-engineering
+chxchx-tech skill recommend .
+chxchx-tech skill enable nextjs .
+chxchx-tech skill sync . --dry-run
+chxchx-tech skill sync .
+chxchx-tech pack list
+chxchx-tech pack detect .
+chxchx-tech pack apply-detected . --dry-run
+chxchx-tech pack apply-detected .
+chxchx-tech skill status .
+```
+
+La selección por proyecto se guarda en `.ai/chxchx-skills.toml`; `skill sync`
+genera las instrucciones activas en `.ai/SKILLS.md` y añade una referencia
+administrada a `AGENTS.md`. Usa `skill disable NOMBRE .` y vuelve a sincronizar
+para retirar una skill del contexto.
+No instalas cada skill por separado: las 17 guías y 11 Tech Packs vienen con
+ChxChx. `skill list` informa el total de guías; `pack list` muestra cada pack,
+cuántas skills incluye y sus nombres; `pack info NOMBRE` consulta uno en
+particular. Así puedes ver exactamente qué se añadirá antes de aplicarlo.
+
+`pack detect` explica qué stack o lenguaje coincidió. `pack apply-detected`
+añade de una vez la unión de los packs compatibles, sin escribir sus nombres;
+`--dry-run` permite previsualizar. La selección queda guardada por proyecto,
+`skill status` cuenta cuáles están activas y después `skill sync .` carga esa
+selección sin volver a nombrar las skills. Son instrucciones Markdown para los
+agentes, no paquetes ejecutables ni utilidades instaladas individualmente.
 
 ## Requisitos
 
@@ -133,8 +172,9 @@ La instalación desde Git no incluye herramientas externas como Zellij, Sublime 
 ### Actualizar una instalación existente para probar `dev`
 
 El build actual de la rama `dev` se identifica como `0.5.0.dev0`. No es una
-release estable; úsalo para las pruebas de Terminal Workspace y registra los
-resultados en [docs/17-REAL-WORLD-VALIDATION.md](docs/17-REAL-WORLD-VALIDATION.md).
+release estable; úsalo para evaluar Terminal Workspace y registra los
+resultados localmente. La carpeta `docs/` contiene notas de trabajo locales y
+no forma parte del repositorio publicado.
 
 Cierra la TUI. Si el CLI instalado ya ofrece el comando, suspende primero el
 workspace para detener los procesos gestionados y poder reanudarlo después:
@@ -238,7 +278,9 @@ chxchx-tech resources .
 # 7. Entrar a la sesión Zellij
 chxchx-tech workspace attach .
 
-# 8. Trabajar con el editor o el agente
+# 8. Configurar Sublime y trabajar con el editor o el agente
+chxchx-tech editor setup . --dry-run
+chxchx-tech editor setup .
 chxchx-tech editor open .
 chxchx-tech agent start codex --path .
 chxchx-tech workspace attach .
@@ -256,6 +298,7 @@ configuración válida. La confianza queda vinculada al contenido de
 proyecto antes de iniciar procesos.
 
 `workspace status`, `process list`, `resources` y los comandos `--dry-run` son de inspección y no deberían iniciar procesos.
+La acción «Preparar proyecto de Sublime» también está disponible desde la paleta de comandos de la TUI.
 
 ## Recetas rápidas del workspace
 
@@ -341,9 +384,10 @@ template = "{logo} {label} | {project} | {profile}"
 orientation = "horizontal"
 
 [workspace.resources]
-warn_memory_percent = 75
-critical_memory_percent = 90
+warn_memory_percent = 70
+critical_memory_percent = 85
 warn_swap_percent = 40
+max_agents = 2
 
 [[workspace.processes]]
 id = "backend"
@@ -553,6 +597,8 @@ chxchx-tech process list [PATH]        muestra procesos y PID
 chxchx-tech process start ID --path .  inicia un proceso configurado
 chxchx-tech process stop ID --path .   detiene un proceso gestionado
 chxchx-tech editor open [PATH]         abre el proyecto en Sublime
+chxchx-tech editor setup [PATH]        genera proyecto Sublime local y lo abre
+chxchx-tech editor setup [PATH] --no-open solo genera el proyecto Sublime
 chxchx-tech agent start ID --path .    inicia un agente configurado
 chxchx-tech agent start ID --new-chat --path . inicia conversación nueva con contexto persistido (Codex/Claude)
 chxchx-tech agent start --all --path . inicia todos los agentes configurados
@@ -598,14 +644,14 @@ El panel interactivo se abre explícitamente así:
 chxchx-tech tui .
 ```
 
-La TUI incluye pestañas de Resumen, Proyectos, Agentes, Procesos, Recursos, Handoff y Memoria. Desde Proyectos puedes cambiar el contexto por alias o ruta; desde Agentes puedes revisar disponibilidad de Codex/Claude, sesión Zellij, pane y preset; Handoff permite leer o actualizar `.ai/HANDOFF.md`; y Memoria muestra, filtra y abre las notas persistentes del proyecto activo en `.ai/memory`.
+La TUI incluye pestañas de Resumen, Trabajo, Proyectos, Skills, Más y Memoria. Desde Skills puedes buscar el catálogo, revisar recomendaciones y Tech Packs, habilitar o deshabilitar skills, aplicar packs y sincronizar el contexto del proyecto. Desde Proyectos puedes cambiar el contexto por alias o ruta; desde Agentes puedes revisar disponibilidad de Codex/Claude, sesión Zellij, pane y preset; Handoff permite leer o actualizar `.ai/HANDOFF.md`; y Memoria muestra, filtra y abre las notas persistentes del proyecto activo en `.ai/memory`.
 
 En Agentes, `Nuevo chat + contexto` abre un pane nuevo para el ID indicado y solicita a Codex o Claude reconstruir el contexto desde los archivos y Basic Memory del proyecto activo. El panel `Checkpoint automático` verifica que las reglas de guardado estén presentes, que Basic Memory aparezca configurado para cada cliente y muestra la nota más reciente encontrada. Es un diagnóstico estático más evidencia de escritura; no puede certificar que el modelo haya guardado cada turno ni que el servidor MCP responda en vivo.
 
-Recursos distingue el uso general del equipo del consumo estimado de los procesos administrados del proyecto, con RAM RSS y CPU por proceso y totales. También compara los proyectos registrados. La estimación actual usa los PID principales declarados; no incluye procesos hijos ni agentes que se ejecutan dentro de panes Zellij.
+El RAM Governor muestra el uso general de memoria, swap y CPU junto con el consumo estimado de procesos del proyecto. Antes de iniciar agentes desde la TUI, advierte si se superan los umbrales configurados o el límite de agentes; puedes cancelar o continuar explícitamente. En `agent start`, `run` y `projects switch`, el CLI informa el riesgo y requiere `--force` para iniciar; `--dry-run` solo muestra el aviso. Nunca detiene procesos por su cuenta. Configúralo en `[workspace.resources]` con `warn_memory_percent`, `critical_memory_percent`, `warn_swap_percent` y `max_agents`. Recursos también compara proyectos registrados. La estimación por proyecto usa PID principales declarados; no incluye procesos hijos ni mide los agentes dentro de panes Zellij.
 
 La TUI agrupa la operación habitual en **Inicio**, **Trabajo** y **Proyectos**.
-La pestaña **Más** contiene configuración, recursos, historial, notas y ayuda.
+La pestaña **Skills** da acceso directo al catálogo y sus packs. **Más** contiene configuración, recursos, historial, notas y ayuda.
 En Inicio, inicializa y confía el proyecto si hace falta. Después puedes abrir
 la shell del proyecto o entrar directamente a la pestaña de agentes con los
 botones **Abrir terminal** y **Abrir agentes**, o las teclas `T` y `A`. La paleta
@@ -628,6 +674,25 @@ r        actualizar
 ```
 
 La TUI muestra estado de confianza, sesión, procesos, agentes, recursos y handoff. Todas las acciones pasan por el servicio de workspace y sus adapters; la CLI continúa siendo la interfaz recomendada para scripts y CI.
+
+## Aplicación nativa en desarrollo
+
+ChxChx Studio es una aplicación de escritorio en C++20 y Qt 6 Widgets. Incluye navegación del proyecto, pestañas de edición, guardado atómico y lecturas asíncronas mediante el CLI instalado. Proyecto permite dar trust, iniciar/reanudar, suspender y detener procesos del workspace; Proyectos lista las rutas registradas, permite dar trust a un destino y cambiar al proyecto elegido sin adjuntar la terminal. Agentes permite iniciar uno, abrir un chat nuevo con contexto o iniciar todos; Procesos permite iniciar/detener procesos configurados. Skills muestra catálogo, selección activa y recomendaciones; permite habilitar/deshabilitar skills y sincronizar contexto. Tech Packs muestra composición y detección; permite aplicar un pack o todos los detectados y sincronizar. Handoff permite revisar el estado, editar resumen/pendiente/validación y guardar con preview y confirmación. Memoria permite buscar y leer notas locales en solo lectura. Chats permite filtrar el historial local de Codex y Claude Code y abrir transcripciones; Errores muestra los registros recientes filtrados al proyecto. Configuración permite previsualizar y ejecutar setup, init completo/mínimo, instalación de herramientas e integración MCP; Doctor es de solo lectura. Guía, Marca y la paleta filtrable de comandos están disponibles en la navegación. Las mutaciones pasan por `--dry-run`, vista previa y confirmación; el RAM Governor se vuelve a consultar al iniciar agentes.
+
+Las vistas Inicio, Proyecto, Agentes, Procesos, Proyectos, Skills y Tech Packs consultan el contrato JSON local y versionado de `chxchx-tech bridge status .`. Recursos usa `chxchx-tech bridge resources .` para mostrar una muestra global de RAM/swap/CPU y consumo agregado de procesos gestionados para cada proyecto registrado. Handoff y Memoria usan lecturas bajo demanda con `chxchx-tech bridge handoff PATH` y `chxchx-tech bridge memory PATH --query TEXTO`. Chats usa `bridge chats` para buscar y carga cada transcripción seleccionada con `bridge conversation`; Errores consulta `bridge errors`. Son lecturas locales y no cambian sesiones ni la caché de errores.
+
+El editor usa el widget Qt oficial de Scintilla con Lexilla para resaltado de sintaxis. CMake descarga revisiones fijadas de ambos proyectos la primera vez que se configura; esa configuración inicial requiere acceso a GitHub. Las versiones y avisos de licencia están en [native/THIRD_PARTY.md](native/THIRD_PARTY.md).
+
+Requisitos para compilar: CMake 3.21+, Ninja (opcional) y Qt 6.4+ con Core, Widgets y Core5Compat. En Fedora instala `qt6-qtbase-devel` y `qt6-qt5compat-devel`; en Ubuntu instala los paquetes de desarrollo Qt6 equivalentes.
+
+```bash
+cmake -S native -B build/native -DCHXCHX_BUILD_TESTS=ON
+cmake --build build/native
+ctest --test-dir build/native --output-on-failure
+./build/native/chxchx-studio .
+```
+
+En Windows y macOS se ejecuta el binario generado desde `build/native` con el proyecto como argumento. El editor Scintilla tiene UTF-8, guardado atómico, números de línea, búsqueda en archivo y lexers para C/C++, Python, JavaScript/TypeScript, JSON, YAML, TOML, Markdown, HTML/XML, CSS, SQL, Bash y CMake. La paleta permite abrir una terminal externa para Zellij y adjuntarse al workspace o al agente seleccionado con previsualización y confirmación; requiere Windows Terminal en Windows y un emulador compatible instalado en Linux. En macOS usa Terminal.app. Studio ya incluye transporte PTY/ConPTY (ConPTY requiere Windows 10+) y un smoke interactivo; siguen pendientes el emulador VT y el dock que lo presenta dentro de la ventana. Se conserva el terminal externo como alternativa. También siguen pendientes búsqueda global, archivos recientes, splits, diff Git, símbolos, LSP y empaquetado instalable. CI compila y ejecuta los smoke en Ubuntu, Windows, macOS y Fedora; falta que los runners remotos completen para certificar la matriz.
 
 ## MCP, Basic Memory y Serena
 

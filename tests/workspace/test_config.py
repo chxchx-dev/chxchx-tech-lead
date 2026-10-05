@@ -18,6 +18,7 @@ def test_new_project_config_is_v2_and_idempotent(tmp_path: Path):
     assert first.source_version is None
     assert second.changed is False
     assert "version = 2" in (tmp_path / ".ai" / "chxchx-tech.toml").read_text(encoding="utf-8")
+    assert "max_agents = 2" in first.content
     assert "[workspace.docker]" not in first.content
 
 
@@ -68,6 +69,22 @@ def test_existing_v2_config_is_validated_but_not_rewritten(tmp_path: Path):
 
     assert result.changed is False
     assert target.read_text(encoding="utf-8") == content
+
+
+def test_resource_config_defaults_and_validates_max_agents(tmp_path: Path):
+    config = WorkspaceConfig.from_mapping({"name": "demo"}, project_root=tmp_path)
+    limited = WorkspaceConfig.from_mapping(
+        {"name": "demo", "resources": {"max_agents": 3}}, project_root=tmp_path
+    )
+
+    assert config.resources.warn_memory_percent == 70
+    assert config.resources.critical_memory_percent == 85
+    assert config.resources.max_agents == 2
+    assert limited.resources.max_agents == 3
+    with pytest.raises(WorkspaceConfigError, match="max_agents"):
+        WorkspaceConfig.from_mapping(
+            {"name": "demo", "resources": {"max_agents": 0}}, project_root=tmp_path
+        )
 
 
 @pytest.mark.parametrize(

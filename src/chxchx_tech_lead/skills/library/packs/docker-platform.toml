@@ -1,0 +1,5 @@
+name = "docker-platform"
+description = "Prácticas para contenedores reproducibles y despliegues seguros."
+stacks = ["docker"]
+languages = []
+skills = ["docker", "security-review", "code-review"]

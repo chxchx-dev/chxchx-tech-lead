@@ -30,3 +30,4 @@ dev = ["pytest>=8.0,<9"]
 
 [tool.setuptools.package-data]
 "chxchx_tech_lead.core" = ["profiles.toml"]
+"chxchx_tech_lead.skills" = ["library/skills/*/skill.toml", "library/skills/*/SKILL.md", "library/packs/*.toml"]
