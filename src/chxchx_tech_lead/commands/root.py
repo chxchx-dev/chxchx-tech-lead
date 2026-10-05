@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-from ..cli_context import (
-    Path,
-    TUIUnavailableError,
-    WorkspaceOperationError,
-    __version__,
-    app,
-    console,
-    run_tui,
-    typer,
-    _print_recipe,
-    _print_workspace_action,
-    _project,
-    _workspace_service,
-)
+from pathlib import Path
+
+import typer
+
+from .. import __version__
+from ..ui.cli_output import console, print_recipe as _print_recipe, print_workspace_action as _print_workspace_action
+from ..cli_registry import app
+from ..tui import TUIUnavailableError, run_tui
+from ..workspace.project_context import project_for_path as _project, workspace_service_for as _workspace_service
+from ..workspace.service import WorkspaceOperationError
 from .resource_guard import guard_cli_agent_start
 
 @app.command("run")

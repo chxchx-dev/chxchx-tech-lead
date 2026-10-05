@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..cli_context import bridge_app, typer
-from ..workspace.bridge import SCHEMA_VERSION, project_status_payload
+import typer
+
+from ..cli_registry import bridge_app
+from ..workspace.bridge import project_status_payload
+from ..workspace.bridge_contracts import ERROR_SCHEMA, SCHEMA_VERSION
 from ..workspace.bridge_resources import resources_overview_payload
 from ..workspace.bridge_history import (
     conversation_payload,
@@ -25,7 +28,7 @@ def bridge_status(
         payload = project_status_payload(path)
     except (OSError, ValueError, WorkspaceOperationError) as exc:
         typer.echo(json.dumps({
-            "schema": "chxchx.error",
+            "schema": ERROR_SCHEMA,
             "schema_version": SCHEMA_VERSION,
             "error": str(exc),
         }, ensure_ascii=False, separators=(",", ":")))
@@ -90,7 +93,7 @@ def _emit_payload(builder, *args) -> None:
         payload = builder(*args)
     except (OSError, UnicodeError, ValueError, WorkspaceOperationError) as exc:
         typer.echo(json.dumps({
-            "schema": "chxchx.error",
+            "schema": ERROR_SCHEMA,
             "schema_version": SCHEMA_VERSION,
             "error": str(exc),
         }, ensure_ascii=False, separators=(",", ":")))

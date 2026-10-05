@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from ..cli_context import (
-    Path,
-    ProcessManagerError,
-    Table,
-    console,
-    process_app,
-    typer,
-    _process_manager,
-)
+from pathlib import Path
+
+import typer
+from rich.table import Table
+
+from ..cli_registry import process_app
+from ..ui.cli_output import console
+from ..workspace.process_manager import ProcessManagerError
+from .workspace_context import process_manager_for as _process_manager
 
 @process_app.command("list")
 def process_list(

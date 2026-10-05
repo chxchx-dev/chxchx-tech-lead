@@ -4,12 +4,24 @@ from pathlib import Path
 from typing import Any
 
 from ..integrations.chat_history import list_conversations
-from .bridge import SCHEMA_VERSION
+from .bridge_contracts import (
+    CONVERSATION_SCHEMA,
+    CONVERSATIONS_SCHEMA,
+    ERRORS_SCHEMA,
+    HANDOFF_SCHEMA,
+    MEMORY_SCHEMA,
+    SCHEMA_VERSION,
+    ConversationPayload,
+    ConversationsPayload,
+    ErrorsPayload,
+    HandoffPayload,
+    MemoryPayload,
+)
 from .error_cache import error_cache_path, list_errors
 from .memory_history import list_memory_notes
 
 
-def handoff_payload(project_path: Path) -> dict[str, Any]:
+def handoff_payload(project_path: Path) -> HandoffPayload:
     root = project_path.expanduser().resolve(strict=True)
     target = root / ".ai" / "HANDOFF.md"
     resolved = target.resolve(strict=False)
@@ -17,7 +29,7 @@ def handoff_payload(project_path: Path) -> dict[str, Any]:
         raise ValueError("El handoff apunta fuera del proyecto.")
     if not target.is_file():
         return {
-            "schema": "chxchx.handoff",
+            "schema": HANDOFF_SCHEMA,
             "schema_version": SCHEMA_VERSION,
             "exists": False,
             "path": str(target),
@@ -41,7 +53,7 @@ def handoff_payload(project_path: Path) -> dict[str, Any]:
         return ""
 
     return {
-        "schema": "chxchx.handoff",
+        "schema": HANDOFF_SCHEMA,
         "schema_version": SCHEMA_VERSION,
         "exists": True,
         "path": str(resolved),
@@ -52,14 +64,14 @@ def handoff_payload(project_path: Path) -> dict[str, Any]:
     }
 
 
-def memory_payload(project_path: Path, query: str = "") -> dict[str, Any]:
+def memory_payload(project_path: Path, query: str = "") -> MemoryPayload:
     root = project_path.expanduser().resolve(strict=True)
     memory_root = root / ".ai" / "memory"
     if memory_root.exists() and not memory_root.resolve().is_relative_to(root):
         raise ValueError("La memoria local apunta fuera del proyecto.")
     notes = list_memory_notes(root, query=query)
     return {
-        "schema": "chxchx.memory",
+        "schema": MEMORY_SCHEMA,
         "schema_version": SCHEMA_VERSION,
         "project": str(root),
         "query": query,
@@ -76,11 +88,11 @@ def memory_payload(project_path: Path, query: str = "") -> dict[str, Any]:
     }
 
 
-def conversations_payload(project_path: Path, query: str = "") -> dict[str, Any]:
+def conversations_payload(project_path: Path, query: str = "") -> ConversationsPayload:
     root = project_path.expanduser().resolve(strict=True)
     conversations = list_conversations(root, query=query)
     return {
-        "schema": "chxchx.conversations",
+        "schema": CONVERSATIONS_SCHEMA,
         "schema_version": SCHEMA_VERSION,
         "project": str(root),
         "query": query,
@@ -98,7 +110,7 @@ def conversations_payload(project_path: Path, query: str = "") -> dict[str, Any]
     }
 
 
-def conversation_payload(project_path: Path, provider: str, session_id: str) -> dict[str, Any]:
+def conversation_payload(project_path: Path, provider: str, session_id: str) -> ConversationPayload:
     root = project_path.expanduser().resolve(strict=True)
     conversation = next(
         (
@@ -111,7 +123,7 @@ def conversation_payload(project_path: Path, provider: str, session_id: str) -> 
     if conversation is None:
         raise ValueError("No se encontró esa conversación para este proyecto.")
     return {
-        "schema": "chxchx.conversation",
+        "schema": CONVERSATION_SCHEMA,
         "schema_version": SCHEMA_VERSION,
         "provider": conversation.provider,
         "session_id": conversation.session_id,
@@ -125,11 +137,11 @@ def conversation_payload(project_path: Path, provider: str, session_id: str) -> 
     }
 
 
-def errors_payload(project_path: Path) -> dict[str, Any]:
+def errors_payload(project_path: Path) -> ErrorsPayload:
     root = project_path.expanduser().resolve(strict=True)
     errors = list_errors(project_path=root)
     return {
-        "schema": "chxchx.errors",
+        "schema": ERRORS_SCHEMA,
         "schema_version": SCHEMA_VERSION,
         "project": str(root),
         "cache_path": str(error_cache_path()),

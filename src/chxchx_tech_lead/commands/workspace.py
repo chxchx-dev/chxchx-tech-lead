@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from ..cli_context import (
-    editor_app,
-    Path,
-    WorkspaceOperationError,
-    app,
+from pathlib import Path
+
+import typer
+
+from ..core.trust import trust_project
+from ..ui.cli_output import (
     console,
-    trust_project,
-    typer,
-    workspace_app,
-    _print_agent_statuses,
-    _print_workspace_action,
-    _workspace_inspection,
-    _workspace_service,
+    print_agent_statuses as _print_agent_statuses,
+    print_workspace_action as _print_workspace_action,
 )
+from ..cli_registry import editor_app, workspace_app
 from ..workspace.error_cache import record_error
+from ..workspace.project_context import workspace_service_for as _workspace_service
+from ..workspace.service import WorkspaceOperationError
+from .workspace_context import inspect_workspace as _workspace_inspection
 
 @workspace_app.command("status")
 def workspace_status(

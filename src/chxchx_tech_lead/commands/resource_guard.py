@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from ..cli_context import console, typer
+import typer
+
+from ..ui.cli_output import console
 from ..workspace.resources import ResourceManager
 
 

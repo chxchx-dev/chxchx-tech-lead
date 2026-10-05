@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(chxchx_studio VERSION 0.1.0 LANGUAGES CXX)
+project(chxchx_studio VERSION 0.1.0 LANGUAGES C CXX)
 
 option(CHXCHX_BUILD_TESTS "Build native editor smoke tests" OFF)
 
@@ -28,6 +28,31 @@ FetchContent_Declare(
     SOURCE_SUBDIR cmake
 )
 FetchContent_MakeAvailable(scintilla lexilla)
+
+FetchContent_Declare(
+    libvterm
+    GIT_REPOSITORY https://github.com/neovim/libvterm.git
+    GIT_TAG v0.3.3
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(libvterm)
+find_package(Perl REQUIRED)
+file(GLOB LIBVTERM_TABLES "${CMAKE_BINARY_DIR}/_deps/libvterm-src/src/encoding/*.tbl")
+foreach(table IN LISTS LIBVTERM_TABLES)
+    get_filename_component(table_name "${table}" NAME_WE)
+    execute_process(
+        COMMAND "${PERL_EXECUTABLE}" -CSD "${CMAKE_BINARY_DIR}/_deps/libvterm-src/tbl2inc_c.pl" "${table}"
+        OUTPUT_FILE "${CMAKE_BINARY_DIR}/_deps/libvterm-src/src/encoding/${table_name}.inc"
+        RESULT_VARIABLE table_result
+    )
+    if(NOT table_result EQUAL 0)
+        message(FATAL_ERROR "Could not generate libvterm encoding table: ${table}")
+    endif()
+endforeach()
+file(GLOB LIBVTERM_SOURCES CONFIGURE_DEPENDS "${CMAKE_BINARY_DIR}/_deps/libvterm-src/src/*.c")
+add_library(chxchx_vterm STATIC ${LIBVTERM_SOURCES})
+set_target_properties(chxchx_vterm PROPERTIES AUTOMOC OFF)
+target_include_directories(chxchx_vterm PUBLIC "${CMAKE_BINARY_DIR}/_deps/libvterm-src/include")
 
 file(GLOB SCINTILLA_CORE_SOURCES CONFIGURE_DEPENDS "${scintilla_SOURCE_DIR}/src/*.cxx")
 add_library(chxchx_scintilla STATIC
@@ -63,15 +88,29 @@ target_compile_definitions(chxchx_lexilla PRIVATE LEXILLA_NO_EXPORT NDEBUG=1)
 qt_add_executable(chxchx-studio
     src/main.cpp
     src/main_window.cpp
+    src/main_window_area_controller.cpp
+    src/main_window_actions.cpp
+    src/main_window_agent_sessions.cpp
+    src/main_window_data_pages.cpp
+    src/main_window_layout.cpp
+    src/main_window_status_presenter.cpp
     src/main_window.hpp
+    src/main_window_areas.hpp
     src/integrations/terminal_launcher.cpp
     src/integrations/terminal_launcher.hpp
+    src/integrations/bridge_client.cpp
+    src/integrations/bridge_client.hpp
+    src/integrations/bridge_schemas.hpp
+    src/integrations/agent_session_widget.cpp
+    src/integrations/agent_session_widget.hpp
+    src/integrations/vt_terminal_widget.cpp
+    src/integrations/vt_terminal_widget.hpp
     src/integrations/pty_session.cpp
     src/integrations/pty_session.hpp
 )
 
 target_link_libraries(chxchx-studio PRIVATE Qt6::Core Qt6::Widgets Qt6::Core5Compat
-    chxchx_scintilla chxchx_lexilla)
+    chxchx_scintilla chxchx_lexilla chxchx_vterm)
 target_compile_definitions(chxchx-studio PRIVATE QT_NO_CAST_FROM_ASCII QT_NO_CAST_TO_ASCII)
 if(WIN32)
     target_compile_definitions(chxchx-studio PRIVATE WINVER=0x0A00 _WIN32_WINNT=0x0A00)

@@ -8,9 +8,10 @@ from ..core.registry import load_registry
 from .manager import WorkspaceManager
 from .process_manager import ManagedProcess, ProcessManager, ProcessStatus
 from .resources import ResourceManager, summarize_process_resources
+from .bridge_contracts import RESOURCES_OVERVIEW_SCHEMA, SCHEMA_VERSION, ResourcesOverviewPayload
 
 
-def resources_overview_payload(current_path: Path) -> dict[str, Any]:
+def resources_overview_payload(current_path: Path) -> ResourcesOverviewPayload:
     """Return one system snapshot and read-only managed-process totals per registered project."""
     registry = load_registry()
     entries = registry.get("projects", [])
@@ -71,8 +72,8 @@ def resources_overview_payload(current_path: Path) -> dict[str, Any]:
     if system_snapshot is None:
         system_snapshot = ResourceManager().system()
     return {
-        "schema": "chxchx.resources-overview",
-        "schema_version": 1,
+        "schema": RESOURCES_OVERVIEW_SCHEMA,
+        "schema_version": SCHEMA_VERSION,
         "system": {
             "memory_total_bytes": system_snapshot.total_bytes,
             "memory_used_bytes": system_snapshot.used_bytes,

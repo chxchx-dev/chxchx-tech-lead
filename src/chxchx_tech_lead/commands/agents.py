@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-from ..cli_context import (
-    agent_app,
-    Path,
-    WorkspaceOperationError,
-    console,
-    typer,
-    update_handoff,
-    workspace_app,
-    _print_agent_statuses,
-    _workspace_service,
-)
+from pathlib import Path
+
+import typer
+
+from ..ui.cli_output import console, print_agent_statuses as _print_agent_statuses
+from ..cli_registry import agent_app, workspace_app
+from ..workspace.handoff import update_handoff
+from ..workspace.project_context import workspace_service_for as _workspace_service
+from ..workspace.service import WorkspaceOperationError
 from .resource_guard import guard_cli_agent_start
 
 @agent_app.command("start")

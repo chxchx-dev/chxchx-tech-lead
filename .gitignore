@@ -8,7 +8,8 @@ htmlcov/
 dist/
 build/
 *.egg-info/
-/docs/
+/docs/*
+!/docs/16-CODE-ORGANIZATION.md
 .DS_Store
 Thumbs.db
 *.log

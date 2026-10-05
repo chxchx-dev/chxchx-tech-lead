@@ -4,8 +4,11 @@
 #include <QProcess>
 #include <QString>
 #include <QStringList>
+#include <QHash>
 
 class QJsonObject;
+class BridgeClient;
+class AgentSessionWidget;
 class QDockWidget;
 class QDialog;
 class QComboBox;
@@ -39,6 +42,7 @@ private slots:
     void selectArea(int row);
     void refreshArea();
     void finishCommand(int exitCode, QProcess::ExitStatus status);
+    void commandFailedToStart(const QString &reason);
     void performPrimaryAreaAction();
     void performSecondaryAreaAction();
     void performTertiaryAreaAction();
@@ -50,6 +54,8 @@ private slots:
     void openNewWorkspaceTerminal();
     void attachWorkspaceTerminal();
     void attachAgentTerminal();
+    void openSelectedAgent(bool newChat = false);
+    void openAllAgentSessions();
 
 private:
     void buildActions();
@@ -114,9 +120,11 @@ private:
     QListWidget *m_errorsList = nullptr;
     QPlainTextEdit *m_errorDetail = nullptr;
     QPlainTextEdit *m_output = nullptr;
+    QDockWidget *m_activityDock = nullptr;
     QLabel *m_areaDescription = nullptr;
-    QProcess *m_command = nullptr;
+    BridgeClient *m_bridgeClient = nullptr;
     QStringList m_confirmedActionArguments;
+    QHash<QString, AgentSessionWidget *> m_agentSessions;
     QStringList m_forceActionArguments;
     QString m_confirmedActionTitle;
     QString m_pendingProjectPath;

@@ -677,13 +677,28 @@ La TUI muestra estado de confianza, sesión, procesos, agentes, recursos y hando
 
 ## Aplicación nativa en desarrollo
 
-ChxChx Studio es una aplicación de escritorio en C++20 y Qt 6 Widgets. Incluye navegación del proyecto, pestañas de edición, guardado atómico y lecturas asíncronas mediante el CLI instalado. Proyecto permite dar trust, iniciar/reanudar, suspender y detener procesos del workspace; Proyectos lista las rutas registradas, permite dar trust a un destino y cambiar al proyecto elegido sin adjuntar la terminal. Agentes permite iniciar uno, abrir un chat nuevo con contexto o iniciar todos; Procesos permite iniciar/detener procesos configurados. Skills muestra catálogo, selección activa y recomendaciones; permite habilitar/deshabilitar skills y sincronizar contexto. Tech Packs muestra composición y detección; permite aplicar un pack o todos los detectados y sincronizar. Handoff permite revisar el estado, editar resumen/pendiente/validación y guardar con preview y confirmación. Memoria permite buscar y leer notas locales en solo lectura. Chats permite filtrar el historial local de Codex y Claude Code y abrir transcripciones; Errores muestra los registros recientes filtrados al proyecto. Configuración permite previsualizar y ejecutar setup, init completo/mínimo, instalación de herramientas e integración MCP; Doctor es de solo lectura. Guía, Marca y la paleta filtrable de comandos están disponibles en la navegación. Las mutaciones pasan por `--dry-run`, vista previa y confirmación; el RAM Governor se vuelve a consultar al iniciar agentes.
+ChxChx Studio es una aplicación de escritorio en C++20 y Qt 6 Widgets. Incluye navegación del proyecto, pestañas de edición, guardado atómico y lecturas asíncronas mediante el CLI instalado. Proyecto permite dar trust, iniciar/reanudar, suspender y detener procesos del workspace; Proyectos lista las rutas registradas, permite dar trust a un destino y cambiar al proyecto elegido sin adjuntar la terminal. Agentes abre el comando CLI configurado dentro de una pestaña central junto a los archivos, con una terminal VT interactiva sobre PTY/ConPTY. La actividad de operaciones vive en un panel independiente que se puede mostrar desde Ver o desde la barra, y se oculta al iniciar para dar más espacio al editor y las terminales. La interfaz, los controles y las solicitudes de permiso pertenecen al CLI del agente; Studio administra pestañas y cierre de sesiones. Se admiten comandos configurados como listas de argumentos; los comandos de shell personalizados no se pueden embeber. Procesos permite iniciar/detener procesos configurados. Skills muestra catálogo, selección activa y recomendaciones; permite habilitar/deshabilitar skills y sincronizar contexto. Tech Packs muestra composición y detección; permite aplicar un pack o todos los detectados y sincronizar. Handoff permite revisar el estado, editar resumen/pendiente/validación y guardar con preview y confirmación. Memoria permite buscar y leer notas locales en solo lectura. Chats permite filtrar el historial local de Codex y Claude Code y abrir transcripciones; Errores muestra los registros recientes filtrados al proyecto. Configuración permite previsualizar y ejecutar setup, init completo/mínimo, instalación de herramientas e integración MCP; Doctor es de solo lectura. Guía, Marca y la paleta filtrable de comandos están disponibles en la navegación.
 
 Las vistas Inicio, Proyecto, Agentes, Procesos, Proyectos, Skills y Tech Packs consultan el contrato JSON local y versionado de `chxchx-tech bridge status .`. Recursos usa `chxchx-tech bridge resources .` para mostrar una muestra global de RAM/swap/CPU y consumo agregado de procesos gestionados para cada proyecto registrado. Handoff y Memoria usan lecturas bajo demanda con `chxchx-tech bridge handoff PATH` y `chxchx-tech bridge memory PATH --query TEXTO`. Chats usa `bridge chats` para buscar y carga cada transcripción seleccionada con `bridge conversation`; Errores consulta `bridge errors`. Son lecturas locales y no cambian sesiones ni la caché de errores.
 
-El editor usa el widget Qt oficial de Scintilla con Lexilla para resaltado de sintaxis. CMake descarga revisiones fijadas de ambos proyectos la primera vez que se configura; esa configuración inicial requiere acceso a GitHub. Las versiones y avisos de licencia están en [native/THIRD_PARTY.md](native/THIRD_PARTY.md).
+El editor usa el widget Qt oficial de Scintilla con Lexilla para resaltado de sintaxis; las sesiones interactivas usan libvterm para renderizar ANSI/VT, responder consultas del terminal y reenviar teclado, teclas de función, pegado desde el portapapeles, cambios de tamaño y mouse/rueda cuando el agente los solicita. CMake descarga revisiones fijadas de esos proyectos la primera vez que se configura; esa configuración inicial requiere acceso a GitHub. Las versiones y avisos de licencia están en [native/THIRD_PARTY.md](native/THIRD_PARTY.md).
 
 Requisitos para compilar: CMake 3.21+, Ninja (opcional) y Qt 6.4+ con Core, Widgets y Core5Compat. En Fedora instala `qt6-qtbase-devel` y `qt6-qt5compat-devel`; en Ubuntu instala los paquetes de desarrollo Qt6 equivalentes.
+
+Para el ciclo diario de desarrollo en macOS, Linux o WSL, este comando configura, recompila y abre Studio con el checkout actual como proyecto:
+
+```bash
+./scripts/dev-studio.sh
+```
+
+También puedes abrir otro proyecto pasándole su ruta; `CHXCHX_BUILD_DIR` permite elegir otra carpeta de build:
+
+```bash
+./scripts/dev-studio.sh /ruta/al/proyecto
+CHXCHX_BUILD_DIR=/tmp/chxchx-build ./scripts/dev-studio.sh
+```
+
+El flujo manual y las pruebas nativas siguen disponibles:
 
 ```bash
 cmake -S native -B build/native -DCHXCHX_BUILD_TESTS=ON
@@ -692,7 +707,7 @@ ctest --test-dir build/native --output-on-failure
 ./build/native/chxchx-studio .
 ```
 
-En Windows y macOS se ejecuta el binario generado desde `build/native` con el proyecto como argumento. El editor Scintilla tiene UTF-8, guardado atómico, números de línea, búsqueda en archivo y lexers para C/C++, Python, JavaScript/TypeScript, JSON, YAML, TOML, Markdown, HTML/XML, CSS, SQL, Bash y CMake. La paleta permite abrir una terminal externa para Zellij y adjuntarse al workspace o al agente seleccionado con previsualización y confirmación; requiere Windows Terminal en Windows y un emulador compatible instalado en Linux. En macOS usa Terminal.app. Studio ya incluye transporte PTY/ConPTY (ConPTY requiere Windows 10+) y un smoke interactivo; siguen pendientes el emulador VT y el dock que lo presenta dentro de la ventana. Se conserva el terminal externo como alternativa. También siguen pendientes búsqueda global, archivos recientes, splits, diff Git, símbolos, LSP y empaquetado instalable. CI compila y ejecuta los smoke en Ubuntu, Windows, macOS y Fedora; falta que los runners remotos completen para certificar la matriz.
+En Windows y macOS se ejecuta el binario generado desde `build/native` con el proyecto como argumento. El editor Scintilla tiene UTF-8, guardado atómico, números de línea, búsqueda en archivo y lexers para C/C++, Python, JavaScript/TypeScript, JSON, YAML, TOML, Markdown, HTML/XML, CSS, SQL, Bash y CMake. La paleta conserva la opción de abrir Zellij en una terminal externa; requiere Windows Terminal en Windows, un emulador compatible instalado en Linux y usa Terminal.app en macOS. Las sesiones de agentes configuradas como argumentos se abren dentro de Studio mediante PTY/ConPTY y libvterm. También siguen pendientes búsqueda global, archivos recientes, splits, diff Git, símbolos, LSP y empaquetado instalable.
 
 ## MCP, Basic Memory y Serena
 

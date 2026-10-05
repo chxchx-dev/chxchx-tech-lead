@@ -1,7 +1,13 @@
 from __future__ import annotations
 
-from ..cli_context import Path, Table, console, skill_app, typer
+from pathlib import Path
+
+import typer
+from rich.table import Table
+
+from ..cli_registry import skill_app
 from ..skills import Skill, SkillRegistry, enabled_skills, set_skill_enabled, sync_project_skills
+from ..ui.cli_output import console
 
 
 def _show_skills(skills: list[Skill], title: str) -> None:

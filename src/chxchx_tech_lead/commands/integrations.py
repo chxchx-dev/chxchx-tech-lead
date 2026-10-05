@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-from ..cli_context import (
-    Path,
-    app,
-    backup_project,
-    console,
-    integrate_mcp,
-    latest_backup,
-    restore_backup,
-    typer,
-    _project,
-)
+from pathlib import Path
+
+import typer
+
+from ..core.backup import backup_project, latest_backup, restore_backup
+from ..integrations.mcp import integrate as integrate_mcp
+from ..ui.cli_output import console
+from ..cli_registry import app
+from ..workspace.project_context import project_for_path as _project
 
 @app.command()
 def integrate(

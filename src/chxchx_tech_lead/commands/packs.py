@@ -1,7 +1,13 @@
 from __future__ import annotations
 
-from ..cli_context import Path, Table, console, pack_app, typer
+from pathlib import Path
+
+import typer
+from rich.table import Table
+
+from ..cli_registry import pack_app
 from ..skills import TechPack, TechPackRegistry, enable_skills, enabled_skills
+from ..ui.cli_output import console
 
 
 def _show_packs(packs: list[TechPack]) -> None:

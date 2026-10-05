@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from ..cli_context import (
-    Path,
-    Table,
-    WorkspaceOperationError,
-    WorkspaceService,
-    console,
-    load_registry,
-    load_state,
-    projects_app,
-    sync_project,
-    typer,
-    _print_recipe,
-    _project,
-    _resolve_project_path,
+from pathlib import Path
+
+import typer
+from rich.table import Table
+
+from ..core.registry import load_registry
+from ..core.sync import sync_project
+from ..ui.cli_output import console, print_recipe as _print_recipe
+from ..cli_registry import projects_app
+from ..workspace.project_context import (
+    project_for_path as _project,
+    resolve_project_path as _resolve_project_path,
 )
+from ..workspace.service import WorkspaceOperationError, WorkspaceService
+from ..workspace.state import load_state
 from .resource_guard import guard_cli_agent_start
 
 @projects_app.command("list")

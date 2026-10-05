@@ -12,12 +12,10 @@ from .resources import ResourceManager, summarize_process_resources
 from .manager import WorkspaceManager
 from .service import WorkspaceService
 from .state import load_state
+from .bridge_contracts import PROJECT_STATUS_SCHEMA, SCHEMA_VERSION, ProjectStatusPayload
 
 
-SCHEMA_VERSION = 1
-
-
-def project_status_payload(project_path: Path) -> dict[str, Any]:
+def project_status_payload(project_path: Path) -> ProjectStatusPayload:
     """Build the versioned, read-only status contract used by native clients."""
     project = detect_project(project_path)
     service = WorkspaceService(project)
@@ -81,6 +79,7 @@ def project_status_payload(project_path: Path) -> dict[str, Any]:
         for pack in TechPackRegistry().list()
     ]
     last_project = registry.get("last_project")
+    agent_config_by_id = {item.id: item for item in config.agents} if config is not None else {}
     registered_projects = []
     for entry in registry.get("projects", []):
         raw_path = entry.get("path")
@@ -101,7 +100,7 @@ def project_status_payload(project_path: Path) -> dict[str, Any]:
         })
 
     return {
-        "schema": "chxchx.project-status",
+        "schema": PROJECT_STATUS_SCHEMA,
         "schema_version": SCHEMA_VERSION,
         "project": {
             "name": project.name,
@@ -128,6 +127,12 @@ def project_status_payload(project_path: Path) -> dict[str, Any]:
         "agents": [
             {
                 "id": agent.id,
+                "command": agent.command,
+                "arguments": agent_config_by_id[agent.id].command[1:]
+                    if agent.id in agent_config_by_id and isinstance(agent_config_by_id[agent.id].command, list)
+                    else [],
+                "shell": agent_config_by_id[agent.id].shell if agent.id in agent_config_by_id else False,
+                "cwd": agent.cwd,
                 "available": agent.available,
                 "session": agent.session,
                 "pane": agent.pane,

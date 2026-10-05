@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from ..cli_context import (
-    Path,
-    ProcessManager,
-    ResourceManager,
-    ResourceSeverity,
-    Table,
-    app,
-    console,
-    format_bytes,
-    sync_project,
-    typer,
-    _workspace_inspection,
-)
+from pathlib import Path
+
+import typer
+from rich.table import Table
+
+from ..core.sync import sync_project
+from ..cli_registry import app
+from ..ui.cli_output import console
+from ..workspace.process_manager import ProcessManager
+from ..workspace.resources import ResourceManager, ResourceSeverity, format_bytes
+from .workspace_context import inspect_workspace as _workspace_inspection
 
 @app.command("resources")
 def resources(
