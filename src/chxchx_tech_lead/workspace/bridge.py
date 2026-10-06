@@ -13,6 +13,7 @@ from .manager import WorkspaceManager
 from .service import WorkspaceService
 from .state import load_state
 from .bridge_contracts import PROJECT_STATUS_SCHEMA, SCHEMA_VERSION, ProjectStatusPayload
+from .agent_commands import agent_pane_command
 
 
 def project_status_payload(project_path: Path) -> ProjectStatusPayload:
@@ -80,6 +81,22 @@ def project_status_payload(project_path: Path) -> ProjectStatusPayload:
     ]
     last_project = registry.get("last_project")
     agent_config_by_id = {item.id: item for item in config.agents} if config is not None else {}
+
+    def studio_command(agent_id: str, *, new_chat: bool) -> list[str]:
+        configured = agent_config_by_id.get(agent_id)
+        if configured is None or not isinstance(configured.command, list):
+            return []
+        try:
+            return agent_pane_command(
+                agent_id,
+                configured.command,
+                label=config.header.label,
+                logo=config.header.logo,
+                new_chat=new_chat,
+            )
+        except ValueError:
+            return []
+
     registered_projects = []
     for entry in registry.get("projects", []):
         raw_path = entry.get("path")
@@ -131,6 +148,8 @@ def project_status_payload(project_path: Path) -> ProjectStatusPayload:
                 "arguments": agent_config_by_id[agent.id].command[1:]
                     if agent.id in agent_config_by_id and isinstance(agent_config_by_id[agent.id].command, list)
                     else [],
+                "studio_command": studio_command(agent.id, new_chat=False),
+                "studio_new_chat_command": studio_command(agent.id, new_chat=True),
                 "shell": agent_config_by_id[agent.id].shell if agent.id in agent_config_by_id else False,
                 "cwd": agent.cwd,
                 "available": agent.available,

@@ -613,6 +613,50 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
         const auto arguments = m_confirmedActionArguments;
         m_confirmedActionArguments.clear();
         m_confirmedActionTitle.clear();
+        if (!arguments.isEmpty()
+            && (arguments.first() == QStringLiteral("__launch_embedded_agent__")
+                || arguments.first() == QStringLiteral("__launch_embedded_agents__"))) {
+            m_forceActionArguments.clear();
+            if (output.contains(QStringLiteral("RAM Governor"))) {
+                const auto governorResult = QMessageBox::warning(
+                    this, QStringLiteral("RAM Governor"),
+                    QStringLiteral("El preflight detectó que el inicio supera el presupuesto configurado:\n\n%1\n\n¿Confirmas iniciar la sesión de todas formas?")
+                        .arg(output),
+                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                if (governorResult != QMessageBox::Yes) {
+                    m_refreshAfterAction = false;
+                    statusBar()->showMessage(QStringLiteral("Inicio cancelado por el RAM Governor."), 5000);
+                    return;
+                }
+            }
+
+            if (arguments.first() == QStringLiteral("__launch_embedded_agent__") && arguments.size() >= 2) {
+                const auto agent = QJsonDocument::fromJson(arguments.at(1).toUtf8()).object();
+                QStringList agentArguments;
+                for (const auto &value : agent.value(QStringLiteral("arguments")).toArray())
+                    agentArguments << value.toString();
+                createEmbeddedAgentSession(agent.value(QStringLiteral("id")).toString(),
+                    agent.value(QStringLiteral("program")).toString(), agentArguments,
+                    agent.value(QStringLiteral("cwd")).toString(),
+                    agent.value(QStringLiteral("new_chat")).toBool());
+            } else if (arguments.first() == QStringLiteral("__launch_embedded_agents__")
+                && arguments.size() >= 2) {
+                const auto agents = QJsonDocument::fromJson(arguments.at(1).toUtf8()).array();
+                for (const auto &value : agents) {
+                    const auto agent = value.toObject();
+                    QStringList agentArguments;
+                    const QJsonArray command = agent.value(QStringLiteral("command")).toArray();
+                    for (qsizetype index = 1; index < command.size(); ++index)
+                        agentArguments << command.at(index).toString();
+                    if (command.isEmpty()) continue;
+                    createEmbeddedAgentSession(agent.value(QStringLiteral("id")).toString(),
+                        command.first().toString(), agentArguments,
+                        agent.value(QStringLiteral("cwd")).toString(), false);
+                }
+            }
+            schedulePendingRefresh();
+            return;
+        }
         if (!arguments.isEmpty() && arguments.first() == QStringLiteral("__launch_terminal__")) {
             m_forceActionArguments.clear();
             m_refreshAfterAction = true;

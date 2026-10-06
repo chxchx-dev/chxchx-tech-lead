@@ -82,6 +82,48 @@ def agent_attach(
         raise typer.Exit(code=1)
     console.print(f"[green]✓[/] {'DRY RUN: ' if dry_run else ''}{' '.join(result.command)}")
 
+
+@agent_app.command("preflight")
+def agent_preflight(
+    agent_ids: list[str] = typer.Option(..., "--agent", help="ID de cada agente que Studio abrirá."),
+    path: Path = typer.Option(Path.cwd(), "--path", exists=True, file_okay=False, resolve_path=True),
+    additional_active: int = typer.Option(0, "--additional-active", min=0,
+        help="Sesiones de agente que Studio ya mantiene abiertas."),
+):
+    """Verifica trust y RAM para una o varias sesiones embebidas; no ejecuta agentes."""
+    try:
+        service = _workspace_service(path)
+        inspection = service.inspect()
+        if not inspection.trusted:
+            raise WorkspaceOperationError(
+                "El proyecto no tiene trust. Márcalo como confiable antes de iniciar agentes."
+            )
+        if inspection.config is None:
+            raise WorkspaceOperationError("No hay configuración válida de workspace")
+        configured = {agent.id: agent for agent in inspection.config.agents}
+        unknown = sorted(set(agent_ids) - configured.keys())
+        if unknown:
+            raise WorkspaceOperationError(f"Agentes no configurados: {', '.join(unknown)}")
+        shell_agents = [agent_id for agent_id in agent_ids if configured[agent_id].shell]
+        if shell_agents:
+            raise WorkspaceOperationError(
+                f"Studio no integra comandos shell personalizados: {', '.join(shell_agents)}"
+            )
+        guard_cli_agent_start(
+            service,
+            tuple(agent_ids),
+            new_chat=True,
+            dry_run=True,
+            additional_active=additional_active,
+        )
+    except WorkspaceOperationError as exc:
+        console.print(f"[red]✗ {exc}[/]")
+        raise typer.Exit(code=1)
+    if not agent_ids:
+        console.print("[red]✗ Indica al menos un --agent.[/]")
+        raise typer.Exit(code=2)
+    console.print(f"[green]✓[/] Preflight Studio listo: {', '.join(agent_ids)}. No se inició ningún proceso.")
+
 @agent_app.command("list")
 def agent_list(
     path: str = typer.Option(".", "--path"),

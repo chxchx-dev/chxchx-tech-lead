@@ -81,6 +81,13 @@ private:
         const QStringList &actionArguments,
         const QStringList &forceArguments,
         const QString &title);
+    void createEmbeddedAgentSession(
+        const QString &agentId,
+        const QString &program,
+        const QStringList &arguments,
+        const QString &workingDirectory,
+        bool newChat);
+    int currentProjectEmbeddedAgentCount() const;
     void schedulePendingRefresh();
     void appendOutput(const QString &text);
 
@@ -125,6 +132,7 @@ private:
     BridgeClient *m_bridgeClient = nullptr;
     QStringList m_confirmedActionArguments;
     QHash<QString, AgentSessionWidget *> m_agentSessions;
+    QHash<QString, QString> m_agentSessionProjects;
     QStringList m_forceActionArguments;
     QString m_confirmedActionTitle;
     QString m_pendingProjectPath;

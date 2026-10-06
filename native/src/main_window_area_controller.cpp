@@ -219,6 +219,10 @@ void MainWindow::updateAreaTargets(const QJsonObject &payload, const QString &ar
             m_targetSelector->setItemData(index, QString::fromUtf8(QJsonDocument(item.value(QStringLiteral("arguments")).toArray())
                 .toJson(QJsonDocument::Compact)), Qt::UserRole + 3);
             m_targetSelector->setItemData(index, item.value(QStringLiteral("shell")).toBool(), Qt::UserRole + 4);
+            m_targetSelector->setItemData(index, QString::fromUtf8(QJsonDocument(item.value(QStringLiteral("studio_command")).toArray())
+                .toJson(QJsonDocument::Compact)), Qt::UserRole + 5);
+            m_targetSelector->setItemData(index, QString::fromUtf8(QJsonDocument(item.value(QStringLiteral("studio_new_chat_command")).toArray())
+                .toJson(QJsonDocument::Compact)), Qt::UserRole + 6);
         }
     }
     const int previous = m_targetSelector->findText(selected);

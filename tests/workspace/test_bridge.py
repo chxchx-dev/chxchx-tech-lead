@@ -8,6 +8,7 @@ from chxchx_tech_lead.workspace.error_cache import record_error
 from chxchx_tech_lead.workspace.bridge import (
     project_status_payload,
 )
+from chxchx_tech_lead.workspace.agent_commands import NEW_CHAT_PROMPT
 from chxchx_tech_lead.workspace.bridge_resources import resources_overview_payload
 from chxchx_tech_lead.workspace.bridge_history import (
     conversation_payload,
@@ -39,6 +40,24 @@ def test_project_status_includes_skill_and_pack_catalog(tmp_path: Path) -> None:
     selected = next(skill for skill in selected_payload["skills"] if skill["name"] == selected_name)
     assert selected_payload["enabled_skill_count"] == 1
     assert selected["enabled"] is True
+
+
+def test_project_status_includes_shared_studio_agent_launchers(tmp_path: Path) -> None:
+    project_config = tmp_path / ".ai" / "chxchx-tech.toml"
+    project_config.parent.mkdir()
+    project_config.write_text(
+        'version = 2\nprofile = "python"\n'
+        '[workspace]\nname = "bridge fixture"\nauto_start = false\nauto_attach = false\n'
+        '[[workspace.agents]]\nid = "codex"\ncommand = ["codex", "--model", "gpt"]\n',
+        encoding="utf-8",
+    )
+
+    agent = project_status_payload(tmp_path)["agents"][0]
+
+    assert agent["studio_command"][1:4] == ["-m", "chxchx_tech_lead.workspace.agent_pane", "--name"]
+    assert "codex" in agent["studio_command"]
+    assert agent["studio_command"][-3:] == ["codex", "--model", "gpt"]
+    assert agent["studio_new_chat_command"][-1] == NEW_CHAT_PROMPT
 
 
 def test_readonly_handoff_and_memory_payloads(tmp_path: Path) -> None:

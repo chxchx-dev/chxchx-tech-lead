@@ -16,6 +16,7 @@ public:
     ~AgentSessionWidget() override;
 
     QString agentId() const;
+    bool isRunning() const;
     void focusTerminal();
 
 private:

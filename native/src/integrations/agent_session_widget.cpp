@@ -57,6 +57,7 @@ AgentSessionWidget::~AgentSessionWidget()
 }
 
 QString AgentSessionWidget::agentId() const { return m_agentId; }
+bool AgentSessionWidget::isRunning() const { return m_pty && m_pty->isRunning(); }
 
 void AgentSessionWidget::focusTerminal()
 {

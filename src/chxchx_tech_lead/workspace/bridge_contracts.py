@@ -26,6 +26,8 @@ class AgentStatusPayload(TypedDict):
     id: str
     command: str
     arguments: list[str]
+    studio_command: list[str]
+    studio_new_chat_command: list[str]
     shell: bool
     cwd: str
     available: bool

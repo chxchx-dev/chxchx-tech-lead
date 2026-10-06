@@ -12,6 +12,7 @@ def agent_start_warnings(
     *,
     preset_id: str | None = None,
     new_chat: bool = False,
+    additional_active: int = 0,
 ) -> tuple[str, ...]:
     """Return current memory and agent-budget warnings for a CLI launch."""
     inspection = service.inspect()
@@ -32,7 +33,7 @@ def agent_start_warnings(
     }
     planned = len(selected) if new_chat else len(selected - active)
     manager = ResourceManager(config.resources)
-    return manager.agent_start_warnings(len(active), planned)
+    return manager.agent_start_warnings(len(active) + max(0, additional_active), planned)
 
 
 def guard_cli_agent_start(
@@ -43,9 +44,11 @@ def guard_cli_agent_start(
     new_chat: bool = False,
     dry_run: bool = False,
     force: bool = False,
+    additional_active: int = 0,
 ) -> None:
     warnings = agent_start_warnings(
-        service, target_ids, preset_id=preset_id, new_chat=new_chat
+        service, target_ids, preset_id=preset_id, new_chat=new_chat,
+        additional_active=additional_active,
     )
     if not warnings:
         return
