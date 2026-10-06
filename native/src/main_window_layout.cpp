@@ -3,6 +3,8 @@
 #include "integrations/bridge_client.hpp"
 #include "integrations/agent_session_widget.hpp"
 
+#include <ScintillaEditBase.h>
+
 #include <QComboBox>
 #include <QAction>
 #include <QDir>
@@ -38,6 +40,10 @@ void MainWindow::buildLayout()
     m_projectTree->setModel(m_fileModel);
     m_projectTree->setRootIndex(m_fileModel->index(m_projectPath));
     m_projectTree->setHeaderHidden(true);
+    m_projectTree->setAnimated(true);
+    m_projectTree->setIndentation(16);
+    m_projectTree->setUniformRowHeights(true);
+    m_projectTree->setExpandsOnDoubleClick(true);
     for (int column = 1; column < m_fileModel->columnCount(); ++column) {
         m_projectTree->hideColumn(column);
     }
@@ -51,12 +57,23 @@ void MainWindow::buildLayout()
     addDockWidget(Qt::LeftDockWidgetArea, projectDock);
 
     m_editorTabs = new QTabWidget(this);
+    m_editorTabs->setDocumentMode(true);
+    m_editorTabs->setElideMode(Qt::ElideMiddle);
+    m_editorTabs->setUsesScrollButtons(true);
     m_editorTabs->setTabsClosable(true);
     m_editorTabs->setMovable(true);
     connect(m_editorTabs, &QTabWidget::tabCloseRequested, this, &MainWindow::closeEditorTab);
     connect(m_editorTabs, &QTabWidget::currentChanged, this, [this](int index) {
         auto *session = qobject_cast<AgentSessionWidget *>(m_editorTabs->widget(index));
-        if (session != nullptr) session->focusTerminal();
+        if (session != nullptr) {
+            session->focusTerminal();
+            return;
+        }
+        auto *editor = qobject_cast<ScintillaEditBase *>(m_editorTabs->widget(index));
+        if (editor != nullptr) {
+            statusBar()->showMessage(QDir(m_projectPath).relativeFilePath(
+                editor->property("filePath").toString()));
+        }
     });
     m_mainPages = new QStackedWidget(this);
     m_mainPages->addWidget(m_editorTabs);
@@ -180,7 +197,8 @@ void MainWindow::buildLayout()
         QStringLiteral("• El árbol de la izquierda abre archivos en pestañas.\n"
                        "• El panel ChxChx muestra acciones de la vista seleccionada.\n"
                        "• Actividad conserva la salida reciente de consultas y operaciones; ábrela desde Ver o desde su botón en la barra.\n"
-                       "• La paleta puede abrir una terminal Zellij nueva o adjuntarse al workspace en un emulador externo.\n"
+                       "• Terminal + abre un shell del proyecto en una pestaña integrada. Usa la rueda o Shift+PageUp para revisar historial y Ctrl+End para volver al final.\n"
+                       "• Adjuntar a Zellij sigue usando una terminal externa.\n"
                        "• Las vistas de Memoria, Chats y Errores son de solo lectura.\n"
                        "• Agentes abre la interfaz interactiva configurada dentro de una pestaña junto a los archivos.\n"
                        "• Configuración integra MCP en todos los clientes o solo Claude Code, Codex u OpenCode.\n"
@@ -236,7 +254,19 @@ void MainWindow::buildLayout()
 
     auto *control = new QWidget(this);
     auto *controlLayout = new QVBoxLayout(control);
+    controlLayout->setContentsMargins(12, 12, 12, 12);
+    controlLayout->setSpacing(9);
+    auto *studioHeading = new QLabel(QStringLiteral("CHXCHX  /  STUDIO"), control);
+    studioHeading->setStyleSheet(QStringLiteral("color: #63e6ee; font-weight: 700; letter-spacing: 2px;"));
+    auto *projectHeading = new QLabel(QDir(m_projectPath).dirName(), control);
+    projectHeading->setStyleSheet(QStringLiteral("color: #91a7c2; padding-bottom: 4px;"));
+    projectHeading->setToolTip(m_projectPath);
+    auto *areaSearch = new QLineEdit(control);
+    areaSearch->setPlaceholderText(QStringLiteral("Filtrar secciones…"));
+    areaSearch->setClearButtonEnabled(true);
     m_areaList = new QListWidget(control);
+    m_areaList->setSpacing(2);
+    m_areaList->setMaximumWidth(300);
     m_areaDescription = new QLabel(control);
     m_areaDescription->setWordWrap(true);
     for (const auto &area : areas) {
@@ -244,8 +274,26 @@ void MainWindow::buildLayout()
         item->setData(Qt::UserRole, QString::fromUtf8(area.id));
     }
     m_areaList->setCurrentRow(0);
+    controlLayout->addWidget(studioHeading);
+    controlLayout->addWidget(projectHeading);
+    controlLayout->addWidget(areaSearch);
     controlLayout->addWidget(m_areaList);
     controlLayout->addWidget(m_areaDescription);
+    connect(areaSearch, &QLineEdit::textChanged, this, [this](const QString &text) {
+        int firstVisible = -1;
+        for (int row = 0; row < m_areaList->count(); ++row) {
+            auto *item = m_areaList->item(row);
+            item->setHidden(!item->text().contains(text.trimmed(), Qt::CaseInsensitive));
+            if (!item->isHidden() && firstVisible < 0) firstVisible = row;
+        }
+        if (firstVisible >= 0 && (m_areaList->currentItem() == nullptr
+            || m_areaList->currentItem()->isHidden())) {
+            m_areaList->setCurrentRow(firstVisible);
+        }
+        if (text.trimmed().isEmpty() && firstVisible >= 0 && m_areaList->currentRow() < 0) {
+            m_areaList->setCurrentRow(firstVisible);
+        }
+    });
     m_targetSelector = new QComboBox(control);
     m_targetSelector->setPlaceholderText(QStringLiteral("Selecciona un elemento"));
     m_primaryAction = new QPushButton(control);

@@ -9,6 +9,7 @@
 class QJsonObject;
 class BridgeClient;
 class AgentSessionWidget;
+class WorkspaceTerminalWidget;
 class QDockWidget;
 class QDialog;
 class QComboBox;
@@ -87,6 +88,7 @@ private:
         const QStringList &arguments,
         const QString &workingDirectory,
         bool newChat);
+    void createEmbeddedWorkspaceTerminal();
     int currentProjectEmbeddedAgentCount() const;
     void schedulePendingRefresh();
     void appendOutput(const QString &text);

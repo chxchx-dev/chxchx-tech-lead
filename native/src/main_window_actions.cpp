@@ -184,10 +184,8 @@ void MainWindow::openNewWorkspaceTerminal()
 {
     const QStringList preview = {QStringLiteral("workspace"), QStringLiteral("terminal"),
         m_projectPath, QStringLiteral("--dry-run")};
-    const QStringList action = {QStringLiteral("__launch_terminal__"),
-        QStringLiteral("chxchx-tech"), QStringLiteral("workspace"),
-        QStringLiteral("terminal"), m_projectPath};
-    runPreview(preview, action, {}, QStringLiteral("Abrir una terminal nueva"));
+    const QStringList action = {QStringLiteral("__launch_embedded_workspace_terminal__")};
+    runPreview(preview, action, {}, QStringLiteral("Abrir terminal integrada"));
 }
 
 void MainWindow::attachWorkspaceTerminal()

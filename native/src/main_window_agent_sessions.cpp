@@ -1,5 +1,7 @@
 #include "main_window.hpp"
 #include "integrations/agent_session_widget.hpp"
+#include "integrations/bridge_client.hpp"
+#include "integrations/workspace_terminal_widget.hpp"
 
 #include <QComboBox>
 #include <QDir>
@@ -22,6 +24,17 @@ QString agentSessionKey(const QString &projectPath, const QString &agentId)
 }
 
 } // namespace
+
+void MainWindow::createEmbeddedWorkspaceTerminal()
+{
+    auto *terminal = new WorkspaceTerminalWidget(m_projectPath, m_editorTabs);
+    const int tab = m_editorTabs->addTab(terminal, QStringLiteral("Terminal · %1")
+        .arg(QFileInfo(m_projectPath).fileName()));
+    m_editorTabs->setTabToolTip(tab, QStringLiteral("Shell del proyecto\n%1").arg(m_projectPath));
+    m_editorTabs->setCurrentWidget(terminal);
+    m_mainPages->setCurrentWidget(m_editorTabs);
+    terminal->setFocus(Qt::OtherFocusReason);
+}
 
 void MainWindow::openSelectedAgent(bool newChat)
 {

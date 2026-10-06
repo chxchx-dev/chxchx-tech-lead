@@ -29,7 +29,12 @@ protected:
 private:
     static int damage(VTermRect rect, void *user);
     static int cursorMoved(VTermPos pos, VTermPos oldPos, int visible, void *user);
+    static int terminalProperty(VTermProp property, VTermValue *value, void *user);
+    static int scrollbackPush(int columns, const VTermScreenCell *cells, void *user);
+    static int scrollbackPop(int columns, VTermScreenCell *cells, void *user);
+    static int scrollbackClear(void *user);
     VTermModifier modifiers(Qt::KeyboardModifiers modifiers) const;
+    void scrollbackBy(int lines);
     void sendMouseButton(int button, bool pressed, const QPointF &position,
         Qt::KeyboardModifiers modifiers);
     void flushInput();

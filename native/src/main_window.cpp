@@ -88,6 +88,16 @@ QString editorText(const ScintillaEditBase *editor)
     return QString::fromUtf8(utf8.constData(), static_cast<qsizetype>(length));
 }
 
+QString editorTabTitle(const QString &projectPath, const QString &path, bool modified)
+{
+    const QString relative = QDir::fromNativeSeparators(QDir(projectPath).relativeFilePath(path));
+    const bool outsideProject = relative == QStringLiteral("..")
+        || relative.startsWith(QStringLiteral("../"));
+    const QString title = outsideProject
+        ? QFileInfo(path).fileName() : relative;
+    return modified ? QStringLiteral("● %1").arg(title) : title;
+}
+
 QString lexerNameForPath(const QString &path)
 {
     const QString suffix = QFileInfo(path).suffix().toLower();
@@ -119,7 +129,7 @@ void configureCodeEditor(ScintillaEditBase *editor, const QString &path)
 {
     editor->send(SCI_SETCODEPAGE, SC_CP_UTF8);
     editor->send(SCI_SETUNDOCOLLECTION, 1);
-    editor->send(SCI_SETMARGINWIDTHN, 0, 44);
+    editor->send(SCI_SETMARGINWIDTHN, 0, 54);
     editor->send(SCI_SETMARGINTYPEN, 0, SC_MARGIN_NUMBER);
     editor->send(SCI_SETMARGINWIDTHN, 1, 14);
     editor->send(SCI_SETMARGINTYPEN, 1, SC_MARGIN_SYMBOL);
@@ -134,16 +144,16 @@ void configureCodeEditor(ScintillaEditBase *editor, const QString &path)
     const QByteArray family = QFontInfo(font).family().toUtf8();
     editor->send(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<Scintilla::sptr_t>(family.constData()));
     editor->send(SCI_STYLESETSIZE, STYLE_DEFAULT, font.pointSize());
-    editor->send(SCI_STYLESETFORE, STYLE_DEFAULT, 0xD8DEE9);
-    editor->send(SCI_STYLESETBACK, STYLE_DEFAULT, 0x20242B);
+    editor->send(SCI_STYLESETFORE, STYLE_DEFAULT, 0xDCE8F7);
+    editor->send(SCI_STYLESETBACK, STYLE_DEFAULT, 0x0E1728);
     editor->send(SCI_STYLECLEARALL);
-    editor->send(SCI_STYLESETFORE, STYLE_LINENUMBER, 0x7F8998);
-    editor->send(SCI_STYLESETBACK, STYLE_LINENUMBER, 0x292E36);
-    editor->send(SCI_SETCARETFORE, 0xE6EDF3);
+    editor->send(SCI_STYLESETFORE, STYLE_LINENUMBER, 0x7189A6);
+    editor->send(SCI_STYLESETBACK, STYLE_LINENUMBER, 0x101C2E);
+    editor->send(SCI_SETCARETFORE, 0x63E6EE);
     editor->send(SCI_SETSELFORE, 1, 0xFFFFFF);
-    editor->send(SCI_SETSELBACK, 1, 0x355B83);
+    editor->send(SCI_SETSELBACK, 1, 0x17485B);
     editor->send(SCI_SETCARETLINEVISIBLE, 1);
-    editor->send(SCI_SETCARETLINEBACK, 0x292E36);
+    editor->send(SCI_SETCARETLINEBACK, 0x112338);
     editor->send(SCI_SETINDENTATIONGUIDES, SC_IV_LOOKBOTH);
     editor->send(SCI_SETTABWIDTH, 4);
 
@@ -188,6 +198,10 @@ void MainWindow::buildActions()
         findInCurrentFile();
     }));
     toolbar->addAction(makeAction(this, QStringLiteral("Actualizar"), QKeySequence(QStringLiteral("F5")), [this] { refreshArea(); }));
+    toolbar->addSeparator();
+    toolbar->addAction(makeAction(this, QStringLiteral("Terminal +"), QKeySequence(QStringLiteral("Ctrl+Shift+T")), [this] {
+        openNewWorkspaceTerminal();
+    }));
     toolbar->addAction(makeAction(this, QStringLiteral("Paleta de comandos"), QKeySequence(QStringLiteral("Ctrl+P")), [this] {
         openCommandPalette();
     }));
@@ -229,7 +243,7 @@ void MainWindow::openPath(const QString &path)
     editor->setProperty("filePath", path);
     configureCodeEditor(editor, path);
     setEditorText(editor, QString::fromUtf8(file.readAll()));
-    const int tab = m_editorTabs->addTab(editor, QFileInfo(path).fileName());
+    const int tab = m_editorTabs->addTab(editor, editorTabTitle(m_projectPath, path, false));
     m_editorTabs->setTabToolTip(tab, path);
     m_editorTabs->setCurrentIndex(tab);
     m_mainPages->setCurrentWidget(m_editorTabs);
@@ -237,8 +251,8 @@ void MainWindow::openPath(const QString &path)
         editor->setProperty("modified", dirty);
         const int tabIndex = m_editorTabs->indexOf(editor);
         if (tabIndex >= 0) {
-            const QString name = QFileInfo(editor->property("filePath").toString()).fileName();
-            m_editorTabs->setTabText(tabIndex, name + (dirty ? QStringLiteral(" •") : QString()));
+            const QString path = editor->property("filePath").toString();
+            m_editorTabs->setTabText(tabIndex, editorTabTitle(m_projectPath, path, dirty));
         }
     });
 }
@@ -259,7 +273,7 @@ void MainWindow::saveFile()
     }
     currentEditor()->send(SCI_SETSAVEPOINT);
     const int tab = m_editorTabs->currentIndex();
-    m_editorTabs->setTabText(tab, QFileInfo(currentFilePath()).fileName());
+    m_editorTabs->setTabText(tab, editorTabTitle(m_projectPath, currentFilePath(), false));
     statusBar()->showMessage(QStringLiteral("Guardado: %1").arg(currentFilePath()), 3000);
 }
 
@@ -389,7 +403,7 @@ void MainWindow::openCommandPalette()
         {QStringLiteral("Ejecutar acción secundaria de la vista"), QStringLiteral("secondary")},
         {QStringLiteral("Ejecutar tercera acción de la vista"), QStringLiteral("tertiary")},
         {QStringLiteral("Ejecutar cuarta acción de la vista"), QStringLiteral("quaternary")},
-        {QStringLiteral("Abrir una terminal nueva del workspace"), QStringLiteral("workspace-terminal")},
+        {QStringLiteral("Abrir terminal integrada del workspace"), QStringLiteral("workspace-terminal")},
         {QStringLiteral("Adjuntar a la terminal del workspace"), QStringLiteral("workspace-attach")},
         {QStringLiteral("Adjuntar a la terminal del agente seleccionado"), QStringLiteral("agent-attach")},
     };
@@ -549,7 +563,11 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
     if (json.isObject()) {
         const QJsonObject payload = json.object();
         const auto schema = payload.value(QStringLiteral("schema")).toString();
-        if (schema == BridgeSchemas::ResourcesOverview) {
+        const auto version = payload.value(QStringLiteral("schema_version"));
+        if (!version.isDouble() || version.toInt(-1) != BridgeSchemas::Version) {
+            output = QStringLiteral("Contrato bridge incompatible: versión ausente o no compatible (%1).")
+                .arg(version.isDouble() ? QString::number(version.toInt()) : QStringLiteral("inválida"));
+        } else if (schema == BridgeSchemas::ResourcesOverview) {
             output = formatResourcesOverview(payload);
         } else if (schema == BridgeSchemas::ProjectStatus) {
             const QJsonObject workspace = payload.value(QStringLiteral("workspace")).toObject();
@@ -580,6 +598,9 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
                 .arg(payload.value(QStringLiteral("errors")).toArray().size());
         } else if (schema == BridgeSchemas::Error) {
             output = payload.value(QStringLiteral("error")).toString();
+        } else {
+            output = QStringLiteral("Contrato bridge desconocido: %1.").arg(schema.isEmpty()
+                ? QStringLiteral("falta el schema") : schema);
         }
     }
     appendOutput(output.isEmpty() ? error : output + (error.isEmpty() ? QString() : QStringLiteral("\n") + error));
@@ -654,6 +675,14 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
                         agent.value(QStringLiteral("cwd")).toString(), false);
                 }
             }
+            schedulePendingRefresh();
+            return;
+        }
+        if (!arguments.isEmpty()
+            && arguments.first() == QStringLiteral("__launch_embedded_workspace_terminal__")) {
+            m_forceActionArguments.clear();
+            createEmbeddedWorkspaceTerminal();
+            statusBar()->showMessage(QStringLiteral("Terminal integrada lista."), 4000);
             schedulePendingRefresh();
             return;
         }

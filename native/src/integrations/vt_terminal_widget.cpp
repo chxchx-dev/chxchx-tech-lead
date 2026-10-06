@@ -14,6 +14,14 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <deque>
+#include <vector>
+
+namespace {
+
+constexpr size_t MaxScrollbackLines = 5000;
+
+} // namespace
 
 struct VtTerminalWidget::State {
     VTerm *terminal = nullptr;
@@ -22,6 +30,10 @@ struct VtTerminalWidget::State {
     bool cursorVisible = true;
     int columns = 80;
     int rows = 24;
+    int scrollbackOffset = 0;
+    int mouseMode = VTERM_PROP_MOUSE_NONE;
+    bool alternateScreen = false;
+    std::deque<std::vector<VTermScreenCell>> scrollback;
     qreal cellWidth = 8;
     qreal cellHeight = 18;
     qreal ascent = 14;
@@ -45,7 +57,9 @@ VtTerminalWidget::VtTerminalWidget(QWidget *parent)
     m_state->screen = vterm_obtain_screen(m_state->terminal);
     static const VTermScreenCallbacks callbacks{
         &VtTerminalWidget::damage, nullptr, &VtTerminalWidget::cursorMoved,
-        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+        &VtTerminalWidget::terminalProperty, nullptr, nullptr,
+        &VtTerminalWidget::scrollbackPush, &VtTerminalWidget::scrollbackPop,
+        &VtTerminalWidget::scrollbackClear};
     vterm_screen_set_callbacks(m_state->screen, &callbacks, this);
     vterm_screen_set_damage_merge(m_state->screen, VTERM_DAMAGE_ROW);
     vterm_screen_enable_altscreen(m_state->screen, 1);
@@ -89,6 +103,62 @@ int VtTerminalWidget::cursorMoved(VTermPos pos, VTermPos oldPos, int visible, vo
     return 1;
 }
 
+int VtTerminalWidget::terminalProperty(VTermProp property, VTermValue *value, void *user)
+{
+    auto *widget = static_cast<VtTerminalWidget *>(user);
+    if (property == VTERM_PROP_MOUSE) {
+        widget->m_state->mouseMode = value->number;
+    } else if (property == VTERM_PROP_ALTSCREEN) {
+        widget->m_state->alternateScreen = value->boolean != 0;
+        widget->m_state->scrollbackOffset = 0;
+        widget->update();
+    }
+    return 1;
+}
+
+int VtTerminalWidget::scrollbackPush(int columns, const VTermScreenCell *cells, void *user)
+{
+    auto *widget = static_cast<VtTerminalWidget *>(user);
+    auto &state = *widget->m_state;
+    if (state.alternateScreen) return 1;
+    state.scrollback.emplace_back(cells, cells + columns);
+    if (state.scrollback.size() > MaxScrollbackLines) state.scrollback.pop_front();
+    if (state.scrollbackOffset > 0) {
+        state.scrollbackOffset = std::min(state.scrollbackOffset + 1,
+            static_cast<int>(state.scrollback.size()));
+    }
+    widget->update();
+    return 1;
+}
+
+int VtTerminalWidget::scrollbackPop(int columns, VTermScreenCell *cells, void *user)
+{
+    auto *widget = static_cast<VtTerminalWidget *>(user);
+    auto &history = widget->m_state->scrollback;
+    if (history.empty()) return 0;
+    const auto line = std::move(history.back());
+    history.pop_back();
+    const int count = std::min(columns, static_cast<int>(line.size()));
+    std::copy_n(line.begin(), count, cells);
+    for (int column = count; column < columns; ++column) {
+        cells[column] = VTermScreenCell{};
+        cells[column].width = 1;
+    }
+    widget->m_state->scrollbackOffset = std::min(widget->m_state->scrollbackOffset,
+        static_cast<int>(history.size()));
+    widget->update();
+    return 1;
+}
+
+int VtTerminalWidget::scrollbackClear(void *user)
+{
+    auto *widget = static_cast<VtTerminalWidget *>(user);
+    widget->m_state->scrollback.clear();
+    widget->m_state->scrollbackOffset = 0;
+    widget->update();
+    return 1;
+}
+
 void VtTerminalWidget::feed(const QByteArray &bytes)
 {
     if (!bytes.isEmpty()) vterm_input_write(m_state->terminal, bytes.constData(), static_cast<size_t>(bytes.size()));
@@ -120,9 +190,24 @@ void VtTerminalWidget::paintEvent(QPaintEvent *event)
     const int firstColumn = std::clamp(static_cast<int>(dirty.left() / m_state->cellWidth), 0, m_state->columns - 1);
     const int lastColumn = std::clamp(static_cast<int>(dirty.right() / m_state->cellWidth), 0, m_state->columns - 1);
     for (int row = firstRow; row <= lastRow; ++row) {
+        const int lineIndex = static_cast<int>(m_state->scrollback.size()) + row
+            - m_state->scrollbackOffset;
+        const std::vector<VTermScreenCell> *historyLine = lineIndex >= 0
+            && lineIndex < static_cast<int>(m_state->scrollback.size())
+            ? &m_state->scrollback[static_cast<size_t>(lineIndex)] : nullptr;
+        const int liveRow = historyLine == nullptr
+            ? lineIndex - static_cast<int>(m_state->scrollback.size()) : -1;
         for (int column = firstColumn; column <= lastColumn; ++column) {
             VTermScreenCell cell{};
-            if (!vterm_screen_get_cell(m_state->screen, VTermPos{row, column}, &cell)) continue;
+            if (historyLine != nullptr) {
+                cell.width = 1;
+                if (column >= 0 && column < static_cast<int>(historyLine->size()))
+                    cell = (*historyLine)[static_cast<size_t>(column)];
+            } else if (liveRow >= 0 && liveRow < m_state->rows) {
+                if (!vterm_screen_get_cell(m_state->screen, VTermPos{liveRow, column}, &cell)) continue;
+            } else {
+                continue;
+            }
             VTermColor foreground = cell.fg;
             VTermColor background = cell.bg;
             vterm_screen_convert_color_to_rgb(m_state->screen, &foreground);
@@ -155,7 +240,18 @@ void VtTerminalWidget::paintEvent(QPaintEvent *event)
             }
         }
     }
-    if (m_state->cursorVisible && hasFocus()) {
+    if (m_state->scrollbackOffset > 0) {
+        const QString hint = QStringLiteral("HISTORIAL · %1 líneas · Ctrl+End vuelve al final")
+            .arg(m_state->scrollbackOffset);
+        const QRect badge(width() - 300, 8, 286, 26);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(14, 23, 40, 225));
+        painter.drawRoundedRect(badge, 6, 6);
+        painter.setPen(QColor(140, 242, 244));
+        painter.setFont(font());
+        painter.drawText(badge.adjusted(8, 0, -8, 0), Qt::AlignVCenter | Qt::AlignRight, hint);
+    }
+    if (m_state->scrollbackOffset == 0 && m_state->cursorVisible && hasFocus()) {
         painter.fillRect(QRectF(m_state->cursor.col * m_state->cellWidth,
             m_state->cursor.row * m_state->cellHeight, m_state->cellWidth, m_state->cellHeight),
             QColor(210, 220, 235, 110));
@@ -175,6 +271,26 @@ void VtTerminalWidget::resizeEvent(QResizeEvent *event)
 
 void VtTerminalWidget::keyPressEvent(QKeyEvent *event)
 {
+    const auto qtKey = event->key();
+    const auto qtModifiers = event->modifiers();
+    if (qtModifiers.testFlag(Qt::ShiftModifier)
+        && (qtKey == Qt::Key_PageUp || qtKey == Qt::Key_PageDown)) {
+        scrollbackBy(qtKey == Qt::Key_PageUp ? m_state->rows : -m_state->rows);
+        event->accept();
+        return;
+    }
+    if (qtModifiers.testFlag(Qt::ControlModifier)
+        && (qtKey == Qt::Key_Home || qtKey == Qt::Key_End)) {
+        m_state->scrollbackOffset = qtKey == Qt::Key_Home
+            ? static_cast<int>(m_state->scrollback.size()) : 0;
+        update();
+        event->accept();
+        return;
+    }
+    if (m_state->scrollbackOffset > 0) {
+        m_state->scrollbackOffset = 0;
+        update();
+    }
     const bool pasteShortcut = event->key() == Qt::Key_V
         && (event->modifiers().testFlag(Qt::MetaModifier)
             || (event->modifiers().testFlag(Qt::ControlModifier)
@@ -225,6 +341,14 @@ void VtTerminalWidget::keyPressEvent(QKeyEvent *event)
     } else { QWidget::keyPressEvent(event); return; }
     flushInput();
     event->accept();
+}
+
+void VtTerminalWidget::scrollbackBy(int lines)
+{
+    if (m_state->alternateScreen || m_state->scrollback.empty()) return;
+    m_state->scrollbackOffset = std::clamp(m_state->scrollbackOffset + lines, 0,
+        static_cast<int>(m_state->scrollback.size()));
+    update();
 }
 
 VTermModifier VtTerminalWidget::modifiers(Qt::KeyboardModifiers modifiers) const
@@ -282,6 +406,12 @@ void VtTerminalWidget::wheelEvent(QWheelEvent *event)
 {
     const int delta = event->angleDelta().y();
     if (delta == 0) { QWidget::wheelEvent(event); return; }
+    if (m_state->mouseMode == VTERM_PROP_MOUSE_NONE && !m_state->alternateScreen) {
+        const int count = std::max(1, std::abs(delta) / 120) * 3;
+        scrollbackBy(delta > 0 ? count : -count);
+        event->accept();
+        return;
+    }
     const int button = delta > 0 ? 4 : 5;
     const int count = std::max(1, std::abs(delta) / 120);
     for (int index = 0; index < count; ++index) {

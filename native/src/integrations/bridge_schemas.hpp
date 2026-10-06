@@ -4,6 +4,7 @@
 
 namespace BridgeSchemas {
 
+inline constexpr int Version = 1;
 inline constexpr QLatin1StringView Error{"chxchx.error"};
 inline constexpr QLatin1StringView ProjectStatus{"chxchx.project-status"};
 inline constexpr QLatin1StringView ResourcesOverview{"chxchx.resources-overview"};

@@ -1,11 +1,50 @@
 # Handoff
 
+## Studio — editor, tabs y árbol de proyecto
+
+- El árbol ahora tiene jerarquía de hover/selección, indentación y filas más claras. Tabs document-mode se eliden por el centro, muestran rutas relativas y usan punto cian al estar modificadas; al cambiar a un archivo, la barra de estado muestra su ruta relativa. Gutter, caret line, selección y cursor Scintilla usan el tema azul/cian.
+- Validación: `cmake --build build/native --parallel 2` compiló y enlazó al 100%; `git diff --check` limpio. Pendiente abrir Studio y revisar legibilidad/espaciado en un proyecto con varios archivos y tabs.
+
+## Terminal Studio — scrollback
+
+- `VtTerminalWidget` guarda hasta 5000 líneas completas de celdas VT/ANSI mediante callbacks de libvterm (`sb_pushline/popline/clear`). La vista histórica mezcla líneas guardadas y pantalla actual; las celdas conservan atributos y color.
+- Navegación: rueda en modo terminal normal, `Shift+PageUp/PageDown` por página, `Ctrl+Home` al historial más antiguo y `Ctrl+End` al live bottom. Un badge indica cuántas líneas atrás está la vista; cualquier entrada de teclado vuelve al live bottom. Si la app activa mouse reporting/alternate screen, la rueda se entrega a la app como antes.
+- Build macOS confirmado: `cmake --build build/native --parallel 2` pasó al 100%. Pendiente probar visualmente reflow al resize y scrollback de salida larga. Attach integrado a Zellij sigue fuera de este bloque.
+
+## Terminal de workspace visible en Studio
+
+- Añadido botón de toolbar `Terminal +` (atajo `Ctrl+Shift+T`) y entrada en la paleta. Ejecuta el preview de `workspace terminal`, y luego abre una pestaña shell integrada en el proyecto con PTY/ConPTY y libvterm.
+- El widget muestra ruta/sesión y permite cerrar la sesión; cerrar la pestaña destruye el widget y detiene el PTY. Attach a Zellij continúa en el emulador externo.
+- El build del scrollback también completó al 100% en macOS. Pendiente probar interacción visual.
+
+## Build macOS — definición incompleta y warning
+
+- Se añadió el include `integrations/bridge_client.hpp` a `main_window_agent_sessions.cpp`; ese archivo invoca `BridgeClient::isRunning()` y la forward declaration sola no basta.
+- Se eliminó la captura lambda `areaSearch` que no se usaba.
+- Confirmación en macOS: `cmake --build build/native --parallel 2` compiló ambos archivos y enlazó `chxchx-studio` al 100%.
+
+## Studio — primera pasada visual
+
+- Tema nativo actualizado a azul noche con acentos cian; estados de foco, hover, selección, pestañas y paneles tienen jerarquía más visible.
+- La navegación lateral identifica el proyecto activo y permite filtrar secciones por nombre. La siguiente revisión debe abrir Studio y ajustar contraste/espaciado según el render real; no se ejecutó build en este bloque.
+
+## Terminales integradas — alcance contractual
+
+- `docs/17-BRIDGE-CONTRACTS.md` aclara que el stream interactivo es nativo y no parte del JSON bridge. Enumera terminal nueva de workspace, attach a Zellij, sesiones de agente y fallback externo, con estado de implementación.
+- Studio integra sesiones de agentes y terminal nueva del workspace mediante PTY/ConPTY y libvterm. Attach a Zellij sigue abriendo el emulador externo. El scrollback está implementado; después cubrirlo con pruebas VT.
+
+## Bridge JSON — compatibilidad del consumidor Qt
+
+- Studio comprueba `schema_version` antes de enrutar la respuesta JSON. La versión soportada está centralizada como `BridgeSchemas::Version = 1`; falta de versión, tipo inválido o versión distinta produce un error visible. Los schemas desconocidos también se informan en lugar de mostrar JSON crudo como resultado válido.
+- El consumidor sigue leyendo solo los campos que usa, por lo que los campos adicionales permanecen compatibles.
+- Validación posterior: `cmake --build build/native --parallel 2` compila Studio al 100% en macOS; `git diff --check` limpio. No se ejecutó la suite de pruebas en esta ronda.
+
 ## ChxChx Studio — primer corte nativo
 
 - Estado vigente: Studio integra sesiones de agentes en pestañas mediante PTY/ConPTY y libvterm. Los cambios locales sustituyen el bypass de trust/RAM por `agent preflight`, agregan revisión de presupuesto para sesiones Studio activas y usan `agent_pane_command` tanto para sesiones normales como para chat nuevo; este último conserva el prompt contextual y la instrumentación compartida. Mantener el emulador externo como fallback.
 - Validación del cambio: `python -m compileall -q src tests scripts`; suite completa `195 passed, 1 skipped`; `git diff --check` limpio. Qt6 Core5Compat está instalado. El build nativo queda pendiente: CMake intentó descargar Scintilla desde GitHub y la resolución DNS falló. Tests verifican trust denegado, suma de sesiones Studio activas y comandos compartidos de lanzamiento/contexto.
 - Qt6 Core5Compat de desarrollo ya quedó instalado en Fedora (`qt6-qt5compat-devel-6.11.2`). La configuración CMake detecta Qt, pero no completa FetchContent porque falla la resolución DNS de `github.com` al descargar Scintilla.
-- PTY/ConPTY + libvterm están integrados. Trust y RAM pasan por un preflight CLI read-only; las advertencias requieren confirmación explícita y cancelar no crea procesos. Studio ahora obtiene del bridge los comandos `agent_pane_command` compartidos, incluido el prompt de chat nuevo. El ADR-0001 local y `.ai/EDITOR-PARITY.md` ya reflejan la dirección vigente. Siguiente: implementar scrollback acotado/navegable y pruebas VT; compilar al recuperar conectividad con GitHub.
+- PTY/ConPTY + libvterm están integrados. Trust y RAM pasan por un preflight CLI read-only; las advertencias requieren confirmación explícita y cancelar no crea procesos. Studio obtiene del bridge comandos `agent_pane_command` compartidos, incluido el prompt de chat nuevo. El ADR-0001 local y `.ai/EDITOR-PARITY.md` reflejan la dirección vigente. Siguiente: validar el scrollback nuevo y completar attach integrado a Zellij.
 - Después de terminal: búsqueda global, recientes, splits, Git diff, símbolos/LSP, empaquetado, QA visual y métricas por SO. No declarar paridad total hasta cubrir `.ai/EDITOR-PARITY.md` y ejecutar CI remoto.
 - Bloque nuevo: Configuración, Guía y Marca tienen vistas propias. Configuración conecta `setup`, `init`, `init --minimal`, `install`, `integrate --client all` y `doctor`; las escrituras previsualizan con `--dry-run` y esperan confirmación. `Ctrl+P` permite buscar áreas, abrir/guardar/buscar archivos, refrescar y disparar acciones del panel actual. `Ctrl+F` busca en el documento activo.
 - CI agrega builds de Qt 6.8.3 en Ubuntu, Windows y macOS y un build usando paquetes de Fedora. El build Fedora local de Qt 6.11.2 pasa; los runners remotos todavía deben completar para validar las matrices.
@@ -19,7 +58,7 @@
 - Handoff tiene bridge de solo lectura y formulario nativo para editar resumen, pendiente y validación; el guardado conserva el caso de uso existente `workspace handoff` y muestra preview/confirmación. Memoria busca títulos/contenido de `.ai/memory`, permite abrir el detalle y se mantiene de solo lectura; las rutas fuera del proyecto se rechazan.
 - Chats y Errores son vistas nativas de solo lectura. `bridge chats` busca sesiones Codex/Claude; al elegir una, `bridge conversation` trae sus mensajes. `bridge errors` limita el listado de caché a este proyecto.
 - Validación añadida: suite completa `191 passed, 1 skipped`, `python -m compileall -q src tests`, `git diff --check HEAD`, smoke JSON de chats/errores y build CMake exitoso con Qt 6.11.2. El binario también permaneció abierto durante 3 s bajo `QT_QPA_PLATFORM=offscreen` (timeout 124 esperado).
-- Pendiente: terminal interactiva integrada, búsqueda global, archivos recientes, splits, Git diff, símbolos, LSP, empaquetado instalable y QA visual/performance en cada SO; los builds multiplataforma local no se pueden certificar desde Fedora.
+- Pendiente: attach integrado a Zellij, búsqueda global, archivos recientes, splits, Git diff, símbolos, LSP, empaquetado instalable y QA visual/performance en cada SO; falta validar el scrollback en uso real.
 - README actualizado con requisitos y comandos para compilar. `git diff --check HEAD` pasa.
 - Build Linux confirmado. El primer intento encontró `QFileSystemModel::isFile`, API inexistente; se corrigió usando `!isDir(index)` y el build pasó.
 - Basic Memory no se actualizó porque la herramienta disponible en esta sesión estaba asociada a otro proyecto; este checkpoint queda local.

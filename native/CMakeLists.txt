@@ -107,6 +107,8 @@ qt_add_executable(chxchx-studio
     src/integrations/vt_terminal_widget.hpp
     src/integrations/pty_session.cpp
     src/integrations/pty_session.hpp
+    src/integrations/workspace_terminal_widget.cpp
+    src/integrations/workspace_terminal_widget.hpp
 )
 
 target_link_libraries(chxchx-studio PRIVATE Qt6::Core Qt6::Widgets Qt6::Core5Compat
