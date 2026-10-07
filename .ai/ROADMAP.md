@@ -44,8 +44,10 @@ verde; la configuración del workflow no equivale a que haya pasado.
 - Diff Git de archivo implementado como lectura acotada desde `HEAD`; no incluye
   archivos sin seguimiento ni cambios aún no guardados. Navegación básica de declaraciones
   disponible en Python, C/C++, JS/TS, Java y C#. Evaluar LSP después de medir su costo.
-- Medir startup, RAM idle, latencia de navegación y apertura de repositorios
-  grandes; definir límites aceptables antes de publicar.
+- Baseline preliminar sobre 341 archivos: indexación 4–5 ms, búsqueda de rutas
+  p50 0.40 ms/p95 0.45 ms y búsqueda de contenido “TODO” mediana 15 ms (48 ms
+  primer proceso frío). Falta medir primer frame, RAM/latencia en repos grandes
+  y fijar límites antes de publicar; la muestra no representa repos grandes.
 - CPack y CI ya generan ZIP para Windows, DMG para macOS y TGZ para Linux desde
   los runners con Qt SDK; cada paquete se publica como artefacto del workflow.
   Falta confirmar una ejecución verde por sistema y probar los artefactos en

@@ -156,6 +156,7 @@
 - Validación actual: build Qt Linux, CTest 6/6, arranque offscreen por 3 segundos, `python -m compileall src`, pytest 195 passed/1 skipped y `git diff --check`.
 - El arranque dentro del sandbox aborta al usar XCB/Wayland, mientras que `minimal`/`offscreen` funcionan. Con acceso elevado a la sesión de escritorio, Studio abre y permanece activo para revisión manual. El entorno restringe ptrace, así que no hay backtrace del intento dentro del sandbox.
 - Muestra preliminar en el checkout actual: ventana gráfica en reposo tras 3:46, RSS 119400 KiB (~116.6 MiB), CPU promedio 0.4%; un arranque offscreen de 10 s alcanzó 63660 KiB (~62.2 MiB) de RSS máximo. Falta medir startup y latencia de navegación con metodología repetible y definir límites.
+- Baseline repetible de `ProjectFileIndex` sobre este checkout (341 archivos): cinco ejecuciones dieron 4–5 ms para indexar, búsqueda de rutas p50 0.40 ms/p95 0.45 ms (201 consultas por ejecución) y búsqueda de contenido “TODO” 15 ms mediana; la primera lectura fría tardó 48 ms. El indicador de contenido quedó truncado por archivos sobre 1 MiB. Es una muestra de un repo pequeño, no una medición de inicio del Studio ni un límite de aceptación; falta repetir en repositorios grandes y medir primer frame.
 - Build Linux correcto y CTest 3/3 pasa (editor, PTY y VT). `git diff --check` limpio.
 - CTest adicional comprueba resize con historial visible; un proceso PTY escribe 80 líneas, recibe entrada de teclado y termina correctamente. Sigue pendiente QA visual del reflow del historial en una sesión real.
 
