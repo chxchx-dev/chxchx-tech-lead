@@ -303,4 +303,4 @@
 - `SymbolIndex` está separado del diálogo y tiene smoke Qt Core para Python, TypeScript, C++ y extensiones no compatibles. No resuelve tipos, referencias ni declaraciones complejas; LSP queda como evolución posterior.
 
 - Validación actual tras integrar navegación de símbolos: build Qt Linux, CTest 6/6, `python -m compileall src`, pytest 195 passed/1 skipped y `git diff --check`. No se ha hecho QA visual del diff/símbolos ni smoke de persistencia al cerrar/reabrir.
-- Intento de abrir la ventana con el backend gráfico del entorno actual termina en SIGABRT/código 134 sin salida diagnóstica; el inicio con `QT_QPA_PLATFORM=offscreen` sí permanece activo durante el smoke. El sandbox no permite ptrace, por lo que no se obtuvo backtrace. Repetir la revisión desde una sesión gráfica normal y confirmar si el fallo pertenece al entorno o a Studio.
+- El sandbox aborta al abrir con XCB/Wayland, pero `minimal`/`offscreen` permanecen activos. Con acceso elevado a la sesión gráfica, Studio abrió y sigue activo para QA manual. La restricción ptrace impidió capturar backtrace del intento dentro del sandbox.
