@@ -5,7 +5,8 @@
 La rama `dev` ya contiene el control plane Python (CLI/TUI) y ChxChx Studio, la
 aplicación nativa C++20/Qt 6. Studio integra el Skill Registry, Tech Packs,
 workspace/trust, RAM Governor, procesos, agentes, terminal PTY/ConPTY, memoria,
-handoff, navegación, edición, búsqueda de nombres y ajustes configurables.
+handoff, navegación, edición, búsqueda de nombres/contenido, archivos recientes
+y restauración de grupos divididos, además de ajustes configurables.
 El inventario de capacidades está en `.ai/EDITOR-PARITY.md`.
 
 ## Cierre para empezar a usar Studio en proyectos reales
@@ -33,12 +34,14 @@ verde; la configuración del workflow no equivale a que haya pasado.
 
 - Attach integrado a Zellij disponible desde la paleta de comandos. Falta
   validarlo manualmente con una sesión real; se conserva el launcher externo.
-- Smoke Qt offscreen cubre render ANSI, navegación al inicio/fin y páginas de
-  scrollback; ampliar cobertura de resize/reflow y sesiones interactivas largas.
-- Añadir búsqueda de contenido del proyecto; la búsqueda actual indexa nombres
-  y rutas, no el texto de los archivos.
-- Restaurar archivos recientes y grupos de pestañas de forma segura al iniciar.
-- Añadir Git diff, navegación de símbolos y después integración LSP.
+- Smoke Qt offscreen cubre render ANSI, navegación al inicio/fin, resize con
+  historial y sesión PTY larga con entrada; falta QA visual del reflow real.
+- Búsqueda de contenido implementada en segundo plano: omite binarios y archivos
+  mayores de 1 MiB, con máximo de 64 MiB leídos y 100 coincidencias por consulta.
+- Archivos recientes y grupos divididos restaurables: persiste hasta 20 rutas por
+  proyecto y reabre solo archivos limpios que existan dentro de la raíz canónica.
+  Terminales/agentes no se reabren automáticamente.
+- Añadir Git diff y navegación de símbolos; evaluar LSP después de medir su costo.
 - Medir startup, RAM idle, latencia de navegación y apertura de repositorios
   grandes; definir límites aceptables antes de publicar.
 - Crear paquetes instalables para Linux, macOS y Windows, con runtime y avisos

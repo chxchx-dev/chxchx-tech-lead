@@ -191,6 +191,7 @@ MainWindow::MainWindow(QString projectPath, QWidget *parent)
     buildActions();
     buildLayout();
     m_fileIndex = new ProjectFileIndex(m_projectPath, this);
+    restoreEditorSession();
     statusBar()->showMessage(m_projectPath);
 }
 
@@ -410,7 +411,7 @@ void MainWindow::openTreeFile(const QModelIndex &index)
     openPath(path);
 }
 
-void MainWindow::openPath(const QString &path)
+void MainWindow::openPath(const QString &path, int lineNumber)
 {
     for (QTabWidget *tabs : editorTabGroups()) {
         for (int index = 0; index < tabs->count(); ++index) {
@@ -419,6 +420,8 @@ void MainWindow::openPath(const QString &path)
                 tabs->setCurrentIndex(index);
                 m_activeEditorTabs = tabs;
                 editor->setFocus(Qt::OtherFocusReason);
+                if (lineNumber > 0) editor->send(SCI_GOTOLINE, lineNumber - 1);
+                if (!m_restoringEditorSession) recordRecentProjectFile(path);
                 return;
             }
         }
@@ -437,6 +440,8 @@ void MainWindow::openPath(const QString &path)
     const int tab = tabs->addTab(editor, editorTabTitle(path, false));
     tabs->setTabToolTip(tab, path);
     tabs->setCurrentIndex(tab);
+    if (lineNumber > 0) editor->send(SCI_GOTOLINE, lineNumber - 1);
+    if (!m_restoringEditorSession) recordRecentProjectFile(path);
     connect(editor, &ScintillaEditBase::savePointChanged, this, [this, editor](bool dirty) {
         editor->setProperty("modified", dirty);
         QTabWidget *tabs = tabGroupFor(editor);
@@ -446,6 +451,12 @@ void MainWindow::openPath(const QString &path)
             tabs->setTabText(tabIndex, editorTabTitle(path, dirty));
         }
     });
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    saveEditorSession();
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::saveFile()

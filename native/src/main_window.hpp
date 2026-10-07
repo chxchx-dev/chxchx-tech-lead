@@ -14,6 +14,7 @@ class ProjectFileIndex;
 class AgentSessionWidget;
 class WorkspaceTerminalWidget;
 class QDockWidget;
+class QCloseEvent;
 class QDialog;
 class QComboBox;
 class QFileSystemModel;
@@ -80,6 +81,7 @@ private slots:
     void openAllAgentSessions();
 
 private:
+    void closeEvent(QCloseEvent *event) override;
     void buildActions();
     void buildLayout();
     void configureShortcuts();
@@ -93,7 +95,7 @@ private:
     void moveTabToOtherGroup(QTabWidget *source, int index, Qt::Orientation orientation);
     void closeSecondaryTabGroup();
     void showTabContextMenu(QTabWidget *tabs, const QPoint &position);
-    void openPath(const QString &path);
+    void openPath(const QString &path, int lineNumber = 0);
     ScintillaEditBase *currentEditor() const;
     QString currentFilePath() const;
     QStringList readCommandForArea(const QString &area) const;
@@ -128,6 +130,12 @@ private:
     int currentProjectEmbeddedAgentCount() const;
     void schedulePendingRefresh();
     void appendOutput(const QString &text);
+    QString projectSettingsGroup() const;
+    bool isProjectFilePathSafe(const QString &path) const;
+    void restoreEditorSession();
+    void saveEditorSession() const;
+    QStringList recentProjectFiles() const;
+    void recordRecentProjectFile(const QString &path);
 
     QPointer<QWidget> m_editTargetWidget;
     QString m_projectPath;
@@ -216,4 +224,5 @@ private:
     bool m_governorRetryPending = false;
     bool m_refreshAfterAction = false;
     bool m_refreshQueued = false;
+    bool m_restoringEditorSession = false;
 };

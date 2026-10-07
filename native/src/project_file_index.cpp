@@ -1,7 +1,9 @@
 #include "project_file_index.hpp"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QJsonObject>
 #include <QMetaObject>
 #include <QPointer>
 #include <QThread>
@@ -13,6 +15,9 @@
 namespace {
 
 constexpr qsizetype MaxIndexedFiles = 100000;
+constexpr qint64 MaxContentFileBytes = 1024 * 1024;
+constexpr qint64 MaxContentSearchBytes = 64 * 1024 * 1024;
+constexpr int MaxContentMatches = 100;
 
 bool excludedDirectory(const QString &name)
 {
@@ -35,11 +40,21 @@ ProjectFileIndex::ProjectFileIndex(QString projectRoot, QObject *parent)
 
 ProjectFileIndex::~ProjectFileIndex()
 {
+    cancelContentSearch();
     if (m_cancel) m_cancel->store(true);
     if (m_thread) {
         if (m_thread->isRunning()) m_thread->wait();
         delete m_thread;
     }
+}
+
+void ProjectFileIndex::cancelContentSearch()
+{
+    if (m_contentSearchCancel) m_contentSearchCancel->store(true);
+    if (!m_contentSearchThread) return;
+    if (m_contentSearchThread->isRunning()) m_contentSearchThread->wait();
+    delete m_contentSearchThread;
+    m_contentSearchThread = nullptr;
 }
 
 bool ProjectFileIndex::isReady() const
@@ -66,6 +81,75 @@ QStringList ProjectFileIndex::search(const QString &query, int limit) const
         }
     }
     return matches;
+}
+
+void ProjectFileIndex::searchContent(const QString &query, int limit)
+{
+    cancelContentSearch();
+    const QString needle = query.trimmed();
+    if (!m_ready || needle.isEmpty() || limit <= 0) return;
+
+    m_contentSearchCancel = std::make_shared<std::atomic_bool>(false);
+    const auto cancellation = m_contentSearchCancel;
+    const QStringList paths = m_paths;
+    QPointer<ProjectFileIndex> target(this);
+    const int resultLimit = std::min(limit, MaxContentMatches);
+    auto *worker = QThread::create([target, cancellation, paths, needle, resultLimit] {
+        QJsonArray matches;
+        qint64 bytesRead = 0;
+        bool truncated = false;
+        for (qsizetype pathIndex = 0; pathIndex < paths.size(); ++pathIndex) {
+            if (cancellation->load()) return;
+            const QString &path = paths.at(pathIndex);
+            const QFileInfo info(path);
+            if (!info.isFile()) continue;
+            if (info.size() > MaxContentFileBytes) {
+                truncated = true;
+                continue;
+            }
+            const qint64 remainingBytes = MaxContentSearchBytes - bytesRead;
+            if (remainingBytes <= 0) {
+                truncated = true;
+                break;
+            }
+            QFile file(path);
+            if (!file.open(QIODevice::ReadOnly)) continue;
+            const qint64 readLimit = std::min(MaxContentFileBytes, remainingBytes);
+            const QByteArray bytes = file.read(readLimit);
+            bytesRead += bytes.size();
+            const bool reachedByteLimit = bytesRead >= MaxContentSearchBytes
+                && pathIndex + 1 < paths.size();
+            if (info.size() > readLimit) truncated = true;
+            if (bytes.contains('\0')) continue;
+
+            const QStringList lines = QString::fromUtf8(bytes).split(QLatin1Char('\n'));
+            for (qsizetype index = 0; index < lines.size(); ++index) {
+                const QString line = lines.at(index).trimmed();
+                if (!line.contains(needle, Qt::CaseInsensitive)) continue;
+                QJsonObject match;
+                match.insert(QStringLiteral("path"), path);
+                match.insert(QStringLiteral("line"), static_cast<int>(index + 1));
+                match.insert(QStringLiteral("excerpt"), line.left(240));
+                matches.append(match);
+                break;
+            }
+            if (matches.size() >= resultLimit) {
+                truncated = true;
+                break;
+            }
+            if (reachedByteLimit) {
+                truncated = true;
+                break;
+            }
+        }
+        if (cancellation->load() || !target) return;
+        QMetaObject::invokeMethod(target, [target, cancellation, needle, matches, truncated] {
+            if (target && !cancellation->load())
+                emit target->contentSearchFinished(needle, matches, truncated);
+        }, Qt::QueuedConnection);
+    });
+    m_contentSearchThread = worker;
+    worker->start();
 }
 
 void ProjectFileIndex::rebuild()

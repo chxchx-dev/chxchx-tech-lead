@@ -59,5 +59,21 @@ int main(int argc, char *argv[])
             }
         }
     }
-    return foundRedAnsiPixel ? 0 : 4;
+    if (!foundRedAnsiPixel) return 4;
+
+    int resizedColumns = 0;
+    int resizedRows = 0;
+    QObject::connect(&terminal, &VtTerminalWidget::terminalResized, &app,
+        [&resizedColumns, &resizedRows](int columns, int rows) {
+            resizedColumns = columns;
+            resizedRows = rows;
+        });
+    terminal.resize(480, 320);
+    QCoreApplication::processEvents();
+    if (resizedColumns <= 0 || resizedRows <= 0) return 5;
+    const QImage resizedLiveView = render(terminal);
+    press(terminal, Qt::Key_Home, Qt::ControlModifier);
+    if (render(terminal) == resizedLiveView) return 6;
+    press(terminal, Qt::Key_End, Qt::ControlModifier);
+    return 0;
 }

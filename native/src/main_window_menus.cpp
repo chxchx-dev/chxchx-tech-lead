@@ -5,12 +5,15 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHash>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QKeySequenceEdit>
 #include <QLabel>
 #include <QLineEdit>
@@ -21,6 +24,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
+#include <QTimer>
 #include <QToolBar>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -36,6 +40,21 @@ void MainWindow::buildActions()
     auto *editMenu = menuBar()->addMenu(QStringLiteral("Edición"));
     m_viewMenu = menuBar()->addMenu(QStringLiteral("Ver"));
     auto *navigateMenu = menuBar()->addMenu(QStringLiteral("Navegar"));
+    auto *recentFiles = navigateMenu->addMenu(QStringLiteral("Archivos recientes"));
+    connect(recentFiles, &QMenu::aboutToShow, this, [this, recentFiles] {
+        recentFiles->clear();
+        const QStringList paths = recentProjectFiles();
+        if (paths.isEmpty()) {
+            QAction *empty = recentFiles->addAction(QStringLiteral("Sin archivos recientes"));
+            empty->setEnabled(false);
+            return;
+        }
+        for (const QString &path : paths) {
+            QAction *action = recentFiles->addAction(QDir(m_projectPath).relativeFilePath(path));
+            action->setToolTip(path);
+            connect(action, &QAction::triggered, this, [this, path] { openPath(path); });
+        }
+    });
     auto *toolsMenu = menuBar()->addMenu(QStringLiteral("Herramientas"));
     auto *helpMenu = menuBar()->addMenu(QStringLiteral("Ayuda"));
 
@@ -174,9 +193,12 @@ void MainWindow::buildActions()
 void MainWindow::searchProjectFiles()
 {
     QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Buscar archivo del proyecto"));
+    dialog.setWindowTitle(QStringLiteral("Buscar en el proyecto"));
     dialog.resize(720, 520);
     auto *layout = new QVBoxLayout(&dialog);
+    auto *mode = new QComboBox(&dialog);
+    mode->addItem(QStringLiteral("Nombres y rutas"));
+    mode->addItem(QStringLiteral("Contenido de archivos"));
     auto *query = new QLineEdit(&dialog);
     query->setPlaceholderText(QStringLiteral("Buscar por nombre o ruta relativa…"));
     auto *summary = new QLabel(&dialog);
@@ -187,15 +209,19 @@ void MainWindow::searchProjectFiles()
     buttons->addWidget(reindex);
     buttons->addStretch(1);
     buttons->addWidget(close);
+    layout->addWidget(mode);
     layout->addWidget(query);
     layout->addWidget(summary);
     layout->addWidget(results, 1);
     layout->addLayout(buttons);
 
-    const auto updateResults = [this, query, summary, results, reindex] {
+    auto *contentSearchDelay = new QTimer(&dialog);
+    contentSearchDelay->setSingleShot(true);
+    contentSearchDelay->setInterval(250);
+    const auto updateResults = [this, mode, query, summary, results, reindex, contentSearchDelay] {
         results->clear();
         if (!m_fileIndex->isReady()) {
-            summary->setText(QStringLiteral("Indexando nombres de archivos en segundo plano…"));
+            summary->setText(QStringLiteral("Indexando archivos en segundo plano…"));
             reindex->setEnabled(false);
             return;
         }
@@ -204,6 +230,11 @@ void MainWindow::searchProjectFiles()
         if (term.isEmpty()) {
             summary->setText(QStringLiteral("Índice listo: %1 archivos. Escribe para buscar.")
                 .arg(m_fileIndex->fileCount()));
+            return;
+        }
+        if (mode->currentIndex() == 1) {
+            summary->setText(QStringLiteral("Buscando contenido en segundo plano…"));
+            contentSearchDelay->start();
             return;
         }
         const QStringList paths = m_fileIndex->search(term);
@@ -217,6 +248,37 @@ void MainWindow::searchProjectFiles()
         if (results->count() > 0) results->setCurrentRow(0);
     };
     connect(query, &QLineEdit::textChanged, &dialog, [updateResults] { updateResults(); });
+    connect(mode, qOverload<int>(&QComboBox::currentIndexChanged), &dialog,
+        [mode, query, updateResults] {
+        query->setPlaceholderText(mode->currentIndex() == 1
+            ? QStringLiteral("Buscar texto en el contenido…")
+            : QStringLiteral("Buscar por nombre o ruta relativa…"));
+        updateResults();
+    });
+    connect(contentSearchDelay, &QTimer::timeout, &dialog, [this, mode, query] {
+        if (mode->currentIndex() == 1) m_fileIndex->searchContent(query->text());
+    });
+    connect(m_fileIndex, &ProjectFileIndex::contentSearchFinished, &dialog,
+        [this, mode, query, summary, results](const QString &searched,
+            const QJsonArray &matches, bool truncated) {
+            if (mode->currentIndex() != 1 || query->text().trimmed() != searched) return;
+            results->clear();
+            summary->setText(QStringLiteral("Coincidencias en contenido: %1%2")
+                .arg(matches.size())
+                .arg(truncated ? QStringLiteral(" · resultado limitado por tamaño/cantidad") : QString()));
+            for (const auto &value : matches) {
+                const QJsonObject match = value.toObject();
+                const QString path = match.value(QStringLiteral("path")).toString();
+                const int line = match.value(QStringLiteral("line")).toInt();
+                const QString relative = QDir(m_projectPath).relativeFilePath(path);
+                auto *item = new QListWidgetItem(QStringLiteral("%1:%2  %3")
+                    .arg(relative).arg(line).arg(match.value(QStringLiteral("excerpt")).toString()), results);
+                item->setData(Qt::UserRole, path);
+                item->setData(Qt::UserRole + 1, line);
+                item->setIcon(studioIcon(QStringLiteral("text-x-generic"), QStyle::SP_FileIcon));
+            }
+            if (results->count() > 0) results->setCurrentRow(0);
+        });
     connect(m_fileIndex, &ProjectFileIndex::indexChanged, &dialog,
         [updateResults](int, bool) { updateResults(); });
     connect(reindex, &QPushButton::clicked, m_fileIndex, &ProjectFileIndex::rebuild);
@@ -228,7 +290,8 @@ void MainWindow::searchProjectFiles()
     updateResults();
     query->setFocus();
     if (dialog.exec() == QDialog::Accepted && results->currentItem() != nullptr) {
-        openPath(results->currentItem()->data(Qt::UserRole).toString());
+        const auto *selected = results->currentItem();
+        openPath(selected->data(Qt::UserRole).toString(), selected->data(Qt::UserRole + 1).toInt());
     }
 }
 

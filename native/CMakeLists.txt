@@ -88,6 +88,7 @@ target_compile_definitions(chxchx_lexilla PRIVATE LEXILLA_NO_EXPORT NDEBUG=1)
 qt_add_executable(chxchx-studio
     src/main.cpp
     src/main_window.cpp
+    src/main_window_session.cpp
     src/main_window_menus.cpp
     src/main_window_area_controller.cpp
     src/main_window_actions.cpp
@@ -178,4 +179,9 @@ if(CHXCHX_BUILD_TESTS)
     endif()
     add_test(NAME native-workspace-terminal-smoke COMMAND chxchx-workspace-terminal-smoke)
     set_tests_properties(native-workspace-terminal-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    add_executable(chxchx-content-search-smoke tests/content_search_smoke.cpp
+        src/project_file_index.cpp src/project_file_index.hpp)
+    target_link_libraries(chxchx-content-search-smoke PRIVATE Qt6::Core)
+    add_test(NAME native-content-search-smoke COMMAND chxchx-content-search-smoke)
 endif()

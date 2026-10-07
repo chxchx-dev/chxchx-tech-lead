@@ -273,3 +273,21 @@
 - Linux build pasa y CTest pasa 4/4 (editor, PTY, VT/scrollback y comando en workspace terminal); `git diff --check` pendiente de la verificación final.
 - Pendiente de QA real: confirmar que Zellij dibuja bien en el panel, recibe teclado/resize, conserva el server al cerrar la pestaña y enfoca la tab/pane esperada. Si falla, el launcher externo sigue disponible.
 - Las sesiones que listó Zellij en este checkout estaban todas `EXITED`; no se adjuntó a ellas porque `--force-run-commands` puede resucitar panes. Usar una sesión activa y confiable para la revisión manual.
+
+## Studio — cobertura de resize y sesión larga
+
+- `native-vt-terminal-smoke` redimensiona la terminal con scrollback y confirma que la VT reporta nuevas dimensiones y mantiene navegación al historial.
+- `native-workspace-terminal-smoke` mantiene un proceso abierto, recibe 80 líneas, cambia tamaño y envía `go` por el teclado emulado; exige exit code 0.
+- Build Linux y CTest 4/4 pasan. Falta verificar visualmente el reflow al estrechar/ampliar Studio y la interacción con salida sostenida.
+
+## Studio — búsqueda indexada de contenido
+
+- `Ctrl+Shift+F` ahora permite alternar búsqueda de nombres/rutas y contenido. El escaneo se ejecuta en worker cancelable, ignora archivos binarios y mayores de 1 MiB, acota lecturas a 64 MiB por búsqueda y muestra hasta 100 archivos coincidentes con ruta/línea/extracto. Al aceptar abre el archivo y posiciona el cursor.
+- CTest añade `native-content-search-smoke`, que verifica coincidencia, línea, exclusión de `.git`/`node_modules` y omisión de binarios. Build Linux y CTest 5/5 pasan.
+- Pendiente de QA visual en un repositorio real; búsqueda de contenidos no persistida y no indexa archivos mayores de 1 MiB.
+
+## Studio — archivos recientes y sesión del editor
+
+- `Navegar → Archivos recientes` lista hasta 20 archivos del proyecto actual. Studio persiste las pestañas de archivo limpias, grupo principal/secundario, orientación/tamaños del split y archivo activo en QSettings, separado por hash de la raíz canónica del proyecto.
+- Al restaurar, se omiten archivos borrados, rutas externas y symlinks que escapen de la raíz. No se inician terminales ni agentes. Las pestañas con cambios sin guardar no se serializan.
+- Build Linux y CTest 5/5 pasan; falta una prueba automatizada dedicada de persistencia y QA manual cerrar/reabrir el mismo proyecto.
