@@ -151,6 +151,7 @@
 - `native-vt-terminal-smoke` usa Qt offscreen y libvterm para comprobar salida ANSI roja, desplazamiento al historial, avance por página y retorno al final en una terminal con más de 24 líneas.
 - La búsqueda global (`Ctrl+Shift+F`) ofrece modo de contenido asíncrono sobre el índice de rutas, omite binarios, abre coincidencias en su línea y limita el escaneo a 1 MiB por archivo, 64 MiB por consulta y 100 resultados.
 - Studio recuerda hasta 20 archivos recientes por proyecto; al cerrar guarda archivos limpios de ambos grupos y al iniciar restaura solo los que aún existen dentro de la raíz canónica. Terminales y agentes no se reabren.
+- `Herramientas → Diff Git del archivo actual` ejecuta `git diff` con lista de argumentos desde el proyecto y presenta salida de solo lectura limitada a 2 MiB. Compara el archivo rastreado con `HEAD`; no incluye untracked ni buffers sin guardar.
 - Build Linux correcto y CTest 3/3 pasa (editor, PTY y VT). `git diff --check` limpio.
 - CTest adicional comprueba resize con historial visible; un proceso PTY escribe 80 líneas, recibe entrada de teclado y termina correctamente. Sigue pendiente QA visual del reflow del historial en una sesión real.
 

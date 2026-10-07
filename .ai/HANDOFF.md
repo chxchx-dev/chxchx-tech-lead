@@ -291,3 +291,8 @@
 - `Navegar → Archivos recientes` lista hasta 20 archivos del proyecto actual. Studio persiste las pestañas de archivo limpias, grupo principal/secundario, orientación/tamaños del split y archivo activo en QSettings, separado por hash de la raíz canónica del proyecto.
 - Al restaurar, se omiten archivos borrados, rutas externas y symlinks que escapen de la raíz. No se inician terminales ni agentes. Las pestañas con cambios sin guardar no se serializan.
 - Build Linux y CTest 5/5 pasan; falta una prueba automatizada dedicada de persistencia y QA manual cerrar/reabrir el mismo proyecto.
+
+## Studio — diff Git por archivo
+
+- `Herramientas → Diff Git del archivo actual` consulta `git diff --no-ext-diff --no-color --unified=3 HEAD -- PATH` en un QProcess asíncrono, con argumentos separados, directorio de trabajo del proyecto y máximo de 2 MiB de salida. La vista es de solo lectura.
+- Rechaza archivos externos al proyecto. No muestra archivos sin seguimiento ni cambios presentes solo en memoria; falta decidir cómo incluir untracked/staged con UX clara y agregar smoke automatizado del flujo UI.

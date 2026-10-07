@@ -70,6 +70,7 @@ private slots:
     void selectChatConversation(QListWidgetItem *item);
     void openCommandPalette();
     void searchProjectFiles();
+    void showCurrentFileDiff();
     void executePaletteCommand(QListWidgetItem *item);
     void showAreaDashboard(const QJsonObject &payload, const QString &area);
     void updateAgentDashboard();

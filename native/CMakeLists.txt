@@ -89,6 +89,7 @@ qt_add_executable(chxchx-studio
     src/main.cpp
     src/main_window.cpp
     src/main_window_session.cpp
+    src/main_window_git.cpp
     src/main_window_menus.cpp
     src/main_window_area_controller.cpp
     src/main_window_actions.cpp
