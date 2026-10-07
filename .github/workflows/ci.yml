@@ -27,6 +27,14 @@ jobs:
         run: cmake --build build-native --config Release --parallel 2
       - name: Smoke test Scintilla editor
         run: ctest --test-dir build-native --build-config Release --output-on-failure
+      - name: Create native install package
+        run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
+      - name: Publish native package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chxchx-studio-${{ matrix.os }}
+          path: build-native/packages/*
+          if-no-files-found: error
 
   native-fedora:
     name: Native Qt build · Fedora

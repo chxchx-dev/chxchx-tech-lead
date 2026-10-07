@@ -50,7 +50,7 @@ La interfaz debe sentirse ligera y ordenada, cercana a la estética limpia de KD
 - Studio integra sesiones de agentes y una terminal nueva del workspace en pestañas con PTY/ConPTY y libvterm. `Terminal +` y `Ctrl+Shift+T` consultan el estado del proyecto mediante el bridge de solo lectura antes de abrir el shell; la paleta permite adjuntar a Zellij dentro de una pestaña PTY y conserva el launcher externo como alternativa. El preflight de trust/RAM y el wrapper contextual compartido están implementados para agentes. El explorador tiene filtro por nombre y búsqueda indexada de rutas o contenido (`Ctrl+Shift+F`); el escaneo de contenido es asíncrono, omite binarios y archivos mayores de 1 MiB y limita cada consulta a 64 MiB/100 resultados. Studio conserva hasta 20 archivos recientes por proyecto y restaura solo archivos existentes dentro de la raíz canónica; al cerrar vuelve a abrir archivos limpios y el estado de los dos grupos divididos. No restaura terminales ni agentes. `Herramientas → Diff Git del archivo actual` muestra el diff rastreado respecto de `HEAD` en una vista de solo lectura, limitada a 2 MiB; no incluye archivos sin seguimiento ni ediciones sin guardar. `Ctrl+Shift+O` lista declaraciones comunes de Python, C/C++, JavaScript/TypeScript, Java y C#; es búsqueda sintáctica por líneas, no análisis semántico. Los grupos divididos de pestañas ya están implementados para archivos, terminales y agentes.
 - Terminal embebida: transporte, emulación VT, pestaña de agente y shell general de workspace están implementados en `native/src/integrations/pty_session.*`, `vt_terminal_widget.*`, `agent_session_widget.*` y `workspace_terminal_widget.*`. Studio pinta celdas ANSI/VT, procesa teclado, resize, mouse y rueda; historial acotado a 5000 líneas con rueda, Shift+PageUp/Down y Ctrl+Home/End. CTest cubre render ANSI, navegación de scrollback, resize conservando historial y una sesión PTY larga con entrada; falta QA visual del reflow real y del attach con Zellij. Conservar launcher externo como fallback.
 - CI tiene trabajos configurados para Qt 6 en Ubuntu, Windows y macOS, además de Fedora. La configuración del workflow no confirma que la ejecución actual haya pasado; registrar evidencia de build y smoke por plataforma antes de declarar compatibilidad. Localmente se ha validado Fedora con Qt 6.11.2. La primera configuración CMake descarga revisiones fijadas de Scintilla/Lexilla y necesita acceso a GitHub; avisos en `native/THIRD_PARTY.md`.
-- Antes del uso diario falta QA interactivo con un proyecto real y corregir los fallos encontrados. Para cerrar una distribución pública faltan medidas de startup/RAM/latencia y empaquetado instalable por plataforma. La migración del bridge a un núcleo C++ es una decisión arquitectónica posterior, no requisito para empezar a usar Studio.
+- Antes del uso diario falta QA interactivo con un proyecto real y corregir los fallos encontrados. CPack genera ZIP/DMG/TGZ y CI publica los artefactos desde runners con Qt SDK; falta revisar una ejecución verde por sistema y probar cada paquete en su plataforma. El TGZ de una build con Qt de Fedora/Ubuntu puede depender de Qt instalado en el host. Para cerrar una distribución pública también faltan medidas repetibles de startup/RAM/latencia. La migración del bridge a un núcleo C++ es una decisión arquitectónica posterior, no requisito para empezar a usar Studio.
 
 ### Pendientes restantes
 
@@ -58,7 +58,7 @@ La interfaz debe sentirse ligera y ordenada, cercana a la estética limpia de KD
 2. Probar build y smoke en cada plataforma objetivo; conservar evidencia de los resultados reales de CI y validar manualmente macOS/Windows cuando se disponga de esos equipos.
 3. Completar QA visual de VT/scrollback y validar attach integrado a Zellij con una sesión real; mantener disponible el launcher externo.
 4. Evaluar LSP según mediciones de procesos y uso; la navegación actual cubre declaraciones comunes sin resolver tipos ni referencias.
-5. Medir startup/RAM/latencia y preparar paquetes instalables antes de declarar una release pública `v1.0`.
+5. Medir startup/RAM/latencia, confirmar artefactos CI y probar ZIP/DMG/TGZ en cada plataforma antes de fijar `v1.0`.
 
 ### Núcleo compartido con CLI/TUI
 
@@ -81,6 +81,7 @@ La interfaz debe sentirse ligera y ordenada, cercana a la estética limpia de KD
 - Windows: instalador firmado y runtime Qt empaquetado.
 - No asumir que compilar en una distribución produce binarios compatibles con todas: probar dependencias, arquitectura, firma y actualización en CI por plataforma.
 - Mantener una lista de avisos de licencias de Qt, Scintilla y Lexilla junto con sus avisos originales.
+- CPack crea ZIP en Windows, DMG en macOS y TGZ en Linux. CI publica los paquetes creados con Qt SDK como artefactos. Los paquetes locales de Fedora/Ubuntu pueden depender del runtime Qt del sistema; validar dependencias por plataforma antes de distribuirlos.
 
 ## Entregas
 
@@ -88,7 +89,7 @@ La interfaz debe sentirse ligera y ordenada, cercana a la estética limpia de KD
 2. Cerrar cobertura específica de VT/scrollback y validar build/smoke en cada runner y plataforma objetivo.
 3. Completar QA de attach Zellij, VT/scrollback y búsqueda de contenido con proyectos reales.
 4. Evaluar LSP según prioridad y costo; la navegación actual reconoce declaraciones comunes sin resolver tipos ni referencias.
-5. Medir startup/RAM/latencia y empaquetar por plataforma antes de fijar `v1.0`.
+5. Medir startup/RAM/latencia y validar paquetes/artefactos por plataforma antes de fijar `v1.0`.
 
 ## Criterios de aceptación
 

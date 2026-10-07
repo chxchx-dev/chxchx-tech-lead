@@ -155,6 +155,7 @@
 - `Navegar → Símbolos del archivo actual` (`Ctrl+Shift+O`) lista declaraciones comunes de Python, C/C++, JavaScript/TypeScript, Java y C#, y salta a la línea. Es sintáctico por líneas; no resuelve referencias ni reemplaza LSP.
 - Validación actual: build Qt Linux, CTest 6/6, arranque offscreen por 3 segundos, `python -m compileall src`, pytest 195 passed/1 skipped y `git diff --check`.
 - El arranque dentro del sandbox aborta al usar XCB/Wayland, mientras que `minimal`/`offscreen` funcionan. Con acceso elevado a la sesión de escritorio, Studio abre y permanece activo para revisión manual. El entorno restringe ptrace, así que no hay backtrace del intento dentro del sandbox.
+- Muestra preliminar en el checkout actual: ventana gráfica en reposo tras 3:46, RSS 119400 KiB (~116.6 MiB), CPU promedio 0.4%; un arranque offscreen de 10 s alcanzó 63660 KiB (~62.2 MiB) de RSS máximo. Falta medir startup y latencia de navegación con metodología repetible y definir límites.
 - Build Linux correcto y CTest 3/3 pasa (editor, PTY y VT). `git diff --check` limpio.
 - CTest adicional comprueba resize con historial visible; un proceso PTY escribe 80 líneas, recibe entrada de teclado y termina correctamente. Sigue pendiente QA visual del reflow del historial en una sesión real.
 
@@ -163,3 +164,11 @@
 - La paleta abre `chxchx-tech workspace attach PATH` dentro de una pestaña PTY/libvterm, después del preview y confirmación existentes. Se conserva otra acción de paleta para lanzar el cliente Zellij en una terminal externa.
 - `WorkspaceTerminalWidget` acepta comandos arbitrarios manteniendo shell por defecto; `BridgeClient` comparte la resolución de la CLI (`CHXCHX_TECH_CLI`, `.venv` local o `PATH`).
 - Build Linux y CTest 4/4 pasan, incluyendo un smoke offscreen que verifica que una pestaña PTY ejecuta y termina un comando personalizado. Falta validar attach real/foco/cierre con Zellij en escritorio.
+
+## Studio: empaquetado CPack
+
+- CMake configura ZIP para Windows, DMG para macOS y TGZ para Linux. El paquete incluye los avisos originales de Scintilla, Lexilla y libvterm junto con `THIRD_PARTY.md`.
+- CI crea los paquetes desde sus runners con Qt SDK y sube cada uno como artefacto de workflow. El job Fedora mantiene build/smokes, sin publicar un TGZ que pueda depender del Qt del host.
+- Un TGZ local sobre Fedora con Qt instalado en directorios del sistema se genera, pero no despliega ese runtime automáticamente; para distribución usar el artefacto CI y validar en la plataforma destino. No afirmar todavía que los tres paquetes fueron probados o que CI está verde.
+- Validación local: CMake configure/build, CTest 6/6, CPack generó el TGZ Linux y el archivo contiene binario y licencias; `python -m compileall -q src tests scripts`, pytest (195 passed, 1 skipped) y `git diff --check` pasan.
+- Pendiente: ejecución real del workflow en Ubuntu/Windows/macOS, prueba de instalación/arranque de los artefactos, QA manual en el proyecto real y mediciones repetibles de startup/navegación.

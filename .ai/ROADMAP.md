@@ -46,8 +46,11 @@ verde; la configuración del workflow no equivale a que haya pasado.
   disponible en Python, C/C++, JS/TS, Java y C#. Evaluar LSP después de medir su costo.
 - Medir startup, RAM idle, latencia de navegación y apertura de repositorios
   grandes; definir límites aceptables antes de publicar.
-- Crear paquetes instalables para Linux, macOS y Windows, con runtime y avisos
-  de terceros incluidos.
+- CPack y CI ya generan ZIP para Windows, DMG para macOS y TGZ para Linux desde
+  los runners con Qt SDK; cada paquete se publica como artefacto del workflow.
+  Falta confirmar una ejecución verde por sistema y probar los artefactos en
+  equipos destino. El TGZ construido con Qt de Fedora/Ubuntu puede depender del
+  runtime Qt del sistema; no usar ese paquete local como distribución autónoma.
 - Decidir si el núcleo Python seguirá siendo la autoridad mediante el bridge o
   si comienza una migración gradual a un núcleo C++ compartido. No bloquear el
   uso de Studio con una reescritura sin una necesidad medida.

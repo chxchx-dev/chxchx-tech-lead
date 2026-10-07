@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(chxchx_studio VERSION 0.1.0 LANGUAGES C CXX)
+include(GNUInstallDirs)
 
 option(CHXCHX_BUILD_TESTS "Build native editor smoke tests" OFF)
 
@@ -122,6 +123,12 @@ qt_add_executable(chxchx-studio
     src/integrations/workspace_terminal_widget.hpp
 )
 
+if(WIN32)
+    set_target_properties(chxchx-studio PROPERTIES WIN32_EXECUTABLE TRUE)
+elseif(APPLE)
+    set_target_properties(chxchx-studio PROPERTIES MACOSX_BUNDLE TRUE)
+endif()
+
 target_link_libraries(chxchx-studio PRIVATE Qt6::Core Qt6::Widgets Qt6::Core5Compat
     chxchx_scintilla chxchx_lexilla chxchx_vterm)
 target_compile_definitions(chxchx-studio PRIVATE QT_NO_CAST_FROM_ASCII QT_NO_CAST_TO_ASCII)
@@ -142,8 +149,40 @@ endif()
 
 install(TARGETS chxchx-studio
     BUNDLE DESTINATION .
-    RUNTIME DESTINATION bin
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+install(FILES THIRD_PARTY.md
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/chxchx-studio)
+install(FILES "${scintilla_SOURCE_DIR}/License.txt"
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/chxchx-studio/scintilla)
+install(FILES "${lexilla_SOURCE_DIR}/License.txt"
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/chxchx-studio/lexilla)
+install(FILES "${libvterm_SOURCE_DIR}/LICENSE"
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/chxchx-studio/libvterm)
+
+qt_generate_deploy_app_script(
+    TARGET chxchx-studio
+    OUTPUT_SCRIPT deploy_script
+    NO_TRANSLATIONS
+)
+install(SCRIPT ${deploy_script})
+
+set(CPACK_PACKAGE_NAME "chxchx-studio")
+set(CPACK_PACKAGE_VENDOR "ChxChx Tech Lead")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "ChxChx Studio desktop application")
+set(CPACK_PACKAGE_FILE_NAME
+    "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set(CPACK_MONOLITHIC_INSTALL ON)
+if(WIN32)
+    set(CPACK_GENERATOR ZIP)
+elseif(APPLE)
+    set(CPACK_GENERATOR DragNDrop)
+else()
+    set(CPACK_GENERATOR TGZ)
+endif()
+include(CPack)
 
 if(CHXCHX_BUILD_TESTS)
     enable_testing()
