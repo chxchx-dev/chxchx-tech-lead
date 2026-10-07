@@ -154,6 +154,7 @@
 - `Herramientas → Diff Git del archivo actual` ejecuta `git diff` con lista de argumentos desde el proyecto y presenta salida de solo lectura limitada a 2 MiB. Compara el archivo rastreado con `HEAD`; no incluye untracked ni buffers sin guardar.
 - `Navegar → Símbolos del archivo actual` (`Ctrl+Shift+O`) lista declaraciones comunes de Python, C/C++, JavaScript/TypeScript, Java y C#, y salta a la línea. Es sintáctico por líneas; no resuelve referencias ni reemplaza LSP.
 - Validación actual: build Qt Linux, CTest 6/6, arranque offscreen por 3 segundos, `python -m compileall src`, pytest 195 passed/1 skipped y `git diff --check`.
+- Intento de abrir la ventana en la sesión gráfica actual aborta con código 134 y sin mensaje; el arranque offscreen sigue pasando. Falta revisar en escritorio; gdb no puede adjuntarse en este sandbox por la restricción ptrace.
 - Build Linux correcto y CTest 3/3 pasa (editor, PTY y VT). `git diff --check` limpio.
 - CTest adicional comprueba resize con historial visible; un proceso PTY escribe 80 líneas, recibe entrada de teclado y termina correctamente. Sigue pendiente QA visual del reflow del historial en una sesión real.
 
