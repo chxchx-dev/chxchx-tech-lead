@@ -296,3 +296,10 @@
 
 - `Herramientas → Diff Git del archivo actual` consulta `git diff --no-ext-diff --no-color --unified=3 HEAD -- PATH` en un QProcess asíncrono, con argumentos separados, directorio de trabajo del proyecto y máximo de 2 MiB de salida. La vista es de solo lectura.
 - Rechaza archivos externos al proyecto. No muestra archivos sin seguimiento ni cambios presentes solo en memoria; falta decidir cómo incluir untracked/staged con UX clara y agregar smoke automatizado del flujo UI.
+
+## Studio — navegación básica de símbolos
+
+- `Ctrl+Shift+O` abre el listado filtrable de declaraciones comunes de Python, C/C++, JavaScript/TypeScript, Java y C#. Elegir una fila posiciona el editor en esa línea.
+- `SymbolIndex` está separado del diálogo y tiene smoke Qt Core para Python, TypeScript, C++ y extensiones no compatibles. No resuelve tipos, referencias ni declaraciones complejas; LSP queda como evolución posterior.
+
+- Validación actual tras integrar navegación de símbolos: build Qt Linux, CTest 6/6, `python -m compileall src`, pytest 195 passed/1 skipped y `git diff --check`. No se ha hecho QA visual del diff/símbolos ni smoke de persistencia al cerrar/reabrir.

@@ -160,6 +160,10 @@ void MainWindow::buildActions()
         QStringLiteral("Buscar archivo del proyecto…"), QKeySequence(QStringLiteral("Ctrl+Shift+F")),
         [this] { searchProjectFiles(); }, QStringLiteral("system-search"),
         QStyle::SP_FileDialogDetailedView, false);
+    addAction(navigateMenu, QStringLiteral("navigate.symbols"),
+        QStringLiteral("Símbolos del archivo actual…"), QKeySequence(QStringLiteral("Ctrl+Shift+O")),
+        [this] { showCurrentFileSymbols(); }, QStringLiteral("code-context"),
+        QStyle::SP_FileDialogListView, false);
 
     addAction(toolsMenu, QStringLiteral("tools.terminal"), QStringLiteral("Nueva terminal integrada"),
         QKeySequence(QStringLiteral("Ctrl+Shift+T")), [this] { openNewWorkspaceTerminal(); },

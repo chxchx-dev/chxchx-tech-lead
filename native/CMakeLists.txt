@@ -90,6 +90,9 @@ qt_add_executable(chxchx-studio
     src/main_window.cpp
     src/main_window_session.cpp
     src/main_window_git.cpp
+    src/main_window_symbols.cpp
+    src/symbol_index.cpp
+    src/symbol_index.hpp
     src/main_window_menus.cpp
     src/main_window_area_controller.cpp
     src/main_window_actions.cpp
@@ -185,4 +188,8 @@ if(CHXCHX_BUILD_TESTS)
         src/project_file_index.cpp src/project_file_index.hpp)
     target_link_libraries(chxchx-content-search-smoke PRIVATE Qt6::Core)
     add_test(NAME native-content-search-smoke COMMAND chxchx-content-search-smoke)
+
+    add_executable(chxchx-symbol-index-smoke tests/symbol_index_smoke.cpp src/symbol_index.cpp)
+    target_link_libraries(chxchx-symbol-index-smoke PRIVATE Qt6::Core)
+    add_test(NAME native-symbol-index-smoke COMMAND chxchx-symbol-index-smoke)
 endif()

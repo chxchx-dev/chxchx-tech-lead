@@ -42,8 +42,8 @@ verde; la configuración del workflow no equivale a que haya pasado.
   proyecto y reabre solo archivos limpios que existan dentro de la raíz canónica.
   Terminales/agentes no se reabren automáticamente.
 - Diff Git de archivo implementado como lectura acotada desde `HEAD`; no incluye
-  archivos sin seguimiento ni cambios aún no guardados. Falta navegación de símbolos;
-  evaluar LSP después de medir su costo.
+  archivos sin seguimiento ni cambios aún no guardados. Navegación básica de declaraciones
+  disponible en Python, C/C++, JS/TS, Java y C#. Evaluar LSP después de medir su costo.
 - Medir startup, RAM idle, latencia de navegación y apertura de repositorios
   grandes; definir límites aceptables antes de publicar.
 - Crear paquetes instalables para Linux, macOS y Windows, con runtime y avisos
