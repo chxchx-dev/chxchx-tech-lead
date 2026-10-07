@@ -22,6 +22,7 @@ Thumbs.db
 **/.basic-memory/
 # Documentación de trabajo privada/local del mantenedor.
 /docs/
+/.codex/
 **/AGENTS.md
 **/CLAUDE.md
 **/GEMINI.md
