@@ -2,21 +2,26 @@
 
 ## Estado actual
 
-- Editor y navegación visualmente refinados: tabs document-mode con ancho/elipsis controlados, ruta relativa, marcador cian de cambios sin guardar, estado de archivo activo, gutter/selección/cursor Scintilla alineados al tema, y árbol con hover/selección/indentación más legibles. `cmake --build build/native --parallel 2` pasó; falta revisar el render con archivos reales.
+- Editor y navegación visualmente refinados: colores Scintilla en el orden RGB correcto; pestañas alinean el título a la izquierda y reservan una zona fija para la `×`; un clic abre archivos y alterna expandir/contraer carpetas. Build Linux y CTest pasan; falta revisión visual real.
+- Acciones principales agrupadas en menús estándar de Studio y compartidas con la barra de acceso rápido. Los atajos se editan en `Edición → Configurar atajos`, se validan contra duplicados y persisten con `QSettings`.
+- La barra de acceso rápido usa iconos con tooltips y atajos; la lista lateral asigna iconos temáticos a sus 15 secciones. Los iconos usan el tema del sistema con fallback Qt.
+- El explorador de archivos muestra iconos de `QFileSystemModel`, y su filtro lateral busca nombres en el árbol. `Ctrl+Shift+F` abre búsqueda global de archivos por nombre/ruta sobre índice asíncrono; excluye directorios generados comunes y permite reconstruir el índice.
+- La barra de acceso rápido controla la visibilidad de Explorador, Secciones/acciones y Actividad con acciones checkables de los dock widgets. Las secciones operativas presentan estados en el centro; Skills marca habilitadas/recomendadas y Agentes disponibles/en uso en Studio.
+- Los logos de `assets/` se empaquetan en recursos Qt: variante mínima como icono de aplicación/ventana y logo completo en la vista Marca.
 - Scrollback integrado en `VtTerminalWidget`: conserva hasta 5000 líneas con celdas/estilos ANSI, rueda para navegar, `Shift+PageUp/PageDown` por página y `Ctrl+Home/End` para inicio/final. Muestra badge al revisar historial y vuelve al final cuando se escribe. Conserva rueda como mouse input cuando la app activa modo mouse o alternate screen. `cmake --build build/native --parallel 2` pasó; falta prueba visual.
-- Terminal visible añadida a Studio: botón `Terminal +` y `Ctrl+Shift+T` abren el shell del proyecto como pestaña integrada con PTY/ConPTY y libvterm, previa a una ejecución de preview del CLI. Attach a Zellij sigue externo. Build previo pasó; falta comprobar visualmente.
+- Terminal visible añadida a Studio: botón `Terminal +` y `Ctrl+Shift+T` abren el shell del proyecto como pestaña integrada con PTY/ConPTY y libvterm, previa a una consulta bridge de solo lectura que no depende de Zellij. Attach a Zellij sigue externo. Build macOS reportado y build Linux local pasan; falta comprobación visual.
 - Corregido error de compilación reportado en macOS: `main_window_agent_sessions.cpp` incluye la definición de `BridgeClient` que necesita para consultar `isRunning()`. Quitada captura lambda no usada en el filtro de secciones. `cmake --build build/native --parallel 2` completó y enlazó `chxchx-studio`.
 - Primera pasada de modernización visual de Studio: paleta azul noche/cian, controles con estados hover/focus/selección, separadores y tabs más claros; navegación lateral ahora muestra proyecto y filtra secciones al escribir. Pendiente revisar visualmente y seguir simplificando tareas frecuentes.
-- El contrato local `docs/17-BRIDGE-CONTRACTS.md` describe terminales integradas como capacidad nativa separada del JSON bridge. Agentes y terminal nueva de workspace usan PTY/ConPTY; attach a Zellij sigue externo. El siguiente alcance es attach embebido a Zellij.
+- El bridge JSON está descrito por `src/chxchx_tech_lead/workspace/bridge_contracts.py`; las terminales integradas son una capacidad nativa separada. Agentes y terminal nueva de workspace usan PTY/ConPTY; attach a Zellij sigue externo. El siguiente alcance es attach embebido a Zellij.
 - Studio ahora valida `schema_version` del bridge antes de procesar un payload y muestra un mensaje legible ante versiones incompatibles, versión ausente/inválida o un nombre de schema desconocido. La versión aceptada por Qt se declara como `BridgeSchemas::Version = 1`; los campos JSON adicionales siguen siendo ignorados por los accesos selectivos existentes.
 - Transporte PTY/ConPTY añadido a `native/src/integrations/pty_session.*`: shell o proceso por argv/cwd, entrada, salida asíncrona, resize y cierre. POSIX usa `forkpty` (Linux/macOS); Windows usa ConPTY, mínimo Windows 10.
 - `native-pty-smoke` comprueba un shell interactivo: Studio envía una línea al proceso y cambia la geometría; en Linux también valida que `stty size` devuelve el nuevo tamaño. CMake compila y CTest pasa 2/2 en Fedora. El backend ConPTY debe quedar validado por el runner de Windows CI.
-- Commit `a5c0753` integra pestañas de agentes con PTY/ConPTY y libvterm. Los cambios locales añaden `agent preflight` para trust/RAM agregado y pasan el arranque embebido por `agent_pane_command`, incluyendo instrumentación y el prompt contextual de sesión nueva. Python: 195 passed, 1 skipped. La compilación nativa sigue sin comprobarse porque CMake no puede resolver GitHub para descargar Scintilla/Lexilla/libvterm, aunque Qt6 Core5Compat ya está instalado.
+- Commit `a5c0753` integra pestañas de agentes con PTY/ConPTY y libvterm. El commit posterior añade `agent preflight` para trust/RAM agregado y pasa el arranque embebido por `agent_pane_command`, incluyendo instrumentación y el prompt contextual de sesión nueva. Python: 195 passed, 1 skipped. El build Linux actual compila y enlaza Studio.
 - Cierre del bloque actual: Recursos de Studio consume `bridge resources PATH`, con muestra global del sistema y resumen de procesos gestionados para cada proyecto registrado. El endpoint es read-only y una prueba verifica que conserva el archivo de configuración.
 - El editor usa Scintilla/Lexilla fijados a commits upstream; tiene UTF-8, guardado atómico, lexer por extensión y búsqueda en archivo. `workspace terminal` abre una pestaña integrada; attach a Zellij y `agent attach` mantienen launcher externo, con preview/confirmación y preflight de RAM para agentes.
-- Validación actual de Python: `python -m compileall -q src tests scripts`; `UV_CACHE_DIR=/tmp/chichan-tech-lead-uv-cache uv run --no-sync pytest -q` (195 passed, 1 skipped); `git diff --check` limpio. Qt6 Core5Compat está instalado (`qt6-qt5compat-devel-6.11.2`). CMake detecta Qt, pero no completa FetchContent porque este entorno no resuelve `github.com` al descargar Scintilla.
+- Validación actual: `python -m compileall -q src tests scripts`; suite Python (`195 passed, 1 skipped`); `git diff --check`; `cmake --build /tmp/chxchx-studio-post-pull --parallel 2`; CTest (`2/2`); inicio Qt offscreen durante 3 s (timeout 124 esperado). Qt6 Core5Compat está instalado; CMake descargó Scintilla/Lexilla/libvterm y compiló el proyecto tras recuperar conectividad.
 - Requisito local: el build estándar usa Qt6 Core5Compat de desarrollo; ya está instalado en este Fedora. CI instala el módulo desde sus runners.
-- Pendiente inmediato: pruebas de pantalla ANSI/VT y scrollback, QA visual y métricas por plataforma; build macOS local pasa con dependencias configuradas. ADR-0001 local refleja la decisión aprobada de incorporar editor y terminal nativos en Studio, manteniendo CLI/TUI independientes y el launcher externo como fallback. Después: attach integrado a Zellij, búsqueda global, recientes, splits, Git diff, símbolos/LSP, instaladores y QA visual/performance en Windows/macOS/Linux.
+- Pendiente inmediato: QA visual/interactivo del flujo Studio en un proyecto real y pruebas automatizadas específicas para pantalla ANSI/VT/scrollback; CTest cubre editor y PTY, no el render VT. La búsqueda indexada de rutas y grupos divididos ya están implementados. Después, según prioridad: attach integrado a Zellij, búsqueda de contenido, recientes, Git diff, símbolos/LSP, instaladores y métricas multiplataforma.
 - Studio añade vistas funcionales de Configuración, Guía y Marca. Setup ofrece preparación completa, init completo/mínimo, instalación de herramientas e integración MCP; todas las mutaciones pasan por dry-run y confirmación. Doctor es solo lectura. `Ctrl+P` filtra vistas, archivos y acciones disponibles; `Ctrl+F` busca en el archivo abierto.
 - CI ahora compila Qt en Ubuntu, Windows, macOS y Fedora. Build local Qt 6.11.2, compileall y suite: 191 passed, 1 skipped. `setup --dry-run` y `doctor` se ejecutaron correctamente sin cambios.
 - La rama activa es `dev`.
@@ -81,3 +86,56 @@
 ## Estado del runtime observado
 
 - La sesión guardada `chichan-tech-lead` apareció `EXITED` y su metadata vieja mostraba panes de agentes sin filas de contenido. El inicio del workspace recrea sesiones `EXITED`; para una sesión viva sin pestaña `Agentes`, el flujo nuevo la agrega al adjuntarse.
+
+## Studio: conservar pestañas de trabajo al cambiar de sección
+
+- Las vistas de sección comparten una pestaña fija con documentos, terminales y agentes. Navegar entre secciones solo cambia el contenido de esa pestaña y conserva abiertas las demás.
+- La pestaña fija refleja el nombre/icono de la sección activa, no muestra botón de cierre y está protegida en `closeEditorTab`.
+- Build Linux y CTest (2/2) pasan; queda QA visual/interactivo en escritorio.
+
+## Studio: contraste de texto del editor
+
+- El texto base del editor bajó de blanco azulado a un gris azulado suave (`#B9C6D8`); los tokens de sintaxis azul claro también se atenuaron (`#98B5CC`). Se mantienen intactos el fondo, la selección y el color de números de línea.
+- Build Linux completado; pendiente revisar visualmente el contraste en escritorio.
+
+## Studio: margen y ajuste de línea
+
+- El margen de números usa un fondo azul marino `#122941` y primer plano `#7896B5`; se reaplican tras la inicialización del lexer para que no vuelva al gris predeterminado.
+- El ajuste de línea está activo de forma predeterminada, oculta la barra horizontal y se alterna desde `Ver → Ajuste de línea` o `Alt+Z`. La preferencia queda guardada en `QSettings` y aplica a documentos abiertos y nuevos.
+- Build Linux completado; falta revisión visual e interacción con un archivo largo.
+
+## Studio: pestañas compactas
+
+- La pestaña de secciones queda sin texto y conserva solo el icono de Inicio; su tooltip indica que abre las secciones del proyecto.
+- Los tabs de archivos, terminales y agentes reducen ancho máximo/mínimo, altura, padding, margen y tamaño de cierre manteniendo el título legible.
+- Build Linux y `git diff --check` pasan; falta validar el tamaño visual en escritorio.
+
+## Studio: nombres de pestañas
+
+- La pestaña Inicio usa mínimo de 44 px y el icono de casa a 14 px. Las pestañas de código muestran el basename con extensión (por ejemplo, `main_window.cpp`); el tooltip mantiene la ruta completa.
+- Las terminales integradas se nombran `Terminal #1`, `Terminal #2`, etc. durante la sesión de Studio.
+- Build Linux y `git diff --check` pasan; falta QA visual del usuario.
+
+## Studio: grupos de pestañas divididos
+
+- El centro usa un `QSplitter` con dos grupos de pestañas. Clic derecho sobre una pestaña permite dividirla a la derecha o abajo y moverla entre grupos; sirve para archivos, terminales y sesiones de agente.
+- Cerrar la división devuelve sus pestañas al grupo principal sin cerrar procesos o sesiones. Inicio permanece fijo en el grupo principal; las acciones de archivo y ajuste de línea operan sobre el grupo activo.
+- La Guía rápida describe el menú contextual. Build Linux y `git diff --check` pasan; pendiente probar las interacciones de split en escritorio.
+
+## Studio: acciones de edición y atajos
+
+- `Edición` ofrece Deshacer, Rehacer, Cortar, Copiar, Pegar y Seleccionar todo con atajos estándar de Qt; quedan editables desde Configurar atajos.
+- Las acciones se despachan al editor Scintilla, campos QLineEdit, paneles QPlainTextEdit/QTextEdit o terminal con el foco. En terminal se conserva Ctrl+C como interrupción; Pegar envía el portapapeles como texto.
+- La Guía rápida explica estas acciones. Build Linux, inicio offscreen y `git diff --check` pasan.
+
+## Studio: recorrido guiado para preparar un proyecto
+
+- La sección Guía presenta cuatro pasos en orden: preparar el proyecto con Init, elegir y sincronizar skills, autorizar/iniciar el workspace y abrir una nueva sesión de agente con contexto.
+- Cada tarjeta tiene un botón que navega directamente a Configuración, Skills, Proyecto o Agentes. La guía también resume el uso diario del explorador, Terminal +, divisiones de pestañas y configuración de atajos.
+- Validación: build Linux en `/tmp/chxchx-studio-post-pull`, inicio offscreen por 3 segundos y `git diff --check` pasan. Falta revisión visual e interacción en escritorio.
+
+## Revisión para empezar a usar Studio
+
+- Roadmap y matriz de paridad actualizados: el plan anterior aún describía Sublime como editor objetivo y marcaba la búsqueda de rutas y los splits como pendientes. Ahora distingue funcionalidades listas, bloqueos para comenzar a usarlo y mejoras de v1.0.
+- El cierre mínimo es QA interactivo en un proyecto confiable: Init/trust, skills, edición/guardado, terminal, agente/contexto, RAM y cierre limpio. Los builds/smokes por sistema requieren evidencia real; que exista un job CI no demuestra que pasó.
+- Cambios de Studio y limpieza documental quedaron comprometidos en dos commits de `dev`. `docs/` permanece con 18 archivos en este checkout y está ignorada; otros clones no la recibirán. No se ejecutaron pruebas en la revisión documental; el build/CTest de Studio constan en el handoff anterior.

@@ -1,32 +1,62 @@
 # Roadmap
 
-## Ahora
+## Estado de la versión de uso diario
 
-- v0.6 / Skill Engine: registro local con comandos `list`, `search`, `info` y `recommend` integrado al detector existente.
-- Catálogo curado de 17 skills con búsqueda, consulta, recomendación y detección de stacks; incluye guía UI/UX avanzada para proyectos web y móvil.
-- Selección por proyecto con `skill enable/disable` y carga explícita con `skill sync`.
-- Tech Packs curados, razones de detección y aplicación aditiva implementados.
-- RAM Governor v0: aviso de presión y cuota de agentes con confirmación desde TUI; sin parada automática.
-- Tokens de color compartidos por CLI y TUI para alinear estados, navegación y acentos con una estética limpia y sobria.
-- `editor setup` genera un `.sublime-project` local con exclusiones, `--dry-run`, idempotencia y backup al actualizar archivos administrados.
-- Próximo entregable: probar visualmente los tres modos y ajustar consistencia; después medir el tamaño del contexto sincronizado.
+La rama `dev` ya contiene el control plane Python (CLI/TUI) y ChxChx Studio, la
+aplicación nativa C++20/Qt 6. Studio integra el Skill Registry, Tech Packs,
+workspace/trust, RAM Governor, procesos, agentes, terminal PTY/ConPTY, memoria,
+handoff, navegación, edición, búsqueda de nombres y ajustes configurables.
+El inventario de capacidades está en `.ai/EDITOR-PARITY.md`.
 
-## Después
+## Cierre para empezar a usar Studio en proyectos reales
 
-- Roles de agente y workflows.
-- Medir RAM reservable por agente y mostrar tendencia en Recursos; luego comandos desde Sublime, workflows y ChxChx Insights.
-- Importación externa solo después de normalización, revisión de seguridad y preservación de licencia/procedencia.
+1. Recompilar y abrir un repositorio de trabajo con `./scripts/dev-studio.sh
+   /ruta/al/proyecto`; el script configura `CHXCHX_TECH_CLI` hacia el `.venv`
+   local si existe. Si se abre directamente el binario, asegurar que
+   `chxchx-tech` esté en el `PATH` o definir esa variable.
+2. Recorrer Guía: Init/preparación con preview, recomendaciones y sincronización
+   de skills, trust del proyecto y nueva sesión de agente con contexto.
+3. Probar en un repositorio real y confiable: abrir/guardar archivos, buscar
+   rutas, usar undo/redo y atajos, abrir una shell, iniciar y cerrar una sesión
+   de agente, revisar handoff, y verificar trust/RAM antes de ejecutar.
+4. Corregir los fallos concretos que aparezcan y confirmar que cerrar Studio no
+   deja procesos inesperados. Registrar la validación manual en el handoff.
 
-## Modos de trabajo: CLI, TUI y editor
+Esta revisión funcional en Fedora es el único paso que bloquea afirmar que el
+usuario ya puede empezar a usar esta copia a diario. Si el proyecto se va a
+usar también en macOS o Windows, ejecutar además el build y smoke nativos en
+cada plataforma destino. El CI tiene trabajos configurados para Linux, Fedora,
+macOS y Windows, pero cada plataforma requiere evidencia de una ejecución
+verde; la configuración del workflow no equivale a que haya pasado.
 
-Objetivo: ofrecer interfaces separadas que ejecuten las mismas operaciones de workspace y respeten la misma configuración, política de recursos y estado por proyecto.
+## Pendientes de Studio; no bloquean el uso local básico
 
-1. **Contrato compartido:** mantener los casos de uso en servicios de `workspace/`, `skills/`, `agents/` y `memory/`. CLI, TUI y editor llaman esos servicios; ninguna interfaz se convierte en dueña de sesiones, procesos o configuración.
-2. **CLI estable:** completar los flujos de automatización y comandos operativos. La CLI debe poder ejecutarse sin abrir la TUI o el editor y mantener sus confirmaciones de RAM/cuota.
-3. **Aplicación nativa ChxChx:** crear escritorio/editor C++20 + Qt 6 Widgets + Scintilla/Lexilla, con paridad funcional completa con TUI y objetivo macOS, Windows, Fedora y Ubuntu. El inventario está en `.ai/EDITOR-PARITY.md`.
-4. Construir primero el shell Qt y editor mínimo, luego un bridge JSON versionado temporal para conservar reglas entre CLI/TUI/app sin congelar la ventana.
-5. Migrar el núcleo compartido a C++ por dominios; CLI y TUI siguen disponibles y delegan al mismo núcleo conforme cada dominio supere pruebas de paridad.
-6. Implementar áreas TUI por verticales medibles y luego LSP/funciones avanzadas de edición. Medir startup, RAM y latencia durante cada vertical.
-7. Añadir CI/build/paquetizado multiplataforma para Fedora, Ubuntu, macOS y Windows y verificar la matriz completa.
+- Attach a una sesión Zellij desde la terminal integrada; por ahora se mantiene
+  el launcher externo como alternativa.
+- Añadir pruebas del render ANSI/VT, scrollback, resize y sesiones interactivas
+  además de los smoke actuales de editor y PTY.
+- Añadir búsqueda de contenido del proyecto; la búsqueda actual indexa nombres
+  y rutas, no el texto de los archivos.
+- Restaurar archivos recientes y grupos de pestañas de forma segura al iniciar.
+- Añadir Git diff, navegación de símbolos y después integración LSP.
+- Medir startup, RAM idle, latencia de navegación y apertura de repositorios
+  grandes; definir límites aceptables antes de publicar.
+- Crear paquetes instalables para Linux, macOS y Windows, con runtime y avisos
+  de terceros incluidos.
+- Decidir si el núcleo Python seguirá siendo la autoridad mediante el bridge o
+  si comienza una migración gradual a un núcleo C++ compartido. No bloquear el
+  uso de Studio con una reescritura sin una necesidad medida.
 
-Regla de convivencia: abrir o cerrar una interfaz no debe detener ni duplicar procesos del proyecto. El estado de workspace es compartido; el estado de pantalla, foco y paneles pertenece a cada interfaz.
+## Evolución posterior
+
+- Roles de agente y workflows una vez que el flujo diario tenga validación real.
+- ChxChx Insights y aprendizaje desde el trabajo, con controles de privacidad y
+  promoción explícita de observaciones a skills.
+- Importación externa de skills solo con normalización, revisión de seguridad y
+  conservación de licencia/procedencia.
+
+## Regla de convivencia entre interfaces
+
+CLI, TUI y Studio operan la misma configuración y servicios del proyecto. Abrir
+o cerrar una interfaz no debe iniciar, duplicar ni detener procesos de otra;
+foco, pestañas y paneles pertenecen a cada interfaz.

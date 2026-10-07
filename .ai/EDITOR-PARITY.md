@@ -46,20 +46,19 @@ La interfaz debe sentirse ligera y ordenada, cercana a la estética limpia de KD
 - Proyecto ofrece trust, start/resume, suspend y stop; Proyectos lista registros desde el bridge y cambia contexto sin adjuntar terminal. Los cambios usan `--dry-run`, confirmación visible y la lógica de recursos/trust del CLI.
 - Handoff tiene formulario para resumen/pendiente/validación, lectura del contenido vigente y guardado por `workspace handoff` con preview/confirmación. Memoria busca notas locales por título/contenido y muestra su detalle en solo lectura; el bridge valida que las rutas permanezcan dentro del proyecto.
 - Chats busca el historial local de Codex/Claude por título y contenido y carga una transcripción elegida bajo demanda. Errores muestra la caché local filtrada al proyecto y el detalle del registro; ambas vistas son de solo lectura.
-- Configuración ya ejecuta preparación completa, init completo/mínimo, instalación de herramientas e integración MCP con `--dry-run`, vista previa y confirmación; Doctor queda como diagnóstico de solo lectura. Guía y Marca tienen vistas nativas. `Ctrl+P` abre una paleta filtrable para navegar áreas, archivos, buscar/guardar y disparar acciones disponibles de la vista. `Ctrl+F` busca dentro del archivo abierto.
-- Studio integra sesiones de agentes y una terminal nueva del workspace en pestañas con PTY/ConPTY y libvterm. `Terminal +` y `Ctrl+Shift+T` abren el shell integrado tras preview CLI; attach a Zellij conserva el emulador externo. El contrato está en `docs/17-BRIDGE-CONTRACTS.md`. El preflight de trust/RAM y el wrapper contextual compartido están implementados para agentes. La búsqueda actual cubre el archivo activo; siguen pendientes búsqueda global, historial de archivos, splits, diff Git, símbolos y LSP.
-- Terminal embebida — transporte, emulación VT, pestaña de agente y shell general de workspace implementados en `native/src/integrations/pty_session.*`, `vt_terminal_widget.*`, `agent_session_widget.*` y `workspace_terminal_widget.*`. Studio pinta celdas ANSI/VT, procesa teclado, resize, mouse y rueda; historial acotado a 5000 líneas con rueda, Shift+PageUp/Down y Ctrl+Home/End. Pendiente: attach integrado a Zellij, pruebas de render/scrollback y CI por plataforma. Conservar launcher externo como fallback.
-- CI configura Qt 6.8.3 y compila y ejecuta el smoke de Scintilla en Ubuntu, Windows, macOS y Fedora. El build y `ctest` pasan localmente en Fedora con Qt 6.11.2; Windows/macOS requieren sus runners para validación real. La primera configuración CMake descarga revisiones fijadas de Scintilla/Lexilla y necesita acceso a GitHub; se documentan avisos en `native/THIRD_PARTY.md`.
-- Siguen pendientes pruebas visuales y medidas de startup/RAM/latencia, empaquetado instalable por plataforma y migración del bridge transitorio a un núcleo C++ común. Completar antes el gobernador y la paridad de sesiones nuevas en la terminal embebida.
+- Configuración ya ejecuta preparación completa, init completo/mínimo, instalación de herramientas e integración MCP con `--dry-run`, vista previa y confirmación; Doctor queda como diagnóstico de solo lectura. Guía y Marca tienen vistas nativas. Las acciones están agrupadas en menús Archivo, Edición, Ver, Navegar, Herramientas y Ayuda, con accesos rápidos en la barra. `Edición → Configurar atajos` permite personalizar combinaciones, validar duplicados, persistir preferencias y restablecer valores iniciales. `Ctrl+P` abre una paleta filtrable para navegar áreas, archivos, buscar/guardar y disparar acciones disponibles de la vista. `Ctrl+F` busca dentro del archivo abierto.
+- Studio integra sesiones de agentes y una terminal nueva del workspace en pestañas con PTY/ConPTY y libvterm. `Terminal +` y `Ctrl+Shift+T` consultan el estado del proyecto mediante el bridge de solo lectura antes de abrir el shell; attach a Zellij conserva el launcher externo. El preflight de trust/RAM y el wrapper contextual compartido están implementados para agentes. El explorador tiene filtro por nombre y búsqueda indexada global de rutas (`Ctrl+Shift+F`); la búsqueda de contenido y los archivos recientes siguen pendientes. Los grupos divididos de pestañas ya están implementados para archivos, terminales y agentes.
+- Terminal embebida: transporte, emulación VT, pestaña de agente y shell general de workspace están implementados en `native/src/integrations/pty_session.*`, `vt_terminal_widget.*`, `agent_session_widget.*` y `workspace_terminal_widget.*`. Studio pinta celdas ANSI/VT, procesa teclado, resize, mouse y rueda; historial acotado a 5000 líneas con rueda, Shift+PageUp/Down y Ctrl+Home/End. Pendiente: attach integrado a Zellij y pruebas específicas de render/scrollback. Conservar launcher externo como fallback.
+- CI tiene trabajos configurados para Qt 6 en Ubuntu, Windows y macOS, además de Fedora. La configuración del workflow no confirma que la ejecución actual haya pasado; registrar evidencia de build y smoke por plataforma antes de declarar compatibilidad. Localmente se ha validado Fedora con Qt 6.11.2. La primera configuración CMake descarga revisiones fijadas de Scintilla/Lexilla y necesita acceso a GitHub; avisos en `native/THIRD_PARTY.md`.
+- Antes del uso diario falta QA interactivo con un proyecto real y corregir los fallos encontrados. Para cerrar una distribución pública faltan medidas de startup/RAM/latencia y empaquetado instalable por plataforma. La migración del bridge a un núcleo C++ es una decisión arquitectónica posterior, no requisito para empezar a usar Studio.
 
 ### Pendientes restantes
 
-1. Completar terminal embebida: integrar attach a Zellij y cubrir pantalla ANSI/VT y scrollback con pruebas. Probar shell interactivo y `zellij attach`; verificar resize y teclado. El transporte PTY/ConPTY, pintado libvterm, scrollback acotado y fallback externo ya existen.
-2. Búsqueda global incremental que respete exclusiones (`.git`, dependencias, builds y `.ai` privado), con resultados que abran archivo y posicionen línea.
-3. Lista de archivos recientes acotada al proyecto y pestañas restaurables de forma segura.
-4. Splits con editor compartiendo documento sin duplicar estado sucio/guardado.
-5. Git diff por archivo y navegación de símbolos; después añadir LSP mediante procesos del workspace.
-6. Cerrar validación: smoke visual, startup/RAM/latencia, runners Windows/macOS/Fedora/Ubuntu y empaquetado.
+1. QA interactivo en Fedora con un proyecto confiable: Init/trust, skills, edición/guardado, búsqueda de rutas, terminal, agentes, RAM, cierre y reapertura. Registrar fallos y corregir los que bloqueen el flujo.
+2. Probar build y smoke en cada plataforma objetivo; conservar evidencia de los resultados reales de CI y validar manualmente macOS/Windows cuando se disponga de esos equipos.
+3. Completar pruebas de VT/scrollback y evaluar attach integrado a Zellij; mantener disponible el launcher externo.
+4. Añadir búsqueda de contenido, archivos recientes restaurables, Git diff, navegación de símbolos y LSP según el uso observado.
+5. Medir startup/RAM/latencia y preparar paquetes instalables antes de declarar una release pública `v1.0`.
 
 ### Núcleo compartido con CLI/TUI
 
@@ -73,7 +72,7 @@ La interfaz debe sentirse ligera y ordenada, cercana a la estética limpia de KD
 
 - Scintilla proporciona edición C++ multiplataforma con selección, folding, márgenes, undo/redo e indicadores; Lexilla aporta lexers.
 - Añadir lenguaje inteligente mediante Language Server Protocol después de estabilizar edición básica; el servidor de lenguaje vive fuera del proceso UI y se administra como proceso del workspace.
-- Búsqueda de archivos/texto incremental, archivos recientes, pestañas, splits, diff Git y navegación de símbolos.
+- Búsqueda incremental de contenido, archivos recientes restaurables, Git diff por archivo y navegación de símbolos. La búsqueda por nombre/ruta y los grupos de pestañas ya están implementados.
 
 ### Distribución
 
@@ -85,13 +84,11 @@ La interfaz debe sentirse ligera y ordenada, cercana a la estética limpia de KD
 
 ## Entregas
 
-1. Crear el target CMake Qt Widgets y ventana nativa vacía para macOS, Windows, Fedora y Ubuntu; validar instalación de toolchain y build reproducible.
-2. Implementar shell KDE-inspired y editor Scintilla mínimo con abrir/editar/guardar, pestañas, árbol de proyecto y paleta de comandos.
-3. Definir y probar el bridge JSON versionado para Inicio → Proyecto → Recursos, sin bloquear el hilo visual.
-4. Implementar agentes/procesos/proyectos con las mismas confirmaciones trust, RAM Governor y acciones actuales.
-5. Implementar skills/packs, handoff, memoria, chats, errores, guía, marca, configuración y doctor.
-6. Añadir LSP y herramientas de edición avanzadas tras la experiencia base.
-7. Medir startup/RAM/latencia y validar matriz TUI completa en Linux, Windows y macOS antes de fijar v1.
+1. Ejecutar QA interactivo del flujo diario en Fedora y corregir defectos que impidan preparar un proyecto, editarlo o trabajar con terminal/agentes.
+2. Cerrar cobertura específica de VT/scrollback y validar build/smoke en cada runner y plataforma objetivo.
+3. Añadir attach integrado a Zellij y búsqueda de contenido si el uso diario lo requiere.
+4. Completar archivos recientes restaurables, Git diff, símbolos y LSP según prioridad de uso.
+5. Medir startup/RAM/latencia y empaquetar por plataforma antes de fijar `v1.0`.
 
 ## Criterios de aceptación
 
