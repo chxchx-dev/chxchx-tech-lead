@@ -31,8 +31,8 @@ verde; la configuración del workflow no equivale a que haya pasado.
 
 ## Pendientes de Studio; no bloquean el uso local básico
 
-- Attach a una sesión Zellij desde la terminal integrada; por ahora se mantiene
-  el launcher externo como alternativa.
+- Attach integrado a Zellij disponible desde la paleta de comandos. Falta
+  validarlo manualmente con una sesión real; se conserva el launcher externo.
 - Smoke Qt offscreen cubre render ANSI, navegación al inicio/fin y páginas de
   scrollback; ampliar cobertura de resize/reflow y sesiones interactivas largas.
 - Añadir búsqueda de contenido del proyecto; la búsqueda actual indexa nombres

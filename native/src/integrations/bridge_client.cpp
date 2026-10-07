@@ -59,6 +59,11 @@ bool BridgeClient::isRunning() const
     return m_process.state() != QProcess::NotRunning;
 }
 
+QString BridgeClient::program() const
+{
+    return m_program;
+}
+
 void BridgeClient::setWorkingDirectory(const QString &path)
 {
     m_process.setWorkingDirectory(path);

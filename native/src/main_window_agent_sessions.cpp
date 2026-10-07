@@ -36,6 +36,17 @@ void MainWindow::createEmbeddedWorkspaceTerminal()
     terminal->setFocus(Qt::OtherFocusReason);
 }
 
+void MainWindow::createEmbeddedWorkspaceAttach(const QStringList &command)
+{
+    QTabWidget *tabs = activeEditorTabs();
+    auto *terminal = new WorkspaceTerminalWidget(m_projectPath, tabs, command,
+        QStringLiteral("Cliente Zellij integrado"));
+    const int tab = tabs->addTab(terminal, QStringLiteral("Zellij"));
+    tabs->setTabToolTip(tab, QStringLiteral("Sesión del workspace en Zellij\n%1").arg(m_projectPath));
+    tabs->setCurrentWidget(terminal);
+    terminal->setFocus(Qt::OtherFocusReason);
+}
+
 void MainWindow::openSelectedAgent(bool newChat)
 {
     if (m_currentArea != QStringLiteral("agents")) return;

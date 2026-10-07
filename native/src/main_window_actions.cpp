@@ -1,4 +1,5 @@
 #include "main_window.hpp"
+#include "integrations/bridge_client.hpp"
 
 #include <QComboBox>
 #include <QLineEdit>
@@ -251,10 +252,19 @@ void MainWindow::attachWorkspaceTerminal()
 {
     const QStringList preview = {QStringLiteral("workspace"), QStringLiteral("attach"),
         m_projectPath, QStringLiteral("--dry-run")};
+    const QStringList action = {QStringLiteral("__launch_embedded_workspace_attach__"),
+        m_bridgeClient->program(), QStringLiteral("workspace"), QStringLiteral("attach"), m_projectPath};
+    runPreview(preview, action, {}, QStringLiteral("Adjuntar a Zellij en Studio"));
+}
+
+void MainWindow::attachWorkspaceTerminalExternal()
+{
+    const QStringList preview = {QStringLiteral("workspace"), QStringLiteral("attach"),
+        m_projectPath, QStringLiteral("--dry-run")};
     const QStringList action = {QStringLiteral("__launch_terminal__"),
         QStringLiteral("chxchx-tech"), QStringLiteral("workspace"),
         QStringLiteral("attach"), m_projectPath};
-    runPreview(preview, action, {}, QStringLiteral("Adjuntar al workspace"));
+    runPreview(preview, action, {}, QStringLiteral("Adjuntar al workspace en terminal externa"));
 }
 
 void MainWindow::attachAgentTerminal()

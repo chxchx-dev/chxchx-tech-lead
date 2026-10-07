@@ -151,3 +151,9 @@
 - `native-vt-terminal-smoke` usa Qt offscreen y libvterm para comprobar salida ANSI roja, desplazamiento al historial, avance por página y retorno al final en una terminal con más de 24 líneas.
 - Build Linux correcto y CTest 3/3 pasa (editor, PTY y VT). `git diff --check` limpio.
 - Sigue pendiente probar reflow del historial al cambiar tamaño y una sesión interactiva larga; attach integrado a Zellij continúa en el roadmap.
+
+## Studio: attach integrado a Zellij
+
+- La paleta abre `chxchx-tech workspace attach PATH` dentro de una pestaña PTY/libvterm, después del preview y confirmación existentes. Se conserva otra acción de paleta para lanzar el cliente Zellij en una terminal externa.
+- `WorkspaceTerminalWidget` acepta comandos arbitrarios manteniendo shell por defecto; `BridgeClient` comparte la resolución de la CLI (`CHXCHX_TECH_CLI`, `.venv` local o `PATH`).
+- Build Linux y CTest 4/4 pasan, incluyendo un smoke offscreen que verifica que una pestaña PTY ejecuta y termina un comando personalizado. Falta validar attach real/foco/cierre con Zellij en escritorio.

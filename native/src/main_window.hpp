@@ -74,6 +74,7 @@ private slots:
     void updateAgentDashboard();
     void openNewWorkspaceTerminal();
     void attachWorkspaceTerminal();
+    void attachWorkspaceTerminalExternal();
     void attachAgentTerminal();
     void openSelectedAgent(bool newChat = false);
     void openAllAgentSessions();
@@ -123,6 +124,7 @@ private:
         const QString &workingDirectory,
         bool newChat);
     void createEmbeddedWorkspaceTerminal();
+    void createEmbeddedWorkspaceAttach(const QStringList &command);
     int currentProjectEmbeddedAgentCount() const;
     void schedulePendingRefresh();
     void appendOutput(const QString &text);

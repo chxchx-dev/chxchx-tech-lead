@@ -12,6 +12,7 @@ public:
     explicit BridgeClient(QString workingDirectory, QObject *parent = nullptr);
 
     bool isRunning() const;
+    QString program() const;
     void setWorkingDirectory(const QString &path);
     bool execute(const QStringList &arguments);
     QByteArray readStandardOutput();

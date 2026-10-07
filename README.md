@@ -683,6 +683,8 @@ Las vistas Inicio, Proyecto, Agentes, Procesos, Proyectos, Skills y Tech Packs c
 
 Inicio incluye un panel central de acciones rápidas para confiar el proyecto, iniciar/reanudar, suspender o detener el workspace, abrir una terminal, preparar el proyecto, sincronizar skills y abrir agentes o sesiones nuevas. Estas acciones conservan la previsualización, confirmación y preflight de trust/RAM de sus flujos compartidos; ya no requieren abrir primero el panel lateral de Secciones y acciones.
 
+La paleta de comandos también puede adjuntar a una sesión Zellij dentro de una pestaña PTY/libvterm integrada; conserva una segunda opción para abrir ese attach en el emulador externo como fallback.
+
 Studio carga los logos de `assets/` como recursos Qt: la variante mínima identifica la aplicación y la ventana; el logo completo aparece en la vista Marca.
 
 El editor usa el widget Qt oficial de Scintilla con Lexilla para resaltado de sintaxis; las sesiones interactivas usan libvterm para renderizar ANSI/VT, responder consultas del terminal y reenviar teclado, teclas de función, pegado desde el portapapeles, cambios de tamaño y mouse/rueda cuando el agente los solicita. CMake descarga revisiones fijadas de esos proyectos la primera vez que se configura; esa configuración inicial requiere acceso a GitHub. Las versiones y avisos de licencia están en [native/THIRD_PARTY.md](native/THIRD_PARTY.md).

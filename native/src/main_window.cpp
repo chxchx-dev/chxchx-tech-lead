@@ -623,7 +623,8 @@ void MainWindow::openCommandPalette()
         {QStringLiteral("Ejecutar tercera acción de la vista"), QStringLiteral("tertiary")},
         {QStringLiteral("Ejecutar cuarta acción de la vista"), QStringLiteral("quaternary")},
         {QStringLiteral("Abrir terminal integrada del workspace"), QStringLiteral("workspace-terminal")},
-        {QStringLiteral("Adjuntar a la terminal del workspace"), QStringLiteral("workspace-attach")},
+        {QStringLiteral("Adjuntar a Zellij integrada"), QStringLiteral("workspace-attach")},
+        {QStringLiteral("Adjuntar a Zellij externa · fallback"), QStringLiteral("workspace-attach-external")},
         {QStringLiteral("Adjuntar a la terminal del agente seleccionado"), QStringLiteral("agent-attach")},
     };
     for (const auto &entry : entries) {
@@ -700,6 +701,8 @@ void MainWindow::executePaletteCommand(QListWidgetItem *item)
         openNewWorkspaceTerminal();
     } else if (command == QStringLiteral("workspace-attach")) {
         attachWorkspaceTerminal();
+    } else if (command == QStringLiteral("workspace-attach-external")) {
+        attachWorkspaceTerminalExternal();
     } else if (command == QStringLiteral("agent-attach")) {
         attachAgentTerminal();
     }
@@ -906,6 +909,20 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             m_forceActionArguments.clear();
             createEmbeddedWorkspaceTerminal();
             statusBar()->showMessage(QStringLiteral("Terminal integrada lista."), 4000);
+            schedulePendingRefresh();
+            return;
+        }
+        if (!arguments.isEmpty()
+            && arguments.first() == QStringLiteral("__launch_embedded_workspace_attach__")) {
+            m_forceActionArguments.clear();
+            const QStringList terminalCommand = arguments.mid(1);
+            if (terminalCommand.isEmpty() || terminalCommand.first().isEmpty()) {
+                QMessageBox::warning(this, QStringLiteral("CLI no disponible"),
+                    QStringLiteral("No encontré chxchx-tech para abrir la sesión integrada."));
+            } else {
+                createEmbeddedWorkspaceAttach(terminalCommand);
+                statusBar()->showMessage(QStringLiteral("Sesión Zellij integrada abierta."), 4000);
+            }
             schedulePendingRefresh();
             return;
         }

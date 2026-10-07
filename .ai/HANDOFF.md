@@ -264,4 +264,12 @@
 
 - Se añadió `native-vt-terminal-smoke` con `QT_QPA_PLATFORM=offscreen`. Verifica ANSI coloreado y que Ctrl+Home, Shift+PageDown y Ctrl+End cambien/restauren lo que pinta el widget ante salida larga.
 - Validación Linux: build en `/tmp/chxchx-studio-post-pull`, CTest 3/3 (editor, PTY, VT), `git diff --check` limpios.
-- Sigue pendiente cobertura de resize/reflow, sesiones interactivas largas y attach integrado a Zellij. Las notas locales `docs/` están ignoradas por Git; el backlog vigente queda resumido en `.ai/ROADMAP.md` y `.ai/EDITOR-PARITY.md`.
+- Sigue pendiente cobertura de resize/reflow y sesiones interactivas largas. El attach integrado a Zellij ya está implementado; las notas locales `docs/` están ignoradas por Git y el backlog vigente queda resumido en `.ai/ROADMAP.md` y `.ai/EDITOR-PARITY.md`.
+
+## Studio — attach de Zellij en pestaña integrada
+
+- La acción de paleta `Adjuntar a Zellij integrada` primero ejecuta `workspace attach --dry-run` y solicita confirmación; luego inicia la CLI resuelta por `BridgeClient` dentro de `WorkspaceTerminalWidget`/PTY. La opción `Adjuntar a Zellij externa · fallback` conserva el comportamiento anterior.
+- Terminal integrada ahora recibe opcionalmente una lista de argumentos y etiqueta de sesión; sin comando continúa abriendo el shell del proyecto.
+- Linux build pasa y CTest pasa 4/4 (editor, PTY, VT/scrollback y comando en workspace terminal); `git diff --check` pendiente de la verificación final.
+- Pendiente de QA real: confirmar que Zellij dibuja bien en el panel, recibe teclado/resize, conserva el server al cerrar la pestaña y enfoca la tab/pane esperada. Si falla, el launcher externo sigue disponible.
+- Las sesiones que listó Zellij en este checkout estaban todas `EXITED`; no se adjuntó a ellas porque `--force-run-commands` puede resucitar panes. Usar una sesión activa y confiable para la revisión manual.

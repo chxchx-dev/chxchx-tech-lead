@@ -164,4 +164,18 @@ if(CHXCHX_BUILD_TESTS)
         Qt6::Core Qt6::Gui Qt6::Widgets chxchx_vterm)
     add_test(NAME native-vt-terminal-smoke COMMAND chxchx-vt-terminal-smoke)
     set_tests_properties(native-vt-terminal-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    add_executable(chxchx-workspace-terminal-smoke tests/workspace_terminal_smoke.cpp
+        src/integrations/workspace_terminal_widget.cpp src/integrations/workspace_terminal_widget.hpp
+        src/integrations/vt_terminal_widget.cpp src/integrations/vt_terminal_widget.hpp
+        src/integrations/pty_session.cpp src/integrations/pty_session.hpp)
+    target_link_libraries(chxchx-workspace-terminal-smoke PRIVATE
+        Qt6::Core Qt6::Gui Qt6::Widgets chxchx_vterm)
+    if(WIN32)
+        target_compile_definitions(chxchx-workspace-terminal-smoke PRIVATE WINVER=0x0A00 _WIN32_WINNT=0x0A00)
+    elseif(UNIX AND NOT APPLE AND CHXCHX_UTIL_LIBRARY)
+        target_link_libraries(chxchx-workspace-terminal-smoke PRIVATE ${CHXCHX_UTIL_LIBRARY})
+    endif()
+    add_test(NAME native-workspace-terminal-smoke COMMAND chxchx-workspace-terminal-smoke)
+    set_tests_properties(native-workspace-terminal-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

@@ -9,7 +9,8 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-WorkspaceTerminalWidget::WorkspaceTerminalWidget(QString workingDirectory, QWidget *parent)
+WorkspaceTerminalWidget::WorkspaceTerminalWidget(QString workingDirectory, QWidget *parent,
+    QStringList command, QString sessionLabel)
     : QWidget(parent)
 {
     auto *layout = new QVBoxLayout(this);
@@ -41,18 +42,27 @@ WorkspaceTerminalWidget::WorkspaceTerminalWidget(QString workingDirectory, QWidg
         stop->setEnabled(false);
     });
 
+    QString program;
+    QStringList arguments;
+    if (command.isEmpty()) {
 #ifdef Q_OS_WIN
-    const QString shell = qEnvironmentVariable("COMSPEC", QStringLiteral("cmd.exe"));
+        program = qEnvironmentVariable("COMSPEC", QStringLiteral("cmd.exe"));
 #else
-    const QString shell = qEnvironmentVariable("SHELL", QStringLiteral("/bin/sh"));
+        program = qEnvironmentVariable("SHELL", QStringLiteral("/bin/sh"));
 #endif
+    } else {
+        program = command.takeFirst();
+        arguments = command;
+    }
     QString error;
     const QString cwd = QDir(workingDirectory).absolutePath();
-    if (m_pty->start(shell, {}, cwd, 110, 32, &error)) {
-        m_status->setText(QStringLiteral("Terminal del proyecto · %1").arg(cwd));
+    if (m_pty->start(program, arguments, cwd, 110, 32, &error)) {
+        m_status->setText(sessionLabel.isEmpty()
+            ? QStringLiteral("Terminal del proyecto · %1").arg(cwd)
+            : sessionLabel + QStringLiteral(" · ") + cwd);
         m_terminal->setFocus(Qt::OtherFocusReason);
     } else {
-        m_status->setText(QStringLiteral("No se pudo iniciar el shell: %1").arg(error));
+        m_status->setText(QStringLiteral("No se pudo iniciar la sesión: %1").arg(error));
         stop->setEnabled(false);
     }
 }
