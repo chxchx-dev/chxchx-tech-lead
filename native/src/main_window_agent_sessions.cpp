@@ -38,11 +38,22 @@ void MainWindow::createEmbeddedWorkspaceTerminal()
 
 void MainWindow::openSelectedAgent(bool newChat)
 {
-    if (m_currentArea != QStringLiteral("agents") || m_targetSelector->currentIndex() < 0) return;
-    const QString agentId = m_targetSelector->currentText();
-    QString program = m_targetSelector->currentData(Qt::UserRole + 1).toString();
-    const QString workingDirectory = m_targetSelector->currentData(Qt::UserRole + 2).toString();
-    const bool shellCommand = m_targetSelector->currentData(Qt::UserRole + 4).toBool();
+    if (m_currentArea != QStringLiteral("agents")) return;
+    launchAgentFromSelector(m_targetSelector, newChat);
+}
+
+void MainWindow::openHomeSelectedAgent(bool newChat)
+{
+    launchAgentFromSelector(m_homeAgentSelector, newChat);
+}
+
+void MainWindow::launchAgentFromSelector(QComboBox *selector, bool newChat)
+{
+    if (selector == nullptr || selector->currentIndex() < 0) return;
+    const QString agentId = selector->currentText();
+    QString program = selector->currentData(Qt::UserRole + 1).toString();
+    const QString workingDirectory = selector->currentData(Qt::UserRole + 2).toString();
+    const bool shellCommand = selector->currentData(Qt::UserRole + 4).toBool();
     if (program.isEmpty() || workingDirectory.isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("Agente no disponible"),
             QStringLiteral("No encontré la configuración del agente. Actualiza la vista Agentes e inténtalo otra vez."));
@@ -54,9 +65,9 @@ void MainWindow::openSelectedAgent(bool newChat)
         return;
     }
     QStringList arguments;
-    const auto encodedArguments = m_targetSelector->currentData(Qt::UserRole + 3).toString().toUtf8();
+    const auto encodedArguments = selector->currentData(Qt::UserRole + 3).toString().toUtf8();
     for (const auto &value : QJsonDocument::fromJson(encodedArguments).array()) arguments << value.toString();
-    const auto encodedCommand = m_targetSelector->currentData(newChat
+    const auto encodedCommand = selector->currentData(newChat
         ? Qt::UserRole + 6 : Qt::UserRole + 5).toString().toUtf8();
     const QJsonArray studioCommand = QJsonDocument::fromJson(encodedCommand).array();
     if (newChat && studioCommand.isEmpty()) {
@@ -156,28 +167,39 @@ int MainWindow::currentProjectEmbeddedAgentCount() const
 void MainWindow::openAllAgentSessions()
 {
     if (m_currentArea != QStringLiteral("agents") || m_targetSelector->count() == 0) return;
+    openAgentSessions(m_targetSelector);
+}
+
+void MainWindow::openAllHomeAgentSessions()
+{
+    openAgentSessions(m_homeAgentSelector);
+}
+
+void MainWindow::openAgentSessions(QComboBox *selector)
+{
+    if (selector == nullptr || selector->count() == 0) return;
     if (m_bridgeClient->isRunning()) {
         statusBar()->showMessage(QStringLiteral("Espera a que termine el comando actual."));
         return;
     }
     QJsonArray agents;
     QStringList agentIds;
-    for (int index = 0; index < m_targetSelector->count(); ++index) {
-        const QString id = m_targetSelector->itemText(index);
-        const QString program = m_targetSelector->itemData(index, Qt::UserRole + 1).toString();
-        const QString workingDirectory = m_targetSelector->itemData(index, Qt::UserRole + 2).toString();
-        const bool shellCommand = m_targetSelector->itemData(index, Qt::UserRole + 4).toBool();
+    for (int index = 0; index < selector->count(); ++index) {
+        const QString id = selector->itemText(index);
+        const QString program = selector->itemData(index, Qt::UserRole + 1).toString();
+        const QString workingDirectory = selector->itemData(index, Qt::UserRole + 2).toString();
+        const bool shellCommand = selector->itemData(index, Qt::UserRole + 4).toBool();
         if (program.isEmpty() || workingDirectory.isEmpty() || shellCommand
             || m_agentSessions.contains(agentSessionKey(m_projectPath, id))) continue;
         QJsonObject agent;
         agent.insert(QStringLiteral("id"), id);
         agent.insert(QStringLiteral("cwd"), workingDirectory);
         QJsonArray command = QJsonDocument::fromJson(
-            m_targetSelector->itemData(index, Qt::UserRole + 5).toString().toUtf8()).array();
+            selector->itemData(index, Qt::UserRole + 5).toString().toUtf8()).array();
         if (command.isEmpty()) {
             command.append(program);
             for (const auto &argument : QJsonDocument::fromJson(
-                m_targetSelector->itemData(index, Qt::UserRole + 3).toString().toUtf8()).array())
+                selector->itemData(index, Qt::UserRole + 3).toString().toUtf8()).array())
                 command.append(argument);
         }
         agent.insert(QStringLiteral("command"), command);

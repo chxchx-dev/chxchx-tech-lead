@@ -13,6 +13,8 @@
 #include <QFileSystemModel>
 #include <QFrame>
 #include <QFormLayout>
+#include <QGridLayout>
+#include <QGroupBox>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -207,6 +209,54 @@ void MainWindow::buildLayout()
     m_dashboardSummary->setStyleSheet(QStringLiteral(
         "background: #101c2e; border: 1px solid #24364f; border-left: 3px solid #20c5d4; "
         "border-radius: 8px; padding: 12px 14px; color: #dce8f7; font-weight: 600;"));
+    m_homeQuickActions = new QGroupBox(QStringLiteral("Acciones rápidas"), m_dashboardPage);
+    m_homeQuickActions->setObjectName(QStringLiteral("homeQuickActions"));
+    m_homeQuickActions->setStyleSheet(QStringLiteral(
+        "QGroupBox#homeQuickActions { background: #101c2e; border: 1px solid #263a55; "
+        "border-radius: 8px; margin-top: 8px; padding: 10px; font-weight: 700; } "
+        "QGroupBox#homeQuickActions::title { subcontrol-origin: margin; left: 12px; "
+        "padding: 0 6px; color: #63e6ee; }"));
+    auto *homeActionsGrid = new QGridLayout(m_homeQuickActions);
+    homeActionsGrid->setContentsMargins(8, 12, 8, 6);
+    homeActionsGrid->setHorizontalSpacing(8);
+    homeActionsGrid->setVerticalSpacing(8);
+    m_homeTrustButton = new QPushButton(QStringLiteral("Confiar proyecto"), m_homeQuickActions);
+    m_homeWorkspaceButton = new QPushButton(QStringLiteral("Iniciar workspace"), m_homeQuickActions);
+    m_homeSuspendButton = new QPushButton(QStringLiteral("Suspender"), m_homeQuickActions);
+    m_homeStopButton = new QPushButton(QStringLiteral("Detener procesos"), m_homeQuickActions);
+    m_homeTerminalButton = new QPushButton(QStringLiteral("Terminal +"), m_homeQuickActions);
+    m_homePrepareButton = new QPushButton(QStringLiteral("Preparar proyecto"), m_homeQuickActions);
+    m_homeSyncSkillsButton = new QPushButton(QStringLiteral("Sincronizar skills"), m_homeQuickActions);
+    m_homeDoctorButton = new QPushButton(QStringLiteral("Diagnóstico"), m_homeQuickActions);
+    m_homeAgentSelector = new QComboBox(m_homeQuickActions);
+    m_homeAgentSelector->setPlaceholderText(QStringLiteral("Selecciona un agente"));
+    m_homeAgentButton = new QPushButton(QStringLiteral("Abrir agente"), m_homeQuickActions);
+    m_homeNewChatButton = new QPushButton(QStringLiteral("Nueva sesión"), m_homeQuickActions);
+    m_homeAllAgentsButton = new QPushButton(QStringLiteral("Abrir todos"), m_homeQuickActions);
+    m_homeTrustButton->setIcon(studioIcon(QStringLiteral("security-high"), QStyle::SP_DialogApplyButton));
+    m_homeWorkspaceButton->setIcon(studioIcon(QStringLiteral("media-playback-start"), QStyle::SP_MediaPlay));
+    m_homeSuspendButton->setIcon(studioIcon(QStringLiteral("media-playback-pause"), QStyle::SP_MediaPause));
+    m_homeStopButton->setIcon(studioIcon(QStringLiteral("media-playback-stop"), QStyle::SP_MediaStop));
+    m_homeTerminalButton->setIcon(studioIcon(QStringLiteral("utilities-terminal"), QStyle::SP_CommandLink));
+    m_homePrepareButton->setIcon(studioIcon(QStringLiteral("document-new"), QStyle::SP_FileDialogNewFolder));
+    m_homeSyncSkillsButton->setIcon(studioIcon(QStringLiteral("view-refresh"), QStyle::SP_BrowserReload));
+    m_homeDoctorButton->setIcon(studioIcon(QStringLiteral("tools-report-bug"), QStyle::SP_MessageBoxInformation));
+    m_homeAgentButton->setIcon(studioIcon(QStringLiteral("system-run"), QStyle::SP_CommandLink));
+    m_homeNewChatButton->setIcon(studioIcon(QStringLiteral("chat-message-new"), QStyle::SP_MessageBoxInformation));
+    m_homeAllAgentsButton->setIcon(studioIcon(QStringLiteral("view-dual"), QStyle::SP_DesktopIcon));
+    homeActionsGrid->addWidget(m_homeTrustButton, 0, 0);
+    homeActionsGrid->addWidget(m_homeWorkspaceButton, 0, 1);
+    homeActionsGrid->addWidget(m_homeSuspendButton, 0, 2);
+    homeActionsGrid->addWidget(m_homeStopButton, 0, 3);
+    homeActionsGrid->addWidget(m_homeTerminalButton, 1, 0);
+    homeActionsGrid->addWidget(m_homePrepareButton, 1, 1);
+    homeActionsGrid->addWidget(m_homeSyncSkillsButton, 1, 2);
+    homeActionsGrid->addWidget(m_homeDoctorButton, 1, 3);
+    homeActionsGrid->addWidget(m_homeAgentSelector, 2, 0, 1, 1);
+    homeActionsGrid->addWidget(m_homeAgentButton, 2, 1);
+    homeActionsGrid->addWidget(m_homeNewChatButton, 2, 2);
+    homeActionsGrid->addWidget(m_homeAllAgentsButton, 2, 3);
+    m_homeQuickActions->setVisible(m_currentArea == QStringLiteral("overview"));
     auto *dashboardListTitle = new QLabel(QStringLiteral("Estado actual"), m_dashboardPage);
     dashboardListTitle->setStyleSheet(QStringLiteral("color: #78a9ff; font-weight: 700; margin-top: 5px;"));
     m_dashboardItems = new QListWidget(m_dashboardPage);
@@ -215,6 +265,7 @@ void MainWindow::buildLayout()
     dashboardLayout->addWidget(m_dashboardTitle);
     dashboardLayout->addWidget(m_areaDescription);
     dashboardLayout->addWidget(m_dashboardSummary);
+    dashboardLayout->addWidget(m_homeQuickActions);
     dashboardLayout->addWidget(dashboardListTitle);
     dashboardLayout->addWidget(m_dashboardItems, 1);
     m_mainPages->addWidget(m_dashboardPage);
@@ -504,6 +555,18 @@ void MainWindow::buildLayout()
     connect(m_secondaryAction, &QPushButton::clicked, this, &MainWindow::performSecondaryAreaAction);
     connect(m_tertiaryAction, &QPushButton::clicked, this, &MainWindow::performTertiaryAreaAction);
     connect(m_quaternaryAction, &QPushButton::clicked, this, &MainWindow::performQuaternaryAreaAction);
+    connect(m_homeTrustButton, &QPushButton::clicked, this, &MainWindow::trustProjectFromHome);
+    connect(m_homeWorkspaceButton, &QPushButton::clicked, this, &MainWindow::startWorkspaceFromHome);
+    connect(m_homeSuspendButton, &QPushButton::clicked, this, &MainWindow::suspendWorkspaceFromHome);
+    connect(m_homeStopButton, &QPushButton::clicked, this, &MainWindow::stopWorkspaceFromHome);
+    connect(m_homeTerminalButton, &QPushButton::clicked, this, &MainWindow::openNewWorkspaceTerminal);
+    connect(m_homePrepareButton, &QPushButton::clicked, this, &MainWindow::prepareProjectFromHome);
+    connect(m_homeSyncSkillsButton, &QPushButton::clicked, this, &MainWindow::syncSkillsFromHome);
+    connect(m_homeDoctorButton, &QPushButton::clicked, this, &MainWindow::doctorFromHome);
+    connect(m_homeAgentButton, &QPushButton::clicked, this, [this] { openHomeSelectedAgent(false); });
+    connect(m_homeNewChatButton, &QPushButton::clicked, this, [this] { openHomeSelectedAgent(true); });
+    connect(m_homeAllAgentsButton, &QPushButton::clicked, this, &MainWindow::openAllHomeAgentSessions);
+    connect(m_homeAgentSelector, &QComboBox::currentTextChanged, this, &MainWindow::updateHomeActionState);
 
     m_controlDock = new QDockWidget(QStringLiteral("Secciones y acciones"), this);
     m_controlDock->setObjectName(QStringLiteral("controlDock"));

@@ -3,6 +3,7 @@
 #include "integrations/agent_session_widget.hpp"
 #include "studio_icons.hpp"
 
+#include <QComboBox>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -35,6 +36,30 @@ void MainWindow::showAreaDashboard(const QJsonObject &payload, const QString &ar
     if (area != m_currentArea || !m_dashboardItems) return;
     const QJsonObject project = payload.value(QStringLiteral("project")).toObject();
     const QJsonObject workspace = payload.value(QStringLiteral("workspace")).toObject();
+    m_homeQuickActions->setVisible(area == QStringLiteral("overview"));
+    if (area == QStringLiteral("overview")) {
+        m_homeAgentSelector->clear();
+        for (const auto &value : payload.value(QStringLiteral("agents")).toArray()) {
+            const QJsonObject agent = value.toObject();
+            const QString id = agent.value(QStringLiteral("id")).toString();
+            if (id.isEmpty()) continue;
+            m_homeAgentSelector->addItem(id, agent.value(QStringLiteral("status")).toString());
+            const int index = m_homeAgentSelector->count() - 1;
+            m_homeAgentSelector->setItemData(index, agent.value(QStringLiteral("command")).toString(), Qt::UserRole + 1);
+            m_homeAgentSelector->setItemData(index, agent.value(QStringLiteral("cwd")).toString(), Qt::UserRole + 2);
+            m_homeAgentSelector->setItemData(index, QString::fromUtf8(
+                QJsonDocument(agent.value(QStringLiteral("arguments")).toArray())
+                    .toJson(QJsonDocument::Compact)), Qt::UserRole + 3);
+            m_homeAgentSelector->setItemData(index, agent.value(QStringLiteral("shell")).toBool(), Qt::UserRole + 4);
+            m_homeAgentSelector->setItemData(index, QString::fromUtf8(
+                QJsonDocument(agent.value(QStringLiteral("studio_command")).toArray())
+                    .toJson(QJsonDocument::Compact)), Qt::UserRole + 5);
+            m_homeAgentSelector->setItemData(index, QString::fromUtf8(
+                QJsonDocument(agent.value(QStringLiteral("studio_new_chat_command")).toArray())
+                    .toJson(QJsonDocument::Compact)), Qt::UserRole + 6);
+        }
+    }
+    updateHomeActionState();
     const auto addRow = [this](const QString &text, const QString &iconName,
         QStyle::StandardPixmap fallback) {
         auto *item = new QListWidgetItem(studioIcon(iconName, fallback), text, m_dashboardItems);

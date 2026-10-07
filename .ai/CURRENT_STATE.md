@@ -139,3 +139,9 @@
 - Roadmap y matriz de paridad actualizados: el plan anterior aún describía Sublime como editor objetivo y marcaba la búsqueda de rutas y los splits como pendientes. Ahora distingue funcionalidades listas, bloqueos para comenzar a usarlo y mejoras de v1.0.
 - El cierre mínimo es QA interactivo en un proyecto confiable: Init/trust, skills, edición/guardado, terminal, agente/contexto, RAM y cierre limpio. Los builds/smokes por sistema requieren evidencia real; que exista un job CI no demuestra que pasó.
 - Cambios de Studio y limpieza documental quedaron comprometidos en dos commits de `dev`. `docs/` permanece con 18 archivos en este checkout y está ignorada; otros clones no la recibirán. No se ejecutaron pruebas en la revisión documental; el build/CTest de Studio constan en el handoff anterior.
+
+## Studio: acciones rápidas centrales en Inicio
+
+- Inicio incorpora botones centrales para trust, iniciar/reanudar, suspender y detener workspace; terminal; Init completo, sincronización de skills y Doctor; selector de agente con abrir/nueva sesión/abrir todos.
+- Los comandos reutilizan los previews y confirmaciones existentes; agentes conservan preflight de trust/RAM. El panel lateral sigue disponible, pero no es requisito para estas acciones frecuentes.
+- El usuario revisó el panel en Studio y confirmó que la presentación le gusta. Compilación Linux y CTest 2/2 pasan; `python -m compileall src` pasa y pytest reporta 195 passed, 1 skipped. No se ejecutaron mutaciones de Init/workspace durante QA.

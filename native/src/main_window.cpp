@@ -552,6 +552,7 @@ void MainWindow::selectArea(int row)
         || m_currentArea == QStringLiteral("resources");
     if (dashboardArea) {
         m_mainPages->setCurrentWidget(m_dashboardPage);
+        m_homeQuickActions->setVisible(m_currentArea == QStringLiteral("overview"));
         m_dashboardTitle->setText(item->text());
         m_dashboardSummary->setText(QStringLiteral("Consultando el estado del proyecto…"));
         m_dashboardItems->clear();

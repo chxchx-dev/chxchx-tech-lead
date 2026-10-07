@@ -252,3 +252,10 @@
 - Siguiente paso concreto: QA manual en Fedora con un proyecto confiable usando la Guía: Init/previsualización, trust, skills y sync, abrir/editar/guardar, shell integrada, nueva sesión con contexto, confirmar preflight RAM/trust y cerrar Studio verificando procesos.
 - Para abrir el checkout: `./scripts/dev-studio.sh /ruta/al/proyecto`; usa el `.venv` local si está creado. En ejecución directa, configurar `CHXCHX_TECH_CLI` o PATH.
 - Los cambios de Studio y la limpieza de documentación quedaron en dos commits de `dev`. `docs/` se conserva localmente (18 archivos) y está ignorada por Git; ya no se requiere para entender el repo desde otro equipo. Esta revisión documental no ejecutó pruebas; el build Linux y CTest 2/2 anteriores siguen siendo la última verificación de código registrada.
+
+## Studio: acciones rápidas en Inicio
+
+- Inicio ahora ofrece acciones centrales de trust/workspace, terminal, Init, sync de skills, Doctor y agentes (incluye sesión nueva y abrir todos), sin exigir el panel lateral.
+- Cada botón llama el flujo de preview/confirmación existente; iniciar agentes conserva el RAM preflight. El build Linux pasó en `/tmp/chxchx-studio-post-pull`.
+- El usuario ya revisó visualmente Inicio y le gustó el panel. Verificación local: `cmake --build /tmp/chxchx-studio-post-pull --parallel 2` pasó; CTest 2/2 pasó (`native-editor-smoke`, `native-pty-smoke`); `python -m compileall src` pasó; pytest 195 passed, 1 skipped. QA no ejecutó acciones mutantes de Init/workspace; usan preview y confirmación al utilizarlas.
+- Este bloque está listo para commit en `dev`. `AGENTS.md` y `.codex/` tienen cambios locales del usuario y deben permanecer fuera del commit.

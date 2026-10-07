@@ -4,6 +4,66 @@
 #include <QLineEdit>
 #include <QMessageBox>
 
+void MainWindow::trustProjectFromHome()
+{
+    if (m_projectTrusted) return;
+    const QStringList preview = {QStringLiteral("workspace"), QStringLiteral("trust"), m_projectPath,
+        QStringLiteral("--dry-run")};
+    const QStringList action = {QStringLiteral("workspace"), QStringLiteral("trust"), m_projectPath};
+    runPreview(preview, action, {}, QStringLiteral("Confirmar confianza del proyecto"));
+}
+
+void MainWindow::startWorkspaceFromHome()
+{
+    if (!m_projectTrusted || m_workspaceStatus == QStringLiteral("ACTIVE")) return;
+    const QString command = m_workspaceStatus == QStringLiteral("SUSPENDED")
+        ? QStringLiteral("resume") : QStringLiteral("start");
+    const QStringList preview = {QStringLiteral("workspace"), command, m_projectPath,
+        QStringLiteral("--dry-run")};
+    const QStringList action = {QStringLiteral("workspace"), command, m_projectPath};
+    runPreview(preview, action, {}, command == QStringLiteral("resume")
+        ? QStringLiteral("Confirmar reanudación del workspace")
+        : QStringLiteral("Confirmar inicio del workspace"));
+}
+
+void MainWindow::suspendWorkspaceFromHome()
+{
+    if (m_workspaceStatus != QStringLiteral("ACTIVE")) return;
+    const QStringList preview = {QStringLiteral("workspace"), QStringLiteral("suspend"), m_projectPath,
+        QStringLiteral("--dry-run")};
+    const QStringList action = {QStringLiteral("workspace"), QStringLiteral("suspend"), m_projectPath};
+    runPreview(preview, action, {}, QStringLiteral("Confirmar suspensión del workspace"));
+}
+
+void MainWindow::stopWorkspaceFromHome()
+{
+    if (m_workspaceStatus != QStringLiteral("ACTIVE") && m_workspaceStatus != QStringLiteral("ERROR")) return;
+    const QStringList preview = {QStringLiteral("workspace"), QStringLiteral("stop"), m_projectPath,
+        QStringLiteral("--dry-run")};
+    const QStringList action = {QStringLiteral("workspace"), QStringLiteral("stop"), m_projectPath};
+    runPreview(preview, action, {}, QStringLiteral("Confirmar detención de procesos"));
+}
+
+void MainWindow::prepareProjectFromHome()
+{
+    const QStringList preview = {QStringLiteral("init"), m_projectPath, QStringLiteral("--dry-run")};
+    const QStringList action = {QStringLiteral("init"), m_projectPath};
+    runPreview(preview, action, {}, QStringLiteral("Preparar proyecto · Init completo"));
+}
+
+void MainWindow::syncSkillsFromHome()
+{
+    const QStringList preview = {QStringLiteral("skill"), QStringLiteral("sync"), m_projectPath,
+        QStringLiteral("--dry-run")};
+    const QStringList action = {QStringLiteral("skill"), QStringLiteral("sync"), m_projectPath};
+    runPreview(preview, action, {}, QStringLiteral("Sincronizar instrucciones de skills"));
+}
+
+void MainWindow::doctorFromHome()
+{
+    runCommand({QStringLiteral("doctor"), m_projectPath});
+}
+
 void MainWindow::performPrimaryAreaAction()
 {
     const QString id = m_targetSelector->currentText();

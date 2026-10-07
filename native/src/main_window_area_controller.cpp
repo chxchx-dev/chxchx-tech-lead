@@ -137,6 +137,39 @@ void MainWindow::updateAreaActionState()
     }
 }
 
+void MainWindow::updateHomeActionState()
+{
+    if (m_homeTrustButton == nullptr || m_homeAgentSelector == nullptr) return;
+    m_homeTrustButton->setText(m_projectTrusted
+        ? QStringLiteral("Proyecto confiable") : QStringLiteral("Confiar proyecto"));
+    m_homeTrustButton->setEnabled(!m_projectTrusted);
+
+    const bool active = m_workspaceStatus == QStringLiteral("ACTIVE");
+    const bool suspended = m_workspaceStatus == QStringLiteral("SUSPENDED");
+    m_homeWorkspaceButton->setText(active ? QStringLiteral("Workspace activo")
+        : (suspended ? QStringLiteral("Reanudar workspace") : QStringLiteral("Iniciar workspace")));
+    m_homeWorkspaceButton->setEnabled(m_projectTrusted && !active);
+    m_homeSuspendButton->setEnabled(active);
+    m_homeStopButton->setEnabled(active || m_workspaceStatus == QStringLiteral("ERROR"));
+
+    const int index = m_homeAgentSelector->currentIndex();
+    const bool agentConfigured = index >= 0
+        && !m_homeAgentSelector->itemData(index, Qt::UserRole + 1).toString().isEmpty()
+        && !m_homeAgentSelector->itemData(index, Qt::UserRole + 2).toString().isEmpty()
+        && !m_homeAgentSelector->itemData(index, Qt::UserRole + 4).toBool();
+    m_homeAgentButton->setEnabled(agentConfigured);
+    m_homeNewChatButton->setEnabled(agentConfigured
+        && !m_homeAgentSelector->itemData(index, Qt::UserRole + 6).toString().isEmpty());
+    bool hasConfiguredAgent = false;
+    for (int agentIndex = 0; agentIndex < m_homeAgentSelector->count(); ++agentIndex) {
+        hasConfiguredAgent = hasConfiguredAgent
+            || (!m_homeAgentSelector->itemData(agentIndex, Qt::UserRole + 1).toString().isEmpty()
+                && !m_homeAgentSelector->itemData(agentIndex, Qt::UserRole + 2).toString().isEmpty()
+                && !m_homeAgentSelector->itemData(agentIndex, Qt::UserRole + 4).toBool());
+    }
+    m_homeAllAgentsButton->setEnabled(hasConfiguredAgent);
+}
+
 void MainWindow::updateAreaTargets(const QJsonObject &payload, const QString &area)
 {
     if (area != m_currentArea || (area != QStringLiteral("agents")
