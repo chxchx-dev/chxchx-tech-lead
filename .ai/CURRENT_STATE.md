@@ -145,3 +145,9 @@
 - Inicio incorpora botones centrales para trust, iniciar/reanudar, suspender y detener workspace; terminal; Init completo, sincronización de skills y Doctor; selector de agente con abrir/nueva sesión/abrir todos.
 - Los comandos reutilizan los previews y confirmaciones existentes; agentes conservan preflight de trust/RAM. El panel lateral sigue disponible, pero no es requisito para estas acciones frecuentes.
 - El usuario revisó el panel en Studio y confirmó que la presentación le gusta. Compilación Linux y CTest 2/2 pasan; `python -m compileall src` pasa y pytest reporta 195 passed, 1 skipped. No se ejecutaron mutaciones de Init/workspace durante QA.
+
+## Terminal Studio: smoke de render VT y scrollback
+
+- `native-vt-terminal-smoke` usa Qt offscreen y libvterm para comprobar salida ANSI roja, desplazamiento al historial, avance por página y retorno al final en una terminal con más de 24 líneas.
+- Build Linux correcto y CTest 3/3 pasa (editor, PTY y VT). `git diff --check` limpio.
+- Sigue pendiente probar reflow del historial al cambiar tamaño y una sesión interactiva larga; attach integrado a Zellij continúa en el roadmap.

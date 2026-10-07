@@ -259,3 +259,9 @@
 - Cada botón llama el flujo de preview/confirmación existente; iniciar agentes conserva el RAM preflight. El build Linux pasó en `/tmp/chxchx-studio-post-pull`.
 - El usuario ya revisó visualmente Inicio y le gustó el panel. Verificación local: `cmake --build /tmp/chxchx-studio-post-pull --parallel 2` pasó; CTest 2/2 pasó (`native-editor-smoke`, `native-pty-smoke`); `python -m compileall src` pasó; pytest 195 passed, 1 skipped. QA no ejecutó acciones mutantes de Init/workspace; usan preview y confirmación al utilizarlas.
 - Este bloque está listo para commit en `dev`. `AGENTS.md` y `.codex/` tienen cambios locales del usuario y deben permanecer fuera del commit.
+
+## Studio — smoke automatizado de VT/scrollback
+
+- Se añadió `native-vt-terminal-smoke` con `QT_QPA_PLATFORM=offscreen`. Verifica ANSI coloreado y que Ctrl+Home, Shift+PageDown y Ctrl+End cambien/restauren lo que pinta el widget ante salida larga.
+- Validación Linux: build en `/tmp/chxchx-studio-post-pull`, CTest 3/3 (editor, PTY, VT), `git diff --check` limpios.
+- Sigue pendiente cobertura de resize/reflow, sesiones interactivas largas y attach integrado a Zellij. Las notas locales `docs/` están ignoradas por Git; el backlog vigente queda resumido en `.ai/ROADMAP.md` y `.ai/EDITOR-PARITY.md`.

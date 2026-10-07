@@ -33,8 +33,8 @@ verde; la configuración del workflow no equivale a que haya pasado.
 
 - Attach a una sesión Zellij desde la terminal integrada; por ahora se mantiene
   el launcher externo como alternativa.
-- Añadir pruebas del render ANSI/VT, scrollback, resize y sesiones interactivas
-  además de los smoke actuales de editor y PTY.
+- Smoke Qt offscreen cubre render ANSI, navegación al inicio/fin y páginas de
+  scrollback; ampliar cobertura de resize/reflow y sesiones interactivas largas.
 - Añadir búsqueda de contenido del proyecto; la búsqueda actual indexa nombres
   y rutas, no el texto de los archivos.
 - Restaurar archivos recientes y grupos de pestañas de forma segura al iniciar.

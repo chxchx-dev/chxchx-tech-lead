@@ -157,4 +157,11 @@ if(CHXCHX_BUILD_TESTS)
         target_link_libraries(chxchx-pty-smoke PRIVATE ${CHXCHX_UTIL_LIBRARY})
     endif()
     add_test(NAME native-pty-smoke COMMAND chxchx-pty-smoke)
+
+    add_executable(chxchx-vt-terminal-smoke tests/vt_terminal_smoke.cpp
+        src/integrations/vt_terminal_widget.cpp src/integrations/vt_terminal_widget.hpp)
+    target_link_libraries(chxchx-vt-terminal-smoke PRIVATE
+        Qt6::Core Qt6::Gui Qt6::Widgets chxchx_vterm)
+    add_test(NAME native-vt-terminal-smoke COMMAND chxchx-vt-terminal-smoke)
+    set_tests_properties(native-vt-terminal-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()
