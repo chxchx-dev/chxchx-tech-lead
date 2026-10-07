@@ -182,8 +182,7 @@ void MainWindow::performQuaternaryAreaAction()
 
 void MainWindow::openNewWorkspaceTerminal()
 {
-    const QStringList preview = {QStringLiteral("workspace"), QStringLiteral("terminal"),
-        m_projectPath, QStringLiteral("--dry-run")};
+    const QStringList preview = {QStringLiteral("bridge"), QStringLiteral("status"), m_projectPath};
     const QStringList action = {QStringLiteral("__launch_embedded_workspace_terminal__")};
     runPreview(preview, action, {}, QStringLiteral("Abrir terminal integrada"));
 }

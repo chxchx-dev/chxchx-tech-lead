@@ -166,6 +166,16 @@ void VtTerminalWidget::feed(const QByteArray &bytes)
     flushInput();
 }
 
+void VtTerminalWidget::pasteText(const QString &text)
+{
+    vterm_keyboard_start_paste(m_state->terminal);
+    for (uint codepoint : text.toUcs4()) {
+        vterm_keyboard_unichar(m_state->terminal, codepoint, VTERM_MOD_NONE);
+    }
+    vterm_keyboard_end_paste(m_state->terminal);
+    flushInput();
+}
+
 void VtTerminalWidget::flushInput()
 {
     QByteArray bytes(static_cast<qsizetype>(vterm_output_get_buffer_current(m_state->terminal)), '\0');
@@ -296,11 +306,7 @@ void VtTerminalWidget::keyPressEvent(QKeyEvent *event)
             || (event->modifiers().testFlag(Qt::ControlModifier)
                 && event->modifiers().testFlag(Qt::ShiftModifier)));
     if (pasteShortcut) {
-        const QString text = QApplication::clipboard()->text();
-        vterm_keyboard_start_paste(m_state->terminal);
-        for (uint codepoint : text.toUcs4()) vterm_keyboard_unichar(m_state->terminal, codepoint, VTERM_MOD_NONE);
-        vterm_keyboard_end_paste(m_state->terminal);
-        flushInput();
+        pasteText(QApplication::clipboard()->text());
         event->accept();
         return;
     }

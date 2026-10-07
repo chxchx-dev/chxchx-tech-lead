@@ -3,6 +3,8 @@
 #include "integrations/bridge_client.hpp"
 #include "integrations/bridge_schemas.hpp"
 #include "integrations/terminal_launcher.hpp"
+#include "integrations/vt_terminal_widget.hpp"
+#include "project_file_index.hpp"
 
 #include <ScintillaEditBase.h>
 #include <ILexer.h>
@@ -12,13 +14,15 @@
 
 #include <algorithm>
 #include <array>
-#include <functional>
 #include <iterator>
 #include <utility>
 
 #include <QAction>
+#include <QApplication>
 #include <QComboBox>
+#include <QClipboard>
 #include <QDateTime>
+#include <QSortFilterProxyModel>
 #include <QFontDatabase>
 #include <QFontInfo>
 #include <QDialog>
@@ -28,12 +32,12 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFileSystemModel>
-#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QMessageBox>
+#include <QMenu>
 #include <QPlainTextEdit>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -41,14 +45,18 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QInputDialog>
+#include <QIcon>
 #include <QPushButton>
 #include <QSaveFile>
+#include <QSettings>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStatusBar>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QTextDocument>
 #include <QTextCursor>
+#include <QTextEdit>
 #include <QTimer>
 #include <QToolBar>
 #include <QTreeView>
@@ -57,16 +65,12 @@
 
 namespace {
 
-QAction *makeAction(
-    QObject *parent,
-    const QString &text,
-    const QKeySequence &shortcut,
-    const std::function<void()> &callback)
+constexpr int scintillaColor(unsigned int rgb)
 {
-    auto *action = new QAction(text, parent);
-    action->setShortcut(shortcut);
-    QObject::connect(action, &QAction::triggered, parent, callback);
-    return action;
+    const unsigned int red = (rgb >> 16) & 0xFF;
+    const unsigned int green = (rgb >> 8) & 0xFF;
+    const unsigned int blue = rgb & 0xFF;
+    return static_cast<int>(red | (green << 8) | (blue << 16));
 }
 
 void setEditorText(ScintillaEditBase *editor, const QString &text)
@@ -88,13 +92,9 @@ QString editorText(const ScintillaEditBase *editor)
     return QString::fromUtf8(utf8.constData(), static_cast<qsizetype>(length));
 }
 
-QString editorTabTitle(const QString &projectPath, const QString &path, bool modified)
+QString editorTabTitle(const QString &path, bool modified)
 {
-    const QString relative = QDir::fromNativeSeparators(QDir(projectPath).relativeFilePath(path));
-    const bool outsideProject = relative == QStringLiteral("..")
-        || relative.startsWith(QStringLiteral("../"));
-    const QString title = outsideProject
-        ? QFileInfo(path).fileName() : relative;
+    const QString title = QFileInfo(path).fileName();
     return modified ? QStringLiteral("● %1").arg(title) : title;
 }
 
@@ -125,7 +125,7 @@ QString lexerNameForPath(const QString &path)
     return {};
 }
 
-void configureCodeEditor(ScintillaEditBase *editor, const QString &path)
+void configureCodeEditor(ScintillaEditBase *editor, const QString &path, bool wordWrapEnabled)
 {
     editor->send(SCI_SETCODEPAGE, SC_CP_UTF8);
     editor->send(SCI_SETUNDOCOLLECTION, 1);
@@ -144,18 +144,20 @@ void configureCodeEditor(ScintillaEditBase *editor, const QString &path)
     const QByteArray family = QFontInfo(font).family().toUtf8();
     editor->send(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<Scintilla::sptr_t>(family.constData()));
     editor->send(SCI_STYLESETSIZE, STYLE_DEFAULT, font.pointSize());
-    editor->send(SCI_STYLESETFORE, STYLE_DEFAULT, 0xDCE8F7);
-    editor->send(SCI_STYLESETBACK, STYLE_DEFAULT, 0x0E1728);
+    editor->send(SCI_STYLESETFORE, STYLE_DEFAULT, scintillaColor(0xB9C6D8));
+    editor->send(SCI_STYLESETBACK, STYLE_DEFAULT, scintillaColor(0x0E1728));
     editor->send(SCI_STYLECLEARALL);
-    editor->send(SCI_STYLESETFORE, STYLE_LINENUMBER, 0x7189A6);
-    editor->send(SCI_STYLESETBACK, STYLE_LINENUMBER, 0x101C2E);
-    editor->send(SCI_SETCARETFORE, 0x63E6EE);
-    editor->send(SCI_SETSELFORE, 1, 0xFFFFFF);
-    editor->send(SCI_SETSELBACK, 1, 0x17485B);
+    editor->send(SCI_STYLESETFORE, STYLE_LINENUMBER, scintillaColor(0x7189A6));
+    editor->send(SCI_STYLESETBACK, STYLE_LINENUMBER, scintillaColor(0x122941));
+    editor->send(SCI_SETCARETFORE, scintillaColor(0x63E6EE));
+    editor->send(SCI_SETSELFORE, 1, scintillaColor(0xFFFFFF));
+    editor->send(SCI_SETSELBACK, 1, scintillaColor(0x17485B));
     editor->send(SCI_SETCARETLINEVISIBLE, 1);
-    editor->send(SCI_SETCARETLINEBACK, 0x112338);
+    editor->send(SCI_SETCARETLINEBACK, scintillaColor(0x112338));
     editor->send(SCI_SETINDENTATIONGUIDES, SC_IV_LOOKBOTH);
     editor->send(SCI_SETTABWIDTH, 4);
+    editor->send(SCI_SETWRAPMODE, wordWrapEnabled ? SC_WRAP_WORD : SC_WRAP_NONE);
+    editor->send(SCI_SETHSCROLLBAR, wordWrapEnabled ? 0 : 1);
 
     const QByteArray lexerName = lexerNameForPath(path).toLatin1();
     if (!lexerName.isEmpty()) {
@@ -165,14 +167,17 @@ void configureCodeEditor(ScintillaEditBase *editor, const QString &path)
             editor->send(SCI_STYLECLEARALL);
             const std::array<std::pair<int, int>, 11> syntaxColors = {{
                 {1, 0x8B949E}, {2, 0x8B949E}, {3, 0x8B949E}, {4, 0xD29922},
-                {5, 0x79C0FF}, {6, 0xA5D6FF}, {7, 0xA5D6FF}, {8, 0xFF7B72},
+                {5, 0x79C0FF}, {6, 0x98B5CC}, {7, 0x98B5CC}, {8, 0xFF7B72},
                 {9, 0xD2A8FF}, {10, 0xD2A8FF}, {11, 0x7EE787},
             }};
             for (const auto &[style, color] : syntaxColors) {
-                editor->send(SCI_STYLESETFORE, static_cast<Scintilla::uptr_t>(style), color);
+                editor->send(SCI_STYLESETFORE, static_cast<Scintilla::uptr_t>(style), scintillaColor(color));
             }
         }
     }
+    editor->send(SCI_STYLESETFORE, STYLE_LINENUMBER, scintillaColor(0x7896B5));
+    editor->send(SCI_STYLESETBACK, STYLE_LINENUMBER, scintillaColor(0x122941));
+    editor->send(SCI_SETMARGINBACKN, 0, scintillaColor(0x122941));
 }
 
 } // namespace
@@ -181,30 +186,208 @@ MainWindow::MainWindow(QString projectPath, QWidget *parent)
     : QMainWindow(parent), m_projectPath(QFileInfo(projectPath).absoluteFilePath())
 {
     setWindowTitle(QStringLiteral("ChxChx Studio — %1").arg(QFileInfo(m_projectPath).fileName()));
+    setWindowIcon(QIcon(QStringLiteral(":/brand/logo-min.png")));
     resize(1440, 920);
     buildActions();
     buildLayout();
+    m_fileIndex = new ProjectFileIndex(m_projectPath, this);
     statusBar()->showMessage(m_projectPath);
 }
 
-void MainWindow::buildActions()
+void MainWindow::setWordWrapEnabled(bool enabled)
 {
-    auto *toolbar = addToolBar(QStringLiteral("Archivo"));
-    toolbar->setMovable(false);
-    toolbar->addAction(makeAction(this, QStringLiteral("Abrir archivo"), QKeySequence::Open, [this] { openFile(); }));
-    toolbar->addAction(makeAction(this, QStringLiteral("Guardar"), QKeySequence::Save, [this] { saveFile(); }));
-    toolbar->addAction(makeAction(this, QStringLiteral("Guardar como"), QKeySequence::SaveAs, [this] { saveFileAs(); }));
-    toolbar->addAction(makeAction(this, QStringLiteral("Buscar en archivo"), QKeySequence(QStringLiteral("Ctrl+F")), [this] {
-        findInCurrentFile();
-    }));
-    toolbar->addAction(makeAction(this, QStringLiteral("Actualizar"), QKeySequence(QStringLiteral("F5")), [this] { refreshArea(); }));
-    toolbar->addSeparator();
-    toolbar->addAction(makeAction(this, QStringLiteral("Terminal +"), QKeySequence(QStringLiteral("Ctrl+Shift+T")), [this] {
-        openNewWorkspaceTerminal();
-    }));
-    toolbar->addAction(makeAction(this, QStringLiteral("Paleta de comandos"), QKeySequence(QStringLiteral("Ctrl+P")), [this] {
-        openCommandPalette();
-    }));
+    m_wordWrapEnabled = enabled;
+    QSettings settings;
+    settings.setValue(QStringLiteral("editor/wordWrap"), enabled);
+    for (QTabWidget *tabs : editorTabGroups()) {
+        for (int index = 0; index < tabs->count(); ++index) {
+            auto *editor = qobject_cast<ScintillaEditBase *>(tabs->widget(index));
+            if (editor == nullptr) continue;
+            editor->send(SCI_SETWRAPMODE, enabled ? SC_WRAP_WORD : SC_WRAP_NONE);
+            editor->send(SCI_SETHSCROLLBAR, enabled ? 0 : 1);
+        }
+    }
+}
+
+void MainWindow::updateEditActionState()
+{
+    QWidget *target = m_editTargetWidget.data();
+    bool terminalFocused = false;
+    bool textControlFocused = false;
+    for (QWidget *widget = target; widget != nullptr; widget = widget->parentWidget()) {
+        if (qobject_cast<VtTerminalWidget *>(widget) != nullptr) terminalFocused = true;
+        if (qobject_cast<ScintillaEditBase *>(widget) != nullptr
+            || qobject_cast<QLineEdit *>(widget) != nullptr
+            || qobject_cast<QPlainTextEdit *>(widget) != nullptr
+            || qobject_cast<QTextEdit *>(widget) != nullptr) {
+            textControlFocused = true;
+        }
+    }
+    const QStringList actions = {QStringLiteral("edit.undo"), QStringLiteral("edit.redo"),
+        QStringLiteral("edit.cut"), QStringLiteral("edit.copy"), QStringLiteral("edit.paste"),
+        QStringLiteral("edit.selectAll")};
+    for (const QString &id : actions) {
+        QAction *action = m_shortcutActions.value(id);
+        if (action != nullptr) action->setEnabled(textControlFocused && !terminalFocused);
+    }
+    if (terminalFocused) {
+        QAction *paste = m_shortcutActions.value(QStringLiteral("edit.paste"));
+        if (paste != nullptr) paste->setEnabled(true);
+    }
+}
+
+void MainWindow::performEditAction(const QString &actionId)
+{
+    QWidget *target = m_editTargetWidget.data();
+    if (target == nullptr) return;
+
+    VtTerminalWidget *terminal = nullptr;
+    ScintillaEditBase *editor = nullptr;
+    QLineEdit *lineEdit = nullptr;
+    QPlainTextEdit *plainText = nullptr;
+    QTextEdit *textEdit = nullptr;
+    for (QWidget *widget = target; widget != nullptr; widget = widget->parentWidget()) {
+        if (terminal == nullptr) terminal = qobject_cast<VtTerminalWidget *>(widget);
+        if (editor == nullptr) editor = qobject_cast<ScintillaEditBase *>(widget);
+        if (lineEdit == nullptr) lineEdit = qobject_cast<QLineEdit *>(widget);
+        if (plainText == nullptr) plainText = qobject_cast<QPlainTextEdit *>(widget);
+        if (textEdit == nullptr) textEdit = qobject_cast<QTextEdit *>(widget);
+    }
+
+    if (terminal != nullptr) {
+        if (actionId == QStringLiteral("edit.paste")) {
+            terminal->pasteText(QApplication::clipboard()->text());
+        }
+        return;
+    }
+    if (editor != nullptr) {
+        if (actionId == QStringLiteral("edit.undo")) editor->send(SCI_UNDO);
+        else if (actionId == QStringLiteral("edit.redo")) editor->send(SCI_REDO);
+        else if (actionId == QStringLiteral("edit.cut")) editor->send(SCI_CUT);
+        else if (actionId == QStringLiteral("edit.copy")) editor->send(SCI_COPY);
+        else if (actionId == QStringLiteral("edit.paste")) editor->send(SCI_PASTE);
+        else if (actionId == QStringLiteral("edit.selectAll")) editor->send(SCI_SELECTALL);
+        return;
+    }
+    if (lineEdit != nullptr) {
+        if (actionId == QStringLiteral("edit.undo")) lineEdit->undo();
+        else if (actionId == QStringLiteral("edit.redo")) lineEdit->redo();
+        else if (actionId == QStringLiteral("edit.cut")) lineEdit->cut();
+        else if (actionId == QStringLiteral("edit.copy")) lineEdit->copy();
+        else if (actionId == QStringLiteral("edit.paste")) lineEdit->paste();
+        else if (actionId == QStringLiteral("edit.selectAll")) lineEdit->selectAll();
+        return;
+    }
+    if (plainText != nullptr) {
+        if (actionId == QStringLiteral("edit.undo")) plainText->undo();
+        else if (actionId == QStringLiteral("edit.redo")) plainText->redo();
+        else if (actionId == QStringLiteral("edit.cut")) plainText->cut();
+        else if (actionId == QStringLiteral("edit.copy")) plainText->copy();
+        else if (actionId == QStringLiteral("edit.paste")) plainText->paste();
+        else if (actionId == QStringLiteral("edit.selectAll")) plainText->selectAll();
+        return;
+    }
+    if (textEdit != nullptr) {
+        if (actionId == QStringLiteral("edit.undo")) textEdit->undo();
+        else if (actionId == QStringLiteral("edit.redo")) textEdit->redo();
+        else if (actionId == QStringLiteral("edit.cut")) textEdit->cut();
+        else if (actionId == QStringLiteral("edit.copy")) textEdit->copy();
+        else if (actionId == QStringLiteral("edit.paste")) textEdit->paste();
+        else if (actionId == QStringLiteral("edit.selectAll")) textEdit->selectAll();
+    }
+}
+
+QList<QTabWidget *> MainWindow::editorTabGroups() const
+{
+    QList<QTabWidget *> groups{m_editorTabs};
+    if (m_secondaryEditorTabs != nullptr) groups.append(m_secondaryEditorTabs);
+    return groups;
+}
+
+QTabWidget *MainWindow::activeEditorTabs() const
+{
+    return m_activeEditorTabs != nullptr ? m_activeEditorTabs : m_editorTabs;
+}
+
+QTabWidget *MainWindow::tabGroupFor(QWidget *page) const
+{
+    for (QTabWidget *tabs : editorTabGroups()) {
+        if (tabs->indexOf(page) >= 0) return tabs;
+    }
+    return nullptr;
+}
+
+void MainWindow::showTabContextMenu(QTabWidget *tabs, const QPoint &position)
+{
+    const int index = tabs->tabBar()->tabAt(position);
+    if (index < 0 || tabs->widget(index) == m_mainPages) return;
+
+    QMenu menu(this);
+    QAction *splitRight = menu.addAction(QStringLiteral("Dividir a la derecha"));
+    QAction *splitBelow = menu.addAction(QStringLiteral("Dividir abajo"));
+    QAction *moveOther = nullptr;
+    QAction *closeGroup = nullptr;
+    if (m_secondaryEditorTabs->isVisible()) {
+        menu.addSeparator();
+        moveOther = menu.addAction(QStringLiteral("Mover pestaña al otro grupo"));
+        closeGroup = menu.addAction(QStringLiteral("Cerrar grupo dividido"));
+    }
+    QAction *selected = menu.exec(tabs->tabBar()->mapToGlobal(position));
+    if (selected == splitRight) {
+        moveTabToOtherGroup(tabs, index, Qt::Horizontal);
+    } else if (selected == splitBelow) {
+        moveTabToOtherGroup(tabs, index, Qt::Vertical);
+    } else if (selected == moveOther) {
+        moveTabToOtherGroup(tabs, index, m_editorSplit->orientation());
+    } else if (selected == closeGroup) {
+        closeSecondaryTabGroup();
+    }
+}
+
+void MainWindow::moveTabToOtherGroup(QTabWidget *source, int index, Qt::Orientation orientation)
+{
+    if (index < 0 || index >= source->count() || source->widget(index) == m_mainPages) return;
+    QTabWidget *destination = source == m_editorTabs ? m_secondaryEditorTabs : m_editorTabs;
+    const bool openingSplit = destination == m_secondaryEditorTabs && !destination->isVisible();
+    m_editorSplit->setOrientation(orientation);
+    if (destination == m_secondaryEditorTabs) {
+        destination->show();
+        if (openingSplit) {
+            const int extent = orientation == Qt::Horizontal ? m_editorSplit->width() : m_editorSplit->height();
+            m_editorSplit->setSizes({extent / 2, extent / 2});
+        }
+    }
+
+    QWidget *page = source->widget(index);
+    const QString title = source->tabText(index);
+    const QIcon icon = source->tabIcon(index);
+    const QString tooltip = source->tabToolTip(index);
+    source->removeTab(index);
+    const int newIndex = destination->addTab(page, icon, title);
+    destination->setTabToolTip(newIndex, tooltip);
+    destination->setCurrentIndex(newIndex);
+    m_activeEditorTabs = destination;
+
+    if (source == m_secondaryEditorTabs && source->count() == 0) {
+        source->hide();
+        m_activeEditorTabs = m_editorTabs;
+    }
+}
+
+void MainWindow::closeSecondaryTabGroup()
+{
+    while (m_secondaryEditorTabs->count() > 0) {
+        QWidget *page = m_secondaryEditorTabs->widget(0);
+        const QString title = m_secondaryEditorTabs->tabText(0);
+        const QIcon icon = m_secondaryEditorTabs->tabIcon(0);
+        const QString tooltip = m_secondaryEditorTabs->tabToolTip(0);
+        m_secondaryEditorTabs->removeTab(0);
+        const int index = m_editorTabs->addTab(page, icon, title);
+        m_editorTabs->setTabToolTip(index, tooltip);
+    }
+    m_secondaryEditorTabs->hide();
+    m_activeEditorTabs = m_editorTabs;
+    m_editorTabs->setCurrentIndex(m_editorTabs->count() - 1);
 }
 
 void MainWindow::openFile()
@@ -217,20 +400,27 @@ void MainWindow::openFile()
 
 void MainWindow::openTreeFile(const QModelIndex &index)
 {
-    const QString path = m_fileModel->filePath(index);
-    if (!m_fileModel->isDir(index)) {
-        openPath(path);
+    if (!index.isValid()) return;
+    const QModelIndex sourceIndex = m_projectProxy->mapToSource(index);
+    const QString path = m_fileModel->filePath(sourceIndex);
+    if (m_fileModel->isDir(sourceIndex)) {
+        m_projectTree->setExpanded(index, !m_projectTree->isExpanded(index));
+        return;
     }
+    openPath(path);
 }
 
 void MainWindow::openPath(const QString &path)
 {
-    for (int index = 0; index < m_editorTabs->count(); ++index) {
-        auto *editor = qobject_cast<ScintillaEditBase *>(m_editorTabs->widget(index));
-        if (editor != nullptr && editor->property("filePath").toString() == path) {
-            m_editorTabs->setCurrentIndex(index);
-            m_mainPages->setCurrentWidget(m_editorTabs);
-            return;
+    for (QTabWidget *tabs : editorTabGroups()) {
+        for (int index = 0; index < tabs->count(); ++index) {
+            auto *editor = qobject_cast<ScintillaEditBase *>(tabs->widget(index));
+            if (editor != nullptr && editor->property("filePath").toString() == path) {
+                tabs->setCurrentIndex(index);
+                m_activeEditorTabs = tabs;
+                editor->setFocus(Qt::OtherFocusReason);
+                return;
+            }
         }
     }
 
@@ -239,20 +429,21 @@ void MainWindow::openPath(const QString &path)
         QMessageBox::warning(this, QStringLiteral("No se pudo abrir"), file.errorString());
         return;
     }
-    auto *editor = new ScintillaEditBase(m_editorTabs);
+    QTabWidget *tabs = activeEditorTabs();
+    auto *editor = new ScintillaEditBase(tabs);
     editor->setProperty("filePath", path);
-    configureCodeEditor(editor, path);
+    configureCodeEditor(editor, path, m_wordWrapEnabled);
     setEditorText(editor, QString::fromUtf8(file.readAll()));
-    const int tab = m_editorTabs->addTab(editor, editorTabTitle(m_projectPath, path, false));
-    m_editorTabs->setTabToolTip(tab, path);
-    m_editorTabs->setCurrentIndex(tab);
-    m_mainPages->setCurrentWidget(m_editorTabs);
+    const int tab = tabs->addTab(editor, editorTabTitle(path, false));
+    tabs->setTabToolTip(tab, path);
+    tabs->setCurrentIndex(tab);
     connect(editor, &ScintillaEditBase::savePointChanged, this, [this, editor](bool dirty) {
         editor->setProperty("modified", dirty);
-        const int tabIndex = m_editorTabs->indexOf(editor);
-        if (tabIndex >= 0) {
+        QTabWidget *tabs = tabGroupFor(editor);
+        const int tabIndex = tabs != nullptr ? tabs->indexOf(editor) : -1;
+        if (tabs != nullptr && tabIndex >= 0) {
             const QString path = editor->property("filePath").toString();
-            m_editorTabs->setTabText(tabIndex, editorTabTitle(m_projectPath, path, dirty));
+            tabs->setTabText(tabIndex, editorTabTitle(path, dirty));
         }
     });
 }
@@ -272,8 +463,10 @@ void MainWindow::saveFile()
         return;
     }
     currentEditor()->send(SCI_SETSAVEPOINT);
-    const int tab = m_editorTabs->currentIndex();
-    m_editorTabs->setTabText(tab, editorTabTitle(m_projectPath, currentFilePath(), false));
+    QTabWidget *tabs = tabGroupFor(currentEditor());
+    if (tabs != nullptr) {
+        tabs->setTabText(tabs->indexOf(currentEditor()), editorTabTitle(currentFilePath(), false));
+    }
     statusBar()->showMessage(QStringLiteral("Guardado: %1").arg(currentFilePath()), 3000);
 }
 
@@ -319,9 +512,15 @@ void MainWindow::findInCurrentFile()
     }
 }
 
-void MainWindow::closeEditorTab(int index)
+void MainWindow::closeEditorTab(QTabWidget *tabs, int index)
 {
-    auto *editor = qobject_cast<ScintillaEditBase *>(m_editorTabs->widget(index));
+    if (tabs == nullptr || index < 0 || index >= tabs->count()) {
+        return;
+    }
+    if (tabs->widget(index) == m_mainPages) {
+        return;
+    }
+    auto *editor = qobject_cast<ScintillaEditBase *>(tabs->widget(index));
     if (editor != nullptr && editor->property("modified").toBool()) {
         const auto result = QMessageBox::question(this, QStringLiteral("Cambios sin guardar"),
             QStringLiteral("¿Cerrar esta pestaña y descartar los cambios?"),
@@ -330,9 +529,13 @@ void MainWindow::closeEditorTab(int index)
             return;
         }
     }
-    QWidget *page = m_editorTabs->widget(index);
-    m_editorTabs->removeTab(index);
+    QWidget *page = tabs->widget(index);
+    tabs->removeTab(index);
     page->deleteLater();
+    if (tabs == m_secondaryEditorTabs && tabs->count() == 0) {
+        tabs->hide();
+        m_activeEditorTabs = m_editorTabs;
+    }
 }
 
 void MainWindow::selectArea(int row)
@@ -342,7 +545,17 @@ void MainWindow::selectArea(int row)
     }
     const auto *item = m_areaList->item(row);
     m_currentArea = item->data(Qt::UserRole).toString();
-    if (m_currentArea == QStringLiteral("handoff")) {
+    const bool dashboardArea = m_currentArea == QStringLiteral("overview")
+        || m_currentArea == QStringLiteral("project") || m_currentArea == QStringLiteral("agents")
+        || m_currentArea == QStringLiteral("processes") || m_currentArea == QStringLiteral("projects")
+        || m_currentArea == QStringLiteral("skills") || m_currentArea == QStringLiteral("packs")
+        || m_currentArea == QStringLiteral("resources");
+    if (dashboardArea) {
+        m_mainPages->setCurrentWidget(m_dashboardPage);
+        m_dashboardTitle->setText(item->text());
+        m_dashboardSummary->setText(QStringLiteral("Consultando el estado del proyecto…"));
+        m_dashboardItems->clear();
+    } else if (m_currentArea == QStringLiteral("handoff")) {
         m_mainPages->setCurrentWidget(m_handoffPage);
     } else if (m_currentArea == QStringLiteral("memory")) {
         m_mainPages->setCurrentWidget(m_memoryPage);
@@ -357,7 +570,11 @@ void MainWindow::selectArea(int row)
     } else if (m_currentArea == QStringLiteral("brand")) {
         m_mainPages->setCurrentWidget(m_brandPage);
     } else {
-        m_mainPages->setCurrentWidget(m_editorTabs);
+        m_mainPages->setCurrentWidget(m_dashboardPage);
+    }
+    const int sectionTab = m_editorTabs->indexOf(m_mainPages);
+    if (sectionTab >= 0) {
+        m_editorTabs->setCurrentIndex(sectionTab);
     }
     const auto area = std::find_if(std::begin(areas), std::end(areas), [this](const Area &candidate) {
         return m_currentArea == QString::fromUtf8(candidate.id);
@@ -395,6 +612,7 @@ void MainWindow::openCommandPalette()
         {QStringLiteral("Abrir Guía"), QStringLiteral("area:guide")},
         {QStringLiteral("Ver Marca CHXCHX"), QStringLiteral("area:brand")},
         {QStringLiteral("Abrir archivo…"), QStringLiteral("open")},
+        {QStringLiteral("Buscar archivo del proyecto…"), QStringLiteral("file-search")},
         {QStringLiteral("Guardar archivo"), QStringLiteral("save")},
         {QStringLiteral("Guardar archivo como…"), QStringLiteral("save-as")},
         {QStringLiteral("Buscar en archivo…"), QStringLiteral("find")},
@@ -451,6 +669,8 @@ void MainWindow::executePaletteCommand(QListWidgetItem *item)
         }
     } else if (command == QStringLiteral("open")) {
         openFile();
+    } else if (command == QStringLiteral("file-search")) {
+        searchProjectFiles();
     } else if (command == QStringLiteral("save")) {
         saveFile();
     } else if (command == QStringLiteral("save-as")) {
@@ -568,6 +788,7 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             output = QStringLiteral("Contrato bridge incompatible: versión ausente o no compatible (%1).")
                 .arg(version.isDouble() ? QString::number(version.toInt()) : QStringLiteral("inválida"));
         } else if (schema == BridgeSchemas::ResourcesOverview) {
+            showAreaDashboard(payload, m_commandArea);
             output = formatResourcesOverview(payload);
         } else if (schema == BridgeSchemas::ProjectStatus) {
             const QJsonObject workspace = payload.value(QStringLiteral("workspace")).toObject();
@@ -575,6 +796,7 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             m_workspaceStatus = workspace.value(QStringLiteral("status")).toString();
             updateAreaTargets(payload, m_commandArea);
             updateAreaActionState();
+            showAreaDashboard(payload, m_commandArea);
             output = formatBridgeStatus(payload, m_commandArea);
         } else if (schema == BridgeSchemas::Handoff) {
             showHandoff(payload);
@@ -803,7 +1025,7 @@ void MainWindow::appendOutput(const QString &text)
 
 ScintillaEditBase *MainWindow::currentEditor() const
 {
-    return qobject_cast<ScintillaEditBase *>(m_editorTabs->currentWidget());
+    return qobject_cast<ScintillaEditBase *>(activeEditorTabs()->currentWidget());
 }
 
 QString MainWindow::currentFilePath() const

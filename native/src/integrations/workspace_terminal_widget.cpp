@@ -21,6 +21,7 @@ WorkspaceTerminalWidget::WorkspaceTerminalWidget(QString workingDirectory, QWidg
     layout->addLayout(toolbar);
 
     m_terminal = new VtTerminalWidget(this);
+    setFocusProxy(m_terminal);
     layout->addWidget(m_terminal, 1);
     m_pty = new PtySession(this);
     connect(m_pty, &PtySession::outputReceived, m_terminal, &VtTerminalWidget::feed);

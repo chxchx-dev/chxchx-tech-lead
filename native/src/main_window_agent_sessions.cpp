@@ -27,12 +27,12 @@ QString agentSessionKey(const QString &projectPath, const QString &agentId)
 
 void MainWindow::createEmbeddedWorkspaceTerminal()
 {
-    auto *terminal = new WorkspaceTerminalWidget(m_projectPath, m_editorTabs);
-    const int tab = m_editorTabs->addTab(terminal, QStringLiteral("Terminal · %1")
-        .arg(QFileInfo(m_projectPath).fileName()));
-    m_editorTabs->setTabToolTip(tab, QStringLiteral("Shell del proyecto\n%1").arg(m_projectPath));
-    m_editorTabs->setCurrentWidget(terminal);
-    m_mainPages->setCurrentWidget(m_editorTabs);
+    QTabWidget *tabs = activeEditorTabs();
+    auto *terminal = new WorkspaceTerminalWidget(m_projectPath, tabs);
+    const int tab = tabs->addTab(terminal,
+        QStringLiteral("Terminal #%1").arg(m_nextTerminalNumber++));
+    tabs->setTabToolTip(tab, QStringLiteral("Shell del proyecto\n%1").arg(m_projectPath));
+    tabs->setCurrentWidget(terminal);
     terminal->setFocus(Qt::OtherFocusReason);
 }
 
@@ -77,8 +77,10 @@ void MainWindow::openSelectedAgent(bool newChat)
         : baseKey;
     if (m_agentSessions.contains(key)) {
         auto *existing = m_agentSessions.value(key);
-        m_editorTabs->setCurrentWidget(existing);
-        m_mainPages->setCurrentWidget(m_editorTabs);
+        if (QTabWidget *tabs = tabGroupFor(existing)) {
+            tabs->setCurrentWidget(existing);
+            m_activeEditorTabs = tabs;
+        }
         existing->focusTerminal();
         return;
     }
@@ -109,26 +111,32 @@ void MainWindow::createEmbeddedAgentSession(const QString &agentId, const QStrin
         : baseKey;
     if (m_agentSessions.contains(key)) {
         auto *existing = m_agentSessions.value(key);
-        m_editorTabs->setCurrentWidget(existing);
-        m_mainPages->setCurrentWidget(m_editorTabs);
+        if (QTabWidget *tabs = tabGroupFor(existing)) {
+            tabs->setCurrentWidget(existing);
+            m_activeEditorTabs = tabs;
+        }
         existing->focusTerminal();
         return;
     }
-    auto *session = new AgentSessionWidget(agentId, program, arguments, workingDirectory, m_editorTabs);
+    QTabWidget *tabs = activeEditorTabs();
+    auto *session = new AgentSessionWidget(agentId, program, arguments, workingDirectory, tabs);
     const QString tabLabel = newChat
         ? QStringLiteral("%1 · nuevo chat").arg(agentId)
         : QStringLiteral("%1 · agente").arg(agentId);
-    const int tab = m_editorTabs->addTab(session, tabLabel);
-    m_editorTabs->setTabToolTip(tab, QStringLiteral("%1\n%2")
+    const int tab = tabs->addTab(session, tabLabel);
+    tabs->setTabToolTip(tab, QStringLiteral("%1\n%2")
         .arg(program, QFileInfo(workingDirectory).absoluteFilePath()));
-    m_editorTabs->setCurrentWidget(session);
-    m_mainPages->setCurrentWidget(m_editorTabs);
+    tabs->setCurrentWidget(session);
     session->focusTerminal();
     m_agentSessions.insert(key, session);
     m_agentSessionProjects.insert(key, m_projectPath);
+    connect(session, &AgentSessionWidget::runningStateChanged, this,
+        [this] { updateAgentDashboard(); });
+    updateAgentDashboard();
     connect(session, &QObject::destroyed, this, [this, key] {
         m_agentSessions.remove(key);
         m_agentSessionProjects.remove(key);
+        updateAgentDashboard();
     });
     statusBar()->showMessage(QStringLiteral("Terminal de %1 integrada en Studio.").arg(agentId), 5000);
 }

@@ -19,6 +19,9 @@ public:
     bool isRunning() const;
     void focusTerminal();
 
+signals:
+    void runningStateChanged(bool running);
+
 private:
     QString m_agentId;
     PtySession *m_pty = nullptr;

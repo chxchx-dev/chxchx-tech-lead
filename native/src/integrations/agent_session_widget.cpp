@@ -30,20 +30,24 @@ AgentSessionWidget::AgentSessionWidget(QString agentId, QString program, QString
     connect(m_pty, &PtySession::processFinished, this, [this](int exitCode) {
         m_status->setText(QStringLiteral("%1 terminó · código %2").arg(m_agentId).arg(exitCode));
         m_stop->setEnabled(false);
+        emit runningStateChanged(false);
     });
     connect(m_pty, &PtySession::failed, this, [this](const QString &message) {
         m_status->setText(message);
+        emit runningStateChanged(false);
         focusTerminal();
     });
     connect(m_stop, &QPushButton::clicked, this, [this] {
         m_pty->stop();
         m_status->setText(QStringLiteral("%1 detenido").arg(m_agentId));
         m_stop->setEnabled(false);
+        emit runningStateChanged(false);
     });
 
     QString error;
     if (m_pty->start(program, arguments, workingDirectory, 110, 32, &error)) {
         m_status->setText(QStringLiteral("%1 activo · terminal integrada").arg(m_agentId));
+        emit runningStateChanged(true);
         focusTerminal();
     } else {
         m_status->setText(QStringLiteral("No se pudo iniciar %1: %2").arg(m_agentId, error));

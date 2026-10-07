@@ -2,6 +2,7 @@
 
 #include <QWidget>
 #include <QByteArray>
+#include <QString>
 #include <memory>
 #include <vterm.h>
 
@@ -11,6 +12,7 @@ public:
     explicit VtTerminalWidget(QWidget *parent = nullptr);
     ~VtTerminalWidget() override;
     void feed(const QByteArray &bytes);
+    void pasteText(const QString &text);
 
 signals:
     void inputReady(const QByteArray &bytes);

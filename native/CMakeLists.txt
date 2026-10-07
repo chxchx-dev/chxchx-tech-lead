@@ -88,14 +88,20 @@ target_compile_definitions(chxchx_lexilla PRIVATE LEXILLA_NO_EXPORT NDEBUG=1)
 qt_add_executable(chxchx-studio
     src/main.cpp
     src/main_window.cpp
+    src/main_window_menus.cpp
     src/main_window_area_controller.cpp
     src/main_window_actions.cpp
     src/main_window_agent_sessions.cpp
     src/main_window_data_pages.cpp
+    src/main_window_dashboard.cpp
     src/main_window_layout.cpp
     src/main_window_status_presenter.cpp
     src/main_window.hpp
+    src/project_file_index.cpp
+    src/project_file_index.hpp
+    src/studio_icons.hpp
     src/main_window_areas.hpp
+    src/branding.qrc
     src/integrations/terminal_launcher.cpp
     src/integrations/terminal_launcher.hpp
     src/integrations/bridge_client.cpp

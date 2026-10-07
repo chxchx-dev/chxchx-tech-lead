@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QColor>
 #include <QDir>
+#include <QIcon>
 #include <QPalette>
 #include <QStringList>
 
@@ -31,6 +32,7 @@ void applyPalette(QApplication &application)
             border-radius: 7px; padding: 7px 11px;
         }
         QToolButton:hover, QPushButton:hover { background-color: #203552; border-color: #20c5d4; }
+        QToolButton:checked { background-color: #123846; border-color: #20c5d4; }
         QPushButton:default { background-color: #087e8b; color: #ffffff; border-color: #21c6d5; }
         QPushButton:disabled { color: #64748b; background-color: #111a29; border-color: #1d2b40; }
         QLineEdit, QComboBox, QPlainTextEdit, QListWidget, QTreeView {
@@ -52,10 +54,16 @@ void applyPalette(QApplication &application)
         QTabWidget::pane { border: 1px solid #1d2b40; background-color: #0b1220; }
         QTabBar { background-color: #0e1728; qproperty-drawBase: 0; }
         QTabBar::tab {
-            background-color: #101a2a; color: #91a7c2; min-width: 110px; max-width: 230px;
-            min-height: 30px; padding: 7px 12px; margin: 4px 2px 0 2px;
-            border: 1px solid #1d2b40; border-top-left-radius: 7px; border-top-right-radius: 7px;
+            background-color: #101a2a; color: #91a7c2; min-width: 44px; max-width: 180px;
+            min-height: 27px; padding: 3px 21px 3px 7px; margin: 2px 1px 0 1px;
+            text-align: left; font-size: 12px;
+            border: 1px solid #1d2b40; border-top-left-radius: 6px; border-top-right-radius: 6px;
         }
+        QTabBar::close-button {
+            subcontrol-origin: padding; subcontrol-position: right center;
+            right: 5px; width: 12px; height: 12px; margin: 0;
+        }
+        QTabBar::close-button:hover { background-color: #743846; border-radius: 7px; }
         QTabBar::tab:hover { background-color: #17283d; color: #dce8f7; }
         QTabBar::tab:selected { background-color: #14283c; color: #8cf2f4; border-color: #24566a; border-bottom: 2px solid #20c5d4; }
         QStatusBar { background-color: #0e1728; color: #91a7c2; border-top: 1px solid #1d2b40; }
@@ -72,6 +80,7 @@ int main(int argc, char *argv[])
     QApplication application(argc, argv);
     application.setApplicationName(QStringLiteral("ChxChx Studio"));
     application.setOrganizationName(QStringLiteral("ChxChx"));
+    application.setWindowIcon(QIcon(QStringLiteral(":/brand/logo-min.png")));
     applyPalette(application);
 
     const QStringList arguments = application.arguments();

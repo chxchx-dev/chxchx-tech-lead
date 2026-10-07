@@ -5,9 +5,12 @@
 #include <QString>
 #include <QStringList>
 #include <QHash>
+#include <QPointer>
 
 class QJsonObject;
+class QAction;
 class BridgeClient;
+class ProjectFileIndex;
 class AgentSessionWidget;
 class WorkspaceTerminalWidget;
 class QDockWidget;
@@ -19,12 +22,17 @@ class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
 class QModelIndex;
+class QMenu;
 class QPlainTextEdit;
+class QSortFilterProxyModel;
 class ScintillaEditBase;
 class QPushButton;
 class QStackedWidget;
+class QSplitter;
 class QTabWidget;
+class QPoint;
 class QTreeView;
+class QToolBar;
 class QWidget;
 
 class MainWindow final : public QMainWindow {
@@ -38,7 +46,7 @@ private slots:
     void saveFile();
     void saveFileAs();
     void findInCurrentFile();
-    void closeEditorTab(int index);
+
     void openTreeFile(const QModelIndex &index);
     void selectArea(int row);
     void refreshArea();
@@ -51,7 +59,10 @@ private slots:
     void selectMemoryNote(QListWidgetItem *item);
     void selectChatConversation(QListWidgetItem *item);
     void openCommandPalette();
+    void searchProjectFiles();
     void executePaletteCommand(QListWidgetItem *item);
+    void showAreaDashboard(const QJsonObject &payload, const QString &area);
+    void updateAgentDashboard();
     void openNewWorkspaceTerminal();
     void attachWorkspaceTerminal();
     void attachAgentTerminal();
@@ -61,6 +72,17 @@ private slots:
 private:
     void buildActions();
     void buildLayout();
+    void configureShortcuts();
+    void setWordWrapEnabled(bool enabled);
+    void performEditAction(const QString &actionId);
+    void updateEditActionState();
+    QList<QTabWidget *> editorTabGroups() const;
+    QTabWidget *activeEditorTabs() const;
+    QTabWidget *tabGroupFor(QWidget *page) const;
+    void closeEditorTab(QTabWidget *tabs, int index);
+    void moveTabToOtherGroup(QTabWidget *source, int index, Qt::Orientation orientation);
+    void closeSecondaryTabGroup();
+    void showTabContextMenu(QTabWidget *tabs, const QPoint &position);
     void openPath(const QString &path);
     ScintillaEditBase *currentEditor() const;
     QString currentFilePath() const;
@@ -93,11 +115,14 @@ private:
     void schedulePendingRefresh();
     void appendOutput(const QString &text);
 
+    QPointer<QWidget> m_editTargetWidget;
     QString m_projectPath;
     QString m_currentArea = QStringLiteral("overview");
     QString m_commandArea;
     QFileSystemModel *m_fileModel = nullptr;
+    QSortFilterProxyModel *m_projectProxy = nullptr;
     QTreeView *m_projectTree = nullptr;
+    QLineEdit *m_projectSearch = nullptr;
     QListWidget *m_areaList = nullptr;
     QComboBox *m_targetSelector = nullptr;
     QPushButton *m_primaryAction = nullptr;
@@ -105,7 +130,14 @@ private:
     QPushButton *m_tertiaryAction = nullptr;
     QPushButton *m_quaternaryAction = nullptr;
     QTabWidget *m_editorTabs = nullptr;
+    QTabWidget *m_secondaryEditorTabs = nullptr;
+    QTabWidget *m_activeEditorTabs = nullptr;
+    QSplitter *m_editorSplit = nullptr;
     QStackedWidget *m_mainPages = nullptr;
+    QWidget *m_dashboardPage = nullptr;
+    QLabel *m_dashboardTitle = nullptr;
+    QLabel *m_dashboardSummary = nullptr;
+    QListWidget *m_dashboardItems = nullptr;
     QWidget *m_handoffPage = nullptr;
     QWidget *m_memoryPage = nullptr;
     QWidget *m_chatsPage = nullptr;
@@ -113,6 +145,10 @@ private:
     QWidget *m_setupPage = nullptr;
     QWidget *m_guidePage = nullptr;
     QWidget *m_brandPage = nullptr;
+    QPushButton *m_guideSetupButton = nullptr;
+    QPushButton *m_guideSkillsButton = nullptr;
+    QPushButton *m_guideProjectButton = nullptr;
+    QPushButton *m_guideAgentsButton = nullptr;
     QLineEdit *m_handoffSummary = nullptr;
     QLineEdit *m_handoffPending = nullptr;
     QLineEdit *m_handoffValidation = nullptr;
@@ -130,15 +166,24 @@ private:
     QPlainTextEdit *m_errorDetail = nullptr;
     QPlainTextEdit *m_output = nullptr;
     QDockWidget *m_activityDock = nullptr;
+    QDockWidget *m_projectDock = nullptr;
+    QDockWidget *m_controlDock = nullptr;
+    QMenu *m_viewMenu = nullptr;
+    QToolBar *m_quickToolbar = nullptr;
     QLabel *m_areaDescription = nullptr;
     BridgeClient *m_bridgeClient = nullptr;
+    ProjectFileIndex *m_fileIndex = nullptr;
     QStringList m_confirmedActionArguments;
     QHash<QString, AgentSessionWidget *> m_agentSessions;
     QHash<QString, QString> m_agentSessionProjects;
+    QHash<QString, QAction *> m_shortcutActions;
+    QStringList m_shortcutOrder;
     QStringList m_forceActionArguments;
     QString m_confirmedActionTitle;
     QString m_pendingProjectPath;
     QString m_workspaceStatus;
+    int m_nextTerminalNumber = 1;
+    bool m_wordWrapEnabled = true;
     bool m_projectTrusted = false;
     bool m_previewPending = false;
     bool m_governorRetryPending = false;
