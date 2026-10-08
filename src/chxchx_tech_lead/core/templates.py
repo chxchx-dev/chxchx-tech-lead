@@ -42,6 +42,10 @@ Basic Memory project: `{memory}`
 ## Reglas
 
 - No introduzcas secretos en código, documentación, logs o commits.
+- Si el usuario pide explícitamente recordar o conservar algo para futuras sesiones, añádelo de inmediato como entrada fechada en `.ai/memory/PROJECT_MEMORY.md`; conserva literalmente frases o nombres, no reemplaces entradas existentes y confirma la ruta guardada.
+- Al iniciar una tarea o conversación nueva, consulta `.ai/memory/PROJECT_MEMORY.md` si existe y recupera solo las entradas pertinentes al proyecto y la solicitud.
+- Si el usuario pregunta por una memoria explícita que no aparece allí, busca únicamente la petición correspondiente en los chats recientes de este mismo proyecto; si la recuperas, persístela ahora. Si no aparece, di que no quedó guardada y pídele el dato otra vez.
+- No guardes contraseñas, tokens, claves, datos personales sensibles ni transcripciones completas. No conviertas comentarios casuales en memoria persistente.
 - Si la tarea depende de decisiones anteriores, consulta Basic Memory usando el proyecto `{memory}`.
 - No asumas que Basic Memory conserva transcripciones: guarda allí solo conocimiento duradero, y no mezcles información de otros proyectos.
 - No guardes saludos, preguntas triviales, secretos ni transcripciones completas; si no hubo cambios ni conocimiento reutilizable, no crees una nota vacía.

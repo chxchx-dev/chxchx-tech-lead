@@ -58,6 +58,8 @@ def test_project_status_includes_shared_studio_agent_launchers(tmp_path: Path) -
     assert "codex" in agent["studio_command"]
     assert agent["studio_command"][-3:] == ["codex", "--model", "gpt"]
     assert agent["studio_new_chat_command"][-1] == NEW_CHAT_PROMPT
+    assert ".ai/memory/PROJECT_MEMORY.md" in NEW_CHAT_PROMPT
+    assert "añádelo de inmediato" in NEW_CHAT_PROMPT
 
 
 def test_readonly_handoff_and_memory_payloads(tmp_path: Path) -> None:

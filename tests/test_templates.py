@@ -22,3 +22,5 @@ def test_generated_rules_include_agent_protocol(tmp_path: Path):
     assert "## Protocolo de trabajo" in body
     assert "`.ai/PROJECT.md`" in body
     assert "`.ai/HANDOFF.md`" in body
+    assert "`.ai/memory/PROJECT_MEMORY.md`" in body
+    assert "pide explícitamente recordar" in body

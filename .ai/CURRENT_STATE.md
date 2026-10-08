@@ -173,3 +173,10 @@
 - Un TGZ local sobre Fedora con Qt instalado en directorios del sistema se genera, pero no despliega ese runtime automáticamente; para distribución usar el artefacto CI y validar en la plataforma destino. No afirmar todavía que los tres paquetes fueron probados o que CI está verde.
 - Validación local: CMake configure/build, CTest 6/6, CPack generó el TGZ Linux y el archivo contiene binario y licencias; `python -m compileall -q src tests scripts`, pytest (195 passed, 1 skipped) y `git diff --check` pasan.
 - Pendiente: ejecución real del workflow en Ubuntu/Windows/macOS, prueba de instalación/arranque de los artefactos, QA manual en el proyecto real y mediciones repetibles de startup/navegación.
+
+## Memoria resiliente de agentes
+
+- Las reglas administradas del proyecto piden guardar solicitudes explícitas de “recuerda esto” en `.ai/memory/PROJECT_MEMORY.md`, conservar frases/nombres literalmente, no guardar secretos o datos sensibles y consultar las entradas pertinentes al iniciar una tarea.
+- El prompt de “Nueva sesión” de Codex/Claude también carga esa nota e indica guardar la petición en el momento, sin esperar a cerrar la conversación. La carpeta `.ai/memory/` ya es la carpeta local asociada a Basic Memory durante la integración.
+- El cierre de Studio sigue sin reabrir el proceso del agente ni restaurar su transcripción. La persistencia está en el archivo del proyecto; solicitudes de memoria anteriores que nunca se guardaron no se recuperan automáticamente.
+- Validar manualmente en una conversación nueva: pedir una frase no sensible, confirmar que el agente informa la ruta, cerrar/reabrir Studio y pedir que la repita. No ejecutar esta prueba sobre información privada o secretos.
