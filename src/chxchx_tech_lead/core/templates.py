@@ -47,6 +47,7 @@ Basic Memory project: `{memory}`
 - Si el usuario pregunta por una memoria explícita que no aparece allí, busca únicamente la petición correspondiente en los chats recientes de este mismo proyecto; si la recuperas, persístela ahora. Si no aparece, di que no quedó guardada y pídele el dato otra vez.
 - No guardes contraseñas, tokens, claves, datos personales sensibles ni transcripciones completas. No conviertas comentarios casuales en memoria persistente.
 - Si la tarea depende de decisiones anteriores, consulta Basic Memory usando el proyecto `{memory}`.
+- Al llamar herramientas de Basic Memory, usa exactamente `{memory}` en el argumento `project`; no reutilices un `project_id` de otro proyecto ni el ámbito predeterminado. Si no puedes fijar el ámbito correcto, usa los archivos locales y no llames Basic Memory.
 - No asumas que Basic Memory conserva transcripciones: guarda allí solo conocimiento duradero, y no mezcles información de otros proyectos.
 - No guardes saludos, preguntas triviales, secretos ni transcripciones completas; si no hubo cambios ni conocimiento reutilizable, no crees una nota vacía.
 - Usa Serena para navegación semántica del código cuando esté disponible.

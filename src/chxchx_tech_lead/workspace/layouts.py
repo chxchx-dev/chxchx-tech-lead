@@ -89,7 +89,13 @@ def _agent_panes(
     lines = [f'    pane split_direction={json.dumps(direction)} {{'] if len(agents) > 1 else []
     for agent in agents:
         agent_cwd = json.dumps(str((root / agent.cwd).resolve()), ensure_ascii=False)
-        command = agent_pane_command(agent.id, agent.command, label=header.label, logo=header.logo)
+        command = agent_pane_command(
+            agent.id,
+            agent.command,
+            label=header.label,
+            logo=header.logo,
+            project_root=str(root.resolve()),
+        )
         executable = json.dumps(command[0], ensure_ascii=False)
         args = " ".join(json.dumps(value, ensure_ascii=False) for value in command[1:])
         lines.extend(

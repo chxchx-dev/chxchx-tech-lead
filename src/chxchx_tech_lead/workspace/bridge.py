@@ -93,6 +93,7 @@ def project_status_payload(project_path: Path) -> ProjectStatusPayload:
                 label=config.header.label,
                 logo=config.header.logo,
                 new_chat=new_chat,
+                project_root=str(project.root),
             )
         except ValueError:
             return []

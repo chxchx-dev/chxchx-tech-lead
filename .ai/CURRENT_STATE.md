@@ -174,6 +174,15 @@
 - Validación local: CMake configure/build, CTest 6/6, CPack generó el TGZ Linux y el archivo contiene binario y licencias; `python -m compileall -q src tests scripts`, pytest (195 passed, 1 skipped) y `git diff --check` pasan.
 - Pendiente: ejecución real del workflow en Ubuntu/Windows/macOS, prueba de instalación/arranque de los artefactos, QA manual en el proyecto real y mediciones repetibles de startup/navegación.
 
+## Memoria explícita al iniciar chat nuevo
+
+- `agent_pane` revisa transcripts al terminar cada sesión Codex/Claude y guarda solicitudes explícitas de recordar en `.ai/memory/PROJECT_MEMORY.md`. Antes de iniciar `--new-chat`, vuelve a revisar el historial local del mismo proyecto, evita duplicar solicitudes idénticas y adjunta las entradas recuperadas al prompt.
+- Excluye preguntas que piden recuperar una frase anterior, mensajes de asistente y mensajes que coinciden con indicadores de secretos; no corre al iniciar agentes normalmente.
+- Validación: `python -m compileall -q src tests`; suite Python `201 passed, 1 skipped`; `git diff --check` limpio.
+- Pendiente: probar en Studio un mensaje exacto de memoria, cerrar el proyecto, iniciar chat nuevo y pedir la frase. La recuperación depende de que el transcript local del proveedor exista y contenga el mensaje original.
+- Ajuste por prueba: el agente consultó `chxchx-studio-qa` en Basic Memory. `new_chat_prompt()` ahora lee `memory_project` del `.ai/chxchx-tech.toml` de la raíz activa y ordena pasar ese nombre exacto como argumento `project`; prohíbe IDs de otros proyectos y búsquedas globales. Si no hay ámbito configurado, indica no usar Basic Memory.
+- Una pregunta de recuperación como “¿cuál fue la frase?” nunca se guarda como memoria; la captura solo acepta mensajes del usuario con una solicitud de recuerdo y excluye preguntas que intentan recuperar información anterior.
+
 ## Memoria resiliente de agentes
 
 - Las reglas administradas del proyecto piden guardar solicitudes explícitas de “recuerda esto” en `.ai/memory/PROJECT_MEMORY.md`, conservar frases/nombres literalmente, no guardar secretos o datos sensibles y consultar las entradas pertinentes al iniciar una tarea.

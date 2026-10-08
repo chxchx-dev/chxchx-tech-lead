@@ -60,10 +60,11 @@ verde; la configuración del workflow no equivale a que haya pasado.
 
 ## Evolución posterior
 
-- Memoria de proyecto resiliente: solicitudes explícitas de recordar se guardan
-  en `.ai/memory/PROJECT_MEMORY.md` y el prompt de chat nuevo la recupera. Falta
-  confirmar manualmente el ciclo guardar/cerrar/reabrir/recordar; no se restaura
-  automáticamente el proceso ni una transcripción completa.
+- Memoria de proyecto resiliente: el wrapper previo al chat nuevo recupera
+  solicitudes explícitas de los transcripts Codex/Claude locales del proyecto,
+  las agrega a `.ai/memory/PROJECT_MEMORY.md` sin duplicarlas y las inyecta al
+  prompt. Falta confirmar manualmente el ciclo en Studio; depende de que el
+  transcript local siga disponible y no restaura sesiones completas.
 - Roles de agente y workflows una vez que el flujo diario tenga validación real.
 - ChxChx Insights y aprendizaje desde el trabajo, con controles de privacidad y
   promoción explícita de observaciones a skills.

@@ -46,7 +46,7 @@ def test_project_status_includes_shared_studio_agent_launchers(tmp_path: Path) -
     project_config = tmp_path / ".ai" / "chxchx-tech.toml"
     project_config.parent.mkdir()
     project_config.write_text(
-        'version = 2\nprofile = "python"\n'
+        'version = 2\nprofile = "python"\nmemory_project = "bridge-fixture-abc123"\n'
         '[workspace]\nname = "bridge fixture"\nauto_start = false\nauto_attach = false\n'
         '[[workspace.agents]]\nid = "codex"\ncommand = ["codex", "--model", "gpt"]\n',
         encoding="utf-8",
@@ -57,7 +57,10 @@ def test_project_status_includes_shared_studio_agent_launchers(tmp_path: Path) -
     assert agent["studio_command"][1:4] == ["-m", "chxchx_tech_lead.workspace.agent_pane", "--name"]
     assert "codex" in agent["studio_command"]
     assert agent["studio_command"][-3:] == ["codex", "--model", "gpt"]
-    assert agent["studio_new_chat_command"][-1] == NEW_CHAT_PROMPT
+    prompt = agent["studio_new_chat_command"][-1]
+    assert prompt.startswith(NEW_CHAT_PROMPT)
+    assert "`bridge-fixture-abc123`" in prompt
+    assert "no reutilices" in prompt
     assert ".ai/memory/PROJECT_MEMORY.md" in NEW_CHAT_PROMPT
     assert "añádelo de inmediato" in NEW_CHAT_PROMPT
 

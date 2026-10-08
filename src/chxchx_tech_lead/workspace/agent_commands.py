@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Sequence
+from pathlib import Path
+import tomllib
 
 
 NEW_CHAT_PROMPT = (
@@ -14,7 +16,9 @@ NEW_CHAT_PROMPT = (
     "como entrada fechada en ese archivo, sin reemplazar otras entradas, y "
     "confirma la ruta; no "
     "esperes al cierre del trabajo. No guardes contraseñas, tokens, claves ni "
-    "datos personales sensibles. Recupera de Basic Memory, limitado al proyecto actual, "
+    "datos personales sensibles. Usa primero el archivo local como fuente de frases explícitas. "
+    "No busques una frase con actividad o búsqueda global de Basic Memory. "
+    "Recupera de Basic Memory únicamente decisiones relevantes del proyecto, "
     "las decisiones y notas relevantes para el estado y la tarea pendiente; "
     "si el usuario pregunta por una memoria explícita que no está en el archivo, "
     "busca solo esa petición en los chats recientes del mismo proyecto y guárdala "
@@ -23,10 +27,35 @@ NEW_CHAT_PROMPT = (
     "qué contexto persistido encontraste y continúa desde el pendiente. "
     "No supongas que información no guardada en archivos de contexto o memoria "
     "está disponible. Antes de responder al terminar trabajo sustancial, guarda "
-    "sin pedir acción manual: actualiza estado y handoff y usa la herramienta "
-    "write_memory de Basic Memory para conocimiento duradero del proyecto. "
+    "sin pedir acción manual: actualiza estado y handoff y usa Basic Memory "
+    "solo con el ámbito exacto del proyecto indicado abajo para conocimiento duradero. "
     "No guardes saludos, preguntas triviales, secretos ni transcripciones completas."
 )
+
+
+def new_chat_prompt(project_root: str) -> str:
+    """Bind memory-tool guidance to the project configured in this checkout."""
+    config_path = Path(project_root) / ".ai" / "chxchx-tech.toml"
+    try:
+        with config_path.open("rb") as stream:
+            config = tomllib.load(stream)
+    except (OSError, tomllib.TOMLDecodeError):
+        config = {}
+    memory_project = config.get("memory_project")
+    if isinstance(memory_project, str) and memory_project.strip():
+        scope = (
+            f"El proyecto Basic Memory autorizado para este chat es `{memory_project}` "
+            "(campo `memory_project` de `.ai/chxchx-tech.toml`). Si llamas herramientas "
+            "Basic Memory, especifica exactamente ese nombre en `project`; no reutilices "
+            "un `project_id` tomado de otro proyecto, del historial de herramientas o del "
+            "proyecto predeterminado. Si no puedes fijar ese ámbito, no llames la herramienta."
+        )
+    else:
+        scope = (
+            "Este proyecto no declara `memory_project` en `.ai/chxchx-tech.toml`; "
+            "no consultes ni escribas Basic Memory. Usa únicamente archivos locales del proyecto."
+        )
+    return f"{NEW_CHAT_PROMPT}\n\nÁmbito de memoria obligatorio: {scope}"
 
 
 def _supports_new_chat(command: Sequence[str]) -> bool:
@@ -43,6 +72,7 @@ def agent_pane_command(
     label: str,
     logo: str,
     new_chat: bool = False,
+    project_root: str = "",
 ) -> list[str]:
     """Build the command used by both initial and dynamic agent panes."""
     if not command or any(not str(part).strip() for part in command):
@@ -62,7 +92,11 @@ def agent_pane_command(
         pane_command.extend(["--label", label])
     if logo:
         pane_command.extend(["--logo", logo])
+    if project_root and _supports_new_chat(command):
+        pane_command.extend(["--capture-explicit-memory", "--project-root", project_root])
+        if new_chat:
+            pane_command.append("--recover-explicit-memory")
     pane_command.extend(["--", *command])
     if new_chat:
-        pane_command.append(NEW_CHAT_PROMPT)
+        pane_command.append(new_chat_prompt(project_root) if project_root else NEW_CHAT_PROMPT)
     return pane_command
