@@ -170,13 +170,13 @@
 
 - CMake configura ZIP para Windows, DMG para macOS y TGZ para Linux. El paquete incluye los avisos originales de Scintilla, Lexilla y libvterm junto con `THIRD_PARTY.md`.
 - CI genera ZIP para Windows, DMG para macOS y TGZ con Qt SDK para Ubuntu; el job Fedora compila en su sistema Qt y publica un TGZ de prueba con el runtime Qt del sistema.
-- `scripts/install-studio-fedora.sh` descarga el artefacto del último push exitoso a `dev`, verifica su digest, instala runtime Qt con DNF y prepara Studio más un entorno CLI aislado bajo `~/.local/opt`. Requiere Fedora x86_64 y sudo; no es una versión estable. El primer uso espera a que CI publique el artefacto.
+- `scripts/install-studio-fedora.sh` descarga el artefacto del último push a `dev` cuando el job Fedora lo publica, verifica su digest, instala runtime Qt con DNF y prepara Studio más un entorno CLI aislado bajo `~/.local/opt`. Requiere Fedora x86_64 y sudo; no es una versión estable. No depende de que jobs de otras plataformas terminen bien.
 - Validación local: CMake configure/build, CTest 6/6, CPack generó el TGZ Linux y el archivo contiene binario y licencias; `python -m compileall -q src tests scripts`, pytest (195 passed, 1 skipped) y `git diff --check` pasan.
 - Pendiente: ejecución real del workflow en Ubuntu/Windows/macOS, prueba de instalación/arranque de los artefactos, QA manual en el proyecto real y mediciones repetibles de startup/navegación.
 
 ## Instalación de prueba de Studio en Fedora
 
-- Se añadió `scripts/install-studio-fedora.sh`, invocable desde `raw.githubusercontent.com/.../dev`. Busca un run push completado exitosamente, baja el artefacto `chxchx-studio-fedora`, verifica el digest reportado por GitHub y lo instala en un directorio por commit, junto con una CLI aislada y el launcher `~/.local/bin/chxchx-studio-dev`.
+- Se añadió `scripts/install-studio-fedora.sh`, invocable desde `raw.githubusercontent.com/.../dev`. Busca el último push propio a `dev`, baja su artefacto `chxchx-studio-fedora` cuando el job Fedora lo publica, verifica el digest reportado por GitHub y lo instala en un directorio por commit, junto con una CLI aislada y el launcher `~/.local/bin/chxchx-studio-dev`.
 - CI Fedora ahora empaqueta Release con CPack TGZ y sube el artefacto. DNF instala solo las bibliotecas Qt de runtime requeridas; CMake, compilador y headers no se instalan en la máquina de prueba.
 - Validación local: `bash -n scripts/install-studio-fedora.sh`, build nativo, CPack TGZ, extracción del paquete y comprobación de dependencias con `ldd`; CTest 6/6; compileall y pytest `201 passed, 1 skipped`. No se ejecutó el instalador real porque instalaría dependencias con DNF y alteraría `~/.local`.
 

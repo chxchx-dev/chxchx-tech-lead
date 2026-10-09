@@ -28,7 +28,7 @@ done
 WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-printf 'Buscando el último build exitoso de %s/%s en %s…\n' "$OWNER" "$REPOSITORY" "$BRANCH"
+printf 'Buscando el último push de %s/%s en %s…\n' "$OWNER" "$REPOSITORY" "$BRANCH"
 curl --fail --silent --show-error --location \
   -H 'Accept: application/vnd.github+json' \
   -H 'X-GitHub-Api-Version: 2022-11-28' \
@@ -47,15 +47,13 @@ for run in runs:
         run.get("event") == "push"
         and run.get("head_branch") == sys.argv[3]
         and repository == sys.argv[2].casefold()
-        and run.get("status") == "completed"
-        and run.get("conclusion") == "success"
     ):
         print(run["id"], run["head_sha"])
         break
 else:
-    raise SystemExit("No hay un build push exitoso de dev disponible todavía.")
+    raise SystemExit("No hay un push propio a dev disponible todavía.")
 PY
-) || fail "No se encontró un build exitoso para dev. Revisa la pestaña Actions de GitHub."
+) || fail "No se encontró el último push de dev. Revisa la pestaña Actions de GitHub."
 read -r RUN_ID COMMIT_SHA <<< "$RUN_INFO"
 
 curl --fail --silent --show-error --location \
@@ -75,9 +73,9 @@ for artifact in artifacts:
         print(artifact["id"], artifact.get("digest") or "-")
         break
 else:
-    raise SystemExit("El build exitoso todavía no publicó el paquete Fedora.")
+    raise SystemExit("El job Fedora todavía no publicó el paquete de este push.")
 PY
-) || fail "No se encontró el artefacto Fedora en el build exitoso."
+) || fail "El artefacto Fedora de este push todavía no está disponible. Espera a que termine su job en Actions."
 read -r ARTIFACT_ID ARTIFACT_DIGEST <<< "$ARTIFACT_INFO"
 
 printf 'Descargando Studio desde el commit %s…\n' "${COMMIT_SHA:0:12}"

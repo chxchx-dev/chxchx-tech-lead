@@ -115,14 +115,14 @@ Estos instaladores solo dejan `chxchx-tech` como herramienta global; la configur
 
 ### Prueba rápida de ChxChx Studio en Fedora
 
-El instalador de prueba descarga el último artefacto Fedora de un push exitoso a `dev`, instala las bibliotecas Qt de ejecución y deja Studio en `~/.local/opt/chxchx-studio/`. También instala el bridge CLI en un entorno aislado para esta versión y crea `~/.local/bin/chxchx-studio-dev`; no reemplaza otro `chxchx-tech` global. Requiere Fedora x86_64, conexión a GitHub, `sudo` y que el workflow CI de `dev` haya terminado correctamente.
+El instalador de prueba descarga el artefacto Fedora del último push a `dev` una vez que ese job lo publique, instala las bibliotecas Qt de ejecución y deja Studio en `~/.local/opt/chxchx-studio/`. También instala el bridge CLI en un entorno aislado para esta versión y crea `~/.local/bin/chxchx-studio-dev`; no reemplaza otro `chxchx-tech` global. Requiere Fedora x86_64, conexión a GitHub, `sudo` y que el job Fedora de CI termine correctamente.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio-fedora.sh | bash
 chxchx-studio-dev /ruta/al/proyecto
 ```
 
-Es una compilación de desarrollo para pruebas, no una versión estable. GitHub conserva los artefactos de Actions por tiempo limitado; si no encuentra uno, revisa que el último workflow de `dev` haya terminado correctamente. Para quitarla, elimina el launcher y la carpeta `~/.local/opt/chxchx-studio/dev-<commit>` indicada al instalar. Las dependencias Qt instaladas mediante DNF se administran aparte con `dnf remove` si ya no las necesita otra aplicación.
+Es una compilación de desarrollo para pruebas, no una versión estable. GitHub conserva los artefactos de Actions por tiempo limitado; después de cada push, espera a que el job Fedora termine. Para quitarla, elimina el launcher y la carpeta `~/.local/opt/chxchx-studio/dev-<commit>` indicada al instalar. Las dependencias Qt instaladas mediante DNF se administran aparte con `dnf remove` si ya no las necesita otra aplicación.
 
 ## Instalación desde un clon
 

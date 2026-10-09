@@ -52,7 +52,7 @@ verde; la configuración del workflow no equivale a que haya pasado.
 - CPack y CI generan ZIP para Windows, DMG para macOS y TGZ para Ubuntu desde Qt
   SDK. Fedora empaqueta TGZ con las bibliotecas Qt del sistema y publica un
   artefacto de prueba; `scripts/install-studio-fedora.sh` lo instala desde el
-  último push exitoso de `dev`. Falta ejecutar el workflow actualizado y probar
+  último push de `dev` cuando termina el job Fedora. Falta ejecutar el workflow actualizado y probar
   instalación/arranque en una segunda máquina Fedora.
 - Decidir si el núcleo Python seguirá siendo la autoridad mediante el bridge o
   si comienza una migración gradual a un núcleo C++ compartido. No bloquear el
