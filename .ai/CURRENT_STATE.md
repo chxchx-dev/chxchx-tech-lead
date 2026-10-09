@@ -176,9 +176,10 @@
 
 ## Instalación de prueba de Studio en Fedora
 
-- Se añadió `scripts/install-studio-fedora.sh`, invocable desde `raw.githubusercontent.com/.../dev`. Busca el último push propio a `dev`, baja su artefacto `chxchx-studio-fedora` cuando el job Fedora lo publica, verifica el digest reportado por GitHub y lo instala en un directorio por commit, junto con una CLI aislada y el launcher `~/.local/bin/chxchx-studio-dev`.
-- CI Fedora ahora empaqueta Release con CPack TGZ y sube el artefacto. DNF instala solo las bibliotecas Qt de runtime requeridas; CMake, compilador y headers no se instalan en la máquina de prueba.
-- Validación local: `bash -n scripts/install-studio-fedora.sh`, build nativo, CPack TGZ, extracción del paquete y comprobación de dependencias con `ldd`; CTest 6/6; compileall y pytest `201 passed, 1 skipped`. No se ejecutó el instalador real porque instalaría dependencias con DNF y alteraría `~/.local`.
+- `scripts/install-studio-fedora.sh` descarga la pre-release pública `studio-fedora-dev`, valida el SHA-256 del TGZ mediante su manifiesto y obtiene el bridge CLI del mismo commit. Instala runtime Qt, Studio en un directorio por commit y `~/.local/bin/chxchx-studio-dev`.
+- CI Fedora empaqueta Release con CPack TGZ. Un job posterior publica el paquete y el manifiesto como assets públicos de una pre-release rodante; así la prueba no depende de que Actions permita descargar artefactos anónimos.
+- Instalación: `curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio-fedora.sh | bash`. Requiere Fedora x86_64, conexión a GitHub y sudo. Esperar a que el job Fedora de publicación termine.
+- Pendiente: verificar la descarga anónima de los assets después del próximo workflow y probar instalación/arranque en otra máquina Fedora.
 
 ## Memoria explícita al iniciar chat nuevo
 

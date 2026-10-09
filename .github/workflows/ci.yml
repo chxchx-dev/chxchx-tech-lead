@@ -59,6 +59,54 @@ jobs:
           path: build-native/packages/*.tar.gz
           if-no-files-found: error
 
+  publish-fedora-preview:
+    name: Publish Fedora dev preview
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: native-fedora
+    runs-on: ubuntu-latest
+    concurrency:
+      group: chxchx-studio-fedora-dev-preview
+      cancel-in-progress: true
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Download Fedora package
+        uses: actions/download-artifact@v4
+        with:
+          name: chxchx-studio-fedora
+          path: dist
+      - name: Prepare public preview assets
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          package="$(find dist -type f -name '*.tar.gz' -print -quit)"
+          test -n "$package"
+          cp "$package" dist/chxchx-studio-fedora.tar.gz
+          sha256sum dist/chxchx-studio-fedora.tar.gz > dist/chxchx-studio-fedora.tar.gz.sha256
+          printf '{"commit":"%s","asset":"chxchx-studio-fedora.tar.gz","sha256":"%s"}\n' \
+            "$COMMIT_SHA" "$(sha256sum dist/chxchx-studio-fedora.tar.gz | cut -d ' ' -f1)" \
+            > dist/chxchx-studio-fedora.json
+      - name: Publish rolling Fedora preview release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: studio-fedora-dev
+          target_commitish: ${{ github.sha }}
+          name: ChxChx Studio · Fedora dev preview
+          body: |
+            Rolling Fedora x86_64 preview built from commit `${{ github.sha }}` on `dev`.
+
+            Install with:
+            `curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio-fedora.sh | bash`
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          files: |
+            dist/chxchx-studio-fedora.tar.gz
+            dist/chxchx-studio-fedora.tar.gz.sha256
+            dist/chxchx-studio-fedora.json
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:

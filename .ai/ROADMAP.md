@@ -50,9 +50,9 @@ verde; la configuración del workflow no equivale a que haya pasado.
   9.55 ms y escanea contenido en 99–100 ms. Falta medir primer frame y RAM de
   Studio en repos reales grandes, y fijar límites antes de publicar.
 - CPack y CI generan ZIP para Windows, DMG para macOS y TGZ para Ubuntu desde Qt
-  SDK. Fedora empaqueta TGZ con las bibliotecas Qt del sistema y publica un
-  artefacto de prueba; `scripts/install-studio-fedora.sh` lo instala desde el
-  último push de `dev` cuando termina el job Fedora. Falta ejecutar el workflow actualizado y probar
+  SDK. Fedora empaqueta TGZ con las bibliotecas Qt del sistema y publica una
+  pre-release rodante con assets descargables anónimamente; el instalador valida
+  el SHA-256 del manifiesto. Falta ejecutar el workflow actualizado y probar
   instalación/arranque en una segunda máquina Fedora.
 - Decidir si el núcleo Python seguirá siendo la autoridad mediante el bridge o
   si comienza una migración gradual a un núcleo C++ compartido. No bloquear el
