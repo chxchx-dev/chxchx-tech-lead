@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/brand">
+        <file alias="logo.png">../../assets/logo-chxchx.png</file>
+        <file alias="logo-min.png">../../assets/logo-chxchx-min.png</file>
+    </qresource>
+</RCC>

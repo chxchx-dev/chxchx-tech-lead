@@ -1,22 +1,19 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import typer
+from rich.table import Table
+
 from ..core.bootstrap import initialize_project
 from ..core.project_config import project_config_needs_update
-
-from ..cli_context import (
-    Path,
-    Table,
-    WorkspaceManager,
-    app,
-    basic_memory_available,
-    check_tools,
-    console,
-    diagnose_project_mcp,
-    install_tool,
-    typer,
-    _project,
-    _show_project,
-)
+from ..integrations.installers import install_tool
+from ..integrations.mcp_diagnostics import diagnose_project_mcp
+from ..integrations.tools import check_tools
+from ..cli_registry import app
+from ..ui.cli_output import console, show_project as _show_project
+from ..workspace.manager import WorkspaceManager
+from ..workspace.project_context import project_for_path as _project
 
 @app.command("install")
 def install_command(

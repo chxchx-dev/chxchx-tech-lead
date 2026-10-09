@@ -1,0 +1,6 @@
+name = "ui-ux-design"
+description = "Diseño de producto UI/UX para interfaces web y móviles claras, accesibles y cuidadas."
+stacks = ["react", "react-vite", "nextjs", "react-native"]
+languages = []
+tags = ["ui", "ux", "product-design", "visual-design", "accessibility", "responsive"]
+origin = "chxchx"

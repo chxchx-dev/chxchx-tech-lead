@@ -1,3 +1,6 @@
+from ..ui.theme import apply_tui_palette
+
+
 TUI_CSS = """
     Screen {
         background: #282a36;
@@ -53,6 +56,12 @@ TUI_CSS = """
         background: #2e303d;
         border: solid #777b8e;
     }
+    .skills-summary {
+        height: 1;
+        margin-bottom: 0;
+        padding: 0 1;
+        color: #aeb1c2;
+    }
     .usage-guide {
         height: 1fr;
         min-height: 12;
@@ -96,7 +105,7 @@ TUI_CSS = """
         border: solid #aeb1c2;
         overflow-y: auto;
     }
-    #chat-detail, #memory-detail, #error-detail {
+    #chat-detail, #memory-detail, #error-detail, #skill-detail, #pack-detail {
         width: 1fr;
         height: 1fr;
         margin-left: 1;
@@ -176,6 +185,8 @@ TUI_CSS = """
     }
     #project-ref { width: 1fr; }
     #errors-table { height: 1fr; }
+    #skills-table { height: 1fr; min-height: 7; }
+    #packs-table { height: 1fr; min-height: 5; }
     Static#handoff {
         height: 1fr;
         padding: 1 2;
@@ -184,6 +195,7 @@ TUI_CSS = """
     }
     .field { width: 1fr; }
     """
+TUI_CSS = apply_tui_palette(TUI_CSS)
 
 TUI_BINDINGS = [
         ("q", "quit", "Salir"),

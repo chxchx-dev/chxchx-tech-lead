@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from ..cli_context import (
-    editor_app,
-    Path,
-    WorkspaceOperationError,
-    app,
+from pathlib import Path
+
+import typer
+
+from ..core.trust import trust_project
+from ..ui.cli_output import (
     console,
-    trust_project,
-    typer,
-    workspace_app,
-    _print_agent_statuses,
-    _print_workspace_action,
-    _workspace_inspection,
-    _workspace_service,
+    print_agent_statuses as _print_agent_statuses,
+    print_workspace_action as _print_workspace_action,
 )
+from ..cli_registry import editor_app, workspace_app
 from ..workspace.error_cache import record_error
+from ..workspace.project_context import workspace_service_for as _workspace_service
+from ..workspace.service import WorkspaceOperationError
+from .workspace_context import inspect_workspace as _workspace_inspection
 
 @workspace_app.command("status")
 def workspace_status(
@@ -115,13 +115,15 @@ def workspace_resume(
 @workspace_app.command("attach")
 def workspace_attach(
     path: str = typer.Argument("."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Muestra el attach sin abrir la terminal."),
 ):
     """Adjunta la terminal a la sesión existente del workspace."""
     try:
-        _workspace_service(path).attach()
+        result = _workspace_service(path).attach(dry_run=dry_run)
     except WorkspaceOperationError as exc:
         console.print(f"[red]✗ {exc}[/]")
         raise typer.Exit(code=1)
+    console.print(f"[green]✓[/] {'DRY RUN: ' if dry_run else ''}{' '.join(result.command)}")
 
 
 @workspace_app.command("terminal")
@@ -166,3 +168,22 @@ def editor_open(
         console.print(f"[red]✗ {exc}[/]")
         raise typer.Exit(code=1)
     console.print(f"[green]✓[/] {'DRY RUN: ' if dry_run else ''}{' '.join(result.command)}")
+
+@editor_app.command("setup")
+def editor_setup(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Muestra la configuración y apertura sin escribir ni ejecutar."),
+    open_editor: bool = typer.Option(True, "--open/--no-open", help="Abre el proyecto generado en Sublime."),
+):
+    """Genera la configuración local de Sublime con exclusiones útiles."""
+    try:
+        project_file, generated, opened = _workspace_service(path).setup_editor(
+            dry_run=dry_run,
+            open_after=open_editor,
+        )
+    except WorkspaceOperationError as exc:
+        console.print(f"[red]✗ {exc}[/]")
+        raise typer.Exit(code=1)
+    console.print(f"[green]✓[/] {generated.stdout or project_file}")
+    if opened is not None:
+        console.print(f"[green]✓[/] {'DRY RUN: ' if dry_run else ''}{' '.join(opened.command)}")

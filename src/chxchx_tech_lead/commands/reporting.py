@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from ..cli_context import (
-    Path,
-    ProcessManager,
-    ResourceManager,
-    ResourceSeverity,
-    Table,
-    app,
-    console,
-    format_bytes,
-    sync_project,
-    typer,
-    _workspace_inspection,
-)
+from pathlib import Path
+
+import typer
+from rich.table import Table
+
+from ..core.sync import sync_project
+from ..cli_registry import app
+from ..ui.cli_output import console
+from ..workspace.process_manager import ProcessManager
+from ..workspace.resources import ResourceManager, ResourceSeverity, format_bytes
+from .workspace_context import inspect_workspace as _workspace_inspection
 
 @app.command("resources")
 def resources(
@@ -37,6 +35,11 @@ def resources(
     console.print(f"CPU       {cpu}")
     mark = "[green]" if severity is ResourceSeverity.OK else "[yellow]" if severity is ResourceSeverity.WARNING else "[red]"
     console.print(f"Estado    {mark}{severity.value}[/]")
+    console.print(
+        f"Política  aviso {manager.config.warn_memory_percent}% / crítico "
+        f"{manager.config.critical_memory_percent}% / swap {manager.config.warn_swap_percent}% "
+        f"/ máximo {manager.config.max_agents} agentes"
+    )
 
     process_manager = ProcessManager(
         path,

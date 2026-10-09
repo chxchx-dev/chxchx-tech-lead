@@ -5,6 +5,108 @@ on:
   pull_request:
 
 jobs:
+  native-build:
+    name: Native Qt build · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          target: desktop
+          modules: qt5compat
+          cache: true
+      - name: Configure native Studio
+        run: cmake -S native -B build-native -DCHXCHX_BUILD_TESTS=ON
+      - name: Build native Studio
+        run: cmake --build build-native --config Release --parallel 2
+      - name: Smoke test Scintilla editor
+        run: ctest --test-dir build-native --build-config Release --output-on-failure
+      - name: Create native install package
+        run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
+      - name: Publish native package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chxchx-studio-${{ matrix.os }}
+          path: build-native/packages/*
+          if-no-files-found: error
+
+  native-fedora:
+    name: Native Qt build · Fedora
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: Install build dependencies
+        run: dnf install -y cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qt5compat-devel git
+      - uses: actions/checkout@v4
+      - name: Configure native Studio
+        run: cmake -S native -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DCHXCHX_BUILD_TESTS=ON
+      - name: Build native Studio
+        run: cmake --build build-native --parallel 2
+      - name: Smoke test Scintilla editor
+        run: ctest --test-dir build-native --output-on-failure
+      - name: Create Fedora install package
+        run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
+      - name: Publish Fedora test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chxchx-studio-fedora
+          path: build-native/packages/*.tar.gz
+          if-no-files-found: error
+
+  publish-fedora-preview:
+    name: Publish Fedora dev preview
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: native-fedora
+    runs-on: ubuntu-latest
+    concurrency:
+      group: chxchx-studio-fedora-dev-preview
+      cancel-in-progress: true
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Download Fedora package
+        uses: actions/download-artifact@v4
+        with:
+          name: chxchx-studio-fedora
+          path: dist
+      - name: Prepare public preview assets
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          package="$(find dist -type f -name '*.tar.gz' -print -quit)"
+          test -n "$package"
+          cp "$package" dist/chxchx-studio-fedora.tar.gz
+          sha256sum dist/chxchx-studio-fedora.tar.gz > dist/chxchx-studio-fedora.tar.gz.sha256
+          printf '{"commit":"%s","asset":"chxchx-studio-fedora.tar.gz","sha256":"%s"}\n' \
+            "$COMMIT_SHA" "$(sha256sum dist/chxchx-studio-fedora.tar.gz | cut -d ' ' -f1)" \
+            > dist/chxchx-studio-fedora.json
+      - name: Publish rolling Fedora preview release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: studio-fedora-dev
+          target_commitish: ${{ github.sha }}
+          name: ChxChx Studio · Fedora dev preview
+          body: |
+            Rolling Fedora x86_64 preview built from commit `${{ github.sha }}` on `dev`.
+
+            Install with:
+            `curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio-fedora.sh | bash`
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          files: |
+            dist/chxchx-studio-fedora.tar.gz
+            dist/chxchx-studio-fedora.tar.gz.sha256
+            dist/chxchx-studio-fedora.json
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:

@@ -1,0 +1,6 @@
+name = "typescript-engineering"
+description = "TypeScript conventions for safe, maintainable application code."
+stacks = []
+languages = ["typescript"]
+tags = ["typescript", "node", "types"]
+origin = "chxchx"

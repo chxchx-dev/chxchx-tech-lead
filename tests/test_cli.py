@@ -20,6 +20,23 @@ def test_version_command():
     assert "chxchx-tech-lead" in result.stdout
 
 
+def test_editor_setup_dry_run_and_generation_are_idempotent(tmp_path: Path):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    preview = runner.invoke(app, ["editor", "setup", str(project), "--dry-run", "--no-open"])
+    assert preview.exit_code == 0, preview.stdout
+    assert "DRY RUN" in preview.stdout
+    assert not (project / ".ai").exists()
+
+    generated = runner.invoke(app, ["editor", "setup", str(project), "--no-open"])
+    unchanged = runner.invoke(app, ["editor", "setup", str(project), "--no-open"])
+    assert generated.exit_code == 0, generated.stdout
+    assert "generado" in generated.stdout
+    assert unchanged.exit_code == 0, unchanged.stdout
+    assert "sin cambios" in unchanged.stdout
+
+
 def test_doctor_reports_project_scoped_mcp_diagnostics_without_mutating(tmp_path: Path, monkeypatch):
     project = tmp_path / "project"
     project.mkdir()
@@ -209,3 +226,101 @@ def test_init_minimal_only_creates_compact_project_context(tmp_path: Path, monke
     assert not (project / "AGENTS.md").exists()
     assert not (project / "CLAUDE.md").exists()
     assert not (project / "docs" / "adr").exists()
+
+def test_skill_cli_enable_and_sync_are_explicit_and_previewable(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "package.json").write_text(
+        '{"dependencies":{"next":"^15","react":"^19"}}',
+        encoding="utf-8",
+    )
+    global_home = tmp_path / "global"
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(global_home))
+
+    recommended = runner.invoke(app, ["skill", "recommend", str(project)])
+    preview = runner.invoke(app, ["skill", "enable", "nextjs", str(project), "--dry-run"])
+
+    assert recommended.exit_code == 0, recommended.stdout
+    assert "nextjs" in recommended.stdout
+    assert "stack detectado: nextjs" in recommended.stdout
+    assert "guía general" in recommended.stdout
+    assert preview.exit_code == 0, preview.stdout
+    assert "Repite sin --dry-run" in preview.stdout
+    assert not (project / ".ai").exists()
+
+    enabled = runner.invoke(app, ["skill", "enable", "nextjs", str(project)])
+    sync_preview = runner.invoke(app, ["skill", "sync", str(project), "--dry-run"])
+
+    assert enabled.exit_code == 0, enabled.stdout
+    assert sync_preview.exit_code == 0, sync_preview.stdout
+    assert not (project / ".ai" / "SKILLS.md").exists()
+
+    synced = runner.invoke(app, ["skill", "sync", str(project)])
+
+    assert synced.exit_code == 0, synced.stdout
+    assert "Next.js" in (project / ".ai" / "SKILLS.md").read_text(encoding="utf-8")
+    assert "Local project" not in (project / "AGENTS.md").read_text(encoding="utf-8")
+    assert global_home.exists()
+
+def test_pack_cli_reports_reason_and_applies_pack_additively(tmp_path: Path, monkeypatch):
+    project = tmp_path / "typescript-project"
+    project.mkdir()
+    (project / "package.json").write_text(
+        '{"dependencies":{"@nestjs/core":"^10"}}',
+        encoding="utf-8",
+    )
+    (project / "main.ts").write_text("export const main = true\n", encoding="utf-8")
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+
+    first = runner.invoke(app, ["skill", "enable", "architecture", str(project)])
+    detected = runner.invoke(app, ["pack", "detect", str(project)])
+    preview = runner.invoke(app, ["pack", "apply", "nestjs-api", str(project), "--dry-run"])
+    applied = runner.invoke(app, ["pack", "apply", "nestjs-api", str(project)])
+
+    assert first.exit_code == 0, first.stdout
+    assert detected.exit_code == 0, detected.stdout
+    assert "nestjs-api" in detected.stdout
+    assert "stack detectado: nestjs" in detected.stdout
+    assert preview.exit_code == 0, preview.stdout
+    assert "se añadirían" in preview.stdout
+    assert applied.exit_code == 0, applied.stdout
+    assert "architecture" in (project / ".ai" / "chxchx-skills.toml").read_text(encoding="utf-8")
+    assert "nestjs" in (project / ".ai" / "chxchx-skills.toml").read_text(encoding="utf-8")
+
+def test_pack_apply_detected_applies_union_without_pack_names(tmp_path: Path, monkeypatch):
+    project = tmp_path / "fullstack"
+    project.mkdir()
+    (project / "package.json").write_text(
+        '{"dependencies":{"next":"^15","react":"^19","@nestjs/core":"^10"}}',
+        encoding="utf-8",
+    )
+    (project / "app.tsx").write_text("export const App = () => null\n", encoding="utf-8")
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+
+    preview = runner.invoke(app, ["pack", "apply-detected", str(project), "--dry-run"])
+
+    assert preview.exit_code == 0, preview.stdout
+    assert "Packs detectados:" in preview.stdout
+    assert not (project / ".ai").exists()
+
+    applied = runner.invoke(app, ["pack", "apply-detected", str(project)])
+    status = runner.invoke(app, ["skill", "status", str(project)])
+
+    assert applied.exit_code == 0, applied.stdout
+    assert "Skills únicas añadidas:" in applied.stdout
+    assert status.exit_code == 0, status.stdout
+    assert "skills habilitadas" in status.stdout
+    assert "nextjs" in (project / ".ai" / "chxchx-skills.toml").read_text(encoding="utf-8")
+
+
+def test_skill_and_pack_lists_report_catalog_size():
+    skills = runner.invoke(app, ["skill", "list"])
+    packs = runner.invoke(app, ["pack", "list"])
+
+    assert skills.exit_code == 0, skills.stdout
+    assert "17 skills disponibles" in skills.stdout
+    assert packs.exit_code == 0, packs.stdout
+    assert "11 packs" in packs.stdout
+    assert "nestjs-api" in packs.stdout
+    assert "nestjs" in packs.stdout
+    assert "typescript-engineering" in packs.stdout

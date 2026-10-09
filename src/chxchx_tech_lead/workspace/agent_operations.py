@@ -47,6 +47,7 @@ class WorkspaceAgentOperations:
                 label=inspection.config.header.label,
                 logo=inspection.config.header.logo,
                 new_chat=new_chat,
+                project_root=str(self.project.root),
             )
         except ValueError as exc:
             raise WorkspaceOperationError(str(exc)) from exc

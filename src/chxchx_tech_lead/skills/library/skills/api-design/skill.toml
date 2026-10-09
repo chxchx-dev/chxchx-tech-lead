@@ -1,0 +1,7 @@
+name = "api-design"
+description = "API design guidance for stable contracts, validation, and clear errors."
+stacks = []
+languages = []
+tags = ["api", "http", "contracts"]
+always_recommend = true
+origin = "chxchx"

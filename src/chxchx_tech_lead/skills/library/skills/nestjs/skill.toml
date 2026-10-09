@@ -1,0 +1,6 @@
+name = "nestjs"
+description = "NestJS conventions for modular APIs, dependency injection, and validation."
+stacks = ["nestjs"]
+languages = ["typescript"]
+tags = ["nestjs", "node", "backend", "api"]
+origin = "chxchx"

@@ -1,0 +1,7 @@
+name = "architecture"
+description = "Keep product boundaries clear and evolve existing architecture in small steps."
+stacks = []
+languages = []
+tags = ["design", "architecture", "review"]
+always_recommend = true
+origin = "chxchx"

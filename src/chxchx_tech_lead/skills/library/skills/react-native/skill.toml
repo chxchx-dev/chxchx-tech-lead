@@ -1,0 +1,6 @@
+name = "react-native"
+description = "React Native guidance for accessible cross-platform mobile experiences."
+stacks = ["react-native"]
+languages = ["typescript", "javascript"]
+tags = ["react-native", "mobile", "react"]
+origin = "chxchx"

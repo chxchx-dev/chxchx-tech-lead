@@ -1,0 +1,5 @@
+name = "react-web"
+description = "Fundamentos para interfaces React web accesibles y mantenibles."
+stacks = ["react", "react-vite", "nextjs"]
+languages = ["javascript", "typescript"]
+skills = ["react", "ui-ux-design", "testing", "security-review", "code-review"]

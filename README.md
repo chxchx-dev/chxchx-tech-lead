@@ -39,7 +39,46 @@ La rama `dev` añade el Terminal Workspace. El PR pasó la matriz automatizada d
 - Process Manager con estado persistente, logs rotativos y protección contra PIDs ajenos;
 - adapters para Zellij, fallback de subprocess, Sublime, agentes CLI y Git;
 - comandos CLI de workspace, procesos, agentes, editor y recursos;
-- dashboard con Textual y operación multiproyecto mediante sesiones recuperables.
+- dashboard con Textual y operación multiproyecto mediante sesiones recuperables;
+- Skill Registry local con búsqueda, consulta de instrucciones y recomendaciones por stack.
+
+El catálogo contiene 17 skills generales y para Python, TypeScript, React/Next.js,
+NestJS, .NET, React Native, PostgreSQL, Prisma, Redis, Docker y diseño UI/UX de
+producto. La skill UI/UX se recomienda para proyectos React, Next.js y React
+Native y forma parte de sus Tech Packs.
+Las recomendaciones no cambian el proyecto. Habilita de forma explícita las
+skills que quieres añadir al contexto:
+
+```bash
+chxchx-tech skill list
+chxchx-tech skill search python
+chxchx-tech skill info python-engineering
+chxchx-tech skill recommend .
+chxchx-tech skill enable nextjs .
+chxchx-tech skill sync . --dry-run
+chxchx-tech skill sync .
+chxchx-tech pack list
+chxchx-tech pack detect .
+chxchx-tech pack apply-detected . --dry-run
+chxchx-tech pack apply-detected .
+chxchx-tech skill status .
+```
+
+La selección por proyecto se guarda en `.ai/chxchx-skills.toml`; `skill sync`
+genera las instrucciones activas en `.ai/SKILLS.md` y añade una referencia
+administrada a `AGENTS.md`. Usa `skill disable NOMBRE .` y vuelve a sincronizar
+para retirar una skill del contexto.
+No instalas cada skill por separado: las 17 guías y 11 Tech Packs vienen con
+ChxChx. `skill list` informa el total de guías; `pack list` muestra cada pack,
+cuántas skills incluye y sus nombres; `pack info NOMBRE` consulta uno en
+particular. Así puedes ver exactamente qué se añadirá antes de aplicarlo.
+
+`pack detect` explica qué stack o lenguaje coincidió. `pack apply-detected`
+añade de una vez la unión de los packs compatibles, sin escribir sus nombres;
+`--dry-run` permite previsualizar. La selección queda guardada por proyecto,
+`skill status` cuenta cuáles están activas y después `skill sync .` carga esa
+selección sin volver a nombrar las skills. Son instrucciones Markdown para los
+agentes, no paquetes ejecutables ni utilidades instaladas individualmente.
 
 ## Requisitos
 
@@ -73,6 +112,17 @@ irm https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/main/scripts/b
 ```
 
 Estos instaladores solo dejan `chxchx-tech` como herramienta global; la configuración de cada proyecto se crea aparte.
+
+### Prueba rápida de ChxChx Studio en Fedora
+
+El instalador descarga el paquete público de la pre-release Fedora más reciente de `dev`, instala las bibliotecas Qt de ejecución y deja Studio en `~/.local/opt/chxchx-studio/`. También instala el bridge CLI en un entorno aislado para esta versión y crea `~/.local/bin/chxchx-studio-dev`; no reemplaza otro `chxchx-tech` global. Requiere Fedora x86_64, conexión a GitHub, `sudo` y que CI termine correctamente.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio-fedora.sh | bash
+chxchx-studio-dev /ruta/al/proyecto
+```
+
+Es una compilación de desarrollo para pruebas, no una versión estable. Después de cada push a `dev`, espera a que los jobs Fedora y de publicación terminen; el enlace siempre instala el paquete más reciente publicado. Para quitarla, elimina el launcher y la carpeta `~/.local/opt/chxchx-studio/dev-<commit>` indicada al instalar. Las dependencias Qt instaladas mediante DNF se administran aparte con `dnf remove` si ya no las necesita otra aplicación.
 
 ## Instalación desde un clon
 
@@ -133,8 +183,9 @@ La instalación desde Git no incluye herramientas externas como Zellij, Sublime 
 ### Actualizar una instalación existente para probar `dev`
 
 El build actual de la rama `dev` se identifica como `0.5.0.dev0`. No es una
-release estable; úsalo para las pruebas de Terminal Workspace y registra los
-resultados en [docs/17-REAL-WORLD-VALIDATION.md](docs/17-REAL-WORLD-VALIDATION.md).
+release estable; úsalo para evaluar Terminal Workspace y registra los
+resultados localmente. La carpeta `docs/` contiene notas de trabajo locales y
+no forma parte del repositorio publicado.
 
 Cierra la TUI. Si el CLI instalado ya ofrece el comando, suspende primero el
 workspace para detener los procesos gestionados y poder reanudarlo después:
@@ -238,7 +289,9 @@ chxchx-tech resources .
 # 7. Entrar a la sesión Zellij
 chxchx-tech workspace attach .
 
-# 8. Trabajar con el editor o el agente
+# 8. Configurar Sublime y trabajar con el editor o el agente
+chxchx-tech editor setup . --dry-run
+chxchx-tech editor setup .
 chxchx-tech editor open .
 chxchx-tech agent start codex --path .
 chxchx-tech workspace attach .
@@ -256,6 +309,7 @@ configuración válida. La confianza queda vinculada al contenido de
 proyecto antes de iniciar procesos.
 
 `workspace status`, `process list`, `resources` y los comandos `--dry-run` son de inspección y no deberían iniciar procesos.
+La acción «Preparar proyecto de Sublime» también está disponible desde la paleta de comandos de la TUI.
 
 ## Recetas rápidas del workspace
 
@@ -341,9 +395,10 @@ template = "{logo} {label} | {project} | {profile}"
 orientation = "horizontal"
 
 [workspace.resources]
-warn_memory_percent = 75
-critical_memory_percent = 90
+warn_memory_percent = 70
+critical_memory_percent = 85
 warn_swap_percent = 40
+max_agents = 2
 
 [[workspace.processes]]
 id = "backend"
@@ -421,7 +476,7 @@ chxchx-tech agent start --all --new-chat --path .
 chxchx-tech workspace attach .
 ```
 
-`--new-chat` está disponible para las CLIs oficiales `codex` y `claude`. Les pasa una instrucción inicial para leer las reglas y el estado del proyecto, consultar en Basic Memory solo notas relevantes del proyecto actual y continuar desde el handoff; no carga la transcripción anterior. Al terminar trabajo sustancial, las instrucciones piden al agente guardar un checkpoint sin acción manual: actualizar `.ai/CURRENT_STATE.md` y `.ai/HANDOFF.md` y usar `write_memory` de Basic Memory para conocimiento duradero. No guarda saludos, preguntas triviales ni conversaciones completas. Esto lo ejecuta el agente y depende de que Basic Memory MCP esté conectado; no es una captura infalible de cada mensaje. Basic Memory mantiene sus notas fuente en Markdown y su índice/configuración en SQLite; no almacena cada mensaje del chat. Por eso un chat nuevo recupera lo que se haya persistido, no mensajes o decisiones nunca guardados. Los agentes distintos de Codex/Claude siguen pudiendo iniciarse normalmente, pero aún no reciben este bootstrap de nuevo chat.
+`--new-chat` está disponible para las CLIs oficiales `codex` y `claude`. Al terminar cada sesión de esos agentes, ChxChx revisa los transcripts locales del proyecto y guarda solicitudes explícitas de recordar en `.ai/memory/PROJECT_MEMORY.md`; al iniciar un chat nuevo las recupera sin duplicarlas y las pasa al contexto inicial. Omite preguntas de recuperación, conversaciones de otros proyectos y mensajes que parezcan contener secretos; no carga transcripciones completas. También incluye el valor exacto de `memory_project` desde `.ai/chxchx-tech.toml`: las herramientas Basic Memory deben usar ese nombre en el argumento `project`, sin reutilizar IDs de otros proyectos ni el ámbito predeterminado. Las frases se buscan primero en el archivo local; si la memoria no está configurada, el agente no debe hacer búsquedas globales. La captura depende de que el transcript local del proveedor exista y pueda leerse al terminar la sesión; no puede recuperar mensajes ausentes de esos archivos. `.ai/` es local a cada checkout y está excluido de Git. Los agentes distintos de Codex/Claude siguen pudiendo iniciarse normalmente, pero aún no reciben esta captura automática.
 
 Para iniciar un proceso manualmente:
 
@@ -553,6 +608,8 @@ chxchx-tech process list [PATH]        muestra procesos y PID
 chxchx-tech process start ID --path .  inicia un proceso configurado
 chxchx-tech process stop ID --path .   detiene un proceso gestionado
 chxchx-tech editor open [PATH]         abre el proyecto en Sublime
+chxchx-tech editor setup [PATH]        genera proyecto Sublime local y lo abre
+chxchx-tech editor setup [PATH] --no-open solo genera el proyecto Sublime
 chxchx-tech agent start ID --path .    inicia un agente configurado
 chxchx-tech agent start ID --new-chat --path . inicia conversación nueva con contexto persistido (Codex/Claude)
 chxchx-tech agent start --all --path . inicia todos los agentes configurados
@@ -598,14 +655,14 @@ El panel interactivo se abre explícitamente así:
 chxchx-tech tui .
 ```
 
-La TUI incluye pestañas de Resumen, Proyectos, Agentes, Procesos, Recursos, Handoff y Memoria. Desde Proyectos puedes cambiar el contexto por alias o ruta; desde Agentes puedes revisar disponibilidad de Codex/Claude, sesión Zellij, pane y preset; Handoff permite leer o actualizar `.ai/HANDOFF.md`; y Memoria muestra, filtra y abre las notas persistentes del proyecto activo en `.ai/memory`.
+La TUI incluye pestañas de Resumen, Trabajo, Proyectos, Skills, Más y Memoria. Desde Skills puedes buscar el catálogo, revisar recomendaciones y Tech Packs, habilitar o deshabilitar skills, aplicar packs y sincronizar el contexto del proyecto. Desde Proyectos puedes cambiar el contexto por alias o ruta; desde Agentes puedes revisar disponibilidad de Codex/Claude, sesión Zellij, pane y preset; Handoff permite leer o actualizar `.ai/HANDOFF.md`; y Memoria muestra, filtra y abre las notas persistentes del proyecto activo en `.ai/memory`.
 
 En Agentes, `Nuevo chat + contexto` abre un pane nuevo para el ID indicado y solicita a Codex o Claude reconstruir el contexto desde los archivos y Basic Memory del proyecto activo. El panel `Checkpoint automático` verifica que las reglas de guardado estén presentes, que Basic Memory aparezca configurado para cada cliente y muestra la nota más reciente encontrada. Es un diagnóstico estático más evidencia de escritura; no puede certificar que el modelo haya guardado cada turno ni que el servidor MCP responda en vivo.
 
-Recursos distingue el uso general del equipo del consumo estimado de los procesos administrados del proyecto, con RAM RSS y CPU por proceso y totales. También compara los proyectos registrados. La estimación actual usa los PID principales declarados; no incluye procesos hijos ni agentes que se ejecutan dentro de panes Zellij.
+El RAM Governor muestra el uso general de memoria, swap y CPU junto con el consumo estimado de procesos del proyecto. Antes de iniciar agentes desde la TUI, advierte si se superan los umbrales configurados o el límite de agentes; puedes cancelar o continuar explícitamente. En `agent start`, `run` y `projects switch`, el CLI informa el riesgo y requiere `--force` para iniciar; `--dry-run` solo muestra el aviso. Nunca detiene procesos por su cuenta. Configúralo en `[workspace.resources]` con `warn_memory_percent`, `critical_memory_percent`, `warn_swap_percent` y `max_agents`. Recursos también compara proyectos registrados. La estimación por proyecto usa PID principales declarados; no incluye procesos hijos ni mide los agentes dentro de panes Zellij.
 
 La TUI agrupa la operación habitual en **Inicio**, **Trabajo** y **Proyectos**.
-La pestaña **Más** contiene configuración, recursos, historial, notas y ayuda.
+La pestaña **Skills** da acceso directo al catálogo y sus packs. **Más** contiene configuración, recursos, historial, notas y ayuda.
 En Inicio, inicializa y confía el proyecto si hace falta. Después puedes abrir
 la shell del proyecto o entrar directamente a la pestaña de agentes con los
 botones **Abrir terminal** y **Abrir agentes**, o las teclas `T` y `A`. La paleta
@@ -628,6 +685,50 @@ r        actualizar
 ```
 
 La TUI muestra estado de confianza, sesión, procesos, agentes, recursos y handoff. Todas las acciones pasan por el servicio de workspace y sus adapters; la CLI continúa siendo la interfaz recomendada para scripts y CI.
+
+## Aplicación nativa en desarrollo
+
+ChxChx Studio es una aplicación de escritorio en C++20 y Qt 6 Widgets. Incluye navegación del proyecto, pestañas de edición, guardado atómico y lecturas asíncronas mediante el CLI instalado. Las acciones están agrupadas en los menús Archivo, Edición, Ver, Navegar, Herramientas y Ayuda; la barra superior conserva accesos rápidos con iconos y tooltips, e incluye botones marcados para mostrar u ocultar Explorador, Secciones/acciones y Actividad. `Edición → Configurar atajos` permite cambiar las combinaciones, valida duplicados y guarda las preferencias del usuario. El explorador muestra iconos del sistema para archivos y carpetas, con tamaño legible. Su campo superior filtra nombres visibles; `Navegar → Buscar en el proyecto` (`Ctrl+Shift+F`) busca nombres/rutas indexados o contenido en segundo plano. El índice omite directorios generados comunes y limita el catálogo a 100.000 archivos; el escaneo de contenido omite binarios y archivos mayores de 1 MiB, con máximo de 64 MiB leídos y 100 coincidencias por consulta. Al elegir una coincidencia se abre el archivo en la línea correspondiente. `Navegar → Símbolos del archivo actual` (`Ctrl+Shift+O`) lista declaraciones comunes de Python, C/C++, JavaScript/TypeScript, Java y C# y salta a su línea; es un escáner de declaraciones, no resolución semántica. Studio usa el tema de iconos del sistema y recurre a iconos estándar de Qt cuando no encuentra uno. En el árbol, un clic despliega carpetas y abre archivos. Proyecto permite dar trust, iniciar/reanudar, suspender y detener procesos del workspace; Proyectos lista las rutas registradas, permite dar trust a un destino y cambiar al proyecto elegido sin adjuntar la terminal. Agentes abre el comando CLI configurado dentro de una pestaña central junto a los archivos, con una terminal VT interactiva sobre PTY/ConPTY. Antes de abrir agentes, Studio vuelve a verificar trust y RAM mediante un preflight de solo lectura; cualquier advertencia del RAM Governor requiere confirmación explícita. Studio usa el wrapper compartido para conservar la instrumentación del agente, y “Nueva sesión” agrega el prompt de recuperación de contexto disponible para Codex y Claude Code. `Terminal +` y `Ctrl+Shift+T` abren una shell integrada en una pestaña del proyecto; la rueda y `Shift+PageUp/PageDown` recorren hasta 5000 líneas de scrollback, y `Ctrl+End` vuelve al final. La paleta puede adjuntar Zellij dentro de una pestaña PTY tras preview y confirmación; el emulador externo sigue disponible. `Herramientas → Diff Git del archivo actual` muestra en solo lectura el cambio rastreado del archivo respecto de `HEAD`, con salida acotada a 2 MiB; no incluye archivos sin seguimiento ni cambios que sigan solo en el buffer. La actividad de operaciones vive en un panel independiente que se puede mostrar desde Ver o desde la barra, y se oculta al iniciar para dar más espacio al editor y las terminales. La interfaz, los controles y las solicitudes de permiso pertenecen al CLI del agente; Studio administra pestañas y cierre de sesiones. Se admiten comandos configurados como listas de argumentos; los comandos de shell personalizados no se pueden embeber. Procesos permite iniciar/detener procesos configurados. Skills muestra catálogo, selección activa y recomendaciones; permite habilitar/deshabilitar skills y sincronizar contexto. Tech Packs muestra composición y detección; permite aplicar un pack o todos los detectados y sincronizar. Handoff permite revisar el estado, editar resumen/pendiente/validación y guardar con preview y confirmación. Memoria permite buscar y leer notas locales en solo lectura. Chats permite filtrar el historial local de Codex y Claude Code y abrir transcripciones; Errores muestra los registros recientes filtrados al proyecto. Configuración permite previsualizar y ejecutar setup, init completo/mínimo, instalación de herramientas e integración MCP; Doctor es de solo lectura. Guía incluye un recorrido paso a paso con botones que llevan a Configuración, Skills, Proyecto y Agentes; Marca y la paleta filtrable de comandos también están disponibles en la navegación. Inicio, Proyecto, Agentes, Procesos, Proyectos, Skills, Tech Packs y Recursos muestran su estado en el área central; Skills distingue habilitadas/recomendadas y Agentes muestra disponibilidad y sesiones activas de Studio.
+
+Las vistas Inicio, Proyecto, Agentes, Procesos, Proyectos, Skills y Tech Packs consultan el contrato JSON local y versionado de `chxchx-tech bridge status .`. Recursos usa `chxchx-tech bridge resources .` para mostrar una muestra global de RAM/swap/CPU y consumo agregado de procesos gestionados para cada proyecto registrado. Handoff y Memoria usan lecturas bajo demanda con `chxchx-tech bridge handoff PATH` y `chxchx-tech bridge memory PATH --query TEXTO`. Chats usa `bridge chats` para buscar y carga cada transcripción seleccionada con `bridge conversation`; Errores consulta `bridge errors`. Son lecturas locales y no cambian sesiones ni la caché de errores.
+
+La memoria resiliente entre sesiones vive por proyecto en `.ai/memory/PROJECT_MEMORY.md`. El wrapper guarda las solicitudes explícitas al terminar la sesión del agente y ChxChx las recupera al iniciar un chat nuevo, siempre desde transcripts locales del mismo proyecto. El prompt incluye el nombre exacto de Basic Memory configurado para ese checkout y prohíbe usar IDs o ámbitos predeterminados de otros proyectos. No se guardan conversaciones completas, preguntas de recuperación ni mensajes que parezcan contener secretos. Esta nota persiste al cerrar y abrir Studio en el mismo checkout; `.ai/` está excluido de Git, así que no se copia a otro clon automáticamente. Si Basic Memory está configurado para el proyecto, usa esa carpeta local como su directorio de notas.
+
+Inicio incluye un panel central de acciones rápidas para confiar el proyecto, iniciar/reanudar, suspender o detener el workspace, abrir una terminal, preparar el proyecto, sincronizar skills y abrir agentes o sesiones nuevas. Estas acciones conservan la previsualización, confirmación y preflight de trust/RAM de sus flujos compartidos; ya no requieren abrir primero el panel lateral de Secciones y acciones.
+
+La paleta de comandos también puede adjuntar a una sesión Zellij dentro de una pestaña PTY/libvterm integrada; conserva una segunda opción para abrir ese attach en el emulador externo como fallback.
+
+Studio carga los logos de `assets/` como recursos Qt: la variante mínima identifica la aplicación y la ventana; el logo completo aparece en la vista Marca.
+
+El editor usa el widget Qt oficial de Scintilla con Lexilla para resaltado de sintaxis; las sesiones interactivas usan libvterm para renderizar ANSI/VT, responder consultas del terminal y reenviar teclado, teclas de función, pegado desde el portapapeles, cambios de tamaño y mouse/rueda cuando el agente los solicita. CMake descarga revisiones fijadas de esos proyectos la primera vez que se configura; esa configuración inicial requiere acceso a GitHub. Las versiones y avisos de licencia están en [native/THIRD_PARTY.md](native/THIRD_PARTY.md).
+
+Requisitos para compilar: CMake 3.21+, Ninja (opcional) y Qt 6.4+ con Core, Widgets y Core5Compat. En Fedora instala `qt6-qtbase-devel` y `qt6-qt5compat-devel`; en Ubuntu instala los paquetes de desarrollo Qt6 equivalentes.
+
+Para el ciclo diario de desarrollo en macOS, Linux o WSL, este comando configura, recompila y abre Studio con el checkout actual como proyecto:
+
+```bash
+./scripts/dev-studio.sh
+```
+
+También puedes abrir otro proyecto pasándole su ruta; `CHXCHX_BUILD_DIR` permite elegir otra carpeta de build:
+
+```bash
+./scripts/dev-studio.sh /ruta/al/proyecto
+CHXCHX_BUILD_DIR=/tmp/chxchx-build ./scripts/dev-studio.sh
+```
+
+El flujo manual y las pruebas nativas siguen disponibles:
+
+```bash
+cmake -S native -B build/native -DCHXCHX_BUILD_TESTS=ON
+cmake --build build/native
+ctest --test-dir build/native --output-on-failure
+./build/native/chxchx-studio .
+```
+
+En Windows y macOS se ejecuta el binario generado desde `build/native` con el proyecto como argumento. El editor Scintilla tiene UTF-8, guardado atómico, números de línea, búsqueda en archivo y lexers para C/C++, Python, JavaScript/TypeScript, JSON, YAML, TOML, Markdown, HTML/XML, CSS, SQL, Bash y CMake. `Terminal +` o `Ctrl+Shift+T` abre una shell integrada con PTY/ConPTY y libvterm; el scrollback se navega con la rueda, `Shift+PageUp/PageDown`, `Ctrl+Home` (inicio) y `Ctrl+End` (final). Attach a Zellij puede usar la terminal integrada; el launcher externo requiere Windows Terminal en Windows, un emulador compatible instalado en Linux o Terminal.app en macOS. Las sesiones de agentes configuradas como argumentos también se abren dentro de Studio. Studio recuerda hasta 20 archivos recientes dentro del proyecto y restaura archivos limpios y grupos divididos al cerrar/reabrir. Siguen pendientes LSP, QA interactivo de todos los flujos y verificación de los paquetes en los runners objetivo.
+
+CPack genera un ZIP para Windows, DMG para macOS y TGZ para Linux. Para crear uno localmente, agrega `-DCMAKE_BUILD_TYPE=Release` al configurar y ejecuta `cpack --config build/native/CPackConfig.cmake -C Release -B build/native/packages`. Los jobs de CI con Qt SDK generan esos paquetes y publican cada uno como artefacto de la ejecución. El TGZ generado con Qt instalado desde los paquetes de Fedora/Ubuntu puede depender de las bibliotecas Qt del sistema; para distribuirlo, usa el artefacto CI creado desde Qt SDK y valida las dependencias de la plataforma destino. Los avisos de Scintilla, Lexilla y libvterm se incluyen en el paquete.
 
 ## MCP, Basic Memory y Serena
 
