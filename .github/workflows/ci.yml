@@ -45,11 +45,19 @@ jobs:
         run: dnf install -y cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qt5compat-devel git
       - uses: actions/checkout@v4
       - name: Configure native Studio
-        run: cmake -S native -B build-native -G Ninja -DCHXCHX_BUILD_TESTS=ON
+        run: cmake -S native -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DCHXCHX_BUILD_TESTS=ON
       - name: Build native Studio
         run: cmake --build build-native --parallel 2
       - name: Smoke test Scintilla editor
         run: ctest --test-dir build-native --output-on-failure
+      - name: Create Fedora install package
+        run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
+      - name: Publish Fedora test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chxchx-studio-fedora
+          path: build-native/packages/*.tar.gz
+          if-no-files-found: error
 
   test:
     runs-on: ${{ matrix.os }}
