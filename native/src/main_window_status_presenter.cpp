@@ -45,11 +45,12 @@ QString MainWindow::formatBridgeStatus(const QJsonObject &payload, const QString
         lines << QStringLiteral("Workflow: %1")
             .arg(payload.value(QStringLiteral("configured")).toBool()
                 ? QStringLiteral("configurado") : QStringLiteral("desactivado"));
-        lines << QStringLiteral("Integridad: %1 · GitHub CLI: %2")
+        QString integrity = QStringLiteral("Integridad: %1 · GitHub CLI: %2")
             .arg(payload.value(QStringLiteral("integrity_ok")).toBool()
-                    ? QStringLiteral("válida") : QStringLiteral("requiere revisión"),
-                 payload.value(QStringLiteral("authenticated")).toBool()
-                    ? QStringLiteral("conectado") : QStringLiteral("sin sesión"));
+                ? QStringLiteral("válida") : QStringLiteral("requiere revisión"));
+        integrity = integrity.arg(payload.value(QStringLiteral("authenticated")).toBool()
+            ? QStringLiteral("conectado") : QStringLiteral("sin sesión"));
+        lines << integrity;
         lines << QStringLiteral("Stacks: %1")
             .arg(joinedValues(payload.value(QStringLiteral("supported_stacks")).toArray()));
         if (!payload.value(QStringLiteral("message")).toString().isEmpty()) {
@@ -61,12 +62,13 @@ QString MainWindow::formatBridgeStatus(const QJsonObject &payload, const QString
         const QJsonArray runs = payload.value(QStringLiteral("recent_runs")).toArray();
         for (const auto &value : runs) {
             const QJsonObject run = value.toObject();
-            lines << QStringLiteral("#%1 · %2 · %3 · %4")
-                .arg(run.value(QStringLiteral("databaseId")).toVariant().toString(),
-                     run.value(QStringLiteral("workflowName")).toString(),
-                     run.value(QStringLiteral("headBranch")).toString(),
-                     run.value(QStringLiteral("conclusion")).toString(
-                         run.value(QStringLiteral("status")).toString()));
+            QString runSummary = QStringLiteral("#%1 · %2 · %3 · %4")
+                .arg(run.value(QStringLiteral("databaseId")).toVariant().toString());
+            runSummary = runSummary.arg(run.value(QStringLiteral("workflowName")).toString())
+                .arg(run.value(QStringLiteral("headBranch")).toString())
+                .arg(run.value(QStringLiteral("conclusion")).toString(
+                    run.value(QStringLiteral("status")).toString()));
+            lines << runSummary;
         }
         return lines.join(QLatin1Char('\n'));
     }

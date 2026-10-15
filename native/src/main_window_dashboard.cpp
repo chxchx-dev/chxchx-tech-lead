@@ -229,11 +229,12 @@ void MainWindow::showAreaDashboard(const QJsonObject &payload, const QString &ar
         const bool authenticated = payload.value(QStringLiteral("authenticated")).toBool();
         const QJsonArray stacks = payload.value(QStringLiteral("supported_stacks")).toArray();
         const QJsonArray runs = payload.value(QStringLiteral("recent_runs")).toArray();
-        m_dashboardSummary->setText(QStringLiteral("CI %1 · integridad %2 · GitHub %3 · %4 ejecución(es) reciente(s)")
-            .arg(configured ? QStringLiteral("configurado") : QStringLiteral("desactivado"),
-                 integrity ? QStringLiteral("válida") : QStringLiteral("sin validar"),
-                 authenticated ? QStringLiteral("conectado") : QStringLiteral("sin sesión"),
-                 QString::number(runs.size())));
+        QString summary = QStringLiteral("CI %1 · integridad %2 · GitHub %3 · %4 ejecución(es) reciente(s)")
+            .arg(configured ? QStringLiteral("configurado") : QStringLiteral("desactivado"));
+        summary = summary.arg(integrity ? QStringLiteral("válida") : QStringLiteral("sin validar"))
+            .arg(authenticated ? QStringLiteral("conectado") : QStringLiteral("sin sesión"))
+            .arg(QString::number(runs.size()));
+        m_dashboardSummary->setText(summary);
         addRow(QStringLiteral("Stacks detectados: %1")
                 .arg(joinedValues(stacks)),
             QStringLiteral("applications-development"), QStyle::SP_ComputerIcon);
@@ -248,11 +249,13 @@ void MainWindow::showAreaDashboard(const QJsonObject &payload, const QString &ar
             const QJsonObject run = value.toObject();
             const QString conclusion = run.value(QStringLiteral("conclusion")).toString(
                 run.value(QStringLiteral("status")).toString());
-            addRow(QStringLiteral("#%1 · %2 · %3\n%4 · %5")
-                    .arg(run.value(QStringLiteral("databaseId")).toVariant().toString(),
-                         run.value(QStringLiteral("workflowName")).toString(),
-                         conclusion, run.value(QStringLiteral("headBranch")).toString(),
-                         run.value(QStringLiteral("url")).toString()),
+            QString runSummary = QStringLiteral("#%1 · %2 · %3\n%4 · %5")
+                .arg(run.value(QStringLiteral("databaseId")).toVariant().toString());
+            runSummary = runSummary.arg(run.value(QStringLiteral("workflowName")).toString())
+                .arg(conclusion)
+                .arg(run.value(QStringLiteral("headBranch")).toString())
+                .arg(run.value(QStringLiteral("url")).toString());
+            addRow(runSummary,
                 conclusion == QStringLiteral("success") ? QStringLiteral("emblem-ok") : QStringLiteral("dialog-warning"),
                 conclusion == QStringLiteral("success") ? QStyle::SP_DialogApplyButton : QStyle::SP_MessageBoxWarning);
         }
