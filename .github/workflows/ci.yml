@@ -32,7 +32,29 @@ jobs:
       - name: Configure native Studio
         run: cmake -S native -B build-native -DCHXCHX_BUILD_TESTS=ON
       - name: Build native Studio
-        run: cmake --build build-native --config Release --parallel 2
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build-native --config Release --parallel 2 2>&1 | tee build-native/build.log
+      - name: Add compiler diagnostics to the job summary
+        if: failure()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          log = Path("build-native/build.log")
+          failures = []
+          if log.is_file():
+              for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+                  lowered = line.casefold()
+                  if any(marker in lowered for marker in ("error:", "fatal error", "undefined reference", "error c")):
+                      failures.append(line)
+          summary = ["### Native build diagnostics", "", "```text", *(failures[-40:] or ["No compiler error lines were captured."]), "```", ""]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write("\n".join(summary) + "\n")
+          PY
       - name: Smoke test Scintilla editor
         run: ctest --test-dir build-native --build-config Release --output-on-failure
       - name: Create native install package
@@ -214,5 +236,31 @@ jobs:
       - run: uv lock --check
       - run: uv sync --dev
       - run: uv run python -m compileall src tests scripts
-      - run: uv run pytest
+      - name: Run pytest
+        run: uv run pytest --junitxml=pytest-report.xml
+      - name: Add failing test names to the job summary
+        if: failure()
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import os
+          from pathlib import Path
+          from xml.etree import ElementTree
+
+          report = Path("pytest-report.xml")
+          lines = ["### pytest failures", ""]
+          if report.is_file():
+              root = ElementTree.parse(report).getroot()
+              for case in root.iter("testcase"):
+                  for tag in ("failure", "error"):
+                      result = case.find(tag)
+                      if result is not None:
+                          name = f"{case.get('classname', '')}.{case.get('name', 'unknown')}"
+                          details = (result.text or result.get("message", tag)).strip()[-2000:]
+                          lines.extend((f"- `{name}`", "```text", details, "```", ""))
+          else:
+              lines.append("Pytest terminó antes de crear el reporte JUnit.")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("\n".join(lines) + "\n")
+          PY
       - run: uv run python scripts/lab_smoke.py
