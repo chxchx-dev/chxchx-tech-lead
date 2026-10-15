@@ -94,6 +94,7 @@ jobs:
           name: chxchx-studio-${{ matrix.platform }}
           path: build-native/packages/*
           if-no-files-found: error
+          compression-level: 0
 
   native-fedora:
     name: Native Qt build · Fedora
@@ -117,6 +118,7 @@ jobs:
           name: chxchx-studio-fedora
           path: build-native/packages/*.tar.gz
           if-no-files-found: error
+          compression-level: 0
 
   cli-wheel:
     name: Build installable CLI wheel
