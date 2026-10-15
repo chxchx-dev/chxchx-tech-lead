@@ -47,8 +47,9 @@ int main(int argc, char *argv[])
         [&loop, &exitCode](int code) { exitCode = code; loop.quit(); });
 
 #ifdef Q_OS_WIN
+    QString startError;
     const bool started = session.start(QCoreApplication::applicationFilePath(),
-        {QStringLiteral("--pty-smoke-child")}, {}, 80, 24);
+        {QStringLiteral("--pty-smoke-child")}, {}, 80, 24, &startError);
 #else
     const bool started = session.start(QStringLiteral("/bin/sh"),
         {QStringLiteral("-c"), QStringLiteral("stty -echo; printf READY; read line; printf 'PTY_OK=%s\\n' \"$line\"; stty size")}, {}, 80, 24);
