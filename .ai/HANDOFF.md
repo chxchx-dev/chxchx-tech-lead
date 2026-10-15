@@ -1,5 +1,12 @@
 # Handoff
 
+## Instaladores nativos de Studio — corrección pendiente de CI remoto
+
+- CPack conserva `_CPack_Packages` junto al archivo final. El workflow nativo ahora inspecciona el paquete, valida los runtimes/plugins Qt de Ubuntu/Windows/macOS y copia solo el ZIP/DMG/TGZ final a `dist/native-package` antes de `upload-artifact`; esto evita subir el directorio temporal de CPack, posible causa de los fallos de carga macOS.
+- El validador `scripts/verify_studio_package.py` exige binario y runtime por SO; para Fedora espera las dependencias Qt instalables del sistema. Pruebas unitarias cubren staging de Windows, paquete Ubuntu incompleto y bundle macOS. `scripts/install-studio.sh` reemplaza `find -maxdepth` por búsqueda BSD/GNU portable al extraer el `.app`.
+- Verificación local: `python -m compileall -q src tests scripts`; pytest `250 passed, 1 skipped`; build Studio y CTest `6/6`; CPack TGZ Fedora local validado y re-staged; YAML del workflow, `bash -n` de instaladores y `git diff --check` pasan.
+- Falta confirmar en GitHub Actions el upload en macOS ARM/Intel y revisar la ejecución de los instaladores reales en macOS/Windows; este entorno no tiene `gh`, `pwsh` ni runners macOS/Windows. No hay despliegue a VPS en este cambio.
+
 ## CI opcional de proyectos y CD a VPS
 
 - CLI: `ci setup/status/remove/run/logs`; GitHub Actions se prepara para Python, Node y CMake/C++/Qt. El setup/remove soporta dry-run. Los workflows ajenos o con ediciones manuales se protegen; backups quedan fuera del checkout.
