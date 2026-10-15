@@ -35,10 +35,10 @@ int main(int argc, char *argv[])
 
 #ifdef Q_OS_WIN
     QString startError;
-    const bool started = session.start(QStringLiteral("powershell.exe"),
-        {QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile"), QStringLiteral("-Command"),
-         QStringLiteral("$answer = Read-Host 'READY'; Write-Output ('PTY_OK=' + $answer)")}, {}, 80, 24,
-        &startError);
+    const QString commandProcessor = qEnvironmentVariable("COMSPEC", QStringLiteral("cmd.exe"));
+    const bool started = session.start(commandProcessor,
+        {QStringLiteral("/D"), QStringLiteral("/Q"), QStringLiteral("/V:ON"), QStringLiteral("/C"),
+         QStringLiteral("set /p answer=READY: & echo PTY_OK=!answer!")}, {}, 80, 24, &startError);
 #else
     const bool started = session.start(QStringLiteral("/bin/sh"),
         {QStringLiteral("-c"), QStringLiteral("stty -echo; printf READY; read line; printf 'PTY_OK=%s\\n' \"$line\"; stty size")}, {}, 80, 24);

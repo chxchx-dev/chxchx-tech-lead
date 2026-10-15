@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
     QCoreApplication::processEvents();
 
     QByteArray output = "\033[31mANSI-RED\033[0m\r\n";
-    for (int line = 0; line < 48; ++line)
+    for (int line = 0; line < 120; ++line)
         output.append("history-line-").append(QByteArray::number(line)).append("\r\n");
     terminal.feed(output);
     QCoreApplication::processEvents();
