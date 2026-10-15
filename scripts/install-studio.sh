@@ -154,7 +154,7 @@ else
     MOUNT_DIR="$WORK_DIR/mount"
     mkdir -p "$MOUNT_DIR"
     hdiutil attach "$WORK_DIR/$PACKAGE" -readonly -nobrowse -mountpoint "$MOUNT_DIR" >/dev/null
-    APP_BUNDLE="$(find "$MOUNT_DIR" -maxdepth 2 -type d -name '*.app' -print -quit)"
+    APP_BUNDLE="$(find "$MOUNT_DIR" -type d -name '*.app' -prune -print -quit)"
     [[ -n "$APP_BUNDLE" ]] || fail "No se encontró la app dentro del DMG."
     ditto "$APP_BUNDLE" "$STAGE/ChxChx Studio Dev-${SHORT_COMMIT}.app"
     hdiutil detach "$MOUNT_DIR" >/dev/null

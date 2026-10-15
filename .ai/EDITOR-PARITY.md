@@ -19,6 +19,7 @@ La interfaz debe sentirse ligera y ordenada, cercana a la estética limpia de KD
 | Tech Packs | Detección/razones, composición, aplicar pack o unión detectada, sincronizar |
 | Mods | Catálogo de instrucciones Claude Code, recomendaciones, previsualizar, aplicar y retirar con backup |
 | Recursos | RAM/swap/CPU del sistema, recursos de procesos del proyecto y vista agregada por proyecto |
+| CI/CD | CI opcional: configurar, ejecutar, ver estado/logs y retirar. CD VPS independiente: Compose, preview, confirmación, estado/logs y retiro |
 | Handoff | Leer estado, editar resumen/pendientes/validación y guardar mediante servicio compartido |
 | Memoria | Buscar y leer notas del proyecto; mantener solo lectura |
 | Chats | Buscar y leer historial local de Codex/Claude; mantener solo lectura |
@@ -54,7 +55,7 @@ La interfaz debe sentirse ligera y ordenada, cercana a la estética limpia de KD
 - Terminal embebida: transporte, emulación VT, pestaña de agente y shell general de workspace están implementados en `native/src/integrations/pty_session.*`, `vt_terminal_widget.*`, `agent_session_widget.*` y `workspace_terminal_widget.*`. Studio pinta celdas ANSI/VT, procesa teclado, resize, mouse y rueda; historial acotado a 5000 líneas con rueda, Shift+PageUp/Down y Ctrl+Home/End. CTest cubre render ANSI, navegación de scrollback, resize conservando historial y una sesión PTY larga con entrada; falta QA visual del reflow real y del attach con Zellij. Conservar launcher externo como fallback.
 - CI compila Qt 6 en Ubuntu, Windows, macOS Apple Silicon/Intel y Fedora. El preview público de `dev` reúne ZIP/DMG/TGZ por sistema y el wheel CLI en `studio-dev-preview`, con checksums e instaladores sin clonar. La configuración del workflow no confirma que la ejecución actual haya pasado; registrar evidencia de publicación y smoke por plataforma antes de declarar compatibilidad. Localmente se ha validado Fedora con Qt 6.11.2. La primera configuración CMake descarga revisiones fijadas de Scintilla/Lexilla y necesita acceso a GitHub; avisos en `native/THIRD_PARTY.md`.
 - Antes del uso diario falta QA interactivo con un proyecto real y corregir los fallos encontrados. CPack genera ZIP/DMG/TGZ y el workflow prepara un release preview público por plataforma; falta ejecutar CI tras el push y probar cada paquete en su plataforma. El TGZ Fedora usa Qt del sistema; Ubuntu despliega Qt del SDK. Para cerrar una distribución estable faltan firma/notarización y medidas repetibles de startup/RAM/latencia. La migración del bridge a un núcleo C++ es una decisión arquitectónica posterior, no requisito para empezar a usar Studio.
-- CI por proyecto ya está disponible en Studio: configurar y retirar workflow con preview/confirmación, iniciar una ejecución manual y revisar ejecuciones/logs. CD opt-in a VPS queda pendiente de definir el runtime del proyecto; no se configura despliegue para ChxChx en este bloque.
+- CI por proyecto está disponible en Studio para configurar, ejecutar y retirar workflows, y revisar ejecuciones/logs. El área CD VPS prepara workflows optativos para Docker Compose, consulta su estado, solicita despliegues con confirmación y permite revisar logs o retirar la integración. El CD del propio ChxChx queda aplazado.
 
 ### Pendientes restantes
 

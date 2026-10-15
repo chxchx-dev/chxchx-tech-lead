@@ -20,11 +20,15 @@ def authenticated(root: Path) -> bool:
     return _gh(root, ["auth", "status"], timeout=15).returncode == 0
 
 
-def recent_runs(root: Path, limit: int = 8) -> list[dict[str, object]]:
+def recent_runs(
+    root: Path, limit: int = 8, *, workflow: str = "chxchx-ci.yml"
+) -> list[dict[str, object]]:
+    if not _valid_workflow(workflow):
+        raise GitHubCliError("El nombre del workflow no es válido.")
     result = _gh(
         root,
         [
-            "run", "list", "--workflow", "chxchx-ci.yml", "--json", RUN_FIELDS,
+            "run", "list", "--workflow", workflow, "--json", RUN_FIELDS,
             "--limit", str(max(1, min(limit, 20))),
         ],
         timeout=30,
@@ -41,19 +45,41 @@ def recent_runs(root: Path, limit: int = 8) -> list[dict[str, object]]:
 
 
 def dispatch_ci(root: Path, ref: str | None = None, *, dry_run: bool = False) -> CommandResult:
+    return dispatch_workflow(root, "chxchx-ci.yml", ref, dry_run=dry_run)
+
+
+def dispatch_workflow(
+    root: Path,
+    workflow: str,
+    ref: str | None = None,
+    *,
+    fields: dict[str, str] | None = None,
+    dry_run: bool = False,
+) -> CommandResult:
+    if not _valid_workflow(workflow):
+        raise GitHubCliError("El nombre del workflow no es válido.")
     if ref is not None and not _valid_ref(ref):
         raise GitHubCliError("La referencia de Git debe ser un nombre de rama o tag válido.")
-    args = ["workflow", "run", "chxchx-ci.yml"]
+    args = ["workflow", "run", workflow]
     if ref:
         args.extend(("--ref", ref))
+    for name, value in (fields or {}).items():
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name) or not re.fullmatch(r"[A-Za-z0-9._/-]{1,255}", value):
+            raise GitHubCliError("El campo de workflow no tiene un formato seguro.")
+        args.extend(("-f", f"{name}={value}"))
     if dry_run:
-        return CommandResult(["gh", *args], 0, "Previsualización; no se contactó GitHub ni se inició una ejecución.", "")
+        return CommandResult(
+            ["gh", *args],
+            0,
+            "Previsualización; no se contactó GitHub ni se inició una ejecución.",
+            "",
+        )
     if not authenticated(root):
         raise GitHubCliError("GitHub CLI no tiene sesión activa. Ejecuta `gh auth login` y repite la acción.")
     result = _gh(root, args, timeout=45)
     if result.returncode != 0:
         raise GitHubCliError(
-            "No pude iniciar CI. Confirma que chxchx-ci.yml ya esté en la rama por defecto y que `gh` tenga acceso."
+            f"No pude iniciar {workflow}. Confirma que el archivo esté en la rama seleccionada y que `gh` tenga acceso."
         )
     return result
 
@@ -90,3 +116,7 @@ def _valid_ref(value: str) -> bool:
         and ".." not in value
         and "//" not in value
     )
+
+
+def _valid_workflow(value: str) -> bool:
+    return bool(re.fullmatch(r"chxchx-[a-z0-9-]+\.yml", value))

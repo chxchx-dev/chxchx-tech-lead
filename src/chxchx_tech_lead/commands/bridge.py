@@ -10,6 +10,7 @@ from ..workspace.bridge import project_status_payload
 from ..workspace.bridge_contracts import ERROR_SCHEMA, SCHEMA_VERSION
 from ..workspace.bridge_resources import resources_overview_payload
 from ..integrations.ci_service import ci_status_payload
+from ..integrations.deploy_service import deployment_status_payload
 from ..workspace.bridge_history import (
     conversation_payload,
     conversations_payload,
@@ -95,6 +96,14 @@ def bridge_ci(
 ) -> None:
     """Lee el estado de CI/CD local y ejecuciones remotas sin modificarlas."""
     _emit_payload(ci_status_payload, path)
+
+
+@bridge_app.command("deploy")
+def bridge_deploy(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+) -> None:
+    """Lee el estado local de CD a VPS y las ejecuciones remotas, sin modificarlas."""
+    _emit_payload(deployment_status_payload, path)
 
 
 def _emit_payload(builder, *args) -> None:
