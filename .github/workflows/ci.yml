@@ -51,6 +51,9 @@ jobs:
                   lowered = line.casefold()
                   if any(marker in lowered for marker in ("error:", "fatal error", "undefined reference", "error c")):
                       failures.append(line)
+          for line in failures[-40:]:
+              escaped = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print(f"::error title=Native Qt compiler::{escaped}")
           summary = ["### Native build diagnostics", "", "```text", *(failures[-40:] or ["No compiler error lines were captured."]), "```", ""]
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
               output.write("\n".join(summary) + "\n")
@@ -256,6 +259,10 @@ jobs:
                       result = case.find(tag)
                       if result is not None:
                           name = f"{case.get('classname', '')}.{case.get('name', 'unknown')}"
+                          message = result.get("message") or (result.text or tag).strip().splitlines()[0]
+                          annotation = f"{name}: {message[:500]}"
+                          annotation = annotation.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                          print(f"::error title=pytest failure::{annotation}")
                           details = (result.text or result.get("message", tag)).strip()[-2000:]
                           lines.extend((f"- `{name}`", "```text", details, "```", ""))
           else:
