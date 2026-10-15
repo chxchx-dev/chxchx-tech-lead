@@ -5,6 +5,7 @@ from pathlib import Path
 import typer
 from rich.table import Table
 
+from ..core.preparation import prepare_project
 from ..core.registry import load_registry
 from ..core.sync import sync_project
 from ..ui.cli_output import console, print_recipe as _print_recipe
@@ -119,3 +120,31 @@ def projects_sync(
         console.print(f"[green]✓[/] {project_path}: {mark}")
     if dry_run:
         console.print("[yellow]No se realizaron cambios (--dry-run).[/]")
+
+
+@projects_app.command("prepare")
+def projects_prepare(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Previsualiza la preparación sin escribir."),
+    trust: bool = typer.Option(False, "--trust", help="Marca el proyecto como confiable localmente al terminar."),
+) -> None:
+    """Prepara el proyecto, aplica skills y packs detectados y opcionalmente lo confía."""
+    try:
+        result = prepare_project(_project(path), dry_run=dry_run, trust=trust)
+    except (OSError, ValueError) as exc:
+        console.print(f"[red]✗ No se pudo preparar el proyecto: {exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    title = "Vista previa · preparación del proyecto" if dry_run else "Preparación del proyecto"
+    console.print(f"[bold cyan]{title}[/] · {path.name}")
+    console.print("Tech Packs detectados: " + (", ".join(result.packs) or "ninguno"))
+    console.print("Skills para el contexto: " + (", ".join(result.skills) or "ninguna"))
+    console.print("Mods de Claude Code: " + (", ".join(result.mods) or "ninguno"))
+    for action in result.actions:
+        console.print(f"[green]•[/] {action}")
+    for backup in result.backups:
+        console.print(f"[dim]Backup: {backup}[/]")
+    for warning in result.warnings:
+        console.print(f"[yellow]! {warning}[/]")
+    if dry_run:
+        console.print("[dim]No se realizaron cambios.[/]")

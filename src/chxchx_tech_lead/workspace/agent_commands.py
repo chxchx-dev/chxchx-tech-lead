@@ -59,10 +59,29 @@ def new_chat_prompt(project_root: str) -> str:
 
 
 def _supports_new_chat(command: Sequence[str]) -> bool:
-    executable = command[0].replace("\\", "/").rsplit("/", 1)[-1].lower()
-    if executable.endswith(".exe"):
-        executable = executable[:-4]
+    executable = _executable_name(command)
+    if executable in {"codex", "claude", "opencode"}:
+        return True
+    return executable == "ollama" and len(command) >= 3 and list(command[1:3]) == ["launch", "opencode"]
+
+
+def _captures_explicit_memory(command: Sequence[str]) -> bool:
+    executable = _executable_name(command)
     return executable in {"codex", "claude"}
+
+
+def _executable_name(command: Sequence[str]) -> str:
+    executable = command[0].replace("\\", "/").rsplit("/", 1)[-1].lower()
+    for suffix in (".exe", ".cmd", ".bat"):
+        executable = executable.removesuffix(suffix)
+    return executable
+
+
+def _is_opencode(command: Sequence[str]) -> bool:
+    executable = _executable_name(command)
+    return executable == "opencode" or (
+        executable == "ollama" and len(command) >= 3 and list(command[1:3]) == ["launch", "opencode"]
+    )
 
 
 def agent_pane_command(
@@ -79,7 +98,7 @@ def agent_pane_command(
         raise ValueError("El comando configurado del agente está vacío o contiene un argumento vacío")
     if new_chat and not _supports_new_chat(command):
         raise ValueError(
-            f"El inicio de chat nuevo con recuperación de contexto solo está configurado para Codex y Claude: {command[0]}"
+            f"El inicio de chat nuevo con recuperación de contexto no está configurado para {command[0]}"
         )
     pane_command = [
         sys.executable,
@@ -93,10 +112,19 @@ def agent_pane_command(
     if logo:
         pane_command.extend(["--logo", logo])
     if project_root and _supports_new_chat(command):
-        pane_command.extend(["--capture-explicit-memory", "--project-root", project_root])
+        pane_command.extend(["--project-root", project_root])
+        if _captures_explicit_memory(command):
+            pane_command.append("--capture-explicit-memory")
         if new_chat:
             pane_command.append("--recover-explicit-memory")
     pane_command.extend(["--", *command])
     if new_chat:
-        pane_command.append(new_chat_prompt(project_root) if project_root else NEW_CHAT_PROMPT)
+        prompt = new_chat_prompt(project_root) if project_root else NEW_CHAT_PROMPT
+        if _is_opencode(command):
+            if _executable_name(command) == "ollama":
+                pane_command.extend(["--", "--prompt", prompt])
+            else:
+                pane_command.extend(["--prompt", prompt])
+        else:
+            pane_command.append(prompt)
     return pane_command

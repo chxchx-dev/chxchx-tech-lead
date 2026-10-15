@@ -191,6 +191,38 @@ void MainWindow::showAreaDashboard(const QJsonObject &payload, const QString &ar
         return;
     }
 
+    if (area == QStringLiteral("mods")) {
+        const QJsonArray mods = payload.value(QStringLiteral("mods")).toArray();
+        int recommended = 0;
+        int applied = 0;
+        for (const auto &value : mods) {
+            const QJsonObject mod = value.toObject();
+            const bool isRecommended = mod.value(QStringLiteral("recommended")).toBool();
+            const bool isApplied = mod.value(QStringLiteral("applied")).toBool();
+            const bool conflict = mod.value(QStringLiteral("conflict")).toBool();
+            if (isRecommended) ++recommended;
+            if (isApplied) ++applied;
+            QString state = isApplied ? QStringLiteral("Aplicado")
+                : (conflict ? QStringLiteral("Conflicto")
+                            : (isRecommended ? QStringLiteral("Recomendado") : QStringLiteral("Disponible")));
+            QString details = mod.value(QStringLiteral("description")).toString();
+            const QString reasons = joinedValues(mod.value(QStringLiteral("reasons")).toArray());
+            if (isRecommended && reasons != QStringLiteral("sin detectar")) {
+                details += QStringLiteral("\nMotivo: ") + reasons;
+            }
+            addRow(QStringLiteral("%1 · %2\n%3")
+                    .arg(mod.value(QStringLiteral("name")).toString(), state, details),
+                conflict ? QStringLiteral("dialog-warning") : QStringLiteral("applications-utilities"),
+                conflict ? QStyle::SP_MessageBoxWarning
+                         : (isApplied ? QStyle::SP_DialogApplyButton : QStyle::SP_FileIcon));
+        }
+        m_dashboardSummary->setText(QStringLiteral("%1 Mods disponibles · %2 recomendados · %3 aplicados")
+            .arg(QString::number(mods.size()), QString::number(recommended), QString::number(applied)));
+        if (mods.isEmpty()) addRow(QStringLiteral("No hay Mods disponibles en el catálogo."),
+            QStringLiteral("dialog-information"), QStyle::SP_MessageBoxInformation);
+        return;
+    }
+
     if (area == QStringLiteral("projects")) {
         const QJsonArray projects = payload.value(QStringLiteral("registered_projects")).toArray();
         int trusted = 0;

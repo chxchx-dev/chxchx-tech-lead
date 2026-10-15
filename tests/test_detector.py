@@ -11,6 +11,21 @@ def test_detect_nextjs(tmp_path: Path):
     assert "typescript" in info.languages
     assert info.profile_name == "nextjs"
 
+def test_detect_cpp_and_qt_from_sources_and_cmake(tmp_path: Path):
+    native = tmp_path / "native"
+    native.mkdir()
+    (native / "main.cpp").write_text("int main() { return 0; }\n", encoding="utf-8")
+    (native / "CMakeLists.txt").write_text(
+        "project(sample LANGUAGES CXX)\nfind_package(Qt6 REQUIRED COMPONENTS Widgets)\n",
+        encoding="utf-8",
+    )
+
+    info = detect_project(tmp_path)
+
+    assert "cpp" in info.languages
+    assert "cpp" in info.stacks
+    assert "qt" in info.stacks
+
 
 def test_detect_dotnet(tmp_path: Path):
     (tmp_path / "Demo.sln").write_text("", encoding="utf-8")

@@ -26,8 +26,8 @@ def test_skills_panel_lists_catalog_and_manages_project_context(
         async with app.run_test() as pilot:
             app.action_show_skills()
             await pilot.pause(0.2)
-            assert app.query_one("#skills-table", DataTable).row_count == 17
-            assert app.query_one("#packs-table", DataTable).row_count == 11
+            assert app.query_one("#skills-table", DataTable).row_count == 21
+            assert app.query_one("#packs-table", DataTable).row_count == 13
             assert app._pack_matches
 
             search = app.query_one("#skills-search", Input)

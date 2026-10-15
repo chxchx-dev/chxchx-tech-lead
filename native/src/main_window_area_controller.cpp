@@ -15,21 +15,23 @@ void MainWindow::configureAreaActions()
     const bool projects = m_currentArea == QStringLiteral("projects");
     const bool skills = m_currentArea == QStringLiteral("skills");
     const bool packs = m_currentArea == QStringLiteral("packs");
+    const bool mods = m_currentArea == QStringLiteral("mods");
     const bool handoff = m_currentArea == QStringLiteral("handoff");
     const bool memory = m_currentArea == QStringLiteral("memory");
     const bool chats = m_currentArea == QStringLiteral("chats");
     const bool errors = m_currentArea == QStringLiteral("errors");
     const bool setup = m_currentArea == QStringLiteral("setup");
-    const bool supported = agents || processes || projects || skills || packs;
+    const bool supported = agents || processes || projects || skills || packs || mods;
     m_targetSelector->setVisible(supported || setup);
     m_primaryAction->setVisible(supported || project || handoff || memory || chats || errors || setup);
-    m_secondaryAction->setVisible(agents || processes || project || projects || skills || packs || handoff || setup);
-    m_tertiaryAction->setVisible(agents || project || packs);
-    m_quaternaryAction->setVisible(project);
+    m_secondaryAction->setVisible(agents || processes || project || projects || skills || packs || mods || handoff || setup);
+    m_tertiaryAction->setVisible(agents || project || packs || mods);
+    m_quaternaryAction->setVisible(project || agents);
     if (agents) {
         m_primaryAction->setText(QStringLiteral("Abrir en Studio"));
         m_secondaryAction->setText(QStringLiteral("Nueva sesión de agente"));
         m_tertiaryAction->setText(QStringLiteral("Abrir todos en Studio"));
+        m_quaternaryAction->setText(QStringLiteral("Añadir agente"));
     } else if (processes) {
         m_primaryAction->setText(QStringLiteral("Iniciar proceso"));
         m_secondaryAction->setText(QStringLiteral("Detener proceso"));
@@ -48,6 +50,10 @@ void MainWindow::configureAreaActions()
         m_primaryAction->setText(QStringLiteral("Aplicar Tech Pack"));
         m_secondaryAction->setText(QStringLiteral("Aplicar packs detectados"));
         m_tertiaryAction->setText(QStringLiteral("Sincronizar contexto"));
+    } else if (mods) {
+        m_primaryAction->setText(QStringLiteral("Aplicar Mod seleccionado"));
+        m_secondaryAction->setText(QStringLiteral("Aplicar Mods recomendados"));
+        m_tertiaryAction->setText(QStringLiteral("Retirar Mod seleccionado"));
     } else if (handoff) {
         m_primaryAction->setText(QStringLiteral("Actualizar handoff"));
         m_secondaryAction->setText(QStringLiteral("Recargar handoff"));
@@ -86,12 +92,22 @@ void MainWindow::updateAreaActionState()
     }
     if (m_currentArea == QStringLiteral("agents")) {
         m_tertiaryAction->setEnabled(m_targetSelector->count() > 0);
+        m_quaternaryAction->setEnabled(true);
     }
     if (m_currentArea == QStringLiteral("skills") && hasSelection) {
         const bool enabled = m_targetSelector->currentData(Qt::UserRole + 1).toBool();
         m_primaryAction->setText(enabled ? QStringLiteral("Quitar del proyecto") : QStringLiteral("Instalar skill"));
         m_primaryAction->setEnabled(true);
         m_secondaryAction->setEnabled(true);
+    }
+    if (m_currentArea == QStringLiteral("mods")) {
+        const bool applied = hasSelection && m_targetSelector->currentData(Qt::UserRole + 1).toBool();
+        const bool conflict = hasSelection && m_targetSelector->currentData(Qt::UserRole + 2).toBool();
+        m_primaryAction->setText(applied ? QStringLiteral("Actualizar Mod seleccionado")
+                                         : QStringLiteral("Aplicar Mod seleccionado"));
+        m_primaryAction->setEnabled(hasSelection && !conflict);
+        m_secondaryAction->setEnabled(true);
+        m_tertiaryAction->setEnabled(applied);
     }
     if (m_currentArea == QStringLiteral("handoff")) {
         m_primaryAction->setEnabled(true);
@@ -174,12 +190,14 @@ void MainWindow::updateAreaTargets(const QJsonObject &payload, const QString &ar
 {
     if (area != m_currentArea || (area != QStringLiteral("agents")
         && area != QStringLiteral("processes") && area != QStringLiteral("projects")
-        && area != QStringLiteral("skills") && area != QStringLiteral("packs"))) {
+        && area != QStringLiteral("skills") && area != QStringLiteral("packs")
+        && area != QStringLiteral("mods"))) {
         return;
     }
     const QString selected = area == QStringLiteral("projects")
         ? m_targetSelector->currentData(Qt::UserRole + 1).toString()
         : (area == QStringLiteral("skills") || area == QStringLiteral("packs")
+            || area == QStringLiteral("mods")
             ? m_targetSelector->currentData().toString()
             : m_targetSelector->currentText());
     m_targetSelector->clear();
@@ -208,6 +226,25 @@ void MainWindow::updateAreaTargets(const QJsonObject &payload, const QString &ar
         if (previous >= 0) {
             m_targetSelector->setCurrentIndex(previous);
         }
+        updateAreaActionState();
+        return;
+    }
+    if (area == QStringLiteral("mods")) {
+        for (const auto &value : payload.value(QStringLiteral("mods")).toArray()) {
+            const QJsonObject item = value.toObject();
+            const QString name = item.value(QStringLiteral("name")).toString();
+            if (name.isEmpty()) continue;
+            QString label = name;
+            if (item.value(QStringLiteral("recommended")).toBool()) label += QStringLiteral(" · recomendado");
+            if (item.value(QStringLiteral("applied")).toBool()) label += QStringLiteral(" · aplicado");
+            if (item.value(QStringLiteral("conflict")).toBool()) label += QStringLiteral(" · conflicto");
+            m_targetSelector->addItem(label, name);
+            const int index = m_targetSelector->count() - 1;
+            m_targetSelector->setItemData(index, item.value(QStringLiteral("applied")).toBool(), Qt::UserRole + 1);
+            m_targetSelector->setItemData(index, item.value(QStringLiteral("conflict")).toBool(), Qt::UserRole + 2);
+        }
+        const int previous = m_targetSelector->findData(selected);
+        if (previous >= 0) m_targetSelector->setCurrentIndex(previous);
         updateAreaActionState();
         return;
     }

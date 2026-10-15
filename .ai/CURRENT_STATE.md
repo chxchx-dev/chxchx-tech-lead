@@ -2,6 +2,13 @@
 
 ## Estado actual
 
+- Inicio de Studio ofrece `Preparar y entrar`: vista previa y confirmación de Init, skills recomendadas, skills de Tech Packs detectados y Mods de Claude aplicables, sincronización del contexto, trust local y apertura de un chat nuevo con el agente elegido. Los Mods se incluyen solo si el proyecto ya tiene contexto/configuración Claude y nunca modifican ajustes globales.
+- El catálogo contiene cinco Mods instalables y retirables en `.claude/skills`: asesor de modelo, revisión previa a integrar, depuración con evidencia, plan de funcionalidad y guía C++/Qt. Studio tiene vista Mods con recomendaciones, estado, aplicación individual/por detección y retiro; el CLI expone `mod list/apply/remove`. El asesor muestra `/model <alias>` para que el usuario confirme el cambio dentro de Claude Code.
+- CI prepara un release rodante `studio-dev-preview` para Ubuntu/Fedora x86_64, Windows x86_64 y macOS Intel/Apple Silicon, más el wheel del bridge CLI con su nombre versionado válido. El manifiesto SHA-256 y los instaladores de Linux/macOS/Windows permiten instalar sin clonar. Los assets públicos aparecerán después de que el próximo push a `dev` complete todos los jobs; aún no hay evidencia de ese release.
+- Validación de este bloque: `python -m compileall -q src tests scripts`; pytest (`217 passed, 1 skipped`); `cmake --build build/native --parallel 2`; CTest (`6/6`); CLI JSON de `mod list`; `projects prepare . --dry-run --trust`; sintaxis Bash, ayuda de ambos instaladores, nombre de wheel versionado con `packaging` y `git diff --check` pasan. No se pudo descargar el release con `--dry-run` ni construir el wheel localmente porque la sesión no resuelve PyPI/raw.githubusercontent.com; `pwsh` tampoco está instalado. El workflow se validó sintácticamente como YAML, pero necesita CI tras el push para verificar los assets por sistema.
+- Studio puede añadir OpenCode u OpenCode con Ollama desde Agentes, con `--dry-run`, confirmación y backup idempotente de `.ai/chxchx-tech.toml`. OpenCode recibe prompt de chat nuevo y memoria explícita local existente; la captura desde transcripts sigue implementada solo para Codex/Claude. Ollama hace su selección guiada de modelo al iniciar `ollama launch opencode`.
+- Validación de esta integración: `python -m compileall -q src tests scripts`, pytest (`210 passed, 1 skipped`), `git diff --check`, build Qt Linux y CTest (`6/6`). No se cambió la configuración local del proyecto durante el desarrollo.
+- Catálogo ampliado a 21 skills y 13 Tech Packs: añade ingeniería C++, desarrollo Qt 6, builds CMake/empaquetado y software nativo multiplataforma. El detector reconoce fuentes C++ y proyectos Qt para recomendar estas guías y packs automáticamente.
 - Editor y navegación visualmente refinados: colores Scintilla en el orden RGB correcto; pestañas alinean el título a la izquierda y reservan una zona fija para la `×`; un clic abre archivos y alterna expandir/contraer carpetas. Build Linux y CTest pasan; falta revisión visual real.
 - Acciones principales agrupadas en menús estándar de Studio y compartidas con la barra de acceso rápido. Los atajos se editan en `Edición → Configurar atajos`, se validan contra duplicados y persisten con `QSettings`.
 - La barra de acceso rápido usa iconos con tooltips y atajos; la lista lateral asigna iconos temáticos a sus 15 secciones. Los iconos usan el tema del sistema con fallback Qt.
@@ -33,7 +40,7 @@
 - Workspace ahora ofrece trust, iniciar/reanudar, suspender y detener procesos con preview/confirmación. Proyectos muestra los registros disponibles y puede cambiar el workspace con `projects switch --no-attach`, actualizar raíz del árbol de archivos y cwd de Studio, y repetir la confirmación del RAM Governor con el estado vigente.
 - Proyectos también permite dar trust al proyecto elegido antes de cambiar; deshabilita Switch para rutas no confiables y para el proyecto actual.
 - `bridge status` incluye proyectos registrados, estado, trust y existencia de cada ruta. El payload JSON v1 se amplió de forma aditiva y reporta configuración inválida sin ocultar la lista multiproyecto.
-- Skills y Tech Packs ya usan ese bridge: Studio muestra las 17 skills, selección por proyecto, seis recomendaciones para el stack actual y los 11 packs con composición/motivos de detección. Permite habilitar/deshabilitar una skill, aplicar un pack o los detectados y sincronizar el contexto; todas las mutaciones hacen preview `--dry-run` y piden confirmación antes del comando real.
+- Skills y Tech Packs ya usan ese bridge: Studio muestra las 21 skills, selección por proyecto, recomendaciones para el stack actual y los 13 packs con composición/motivos de detección. Permite habilitar/deshabilitar una skill, aplicar un pack o los detectados y sincronizar el contexto; todas las mutaciones hacen preview `--dry-run` y piden confirmación antes del comando real.
 - Una prueba nueva cubre catálogo, recomendaciones, composición de packs y reflejo de selección activa en el payload. Validación: `python -m compileall -q src tests`, suite (`189 passed, 1 skipped`), `git diff --check HEAD` y dry-runs de `skill enable`, `skill sync` y `pack apply-detected` pasan sin cambios reales.
 - Qt 6.11.2 quedó instalado en el host Fedora. `cmake -S native -B /tmp/chxchx-studio-build -G Ninja` configura y `cmake --build /tmp/chxchx-studio-build --parallel 2` compila y enlaza. El primer build reveló el uso inválido de `QFileSystemModel::isFile`; se cambió a `!isDir` y el build final pasó.
 - Handoff y Memoria ya tienen vistas nativas propias. Handoff carga el documento, precarga los campos editables cuando encuentra el formato administrado y guarda resumen/pendiente/validación mediante `workspace handoff` tras preview y confirmación. Memoria filtra notas por título/contenido y muestra su contenido como solo lectura.
@@ -55,13 +62,13 @@
 - RAM Governor inicial: `workspace.resources` ahora incluye `max_agents` (default 2); proyectos nuevos usan aviso RAM 70%, crítico 85% y aviso swap 40%. La TUI calcula cuántos agentes nuevos se abrirían, muestra un diálogo al superar umbrales o presupuesto y deja cancelar o continuar. `agent start`, `run` y `projects switch` hacen el preflight en CLI y requieren `--force` para confirmar. No mata procesos automáticamente.
 - El panel Recursos muestra los umbrales y la cuota. El comando `chxchx-tech resources` también imprime esta política. Configs existentes mantienen sus umbrales explícitos; en este repo siguen en 75%/90% y reciben `max_agents = 2` por default al cargar.
 - Pruebas nuevas validan configuración, avisos de RAM/cuota y cancelar o confirmar desde el diálogo TUI.
-- Se añadió `ui-ux-design`, una guía avanzada de diseño de producto UI/UX; se recomienda en proyectos React, Next.js y React Native y ya forma parte de esos Tech Packs. Catálogo actual: 17 skills.
+- Se añadió `ui-ux-design`, una guía avanzada de diseño de producto UI/UX; se recomienda en proyectos React, Next.js y React Native y ya forma parte de esos Tech Packs. El catálogo se amplió después a 21 skills.
 - La TUI tiene una pestaña principal `Skills` con catálogo buscable y Tech Packs. Muestra total de skills, selección activa, packs detectados, razones de recomendación y composición de cada pack.
 - Desde la TUI se puede habilitar/deshabilitar skills, aplicar un pack o todos los packs detectados y sincronizar `.ai/SKILLS.md`/`AGENTS.md`; cada escritura preflighta con `dry-run` y las operaciones existentes hacen backup.
 - La vista mantiene dos subpestañas, Catálogo y Tech Packs, para que las acciones sigan accesibles en una terminal pequeña; se puede abrir desde `Ctrl+P` buscando “skills”.
 - Validación tras integrar la TUI: `python -m compileall src tests` y `UV_CACHE_DIR=/tmp/chichan-tech-lead-uv-cache uv run --no-sync pytest` (180 passed, 1 skipped); `git diff --check HEAD` limpio.
 - Inicio de v0.6: existe `SkillRegistry` con metadatos TOML e instrucciones Markdown, y el CLI expone `skill list/search/info/recommend`.
-- Catálogo actual: 17 skills generales y para Python, TypeScript, React/Next, UI/UX, NestJS, .NET, React Native, PostgreSQL, Prisma, Redis y Docker; `recommend` usa `detect_project` para comparar stacks y lenguajes.
+- Catálogo en ese checkpoint: 17 skills generales y para Python, TypeScript, React/Next, UI/UX, NestJS, .NET, React Native, PostgreSQL, Prisma, Redis y Docker; `recommend` usa `detect_project` para comparar stacks y lenguajes.
 - `docs/` sigue presente en esta copia local y está excluida del índice de Git; `.gitignore` evita volver a agregarla.
 - Basic Memory sigue apuntando a otro proyecto en esta sesión; no se guardó información allí.
 - Validación actual del Skill Registry y Tech Packs: `python -m compileall src tests` y `UV_CACHE_DIR=/tmp/chichan-tech-lead-uv-cache uv run --no-sync pytest` (179 passed, 1 skipped); pruebas CLI cubren catálogo, estado, recomendaciones, detección y aplicación aditiva con dry-run.
@@ -169,17 +176,13 @@
 ## Studio: empaquetado CPack
 
 - CMake configura ZIP para Windows, DMG para macOS y TGZ para Linux. El paquete incluye los avisos originales de Scintilla, Lexilla y libvterm junto con `THIRD_PARTY.md`.
-- CI genera ZIP para Windows, DMG para macOS y TGZ con Qt SDK para Ubuntu; el job Fedora compila en su sistema Qt y publica un TGZ de prueba con el runtime Qt del sistema.
-- `scripts/install-studio-fedora.sh` descarga el artefacto del último push a `dev` cuando el job Fedora lo publica, verifica su digest, instala runtime Qt con DNF y prepara Studio más un entorno CLI aislado bajo `~/.local/opt`. Requiere Fedora x86_64 y sudo; no es una versión estable. No depende de que jobs de otras plataformas terminen bien.
+- Estado histórico previo: CI solo publicaba el TGZ Fedora y no dependía de las matrices Windows/macOS/Ubuntu. El flujo actual está descrito al inicio del archivo y en ADR-0005.
 - Validación local: CMake configure/build, CTest 6/6, CPack generó el TGZ Linux y el archivo contiene binario y licencias; `python -m compileall -q src tests scripts`, pytest (195 passed, 1 skipped) y `git diff --check` pasan.
 - Pendiente: ejecución real del workflow en Ubuntu/Windows/macOS, prueba de instalación/arranque de los artefactos, QA manual en el proyecto real y mediciones repetibles de startup/navegación.
 
-## Instalación de prueba de Studio en Fedora
+## Instalación Fedora anterior (histórica; sustituida por el instalador multiplataforma)
 
-- `scripts/install-studio-fedora.sh` descarga la pre-release pública `studio-fedora-dev`, valida el SHA-256 del TGZ mediante su manifiesto y obtiene el bridge CLI del mismo commit. Instala runtime Qt, Studio en un directorio por commit y `~/.local/bin/chxchx-studio-dev`.
-- CI Fedora empaqueta Release con CPack TGZ. Un job posterior publica el paquete y el manifiesto como assets públicos de una pre-release rodante; así la prueba no depende de que Actions permita descargar artefactos anónimos.
-- Instalación: `curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio-fedora.sh | bash`. Requiere Fedora x86_64, conexión a GitHub y sudo. Esperar a que el job Fedora de publicación termine.
-- Pendiente: verificar la descarga anónima de los assets después del próximo workflow y probar instalación/arranque en otra máquina Fedora.
+- El instalador Fedora dedicado ahora delega en `scripts/install-studio.sh`. El tag antiguo `studio-fedora-dev` no forma parte del flujo de release actual; usa las instrucciones multiplataforma de README.
 
 ## Memoria explícita al iniciar chat nuevo
 

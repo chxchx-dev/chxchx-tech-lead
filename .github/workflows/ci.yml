@@ -11,7 +11,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-22.04
+            platform: linux-ubuntu-x86_64
+          - os: windows-latest
+            platform: windows-x86_64
+          - os: macos-15
+            platform: macos-arm64
+          - os: macos-15-intel
+            platform: macos-x86_64
     steps:
       - uses: actions/checkout@v4
       - name: Install Qt 6
@@ -32,7 +40,7 @@ jobs:
       - name: Publish native package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chxchx-studio-${{ matrix.os }}
+          name: chxchx-studio-${{ matrix.platform }}
           path: build-native/packages/*
           if-no-files-found: error
 
@@ -59,53 +67,138 @@ jobs:
           path: build-native/packages/*.tar.gz
           if-no-files-found: error
 
-  publish-fedora-preview:
-    name: Publish Fedora dev preview
+  cli-wheel:
+    name: Build installable CLI wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build --wheel --out-dir dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chxchx-tech-lead-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+
+  publish-studio-preview:
+    name: Publish cross-platform Studio dev preview
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
-    needs: native-fedora
+    needs: [native-build, native-fedora, cli-wheel, test]
     runs-on: ubuntu-latest
     concurrency:
-      group: chxchx-studio-fedora-dev-preview
+      group: chxchx-studio-dev-preview
       cancel-in-progress: true
     permissions:
       contents: write
       actions: read
     steps:
+      - name: Download Ubuntu package
+        uses: actions/download-artifact@v4
+        with:
+          name: chxchx-studio-linux-ubuntu-x86_64
+          path: dist/downloads/linux-ubuntu-x86_64
       - name: Download Fedora package
         uses: actions/download-artifact@v4
         with:
           name: chxchx-studio-fedora
-          path: dist
+          path: dist/downloads/linux-fedora-x86_64
+      - name: Download Windows package
+        uses: actions/download-artifact@v4
+        with:
+          name: chxchx-studio-windows-x86_64
+          path: dist/downloads/windows-x86_64
+      - name: Download macOS Apple Silicon package
+        uses: actions/download-artifact@v4
+        with:
+          name: chxchx-studio-macos-arm64
+          path: dist/downloads/macos-arm64
+      - name: Download macOS Intel package
+        uses: actions/download-artifact@v4
+        with:
+          name: chxchx-studio-macos-x86_64
+          path: dist/downloads/macos-x86_64
+      - name: Download CLI wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: chxchx-tech-lead-wheel
+          path: dist/downloads/cli-wheel
       - name: Prepare public preview assets
         env:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          package="$(find dist -type f -name '*.tar.gz' -print -quit)"
-          test -n "$package"
-          cp "$package" dist/chxchx-studio-fedora.tar.gz
-          sha256sum dist/chxchx-studio-fedora.tar.gz > dist/chxchx-studio-fedora.tar.gz.sha256
-          printf '{"commit":"%s","asset":"chxchx-studio-fedora.tar.gz","sha256":"%s"}\n' \
-            "$COMMIT_SHA" "$(sha256sum dist/chxchx-studio-fedora.tar.gz | cut -d ' ' -f1)" \
-            > dist/chxchx-studio-fedora.json
-      - name: Publish rolling Fedora preview release
+          mkdir -p dist/release
+          publish_asset() {
+            platform="$1"
+            pattern="$2"
+            output="$3"
+            source="$(find "dist/downloads/$platform" -type f -name "$pattern" -print -quit)"
+            test -n "$source"
+            cp "$source" "dist/release/$output"
+          }
+          publish_asset linux-ubuntu-x86_64 '*.tar.gz' chxchx-studio-ubuntu-x86_64.tar.gz
+          publish_asset linux-fedora-x86_64 '*.tar.gz' chxchx-studio-fedora-x86_64.tar.gz
+          publish_asset windows-x86_64 '*.zip' chxchx-studio-windows-x86_64.zip
+          publish_asset macos-arm64 '*.dmg' chxchx-studio-macos-arm64.dmg
+          publish_asset macos-x86_64 '*.dmg' chxchx-studio-macos-x86_64.dmg
+          wheel="$(find dist/downloads/cli-wheel -type f -name 'chxchx_tech_lead-*-py3-none-any.whl' -print -quit)"
+          test -n "$wheel"
+          wheel_name="$(basename "$wheel")"
+          cp "$wheel" "dist/release/$wheel_name"
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          import tomllib
+
+          release = Path("dist/release")
+          files = {
+              "linux-ubuntu-x86_64": "chxchx-studio-ubuntu-x86_64.tar.gz",
+              "linux-fedora-x86_64": "chxchx-studio-fedora-x86_64.tar.gz",
+              "windows-x86_64": "chxchx-studio-windows-x86_64.zip",
+              "macos-arm64": "chxchx-studio-macos-arm64.dmg",
+              "macos-x86_64": "chxchx-studio-macos-x86_64.dmg",
+          }
+          wheel_candidates = list(release.glob("chxchx_tech_lead-*-py3-none-any.whl"))
+          if len(wheel_candidates) != 1:
+              raise SystemExit("Expected exactly one valid chxchx-tech-lead universal wheel")
+          files["cli-wheel"] = wheel_candidates[0].name
+          def sha256(name):
+              return hashlib.sha256((release / name).read_bytes()).hexdigest()
+          lines = [
+              "schema_version=1",
+              f"commit={os.environ['COMMIT_SHA']}",
+              f"version={tomllib.loads(Path('pyproject.toml').read_text())['project']['version']}",
+          ]
+          for key, filename in files.items():
+              lines.extend((f"asset.{key}={filename}", f"sha256.{key}={sha256(filename)}"))
+          (release / "studio-preview.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+      - name: Replace the rolling preview tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view studio-dev-preview --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete studio-dev-preview --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          elif gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/studio-dev-preview" >/dev/null 2>&1; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/studio-dev-preview"
+          fi
+      - name: Publish rolling multi-platform preview release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: studio-fedora-dev
+          tag_name: studio-dev-preview
           target_commitish: ${{ github.sha }}
-          name: ChxChx Studio · Fedora dev preview
+          name: ChxChx Studio · cross-platform dev preview
           body: |
-            Rolling Fedora x86_64 preview built from commit `${{ github.sha }}` on `dev`.
+            Rolling preview built from commit `${{ github.sha }}` on `dev`.
 
-            Install with:
-            `curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio-fedora.sh | bash`
+            Install without cloning the repository: see the Studio section in README.md.
+            Supported preview assets: Ubuntu x86_64, Fedora x86_64, Windows x86_64,
+            macOS Apple Silicon and Intel. This is not a stable or signed release.
           prerelease: true
           make_latest: false
           overwrite_files: true
-          files: |
-            dist/chxchx-studio-fedora.tar.gz
-            dist/chxchx-studio-fedora.tar.gz.sha256
-            dist/chxchx-studio-fedora.json
+          files: dist/release/*
 
   test:
     runs-on: ${{ matrix.os }}

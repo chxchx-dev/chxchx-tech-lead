@@ -560,6 +560,7 @@ void MainWindow::selectArea(int row)
         || m_currentArea == QStringLiteral("project") || m_currentArea == QStringLiteral("agents")
         || m_currentArea == QStringLiteral("processes") || m_currentArea == QStringLiteral("projects")
         || m_currentArea == QStringLiteral("skills") || m_currentArea == QStringLiteral("packs")
+        || m_currentArea == QStringLiteral("mods")
         || m_currentArea == QStringLiteral("resources");
     if (dashboardArea) {
         m_mainPages->setCurrentWidget(m_dashboardPage);
@@ -615,6 +616,7 @@ void MainWindow::openCommandPalette()
         {QStringLiteral("Ir a Proyectos"), QStringLiteral("area:projects")},
         {QStringLiteral("Ir a Skills"), QStringLiteral("area:skills")},
         {QStringLiteral("Ir a Tech Packs"), QStringLiteral("area:packs")},
+        {QStringLiteral("Ir a Mods"), QStringLiteral("area:mods")},
         {QStringLiteral("Ir a Recursos"), QStringLiteral("area:resources")},
         {QStringLiteral("Ir a Handoff"), QStringLiteral("area:handoff")},
         {QStringLiteral("Ir a Memoria"), QStringLiteral("area:memory")},
@@ -756,6 +758,9 @@ void MainWindow::commandFailedToStart(const QString &reason)
     m_forceActionArguments.clear();
     m_confirmedActionTitle.clear();
     m_pendingProjectPath.clear();
+    m_prepareAndEnterPending = false;
+    m_openAgentAfterRefresh = false;
+    m_prepareAndEnterAgentId.clear();
     appendOutput(QStringLiteral("No se pudo iniciar chxchx-tech: %1").arg(reason));
     statusBar()->showMessage(QStringLiteral("No se pudo iniciar ChxChx CLI."), 6000);
 }
@@ -772,6 +777,10 @@ QStringList MainWindow::readCommandForArea(const QString &area) const
     }
     if (area == QStringLiteral("skills") || area == QStringLiteral("packs")) {
         return {QStringLiteral("bridge"), QStringLiteral("status"), m_projectPath};
+    }
+    if (area == QStringLiteral("mods")) {
+        return {QStringLiteral("mod"), QStringLiteral("list"), QStringLiteral("--path"),
+            m_projectPath, QStringLiteral("--json")};
     }
     if (area == QStringLiteral("handoff")) {
         return {QStringLiteral("bridge"), QStringLiteral("handoff"), m_projectPath};
@@ -805,6 +814,11 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
         } else if (schema == BridgeSchemas::ResourcesOverview) {
             showAreaDashboard(payload, m_commandArea);
             output = formatResourcesOverview(payload);
+        } else if (schema == BridgeSchemas::Mods) {
+            updateAreaTargets(payload, m_commandArea);
+            updateAreaActionState();
+            showAreaDashboard(payload, m_commandArea);
+            output = formatMods(payload);
         } else if (schema == BridgeSchemas::ProjectStatus) {
             const QJsonObject workspace = payload.value(QStringLiteral("workspace")).toObject();
             m_projectTrusted = workspace.value(QStringLiteral("trusted")).toBool();
@@ -813,6 +827,25 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             updateAreaActionState();
             showAreaDashboard(payload, m_commandArea);
             output = formatBridgeStatus(payload, m_commandArea);
+            if (m_openAgentAfterRefresh && m_commandArea == QStringLiteral("overview")) {
+                const int preferred = m_homeAgentSelector->findText(m_prepareAndEnterAgentId);
+                if (preferred >= 0) {
+                    m_homeAgentSelector->setCurrentIndex(preferred);
+                } else if (m_homeAgentSelector->count() > 0) {
+                    m_homeAgentSelector->setCurrentIndex(0);
+                }
+                updateHomeActionState();
+                m_openAgentAfterRefresh = false;
+                QTimer::singleShot(0, this, [this] {
+                    if (m_homeNewChatButton->isEnabled()) {
+                        openHomeSelectedAgent(true);
+                    } else {
+                        QMessageBox::information(this, QStringLiteral("Proyecto preparado"),
+                            QStringLiteral("El proyecto quedó listo. Configura un agente para abrir una sesión nueva."));
+                    }
+                    m_prepareAndEnterAgentId.clear();
+                });
+            }
         } else if (schema == BridgeSchemas::Handoff) {
             showHandoff(payload);
             output = payload.value(QStringLiteral("exists")).toBool()
@@ -844,6 +877,10 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
     if (m_previewPending) {
         m_previewPending = false;
         if (status != QProcess::NormalExit || exitCode != 0) {
+            if (!m_confirmedActionArguments.isEmpty()
+                && m_confirmedActionArguments.first() == QStringLiteral("__prepare_and_enter__")) {
+                m_prepareAndEnterAgentId.clear();
+            }
             m_confirmedActionArguments.clear();
             m_forceActionArguments.clear();
             m_confirmedActionTitle.clear();
@@ -859,6 +896,10 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             QMessageBox::Yes | QMessageBox::Cancel,
             QMessageBox::Cancel);
         if (result != QMessageBox::Yes) {
+            if (!m_confirmedActionArguments.isEmpty()
+                && m_confirmedActionArguments.first() == QStringLiteral("__prepare_and_enter__")) {
+                m_prepareAndEnterAgentId.clear();
+            }
             m_confirmedActionArguments.clear();
             m_forceActionArguments.clear();
             m_confirmedActionTitle.clear();
@@ -871,6 +912,18 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
         const auto arguments = m_confirmedActionArguments;
         m_confirmedActionArguments.clear();
         m_confirmedActionTitle.clear();
+        if (!arguments.isEmpty()
+            && arguments.first() == QStringLiteral("__prepare_and_enter__")) {
+            if (arguments.size() < 2) {
+                m_prepareAndEnterAgentId.clear();
+                schedulePendingRefresh();
+                return;
+            }
+            m_prepareAndEnterPending = true;
+            runCommand(arguments.mid(1));
+            statusBar()->showMessage(QStringLiteral("Preparando el proyecto…"));
+            return;
+        }
         if (!arguments.isEmpty()
             && (arguments.first() == QStringLiteral("__launch_embedded_agent__")
                 || arguments.first() == QStringLiteral("__launch_embedded_agents__"))) {
@@ -1001,6 +1054,14 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             setProjectRoot(m_pendingProjectPath);
         }
         m_pendingProjectPath.clear();
+    }
+    if (m_prepareAndEnterPending) {
+        m_prepareAndEnterPending = false;
+        if (status == QProcess::NormalExit && exitCode == 0) {
+            m_openAgentAfterRefresh = true;
+        } else {
+            m_prepareAndEnterAgentId.clear();
+        }
     }
     statusBar()->showMessage(status == QProcess::NormalExit && exitCode == 0
         ? QStringLiteral("Actualizado")

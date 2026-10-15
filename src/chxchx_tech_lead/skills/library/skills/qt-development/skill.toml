@@ -1,0 +1,7 @@
+name = "qt-development"
+description = "Diseño de aplicaciones nativas con Qt 6, Widgets o QML, y ciclo de vida seguro."
+stacks = ["qt"]
+languages = []
+tags = ["qt", "qt6", "widgets", "qml", "signals-slots", "gui"]
+always_recommend = false
+origin = "chxchx"

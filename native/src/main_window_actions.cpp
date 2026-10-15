@@ -2,6 +2,7 @@
 #include "integrations/bridge_client.hpp"
 
 #include <QComboBox>
+#include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
 
@@ -47,9 +48,15 @@ void MainWindow::stopWorkspaceFromHome()
 
 void MainWindow::prepareProjectFromHome()
 {
-    const QStringList preview = {QStringLiteral("init"), m_projectPath, QStringLiteral("--dry-run")};
-    const QStringList action = {QStringLiteral("init"), m_projectPath};
-    runPreview(preview, action, {}, QStringLiteral("Preparar proyecto · Init completo"));
+    m_prepareAndEnterAgentId = m_homeAgentSelector->currentText();
+    const QStringList preview = {QStringLiteral("projects"), QStringLiteral("prepare"),
+        m_projectPath, QStringLiteral("--trust"), QStringLiteral("--dry-run")};
+    const QStringList action = {QStringLiteral("__prepare_and_enter__"),
+        QStringLiteral("projects"), QStringLiteral("prepare"), m_projectPath,
+        QStringLiteral("--trust")};
+    if (!runPreview(preview, action, {}, QStringLiteral("Preparar proyecto y entrar"))) {
+        m_prepareAndEnterAgentId.clear();
+    }
 }
 
 void MainWindow::syncSkillsFromHome()
@@ -107,6 +114,13 @@ void MainWindow::performPrimaryAreaAction()
             m_projectPath, QStringLiteral("--dry-run")};
         const QStringList action = {QStringLiteral("pack"), QStringLiteral("apply"), name, m_projectPath};
         runPreview(preview, action, {}, QStringLiteral("Aplicar Tech Pack"));
+    } else if (m_currentArea == QStringLiteral("mods")) {
+        const QString name = m_targetSelector->currentData().toString();
+        const QStringList preview = {QStringLiteral("mod"), QStringLiteral("apply"), name,
+            QStringLiteral("--path"), m_projectPath, QStringLiteral("--dry-run")};
+        const QStringList action = {QStringLiteral("mod"), QStringLiteral("apply"), name,
+            QStringLiteral("--path"), m_projectPath};
+        runPreview(preview, action, {}, QStringLiteral("Aplicar Mod de Claude Code"));
     } else if (m_currentArea == QStringLiteral("handoff")) {
         if (m_handoffSummary->text().trimmed().isEmpty()
             || m_handoffPending->text().trimmed().isEmpty()
@@ -198,6 +212,12 @@ void MainWindow::performSecondaryAreaAction()
             QStringLiteral("--dry-run")};
         const QStringList action = {QStringLiteral("pack"), QStringLiteral("apply-detected"), m_projectPath};
         runPreview(preview, action, {}, QStringLiteral("Aplicar Tech Packs detectados"));
+    } else if (m_currentArea == QStringLiteral("mods")) {
+        const QStringList preview = {QStringLiteral("mod"), QStringLiteral("apply"),
+            QStringLiteral("--path"), m_projectPath, QStringLiteral("--dry-run")};
+        const QStringList action = {QStringLiteral("mod"), QStringLiteral("apply"),
+            QStringLiteral("--path"), m_projectPath};
+        runPreview(preview, action, {}, QStringLiteral("Aplicar Mods recomendados de Claude Code"));
     }
 }
 
@@ -218,6 +238,13 @@ void MainWindow::performTertiaryAreaAction()
                 QStringLiteral("--dry-run")};
             const QStringList action = {QStringLiteral("skill"), QStringLiteral("sync"), m_projectPath};
             runPreview(preview, action, {}, QStringLiteral("Sincronizar contexto de skills"));
+        } else if (m_currentArea == QStringLiteral("mods")) {
+            const QString name = m_targetSelector->currentData().toString();
+            const QStringList preview = {QStringLiteral("mod"), QStringLiteral("remove"), name,
+                QStringLiteral("--path"), m_projectPath, QStringLiteral("--dry-run")};
+            const QStringList action = {QStringLiteral("mod"), QStringLiteral("remove"), name,
+                QStringLiteral("--path"), m_projectPath};
+            runPreview(preview, action, {}, QStringLiteral("Retirar Mod de Claude Code"));
         }
         return;
     }
@@ -232,6 +259,24 @@ void MainWindow::performTertiaryAreaAction()
 
 void MainWindow::performQuaternaryAreaAction()
 {
+    if (m_currentArea == QStringLiteral("agents")) {
+        const QStringList choices = {
+            QStringLiteral("OpenCode"),
+            QStringLiteral("OpenCode con Ollama local")
+        };
+        bool accepted = false;
+        const QString selected = QInputDialog::getItem(this, QStringLiteral("Añadir agente"),
+            QStringLiteral("Elige cómo quieres conectar el agente a este proyecto:"), choices, 0, false, &accepted);
+        if (!accepted) return;
+        const QString provider = selected == choices.at(0)
+            ? QStringLiteral("opencode") : QStringLiteral("ollama-opencode");
+        const QStringList preview = {QStringLiteral("agent"), QStringLiteral("add"), provider,
+            QStringLiteral("--path"), m_projectPath, QStringLiteral("--dry-run")};
+        const QStringList action = {QStringLiteral("agent"), QStringLiteral("add"), provider,
+            QStringLiteral("--path"), m_projectPath};
+        runPreview(preview, action, {}, QStringLiteral("Añadir agente al proyecto"));
+        return;
+    }
     if (m_currentArea != QStringLiteral("project")) {
         return;
     }

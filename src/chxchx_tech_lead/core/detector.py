@@ -114,6 +114,28 @@ def _detect_redis(root: Path, package: dict) -> bool:
     return False
 
 
+def _detect_qt(root: Path) -> bool:
+    build_names = {"cmakelists.txt", "meson.build"}
+    build_suffixes = (".cmake", ".pro", ".pri")
+    for current, dirs, files in os.walk(root):
+        dirs[:] = [directory for directory in dirs if directory not in IGNORED_DIRS]
+        for filename in files:
+            lowered = filename.casefold()
+            if lowered not in build_names and not lowered.endswith(build_suffixes):
+                continue
+            try:
+                content = Path(current, filename).read_text(
+                    encoding="utf-8", errors="ignore"
+                )[:512 * 1024].casefold()
+            except OSError:
+                continue
+            if "qt6" in content or "qt5" in content:
+                return True
+            if lowered.endswith((".pro", ".pri")) and "qt +=" in content:
+                return True
+    return False
+
+
 def _source_suffixes(root: Path) -> set[str]:
     suffixes: set[str] = set()
     for current, dirs, files in os.walk(root):
@@ -129,6 +151,14 @@ def detect_project(root: Path) -> ProjectInfo:
     root = root.resolve()
     info = ProjectInfo(root=root, name=root.name)
     package = _read_package_json(root)
+    suffixes = _source_suffixes(root)
+    cpp_suffixes = {".cc", ".cpp", ".cxx", ".c++", ".hh", ".hpp", ".hxx", ".ipp"}
+    if suffixes & cpp_suffixes:
+        info.languages.append("cpp")
+        info.stacks.append("cpp")
+    if _detect_qt(root):
+        info.stacks.append("qt")
+
     info.stacks.extend(sorted(_detect_javascript_stacks(package)))
     if any(root.glob("*.sln")) or any(root.rglob("*.csproj")):
         info.stacks.append("dotnet")
@@ -156,7 +186,6 @@ def detect_project(root: Path) -> ProjectInfo:
     if (root / "uv.lock").exists():
         info.package_managers.append("uv")
 
-    suffixes = _source_suffixes(root)
     mapping = {
         ".ts": "typescript",
         ".tsx": "typescript",
@@ -169,6 +198,14 @@ def detect_project(root: Path) -> ProjectInfo:
         ".sql": "sql",
         ".rs": "rust",
         ".go": "go",
+        ".cc": "cpp",
+        ".cpp": "cpp",
+        ".cxx": "cpp",
+        ".c++": "cpp",
+        ".hh": "cpp",
+        ".hpp": "cpp",
+        ".hxx": "cpp",
+        ".ipp": "cpp",
     }
     for suffix, language in mapping.items():
         if suffix in suffixes and language not in info.languages:

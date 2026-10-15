@@ -219,3 +219,26 @@ QString MainWindow::formatResourcesOverview(const QJsonObject &payload) const
     }
     return lines.join(QLatin1Char('\n'));
 }
+
+QString MainWindow::formatMods(const QJsonObject &payload) const
+{
+    QStringList lines{QStringLiteral("Mods de Claude Code · instrucciones locales del proyecto")};
+    for (const auto &value : payload.value(QStringLiteral("mods")).toArray()) {
+        const QJsonObject mod = value.toObject();
+        QStringList reasons;
+        for (const auto &reason : mod.value(QStringLiteral("reasons")).toArray()) {
+            reasons << reason.toString();
+        }
+        const QString state = mod.value(QStringLiteral("conflict")).toBool()
+            ? QStringLiteral("conflicto: archivo externo")
+            : (mod.value(QStringLiteral("applied")).toBool() ? QStringLiteral("aplicado")
+                : (mod.value(QStringLiteral("recommended")).toBool() ? QStringLiteral("recomendado")
+                                                                       : QStringLiteral("disponible")));
+        lines << QStringLiteral("%1 · %2\n  %3%4")
+            .arg(mod.value(QStringLiteral("name")).toString(), state,
+                 mod.value(QStringLiteral("description")).toString(),
+                 reasons.isEmpty() ? QString() : QStringLiteral("\n  Motivo: ") + reasons.join(QStringLiteral("; ")));
+    }
+    lines << QStringLiteral("El asesor de modelo recomienda y muestra /model <alias>; Claude Code aplica el cambio tras tu confirmación.");
+    return lines.join(QLatin1Char('\n'));
+}

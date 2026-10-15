@@ -104,7 +104,7 @@ Basic Memory project: `chichan-tech-lead-e45505`
 ## Protocolo de trabajo
 
 1. Lee `.ai/PROJECT.md` y `.ai/CURRENT_STATE.md` antes de cambios amplios.
-2. Consulta `.ai/PROJECT.md`, `.ai/EDITOR-PARITY.md`, el historial de Git y Basic Memory antes de contradecir decisiones existentes.
+2. Consulta `docs/adr/` y Basic Memory antes de contradecir decisiones existentes.
 3. Haz cambios pequeños, verificables y con pruebas cuando corresponda.
 4. Valida el resultado y deja `.ai/HANDOFF.md` actualizado si queda trabajo incompleto.
 5. Antes de dar por terminada una tarea con cambios, decisiones o hallazgos útiles, guarda un checkpoint sin pedirle al usuario que lo haga: actualiza `.ai/CURRENT_STATE.md` y `.ai/HANDOFF.md`, y usa la herramienta `write_memory` de Basic Memory para decisiones y conocimiento reutilizable de este proyecto.
@@ -117,3 +117,7 @@ Basic Memory project: `chichan-tech-lead-e45505`
 - No guardes saludos, preguntas triviales, secretos ni transcripciones completas; si no hubo cambios ni conocimiento reutilizable, no crees una nota vacía.
 - Usa Serena para navegación semántica del código cuando esté disponible.
 <!-- chxchx-tech:end project-rules -->
+
+<!-- chxchx-tech:start project-skills -->
+Consulta `.ai/SKILLS.md` al trabajar en tareas cubiertas por esas skills. Skills habilitadas: architecture.
+<!-- chxchx-tech:end project-skills -->
