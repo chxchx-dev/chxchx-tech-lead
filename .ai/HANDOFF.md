@@ -4,9 +4,11 @@
 
 - CLI: `ci setup/status/remove/run/logs`; GitHub Actions se prepara para Python, Node y CMake/C++/Qt. El setup/remove soporta dry-run. Los workflows ajenos o con ediciones manuales se protegen; backups quedan fuera del checkout.
 - Studio y TUI incluyen un panel CI para configurar con preview, leer ejecuciones/logs y confirmar dispatch o retiro. El bridge JSON v1 publica estado de lectura; GitHub requiere `gh auth login` para estado remoto, ejecución y logs.
-- La implementación cubre CI, no el despliegue del propio ChxChx. El template CD a servidor propio/VPS queda pendiente de acordar cómo se empaquetan los proyectos objetivo. Al completarlo: secrets se configuran con el proveedor oficial, nunca en archivos del repo o logs; preview/confirmación, health check y rollback forman parte del flujo.
-- Validación local completada: compileall, `git diff --check`, pytest (`227 passed, 1 skipped`), Studio C++/Qt y CTest (`6/6`), CLI y bridge de CI read-only.
-- Pendiente: después del push autorizado, comprobar los jobs remotos y arreglar cualquier fallo. Confirmar formato/runtime del despliegue a VPS antes de generar el workflow CD. Hacer QA visual del panel CI en Studio/TUI.
+- La implementación cubre CI de proyectos de usuario; no el despliegue de ChxChx. No configurar CD para este software herramienta. El CD opcional de proyectos del usuario a servidor propio/VPS espera que el usuario defina runtime/formato de empaquetado. Luego deberá ofrecer preview/confirmación, secretos en GitHub Actions Secrets, health check y rollback.
+- La matriz de pruebas Python (Linux/macOS/Windows, Python 3.11–3.13) pasa. El run `38683459307` mostró dos fallos de smoke Windows: se intentaba iniciar `powershell.exe` por nombre y el runner no lo resuelve; además, 48 líneas no siempre llenan una página del viewport Windows. Corregido en `cb86b3d`: usar el ejecutable de `COMSPEC` y generar 120 líneas de historial. El run `38684041970` confirmó que el smoke VT ya pasa, pero `native-pty-smoke` no recibió `READY` y cmd indicó que no encontraba la ruta. Se reemplazó cmd por un proceso hijo del propio ejecutable en el smoke Windows. El paso de resumen de CTest ahora usa PowerShell y `continue-on-error` para no ocultar fallos originales. Build y CTest Linux pasan (`6/6`); falta validarlo en runner Windows.
+- Los builds y las cargas de artifacts nativos de Qt están en la matriz GitHub. Se puso `compression-level: 0` en paquetes Qt grandes precompilados; la publicación del preview sigue pendiente del resultado final del run `38684041970`.
+- Validación local: `python -m compileall src tests scripts`, `git diff --check`, pytest (`227 passed, 1 skipped`), build Studio C++/Qt y CTest (`6/6`), CLI y bridge read-only.
+- Pendiente: publicar el arreglo de ConPTY, confirmar el siguiente run y el preview; definir runtime CD a VPS para proyectos de usuario; QA visual del panel CI en Studio/TUI.
 
 ## Studio — preparar y entrar desde Inicio
 
