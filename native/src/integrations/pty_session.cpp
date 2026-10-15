@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <mutex>
 #include <thread>
 
 #ifdef Q_OS_WIN
@@ -33,6 +34,8 @@ struct PtySession::State {
     HANDLE output = INVALID_HANDLE_VALUE;
     HANDLE process = INVALID_HANDLE_VALUE;
     std::thread reader;
+    std::thread watcher;
+    std::mutex consoleMutex;
     std::atomic_bool running = false;
 #else
     int master = -1;
@@ -131,9 +134,20 @@ bool PtySession::start(const QString &program, const QStringList &arguments,
         char buffer[8192]; DWORD count = 0;
         while (ReadFile(m_state->output, buffer, sizeof(buffer), &count, nullptr) && count)
             emit outputReceived(QByteArray(buffer, static_cast<qsizetype>(count)));
+    });
+    m_state->watcher = std::thread([this] {
         WaitForSingleObject(m_state->process, INFINITE);
+        m_state->running = false;
+        {
+            std::lock_guard<std::mutex> lock(m_state->consoleMutex);
+            if (m_state->console) {
+                ClosePseudoConsole(m_state->console);
+                m_state->console = nullptr;
+            }
+        }
+        if (m_state->reader.joinable()) m_state->reader.join();
         DWORD code = 1; GetExitCodeProcess(m_state->process, &code);
-        m_state->running = false; emit processFinished(static_cast<int>(code));
+        emit processFinished(static_cast<int>(code));
     });
 #else
     winsize size{}; size.ws_col = static_cast<unsigned short>(columns); size.ws_row = static_cast<unsigned short>(rows);
@@ -212,6 +226,8 @@ bool PtySession::write(const QByteArray &data)
 {
     if (!m_state->running) return false;
 #ifdef Q_OS_WIN
+    std::lock_guard<std::mutex> lock(m_state->consoleMutex);
+    if (!m_state->running || m_state->input == INVALID_HANDLE_VALUE) return false;
     DWORD written = 0;
     return WriteFile(m_state->input, data.constData(), static_cast<DWORD>(data.size()), &written, nullptr)
         && written == static_cast<DWORD>(data.size());
@@ -227,6 +243,8 @@ bool PtySession::resize(int columns, int rows)
     if (!m_state->running) return false;
     columns = std::clamp(columns, 2, 500); rows = std::clamp(rows, 1, 300);
 #ifdef Q_OS_WIN
+    std::lock_guard<std::mutex> lock(m_state->consoleMutex);
+    if (!m_state->running || !m_state->console) return false;
     return SUCCEEDED(ResizePseudoConsole(m_state->console,
         COORD{static_cast<SHORT>(columns), static_cast<SHORT>(rows)}));
 #else
@@ -240,9 +258,13 @@ void PtySession::stop()
 #ifdef Q_OS_WIN
     if (m_state->process != INVALID_HANDLE_VALUE) {
         if (m_state->running) TerminateProcess(m_state->process, 1);
-        if (m_state->console) { ClosePseudoConsole(m_state->console); m_state->console = nullptr; }
+        if (m_state->watcher.joinable()) m_state->watcher.join();
         if (m_state->reader.joinable()) m_state->reader.join();
         CloseHandle(m_state->process); m_state->process = INVALID_HANDLE_VALUE;
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_state->consoleMutex);
+        if (m_state->console) { ClosePseudoConsole(m_state->console); m_state->console = nullptr; }
     }
     if (m_state->input != INVALID_HANDLE_VALUE) { CloseHandle(m_state->input); m_state->input = INVALID_HANDLE_VALUE; }
     if (m_state->output != INVALID_HANDLE_VALUE) { CloseHandle(m_state->output); m_state->output = INVALID_HANDLE_VALUE; }
