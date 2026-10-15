@@ -60,6 +60,32 @@ jobs:
           PY
       - name: Smoke test Scintilla editor
         run: ctest --test-dir build-native --build-config Release --output-on-failure
+      - name: Add native smoke failures to the job summary
+        if: failure()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          log = Path("build-native/Testing/Temporary/LastTest.log")
+          text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
+          failures = re.finditer(r"\d+/\d+ Testing: ([^\r\n]+)(.*?)(?=\n\d+/\d+ Testing:|\nEnd testing:|\Z)", text, re.S)
+          summary = ["### Native smoke-test diagnostics", ""]
+          for match in failures:
+              if "Test Failed." not in match.group(2):
+                  continue
+              name, details = match.group(1), match.group(2).strip()[-2500:]
+              message = f"{name}: {details}"
+              escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print(f"::error title=CTest failure::{escaped}")
+              summary.extend((f"- `{name}`", "```text", details, "```", ""))
+          if len(summary) == 2:
+              summary.append("LastTest.log had no failing-test detail.")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write("\n".join(summary) + "\n")
+          PY
       - name: Create native install package
         run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
       - name: Publish native package artifact
