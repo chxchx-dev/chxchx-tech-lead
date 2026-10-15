@@ -113,7 +113,10 @@ bool PtySession::start(const QString &program, const QStringList &arguments,
     }
     std::wstring mutableCommand = command.toStdWString();
     const std::wstring directory = cwd.toStdWString();
-    STARTUPINFOEXW startup{}; startup.StartupInfo.cb = sizeof(startup); startup.lpAttributeList = attrs;
+    STARTUPINFOEXW startup{};
+    startup.StartupInfo.cb = sizeof(startup);
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startup.lpAttributeList = attrs;
     PROCESS_INFORMATION info{};
     const BOOL ok = CreateProcessW(program.toStdWString().c_str(), mutableCommand.data(), nullptr, nullptr,
         FALSE, EXTENDED_STARTUPINFO_PRESENT, nullptr, directory.empty() ? nullptr : directory.c_str(),
