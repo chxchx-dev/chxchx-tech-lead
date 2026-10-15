@@ -98,6 +98,39 @@ void MainWindow::performPrimaryAreaAction()
         }
         return;
     }
+    if (m_currentArea == QStringLiteral("deploy")) {
+        const QString operation = m_targetSelector->currentData().toString();
+        if (operation == QStringLiteral("setup")) {
+            bool accepted = false;
+            const QString branch = QInputDialog::getText(this, QStringLiteral("Configurar CD a VPS"),
+                QStringLiteral("Rama para despliegues automáticos (déjala vacía para modo manual):"),
+                QLineEdit::Normal, QString(), &accepted).trimmed();
+            if (!accepted) return;
+            QStringList preview = {QStringLiteral("deploy"), QStringLiteral("setup"),
+                m_projectPath, QStringLiteral("--dry-run")};
+            QStringList action = {QStringLiteral("deploy"), QStringLiteral("setup"), m_projectPath};
+            if (!branch.isEmpty()) {
+                preview << QStringLiteral("--auto-deploy-on") << branch;
+                action << QStringLiteral("--auto-deploy-on") << branch;
+            }
+            runPreview(preview, action, {}, QStringLiteral("Preparar despliegue opcional a VPS"));
+        } else if (operation == QStringLiteral("run")) {
+            const QStringList preview = {QStringLiteral("deploy"), QStringLiteral("run"),
+                m_projectPath, QStringLiteral("--dry-run")};
+            const QStringList action = {QStringLiteral("deploy"), QStringLiteral("run"),
+                m_projectPath, QStringLiteral("--confirm")};
+            runPreview(preview, action, {}, QStringLiteral("Confirmar despliegue al VPS"));
+        } else if (operation == QStringLiteral("remove")) {
+            const QStringList preview = {QStringLiteral("deploy"), QStringLiteral("remove"),
+                m_projectPath, QStringLiteral("--dry-run")};
+            const QStringList action = {QStringLiteral("deploy"), QStringLiteral("remove"), m_projectPath};
+            runPreview(preview, action, {}, QStringLiteral("Confirmar retirada del workflow CD"));
+        } else if (operation.startsWith(QStringLiteral("logs:"))) {
+            runCommand({QStringLiteral("deploy"), QStringLiteral("logs"), operation.mid(5),
+                QStringLiteral("--path"), m_projectPath});
+        }
+        return;
+    }
     if (m_currentArea == QStringLiteral("agents")) {
         openSelectedAgent();
     } else if (m_currentArea == QStringLiteral("processes")) {
@@ -193,6 +226,10 @@ void MainWindow::performPrimaryAreaAction()
 void MainWindow::performSecondaryAreaAction()
 {
     if (m_currentArea == QStringLiteral("ci")) {
+        refreshArea();
+        return;
+    }
+    if (m_currentArea == QStringLiteral("deploy")) {
         refreshArea();
         return;
     }

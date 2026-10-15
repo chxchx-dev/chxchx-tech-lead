@@ -15,6 +15,7 @@ from ..workspace.service import WorkspaceService
 from .agent_actions import WorkspaceAgentActions
 from .actions import WorkspaceActions
 from .ci_actions import CiActions
+from .deploy_actions import DeployActions
 from .dashboard import WorkspaceDashboard
 from .events import WorkspaceEvents
 from .event_dispatch import (
@@ -41,6 +42,7 @@ class WorkspaceConsole(
     WorkspaceAgentActions,
     WorkspaceActions,
     CiActions,
+    DeployActions,
     WorkspaceSetupActions,
     WorkspaceTerminalActions,
     WorkspaceEvents,
@@ -66,6 +68,10 @@ class WorkspaceConsole(
     _ci_pending = SessionField()
     _ci_selected_run = SessionField()
     _ci_target_root = SessionField()
+    _deploy_pending = SessionField()
+    _deploy_target_root = SessionField()
+    _deploy_target_branch = SessionField()
+    _deploy_selected_run = SessionField()
     _palette_open = SessionField()
     _attach_pending = SessionField()
     _start_pending = SessionField()

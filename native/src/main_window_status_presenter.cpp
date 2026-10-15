@@ -40,6 +40,40 @@ QString joinedValues(const QJsonArray &values)
 
 QString MainWindow::formatBridgeStatus(const QJsonObject &payload, const QString &area) const
 {
+    if (area == QStringLiteral("deploy")) {
+        QStringList lines;
+        lines << QStringLiteral("Workflow: %1")
+            .arg(payload.value(QStringLiteral("configured")).toBool()
+                ? QStringLiteral("configurado") : QStringLiteral("desactivado"));
+        lines << QStringLiteral("Integridad: %1 · GitHub CLI: %2")
+            .arg(payload.value(QStringLiteral("integrity_ok")).toBool()
+                ? QStringLiteral("válida") : QStringLiteral("requiere revisión"),
+                 payload.value(QStringLiteral("authenticated")).toBool()
+                ? QStringLiteral("conectado") : QStringLiteral("sin sesión"));
+        lines << QStringLiteral("Runtime: Docker Compose · %1")
+            .arg(payload.value(QStringLiteral("compose_file")).toString(QStringLiteral("no detectado")));
+        const QString branch = payload.value(QStringLiteral("auto_deploy_branch")).toString();
+        lines << (branch.isEmpty() ? QStringLiteral("Modo: manual")
+            : QStringLiteral("Modo: automático · %1").arg(branch));
+        if (!payload.value(QStringLiteral("message")).toString().isEmpty()) {
+            lines << payload.value(QStringLiteral("message")).toString();
+        }
+        for (const auto &warning : payload.value(QStringLiteral("warnings")).toArray()) {
+            lines << QStringLiteral("Aviso: %1").arg(warning.toString());
+        }
+        const QJsonArray runs = payload.value(QStringLiteral("recent_runs")).toArray();
+        for (const auto &value : runs) {
+            const QJsonObject run = value.toObject();
+            QString runSummary = QStringLiteral("#%1 · %2 · %3 · %4")
+                .arg(run.value(QStringLiteral("databaseId")).toVariant().toString());
+            runSummary = runSummary.arg(run.value(QStringLiteral("workflowName")).toString())
+                .arg(run.value(QStringLiteral("headBranch")).toString())
+                .arg(run.value(QStringLiteral("conclusion")).toString(
+                    run.value(QStringLiteral("status")).toString()));
+            lines << runSummary;
+        }
+        return lines.join(QLatin1Char('\n'));
+    }
     if (area == QStringLiteral("ci")) {
         QStringList lines;
         lines << QStringLiteral("Workflow: %1")

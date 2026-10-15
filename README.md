@@ -849,10 +849,78 @@ retirada hasta que se revise. Al actualizar o retirar un workflow íntegro, se
 guarda un backup fuera del repositorio. Para retirarlo, usa `ci remove --dry-run`
 y luego `ci remove`.
 
-La preparación de despliegues opcionales a un servidor propio/VPS para proyectos
-de usuario es una etapa separada de CD. ChxChx no despliega este repositorio ni
-guarda credenciales del servidor; el formato de despliegue de los proyectos se
-define antes de generar esa configuración.
+### CD opcional a tu servidor o VPS
+
+Para proyectos que ya usan Docker Compose, ChxChx puede preparar un workflow
+GitHub Actions que despliega por SSH a un servidor propio o VPS. El despliegue
+es manual por defecto; activar una rama para despliegue automático es opcional.
+ChxChx no despliega este repositorio ni almacena credenciales del servidor.
+
+```bash
+chxchx-tech deploy setup . --dry-run
+chxchx-tech deploy setup .
+chxchx-tech deploy status .
+chxchx-tech deploy run . --dry-run
+chxchx-tech deploy run . --confirm
+chxchx-tech deploy logs 123456789 --path .
+chxchx-tech deploy remove . --dry-run
+chxchx-tech deploy remove .
+```
+
+El asistente inicial admite un único `compose.yaml`, `compose.yml`,
+`docker-compose.yaml` o `docker-compose.yml` en la raíz. En Studio, abre
+**CD VPS**; en la TUI usa la pestaña **Despliegue VPS**. Ambas interfaces
+previsualizan setup y retirada, y piden confirmación antes de despachar un
+despliegue remoto. Para usar el modo automático:
+
+```bash
+chxchx-tech deploy setup . --auto-deploy-on main --dry-run
+chxchx-tech deploy setup . --auto-deploy-on main
+```
+
+#### Preparar GitHub y el VPS
+
+1. Instala Docker Engine y el plugin Docker Compose en el VPS. Crea un usuario
+   dedicado sin iniciar sesión como `root`, clona allí este mismo repositorio y
+   confirma que `origin` apunta al repositorio GitHub correcto. El árbol
+   versionado debe estar limpio. El usuario necesita permisos para actualizar
+   el checkout y ejecutar Compose; pertenecer al grupo `docker` puede equivaler
+   a tener acceso root, así que considera Docker rootless.
+2. Mantén la configuración de producción en el servidor. Por ejemplo, coloca
+   `.env` dentro de `VPS_DEPLOY_PATH`; Git y este workflow la dejan intacta. Si
+   el repositorio es privado, instala en el VPS una llave de lectura para que
+   `git fetch` pueda obtener el código. Esa llave es distinta de la llave SSH
+   que permite a GitHub Actions conectarse al VPS.
+3. En GitHub crea el Environment `production` y agrega estas **variables**:
+   `VPS_SSH_HOST` (nombre DNS o dirección IPv4), `VPS_SSH_USER` (usuario dedicado) y
+   `VPS_DEPLOY_PATH` (ruta absoluta del clon). `VPS_SSH_PORT` es opcional y
+   usa el puerto 22 por defecto.
+4. En los secretos del Environment configura `VPS_SSH_PRIVATE_KEY`, la llave
+   privada cuya llave pública está autorizada para el usuario del VPS, y
+   `VPS_SSH_KNOWN_HOSTS`, con la entrada conocida del host. Obtén y verifica
+   la huella del host por un canal confiable antes de guardarla; la conexión
+   exige validación estricta y no acepta claves aprendidas automáticamente.
+5. Revisa y sube `.github/workflows/chxchx-deploy.yml`. Para el primer despacho
+   manual, GitHub requiere que el workflow exista en la rama por defecto.
+   Después ejecuta `deploy run . --dry-run`, revisa la referencia y confirma
+   con `deploy run . --confirm`. Puedes exigir aprobación adicional desde las
+   reglas del Environment `production`.
+
+El workflow usa permisos GitHub mínimos (`contents: read`), serializa los
+despliegues de producción, actualiza el VPS al commit elegido y ejecuta
+`docker compose up -d --build`. Comprueba que los servicios permanezcan en
+`running` y que sus healthchecks no estén fallando. Si el inicio o la
+comprobación falla, intenta volver al commit previo y reconstruirlo; el log de
+la ejecución informa si también falló ese rollback. Configura `healthcheck` en
+Compose para comprobar que la aplicación está lista. Esta reversión no puede
+deshacer cambios destructivos de esquema o datos; prepara las migraciones de
+base de datos para que sean compatibles con la versión previa. Los servicios
+del workflow inicial deben ser procesos de larga duración; proyectos con tareas
+Compose de una sola ejecución necesitan ajustar el workflow generado.
+
+El setup detecta colisiones y protege los workflows ajenos o editados. Para
+actualizar o retirar un workflow administrado, genera backup fuera del checkout.
+La configuración de CD es independiente de la CI y puedes dejarla desactivada.
 
 ## Aplicación nativa en desarrollo
 

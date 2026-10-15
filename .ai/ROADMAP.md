@@ -11,12 +11,16 @@ El inventario de capacidades está en `.ai/EDITOR-PARITY.md`.
 
 ## CI/CD opcional de proyectos
 
-- CI por proyecto ya está disponible en CLI/TUI/Studio para Python, Node.js y
+- CI por proyecto está disponible en CLI/TUI/Studio para Python, Node.js y
   CMake/C++/Qt. El usuario conserva el control de instalación, ejecución y
-  retirada; no hay despliegues ni credenciales en el workflow generado.
-- El CD a servidor propio/VPS se diseñará como capacidad independiente después
-  de definir el runtime y formato de entrega de los proyectos objetivo. Este
-  roadmap no modifica CI/CD del repositorio de ChxChx.
+  retirada; no hay credenciales de despliegue en ese workflow.
+- CD de proyectos del usuario tiene una primera implementación opt-in en
+  CLI/TUI/Studio para GitHub Actions por SSH a un VPS con Docker Compose. Es
+  manual por defecto; el trigger automático por rama requiere opt-in explícito.
+  Revisa `.ai/adr/0007-opt-in-compose-vps-deployment.md` para el alcance y los
+  límites de la primera versión.
+- El pipeline de publicación de ChxChx queda fuera de este bloque y aplazado;
+  no se modifica ni se publica Studio como consecuencia del CD de proyectos.
 
 ## Cierre para empezar a usar Studio en proyectos reales
 
