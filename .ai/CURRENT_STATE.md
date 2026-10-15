@@ -18,7 +18,7 @@
 - Contexto anterior de CI del producto: los detalles de runs enumerados arriba corresponden al checkpoint previo a aplazar la publicación de ChxChx; su estado remoto más reciente no está consultable desde esta sesión.
 - Validación local de esta integración: compileall de `src/tests/scripts`, pytest (`247 passed, 1 skipped`), build Studio C++/Qt, CTest (`6/6`), CLI `deploy --help`, JSON `bridge deploy .`, `bash -n` sobre el runner y el script remoto generados, y `git diff --check` pasan. No se ejecutó un despliegue real porque requeriría un VPS configurado.
 - El CI remoto se disparará desde una rama feature autorizada, nunca desde `dev`: el push a `dev` puede publicar el preview del producto. La publicación del propio ChxChx queda aplazada y no se tocó su workflow.
-- Push `5c17e46` a `feature/vps-compose-deploy` disparó el run `38692862282` (#86). En la primera consulta, Ubuntu Python 3.12 y el wheel terminaron correctamente; los jobs multiplataforma seguían en ejecución. El workflow de publicación está limitado a `dev`.
+- Push `5c17e46` a `feature/vps-compose-deploy` disparó el run `38692862282` (#86). La matriz Python (Ubuntu/macOS/Windows, 3.11–3.13), wheel y builds/CTest nativos de Fedora, Ubuntu y Windows terminaron correctamente. macOS ARM compiló y pasó CTest, pero su job falló al publicar el artifact; macOS Intel seguía en la carga del artifact al último chequeo. El workflow de publicación está limitado a `dev` y no se activó.
 
 ## Estado actual
 
