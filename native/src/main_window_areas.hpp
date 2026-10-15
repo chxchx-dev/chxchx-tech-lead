@@ -15,6 +15,7 @@ inline constexpr Area areas[] = {
     {"skills", "Skills", "Catálogo, recomendaciones y selección por proyecto."},
     {"packs", "Tech Packs", "Packs detectados y composición de skills."},
     {"mods", "Mods", "Flujos guiados de Claude Code para este proyecto."},
+    {"ci", "CI/CD", "Pipelines opcionales: estado, ejecución y resultados."},
     {"resources", "Recursos", "RAM, swap, CPU y procesos por proyecto."},
     {"handoff", "Handoff", "Estado transferible entre sesiones de trabajo."},
     {"memory", "Memoria", "Notas persistentes de este proyecto."},

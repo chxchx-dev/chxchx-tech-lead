@@ -1,5 +1,13 @@
 # Handoff
 
+## CI opcional de proyectos y CD a VPS
+
+- CLI: `ci setup/status/remove/run/logs`; GitHub Actions se prepara para Python, Node y CMake/C++/Qt. El setup/remove soporta dry-run. Los workflows ajenos o con ediciones manuales se protegen; backups quedan fuera del checkout.
+- Studio y TUI incluyen un panel CI para configurar con preview, leer ejecuciones/logs y confirmar dispatch o retiro. El bridge JSON v1 publica estado de lectura; GitHub requiere `gh auth login` para estado remoto, ejecución y logs.
+- La implementación cubre CI, no el despliegue del propio ChxChx. El template CD a servidor propio/VPS queda pendiente de acordar cómo se empaquetan los proyectos objetivo. Al completarlo: secrets se configuran con el proveedor oficial, nunca en archivos del repo o logs; preview/confirmación, health check y rollback forman parte del flujo.
+- Validación local completada: compileall, `git diff --check`, pytest (`227 passed, 1 skipped`), Studio C++/Qt y CTest (`6/6`), CLI y bridge de CI read-only.
+- Pendiente: después del push autorizado, comprobar los jobs remotos y arreglar cualquier fallo. Confirmar formato/runtime del despliegue a VPS antes de generar el workflow CD. Hacer QA visual del panel CI en Studio/TUI.
+
 ## Studio — preparar y entrar desde Inicio
 
 - `Preparar y entrar` compone `init`, skills recomendadas, skills de Tech Packs detectados y Mods Claude aplicables, sincronización del contexto y trust local. Previsualiza `projects prepare PATH --dry-run --trust` antes de escribir; al confirmar, inicia un chat nuevo con el agente seleccionado (o el primero configurado).

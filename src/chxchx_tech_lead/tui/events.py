@@ -125,6 +125,18 @@ class WorkspaceEvents:
     def button_errors_refresh(self) -> None:
         self._refresh_errors()
 
+    def button_ci_setup(self) -> None:
+        self.button_ci_setup_action()
+
+    def button_ci_run(self) -> None:
+        self.button_ci_run_action()
+
+    def button_ci_remove(self) -> None:
+        self.button_ci_remove_action()
+
+    def button_ci_logs(self) -> None:
+        self.button_ci_logs_action()
+
     def chat_search_changed(self, _event: Input.Changed) -> None:
         self._debounce_panel_refresh("chat")
 

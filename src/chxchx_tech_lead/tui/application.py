@@ -14,6 +14,7 @@ from ..core.models import ProjectInfo
 from ..workspace.service import WorkspaceService
 from .agent_actions import WorkspaceAgentActions
 from .actions import WorkspaceActions
+from .ci_actions import CiActions
 from .dashboard import WorkspaceDashboard
 from .events import WorkspaceEvents
 from .event_dispatch import (
@@ -39,6 +40,7 @@ class WorkspaceConsole(
     ResourceGovernorActions,
     WorkspaceAgentActions,
     WorkspaceActions,
+    CiActions,
     WorkspaceSetupActions,
     WorkspaceTerminalActions,
     WorkspaceEvents,
@@ -61,6 +63,9 @@ class WorkspaceConsole(
     _pack_matches = SessionField()
     _conversations = SessionField()
     _cached_errors = SessionField()
+    _ci_pending = SessionField()
+    _ci_selected_run = SessionField()
+    _ci_target_root = SessionField()
     _palette_open = SessionField()
     _attach_pending = SessionField()
     _start_pending = SessionField()

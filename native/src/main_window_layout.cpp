@@ -57,6 +57,7 @@ QIcon areaIcon(const QString &id)
         {"skills", "preferences-plugin", QStyle::SP_DialogApplyButton},
         {"packs", "package-x-generic", QStyle::SP_DirLinkIcon},
         {"mods", "applications-utilities", QStyle::SP_DialogApplyButton},
+        {"ci", "applications-development", QStyle::SP_ComputerIcon},
         {"resources", "drive-harddisk", QStyle::SP_DriveHDIcon},
         {"handoff", "document-edit", QStyle::SP_FileIcon},
         {"memory", "view-history", QStyle::SP_FileDialogInfoView},

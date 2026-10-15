@@ -9,6 +9,15 @@ handoff, navegación, edición, búsqueda de nombres/contenido, archivos recient
 y restauración de grupos divididos, además de ajustes configurables.
 El inventario de capacidades está en `.ai/EDITOR-PARITY.md`.
 
+## CI/CD opcional de proyectos
+
+- CI por proyecto ya está disponible en CLI/TUI/Studio para Python, Node.js y
+  CMake/C++/Qt. El usuario conserva el control de instalación, ejecución y
+  retirada; no hay despliegues ni credenciales en el workflow generado.
+- El CD a servidor propio/VPS se diseñará como capacidad independiente después
+  de definir el runtime y formato de entrega de los proyectos objetivo. Este
+  roadmap no modifica CI/CD del repositorio de ChxChx.
+
 ## Cierre para empezar a usar Studio en proyectos reales
 
 1. Recompilar y abrir un repositorio de trabajo con `./scripts/dev-studio.sh

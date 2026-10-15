@@ -814,6 +814,46 @@ r        actualizar
 
 La TUI muestra estado de confianza, sesión, procesos, agentes, recursos y handoff. Todas las acciones pasan por el servicio de workspace y sus adapters; la CLI continúa siendo la interfaz recomendada para scripts y CI.
 
+## CI opcional para tus proyectos
+
+ChxChx puede preparar un workflow de GitHub Actions para proyectos Python,
+Node.js y CMake/C++/Qt. Primero revisa la propuesta; solo se escribe el archivo
+cuando confirmas la instalación:
+
+```bash
+chxchx-tech ci setup . --dry-run
+chxchx-tech ci setup .
+chxchx-tech ci status
+```
+
+La plantilla ejecuta comprobaciones en `push`, `pull_request` y `workflow_dispatch`,
+con permisos `contents: read`. Las acciones externas quedan fijadas a commits;
+no incorpora secretos ni inicia despliegues. Para activarla en GitHub, sube
+`.github/workflows/chxchx-ci.yml` al repositorio. El workflow debe existir en la
+rama por defecto antes de pedir una ejecución manual.
+
+Con GitHub CLI (`gh`) instalada y autenticada puedes seguir ejecuciones, lanzar
+una ejecución manual y consultar logs fallidos:
+
+```bash
+chxchx-tech ci status
+chxchx-tech ci run --ref main
+chxchx-tech ci logs 123456789
+```
+
+La TUI y Studio muestran estado, ejecuciones y logs. Escribir, retirar o
+ejecutar CI manualmente pide confirmación; las consultas son de solo lectura.
+Si el workflow ya existe sin el marcador de ChxChx, se conserva.
+Si alguien modifica el archivo administrado, ChxChx detiene la actualización o
+retirada hasta que se revise. Al actualizar o retirar un workflow íntegro, se
+guarda un backup fuera del repositorio. Para retirarlo, usa `ci remove --dry-run`
+y luego `ci remove`.
+
+La preparación de despliegues opcionales a un servidor propio/VPS para proyectos
+de usuario es una etapa separada de CD. ChxChx no despliega este repositorio ni
+guarda credenciales del servidor; el formato de despliegue de los proyectos se
+define antes de generar esa configuración.
+
 ## Aplicación nativa en desarrollo
 
 ChxChx Studio es una aplicación de escritorio en C++20 y Qt 6 Widgets. Incluye navegación del proyecto, pestañas de edición, guardado atómico y lecturas asíncronas mediante el CLI instalado. Las acciones están agrupadas en los menús Archivo, Edición, Ver, Navegar, Herramientas y Ayuda; la barra superior conserva accesos rápidos con iconos y tooltips, e incluye botones marcados para mostrar u ocultar Explorador, Secciones/acciones y Actividad. `Edición → Configurar atajos` permite cambiar las combinaciones, valida duplicados y guarda las preferencias del usuario. El explorador muestra iconos del sistema para archivos y carpetas, con tamaño legible. Su campo superior filtra nombres visibles; `Navegar → Buscar en el proyecto` (`Ctrl+Shift+F`) busca nombres/rutas indexados o contenido en segundo plano. El índice omite directorios generados comunes y limita el catálogo a 100.000 archivos; el escaneo de contenido omite binarios y archivos mayores de 1 MiB, con máximo de 64 MiB leídos y 100 coincidencias por consulta. Al elegir una coincidencia se abre el archivo en la línea correspondiente. `Navegar → Símbolos del archivo actual` (`Ctrl+Shift+O`) lista declaraciones comunes de Python, C/C++, JavaScript/TypeScript, Java y C# y salta a su línea; es un escáner de declaraciones, no resolución semántica. Studio usa el tema de iconos del sistema y recurre a iconos estándar de Qt cuando no encuentra uno. En el árbol, un clic despliega carpetas y abre archivos. Proyecto permite dar trust, iniciar/reanudar, suspender y detener procesos del workspace; Proyectos lista las rutas registradas, permite dar trust a un destino y cambiar al proyecto elegido sin adjuntar la terminal. Agentes abre el comando CLI configurado dentro de una pestaña central junto a los archivos, con una terminal VT interactiva sobre PTY/ConPTY. Antes de abrir agentes, Studio vuelve a verificar trust y RAM mediante un preflight de solo lectura; cualquier advertencia del RAM Governor requiere confirmación explícita. Studio usa el wrapper compartido para conservar la instrumentación del agente. “Agentes → Añadir agente” conecta OpenCode u OpenCode con Ollama tras preview, confirmación y backup; “Nueva sesión” agrega el prompt contextual para Codex, Claude Code y OpenCode. `Terminal +` y `Ctrl+Shift+T` abren una shell integrada en una pestaña del proyecto; la rueda y `Shift+PageUp/PageDown` recorren hasta 5000 líneas de scrollback, y `Ctrl+End` vuelve al final. La paleta puede adjuntar Zellij dentro de una pestaña PTY tras preview y confirmación; el emulador externo sigue disponible. `Herramientas → Diff Git del archivo actual` muestra en solo lectura el cambio rastreado del archivo respecto de `HEAD`, con salida acotada a 2 MiB; no incluye archivos sin seguimiento ni cambios que sigan solo en el buffer. La actividad de operaciones vive en un panel independiente que se puede mostrar desde Ver o desde la barra, y se oculta al iniciar para dar más espacio al editor y las terminales. La interfaz, los controles y las solicitudes de permiso pertenecen al CLI del agente; Studio administra pestañas y cierre de sesiones. Se admiten comandos configurados como listas de argumentos; los comandos de shell personalizados no se pueden embeber. Procesos permite iniciar/detener procesos configurados. Skills muestra catálogo, selección activa y recomendaciones; permite habilitar/deshabilitar skills y sincronizar contexto. Tech Packs muestra composición y detección; permite aplicar un pack o todos los detectados y sincronizar. Handoff permite revisar el estado, editar resumen/pendiente/validación y guardar con preview y confirmación. Memoria permite buscar y leer notas locales en solo lectura. Chats permite filtrar el historial local de Codex y Claude Code y abrir transcripciones; Errores muestra los registros recientes filtrados al proyecto. Configuración permite previsualizar y ejecutar setup, init completo/mínimo, instalación de herramientas e integración MCP; Doctor es de solo lectura. Guía incluye un recorrido paso a paso con botones que llevan a Configuración, Skills, Proyecto y Agentes; Marca y la paleta filtrable de comandos también están disponibles en la navegación. Inicio, Proyecto, Agentes, Procesos, Proyectos, Skills, Tech Packs y Recursos muestran su estado en el área central; Skills distingue habilitadas/recomendadas y Agentes muestra disponibilidad y sesiones activas de Studio.

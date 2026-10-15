@@ -561,6 +561,7 @@ void MainWindow::selectArea(int row)
         || m_currentArea == QStringLiteral("processes") || m_currentArea == QStringLiteral("projects")
         || m_currentArea == QStringLiteral("skills") || m_currentArea == QStringLiteral("packs")
         || m_currentArea == QStringLiteral("mods")
+        || m_currentArea == QStringLiteral("ci")
         || m_currentArea == QStringLiteral("resources");
     if (dashboardArea) {
         m_mainPages->setCurrentWidget(m_dashboardPage);
@@ -617,6 +618,7 @@ void MainWindow::openCommandPalette()
         {QStringLiteral("Ir a Skills"), QStringLiteral("area:skills")},
         {QStringLiteral("Ir a Tech Packs"), QStringLiteral("area:packs")},
         {QStringLiteral("Ir a Mods"), QStringLiteral("area:mods")},
+        {QStringLiteral("Ir a CI/CD"), QStringLiteral("area:ci")},
         {QStringLiteral("Ir a Recursos"), QStringLiteral("area:resources")},
         {QStringLiteral("Ir a Handoff"), QStringLiteral("area:handoff")},
         {QStringLiteral("Ir a Memoria"), QStringLiteral("area:memory")},
@@ -782,6 +784,9 @@ QStringList MainWindow::readCommandForArea(const QString &area) const
         return {QStringLiteral("mod"), QStringLiteral("list"), QStringLiteral("--path"),
             m_projectPath, QStringLiteral("--json")};
     }
+    if (area == QStringLiteral("ci")) {
+        return {QStringLiteral("bridge"), QStringLiteral("ci"), m_projectPath};
+    }
     if (area == QStringLiteral("handoff")) {
         return {QStringLiteral("bridge"), QStringLiteral("handoff"), m_projectPath};
     }
@@ -819,6 +824,11 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             updateAreaActionState();
             showAreaDashboard(payload, m_commandArea);
             output = formatMods(payload);
+        } else if (schema == BridgeSchemas::CiStatus) {
+            updateAreaTargets(payload, m_commandArea);
+            updateAreaActionState();
+            showAreaDashboard(payload, m_commandArea);
+            output = formatBridgeStatus(payload, m_commandArea);
         } else if (schema == BridgeSchemas::ProjectStatus) {
             const QJsonObject workspace = payload.value(QStringLiteral("workspace")).toObject();
             m_projectTrusted = workspace.value(QStringLiteral("trusted")).toBool();

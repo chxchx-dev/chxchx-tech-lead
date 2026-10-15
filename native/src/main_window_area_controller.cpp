@@ -16,15 +16,16 @@ void MainWindow::configureAreaActions()
     const bool skills = m_currentArea == QStringLiteral("skills");
     const bool packs = m_currentArea == QStringLiteral("packs");
     const bool mods = m_currentArea == QStringLiteral("mods");
+    const bool ci = m_currentArea == QStringLiteral("ci");
     const bool handoff = m_currentArea == QStringLiteral("handoff");
     const bool memory = m_currentArea == QStringLiteral("memory");
     const bool chats = m_currentArea == QStringLiteral("chats");
     const bool errors = m_currentArea == QStringLiteral("errors");
     const bool setup = m_currentArea == QStringLiteral("setup");
-    const bool supported = agents || processes || projects || skills || packs || mods;
+    const bool supported = agents || processes || projects || skills || packs || mods || ci;
     m_targetSelector->setVisible(supported || setup);
     m_primaryAction->setVisible(supported || project || handoff || memory || chats || errors || setup);
-    m_secondaryAction->setVisible(agents || processes || project || projects || skills || packs || mods || handoff || setup);
+    m_secondaryAction->setVisible(agents || processes || project || projects || skills || packs || mods || ci || handoff || setup);
     m_tertiaryAction->setVisible(agents || project || packs || mods);
     m_quaternaryAction->setVisible(project || agents);
     if (agents) {
@@ -54,6 +55,9 @@ void MainWindow::configureAreaActions()
         m_primaryAction->setText(QStringLiteral("Aplicar Mod seleccionado"));
         m_secondaryAction->setText(QStringLiteral("Aplicar Mods recomendados"));
         m_tertiaryAction->setText(QStringLiteral("Retirar Mod seleccionado"));
+    } else if (ci) {
+        m_primaryAction->setText(QStringLiteral("Configurar CI"));
+        m_secondaryAction->setText(QStringLiteral("Actualizar estado"));
     } else if (handoff) {
         m_primaryAction->setText(QStringLiteral("Actualizar handoff"));
         m_secondaryAction->setText(QStringLiteral("Recargar handoff"));
@@ -108,6 +112,22 @@ void MainWindow::updateAreaActionState()
         m_primaryAction->setEnabled(hasSelection && !conflict);
         m_secondaryAction->setEnabled(true);
         m_tertiaryAction->setEnabled(applied);
+    }
+    if (m_currentArea == QStringLiteral("ci")) {
+        const QString operation = hasSelection ? m_targetSelector->currentData().toString() : QString();
+        m_primaryAction->setEnabled(operation == QStringLiteral("setup")
+            || operation == QStringLiteral("run") || operation == QStringLiteral("remove")
+            || operation.startsWith(QStringLiteral("logs:")));
+        if (operation == QStringLiteral("setup")) {
+            m_primaryAction->setText(QStringLiteral("Previsualizar y configurar CI"));
+        } else if (operation == QStringLiteral("run")) {
+            m_primaryAction->setText(QStringLiteral("Previsualizar y ejecutar CI"));
+        } else if (operation == QStringLiteral("remove")) {
+            m_primaryAction->setText(QStringLiteral("Previsualizar y retirar CI"));
+        } else if (operation.startsWith(QStringLiteral("logs:"))) {
+            m_primaryAction->setText(QStringLiteral("Consultar logs fallidos"));
+        }
+        m_secondaryAction->setEnabled(true);
     }
     if (m_currentArea == QStringLiteral("handoff")) {
         m_primaryAction->setEnabled(true);
@@ -191,16 +211,42 @@ void MainWindow::updateAreaTargets(const QJsonObject &payload, const QString &ar
     if (area != m_currentArea || (area != QStringLiteral("agents")
         && area != QStringLiteral("processes") && area != QStringLiteral("projects")
         && area != QStringLiteral("skills") && area != QStringLiteral("packs")
-        && area != QStringLiteral("mods"))) {
+        && area != QStringLiteral("mods") && area != QStringLiteral("ci"))) {
         return;
     }
     const QString selected = area == QStringLiteral("projects")
         ? m_targetSelector->currentData(Qt::UserRole + 1).toString()
         : (area == QStringLiteral("skills") || area == QStringLiteral("packs")
-            || area == QStringLiteral("mods")
+            || area == QStringLiteral("mods") || area == QStringLiteral("ci")
             ? m_targetSelector->currentData().toString()
             : m_targetSelector->currentText());
     m_targetSelector->clear();
+    if (area == QStringLiteral("ci")) {
+        const bool configured = payload.value(QStringLiteral("configured")).toBool();
+        const bool valid = payload.value(QStringLiteral("managed")).toBool()
+            && payload.value(QStringLiteral("integrity_ok")).toBool();
+        if (!configured) {
+            m_targetSelector->addItem(QStringLiteral("Configurar pipeline detectado"), QStringLiteral("setup"));
+        } else if (valid) {
+            m_targetSelector->addItem(QStringLiteral("Ejecutar CI manualmente"), QStringLiteral("run"));
+            m_targetSelector->addItem(QStringLiteral("Retirar workflow administrado"), QStringLiteral("remove"));
+            for (const auto &value : payload.value(QStringLiteral("recent_runs")).toArray()) {
+                const QJsonObject item = value.toObject();
+                const QString id = item.value(QStringLiteral("databaseId")).toVariant().toString();
+                if (id.isEmpty()) continue;
+                const QString label = QStringLiteral("Logs fallidos · #%1 · %2 · %3")
+                    .arg(id, item.value(QStringLiteral("workflowName")).toString(),
+                         item.value(QStringLiteral("conclusion")).toString(item.value(QStringLiteral("status")).toString()));
+                m_targetSelector->addItem(label, QStringLiteral("logs:") + id);
+            }
+        } else {
+            m_targetSelector->addItem(QStringLiteral("Workflow requiere revisión"), QStringLiteral("readonly"));
+        }
+        const int previous = m_targetSelector->findData(selected);
+        if (previous >= 0) m_targetSelector->setCurrentIndex(previous);
+        updateAreaActionState();
+        return;
+    }
     if (area == QStringLiteral("skills") || area == QStringLiteral("packs")) {
         const QString key = area == QStringLiteral("skills") ? QStringLiteral("skills") : QStringLiteral("packs");
         for (const auto &value : payload.value(key).toArray()) {

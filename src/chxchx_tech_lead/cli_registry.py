@@ -16,6 +16,7 @@ skill_app = typer.Typer(no_args_is_help=True, help="Busca y recomienda skills de
 pack_app = typer.Typer(no_args_is_help=True, help="Detecta y aplica Tech Packs de skills.")
 mod_app = typer.Typer(no_args_is_help=True, help="Consulta y aplica Mods locales para Claude Code.")
 bridge_app = typer.Typer(no_args_is_help=True, help="API JSON local para interfaces de ChxChx.")
+ci_app = typer.Typer(no_args_is_help=True, help="Prepara y opera CI opcional para proyectos GitHub.")
 
 app.add_typer(projects_app, name="projects")
 app.add_typer(workspace_app, name="workspace")
@@ -26,3 +27,4 @@ app.add_typer(skill_app, name="skill")
 app.add_typer(pack_app, name="pack")
 app.add_typer(mod_app, name="mod")
 app.add_typer(bridge_app, name="bridge")
+app.add_typer(ci_app, name="ci")

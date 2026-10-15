@@ -9,6 +9,7 @@ from ..cli_registry import bridge_app
 from ..workspace.bridge import project_status_payload
 from ..workspace.bridge_contracts import ERROR_SCHEMA, SCHEMA_VERSION
 from ..workspace.bridge_resources import resources_overview_payload
+from ..integrations.ci_service import ci_status_payload
 from ..workspace.bridge_history import (
     conversation_payload,
     conversations_payload,
@@ -86,6 +87,14 @@ def bridge_errors(
 ) -> None:
     """Lista errores locales asociados a este proyecto."""
     _emit_payload(errors_payload, path)
+
+
+@bridge_app.command("ci")
+def bridge_ci(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+) -> None:
+    """Lee el estado de CI/CD local y ejecuciones remotas sin modificarlas."""
+    _emit_payload(ci_status_payload, path)
 
 
 def _emit_payload(builder, *args) -> None:

@@ -66,6 +66,7 @@ class CommandPalette(ModalScreen[str | None]):
         ("show_processes", "Abrir procesos", ""),
         ("show_resources", "Ver recursos", ""),
         ("show_skills", "Ver catálogo de skills y Tech Packs", ""),
+        ("show_ci", "Ver CI/CD del proyecto", ""),
         ("show_handoff", "Ver handoff", ""),
         ("show_memory", "Ver notas del proyecto", ""),
         ("show_conversations", "Ver historial de chats", ""),

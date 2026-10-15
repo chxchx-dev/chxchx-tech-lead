@@ -27,11 +27,49 @@ QString displayPercent(const QJsonValue &value)
         : QStringLiteral("no disponible");
 }
 
+QString joinedValues(const QJsonArray &values)
+{
+    QStringList entries;
+    for (const auto &value : values) {
+        entries << value.toString();
+    }
+    return entries.isEmpty() ? QStringLiteral("sin detectar") : entries.join(QStringLiteral(" · "));
+}
 
 } // namespace
 
 QString MainWindow::formatBridgeStatus(const QJsonObject &payload, const QString &area) const
 {
+    if (area == QStringLiteral("ci")) {
+        QStringList lines;
+        lines << QStringLiteral("Workflow: %1")
+            .arg(payload.value(QStringLiteral("configured")).toBool()
+                ? QStringLiteral("configurado") : QStringLiteral("desactivado"));
+        lines << QStringLiteral("Integridad: %1 · GitHub CLI: %2")
+            .arg(payload.value(QStringLiteral("integrity_ok")).toBool()
+                    ? QStringLiteral("válida") : QStringLiteral("requiere revisión"),
+                 payload.value(QStringLiteral("authenticated")).toBool()
+                    ? QStringLiteral("conectado") : QStringLiteral("sin sesión"));
+        lines << QStringLiteral("Stacks: %1")
+            .arg(joinedValues(payload.value(QStringLiteral("supported_stacks")).toArray()));
+        if (!payload.value(QStringLiteral("message")).toString().isEmpty()) {
+            lines << payload.value(QStringLiteral("message")).toString();
+        }
+        for (const auto &warning : payload.value(QStringLiteral("warnings")).toArray()) {
+            lines << QStringLiteral("Aviso: %1").arg(warning.toString());
+        }
+        const QJsonArray runs = payload.value(QStringLiteral("recent_runs")).toArray();
+        for (const auto &value : runs) {
+            const QJsonObject run = value.toObject();
+            lines << QStringLiteral("#%1 · %2 · %3 · %4")
+                .arg(run.value(QStringLiteral("databaseId")).toVariant().toString(),
+                     run.value(QStringLiteral("workflowName")).toString(),
+                     run.value(QStringLiteral("headBranch")).toString(),
+                     run.value(QStringLiteral("conclusion")).toString(
+                         run.value(QStringLiteral("status")).toString()));
+        }
+        return lines.join(QLatin1Char('\n'));
+    }
     const QJsonObject project = payload.value(QStringLiteral("project")).toObject();
     const QJsonObject workspace = payload.value(QStringLiteral("workspace")).toObject();
     const QJsonObject resources = payload.value(QStringLiteral("resources")).toObject();

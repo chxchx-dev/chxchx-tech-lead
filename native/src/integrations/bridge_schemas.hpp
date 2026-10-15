@@ -14,5 +14,6 @@ inline constexpr QLatin1StringView Memory{"chxchx.memory"};
 inline constexpr QLatin1StringView Conversations{"chxchx.conversations"};
 inline constexpr QLatin1StringView Conversation{"chxchx.conversation"};
 inline constexpr QLatin1StringView Errors{"chxchx.errors"};
+inline constexpr QLatin1StringView CiStatus{"chxchx.ci-status"};
 
 } // namespace BridgeSchemas

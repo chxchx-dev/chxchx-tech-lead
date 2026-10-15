@@ -75,6 +75,29 @@ void MainWindow::doctorFromHome()
 void MainWindow::performPrimaryAreaAction()
 {
     const QString id = m_targetSelector->currentText();
+    if (m_currentArea == QStringLiteral("ci")) {
+        const QString operation = m_targetSelector->currentData().toString();
+        if (operation == QStringLiteral("setup")) {
+            const QStringList preview = {QStringLiteral("ci"), QStringLiteral("setup"),
+                m_projectPath, QStringLiteral("--dry-run")};
+            const QStringList action = {QStringLiteral("ci"), QStringLiteral("setup"), m_projectPath};
+            runPreview(preview, action, {}, QStringLiteral("Preparar CI opcional"));
+        } else if (operation == QStringLiteral("run")) {
+            const QStringList preview = {QStringLiteral("ci"), QStringLiteral("run"),
+                m_projectPath, QStringLiteral("--dry-run")};
+            const QStringList action = {QStringLiteral("ci"), QStringLiteral("run"), m_projectPath};
+            runPreview(preview, action, {}, QStringLiteral("Confirmar ejecución de CI en GitHub"));
+        } else if (operation == QStringLiteral("remove")) {
+            const QStringList preview = {QStringLiteral("ci"), QStringLiteral("remove"),
+                m_projectPath, QStringLiteral("--dry-run")};
+            const QStringList action = {QStringLiteral("ci"), QStringLiteral("remove"), m_projectPath};
+            runPreview(preview, action, {}, QStringLiteral("Confirmar retirada del workflow CI"));
+        } else if (operation.startsWith(QStringLiteral("logs:"))) {
+            runCommand({QStringLiteral("ci"), QStringLiteral("logs"), operation.mid(5),
+                QStringLiteral("--path"), m_projectPath});
+        }
+        return;
+    }
     if (m_currentArea == QStringLiteral("agents")) {
         openSelectedAgent();
     } else if (m_currentArea == QStringLiteral("processes")) {
@@ -169,6 +192,10 @@ void MainWindow::performPrimaryAreaAction()
 
 void MainWindow::performSecondaryAreaAction()
 {
+    if (m_currentArea == QStringLiteral("ci")) {
+        refreshArea();
+        return;
+    }
     if (m_currentArea == QStringLiteral("setup")) {
         runCommand({QStringLiteral("doctor"), m_projectPath});
         return;

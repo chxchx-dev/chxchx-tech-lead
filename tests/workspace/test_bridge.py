@@ -10,6 +10,7 @@ from chxchx_tech_lead.workspace.bridge import (
 )
 from chxchx_tech_lead.workspace.agent_commands import NEW_CHAT_PROMPT
 from chxchx_tech_lead.workspace.bridge_resources import resources_overview_payload
+from chxchx_tech_lead.integrations.ci_service import ci_status_payload
 from chxchx_tech_lead.workspace.bridge_history import (
     conversation_payload,
     conversations_payload,
@@ -40,6 +41,24 @@ def test_project_status_includes_skill_and_pack_catalog(tmp_path: Path) -> None:
     selected = next(skill for skill in selected_payload["skills"] if skill["name"] == selected_name)
     assert selected_payload["enabled_skill_count"] == 1
     assert selected["enabled"] is True
+
+
+def test_ci_status_bridge_keeps_pipeline_opt_in_without_github_calls(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "ci-fixture"\nrequires-python = ">=3.11"\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        "chxchx_tech_lead.integrations.github_cli.executable",
+        lambda _name: (_ for _ in ()).throw(AssertionError("CI no debe consultar GitHub si está desactivado")),
+    )
+
+    payload = ci_status_payload(tmp_path)
+
+    assert payload["schema"] == "chxchx.ci-status"
+    assert payload["schema_version"] == 1
+    assert payload["configured"] is False
+    assert payload["managed"] is False
+    assert payload["supported_stacks"] == ["Python"]
 
 
 def test_project_status_includes_shared_studio_agent_launchers(tmp_path: Path) -> None:

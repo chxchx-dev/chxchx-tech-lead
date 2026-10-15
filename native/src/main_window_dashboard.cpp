@@ -223,6 +223,46 @@ void MainWindow::showAreaDashboard(const QJsonObject &payload, const QString &ar
         return;
     }
 
+    if (area == QStringLiteral("ci")) {
+        const bool configured = payload.value(QStringLiteral("configured")).toBool();
+        const bool integrity = payload.value(QStringLiteral("integrity_ok")).toBool();
+        const bool authenticated = payload.value(QStringLiteral("authenticated")).toBool();
+        const QJsonArray stacks = payload.value(QStringLiteral("supported_stacks")).toArray();
+        const QJsonArray runs = payload.value(QStringLiteral("recent_runs")).toArray();
+        m_dashboardSummary->setText(QStringLiteral("CI %1 · integridad %2 · GitHub %3 · %4 ejecución(es) reciente(s)")
+            .arg(configured ? QStringLiteral("configurado") : QStringLiteral("desactivado"),
+                 integrity ? QStringLiteral("válida") : QStringLiteral("sin validar"),
+                 authenticated ? QStringLiteral("conectado") : QStringLiteral("sin sesión"),
+                 QString::number(runs.size())));
+        addRow(QStringLiteral("Stacks detectados: %1")
+                .arg(joinedValues(stacks)),
+            QStringLiteral("applications-development"), QStyle::SP_ComputerIcon);
+        const QString message = payload.value(QStringLiteral("message")).toString();
+        if (!message.isEmpty()) {
+            addRow(message, QStringLiteral("dialog-information"), QStyle::SP_MessageBoxInformation);
+        }
+        for (const auto &warning : payload.value(QStringLiteral("warnings")).toArray()) {
+            addRow(warning.toString(), QStringLiteral("dialog-warning"), QStyle::SP_MessageBoxWarning);
+        }
+        for (const auto &value : runs) {
+            const QJsonObject run = value.toObject();
+            const QString conclusion = run.value(QStringLiteral("conclusion")).toString(
+                run.value(QStringLiteral("status")).toString());
+            addRow(QStringLiteral("#%1 · %2 · %3\n%4 · %5")
+                    .arg(run.value(QStringLiteral("databaseId")).toVariant().toString(),
+                         run.value(QStringLiteral("workflowName")).toString(),
+                         conclusion, run.value(QStringLiteral("headBranch")).toString(),
+                         run.value(QStringLiteral("url")).toString()),
+                conclusion == QStringLiteral("success") ? QStringLiteral("emblem-ok") : QStringLiteral("dialog-warning"),
+                conclusion == QStringLiteral("success") ? QStyle::SP_DialogApplyButton : QStyle::SP_MessageBoxWarning);
+        }
+        if (runs.isEmpty() && !configured) {
+            addRow(QStringLiteral("CI está desactivado. Elige Configurar pipeline para revisar la propuesta."),
+                QStringLiteral("dialog-information"), QStyle::SP_MessageBoxInformation);
+        }
+        return;
+    }
+
     if (area == QStringLiteral("projects")) {
         const QJsonArray projects = payload.value(QStringLiteral("registered_projects")).toArray();
         int trusted = 0;

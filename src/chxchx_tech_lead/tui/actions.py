@@ -94,6 +94,9 @@ class WorkspaceActions:
     def action_show_errors(self) -> None:
         self._show("errors")
 
+    def action_show_ci(self) -> None:
+        self._show("ci")
+
     def action_show_brand(self) -> None:
         self._show("brand-tab")
 

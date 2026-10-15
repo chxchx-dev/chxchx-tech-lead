@@ -1,5 +1,13 @@
 # Current State
 
+## CI opcional para proyectos de usuario
+
+- ChxChx genera de forma opt-in GitHub Actions para Python, Node.js y CMake/C++/Qt; el setup ofrece `--dry-run`, conserva workflows no administrados y verifica el hash de los administrados antes de actualizarlos o retirarlos. Los reemplazos/retiros dejan backup local fuera del repositorio.
+- `ci status/run/logs` usa GitHub CLI oficial sin almacenar credenciales; TUI y Studio presentan estado y confirmación de escrituras, dispatch y retiro. `bridge ci` es lectura JSON v1.
+- El template tiene `push`, `pull_request`, `workflow_dispatch`, acciones fijadas por SHA y `contents: read`. El workflow debe subirse al repositorio para activarse; CD a servidor propio/VPS espera la definición de runtime de los proyectos. No se está configurando CD para este software herramienta.
+- Validación local: `python -m compileall -q src tests scripts`, `git diff --check`, pytest (`227 passed, 1 skipped`), build Studio C++/Qt y CTest (`6/6`). CLI `ci --help` y `bridge ci .` también responden; la lectura confirmó que este repo no se configura con el template nuevo.
+- Pendiente: comprobar la ejecución de CI en GitHub tras el push y definir el runtime de CD para los proyectos de usuario.
+
 ## Estado actual
 
 - Inicio de Studio ofrece `Preparar y entrar`: vista previa y confirmación de Init, skills recomendadas, skills de Tech Packs detectados y Mods de Claude aplicables, sincronización del contexto, trust local y apertura de un chat nuevo con el agente elegido. Los Mods se incluyen solo si el proyecto ya tiene contexto/configuración Claude y nunca modifican ajustes globales.
