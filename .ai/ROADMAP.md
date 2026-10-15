@@ -66,8 +66,9 @@ verde; la configuración del workflow no equivale a que haya pasado.
   SDK. Fedora empaqueta TGZ con las bibliotecas Qt del sistema. El workflow
   ahora valida binarios, runtimes/plugins y el bundle macOS, y sube solo el
   paquete final fuera del staging temporal de CPack; el instalador valida el
-  SHA-256 del manifiesto. Falta confirmar este cambio en GitHub Actions y probar
-  instalación/arranque en una segunda máquina Fedora.
+  SHA-256 del manifiesto. CI run #87 pasó las validaciones de paquete en todos
+  los runners configurados. Sigue pendiente probar la instalación/arranque en
+  una segunda máquina Fedora.
 - Decidir si el núcleo Python seguirá siendo la autoridad mediante el bridge o
   si comienza una migración gradual a un núcleo C++ compartido. No bloquear el
   uso de Studio con una reescritura sin una necesidad medida.

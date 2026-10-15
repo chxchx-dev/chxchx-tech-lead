@@ -20,7 +20,7 @@
 - El CI remoto se disparará desde una rama feature autorizada, nunca desde `dev`: el push a `dev` puede publicar el preview del producto. La publicación del propio ChxChx queda aplazada; en esta rama el workflow solo valida y empaqueta assets, y el job de publicación no se activa.
 - Push `5c17e46` a `feature/vps-compose-deploy` disparó el run `38692862282` (#86). La matriz Python (Ubuntu/macOS/Windows, 3.11–3.13), wheel y builds/CTest nativos de Fedora, Ubuntu y Windows terminaron correctamente. macOS ARM compiló y pasó CTest, pero su job falló al publicar el artifact; macOS Intel seguía en la carga del artifact al último chequeo. El workflow de publicación está limitado a `dev` y no se activó.
 
-- Corrección local de empaquetado: CPack deja `_CPack_Packages` dentro del directorio de salida; el workflow ya no sube el glob amplio `packages/*`, valida contenido/runtime de cada paquete y copia solo el ZIP/DMG/TGZ final a un staging limpio. El instalador macOS busca el `.app` sin `find -maxdepth`, que no es portable al `find` de macOS. Verificación nueva pendiente del siguiente run remoto.
+- CI run `38728824695` (#87), commit `9565feb`: 15 jobs aplicables finalizaron correctamente. CPack ya se valida y solo se carga el ZIP/DMG/TGZ final, no su staging temporal; macOS ARM e Intel validaron el contenido y subieron el artifact. Windows validó el script PowerShell y su paquete; Ubuntu/Fedora también validaron sus TGZ. `publish-studio-preview` quedó omitido porque la rama no es `dev`.
 
 ## Estado actual
 

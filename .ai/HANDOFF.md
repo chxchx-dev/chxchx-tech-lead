@@ -1,17 +1,17 @@
 # Handoff
 
-## Instaladores nativos de Studio — corrección pendiente de CI remoto
+## Instaladores nativos de Studio — CI verificado
 
-- CPack conserva `_CPack_Packages` junto al archivo final. El workflow nativo ahora inspecciona el paquete, valida los runtimes/plugins Qt de Ubuntu/Windows/macOS y copia solo el ZIP/DMG/TGZ final a `dist/native-package` antes de `upload-artifact`; esto evita subir el directorio temporal de CPack, posible causa de los fallos de carga macOS.
-- El validador `scripts/verify_studio_package.py` exige binario y runtime por SO; para Fedora espera las dependencias Qt instalables del sistema. Pruebas unitarias cubren staging de Windows, paquete Ubuntu incompleto y bundle macOS. `scripts/install-studio.sh` reemplaza `find -maxdepth` por búsqueda BSD/GNU portable al extraer el `.app`.
-- Verificación local: `python -m compileall -q src tests scripts`; pytest `250 passed, 1 skipped`; build Studio y CTest `6/6`; CPack TGZ Fedora local validado y re-staged; YAML del workflow, `bash -n` de instaladores y `git diff --check` pasan.
-- Falta confirmar en GitHub Actions el upload en macOS ARM/Intel y revisar la ejecución de los instaladores reales en macOS/Windows; este entorno no tiene `gh`, `pwsh` ni runners macOS/Windows. No hay despliegue a VPS en este cambio.
+- CPack conserva `_CPack_Packages` junto al archivo final. El workflow inspecciona el paquete, valida runtimes/plugins Qt de Ubuntu/Windows/macOS y copia solo el ZIP/DMG/TGZ final a `dist/native-package` antes de `upload-artifact`. Esto elimina el staging temporal del input de subida y corrigió la falla de artefactos macOS.
+- `scripts/verify_studio_package.py` exige binario/runtime por SO; Fedora usa dependencias Qt instalables del sistema. Las pruebas cubren staging de Windows, detección de paquete Ubuntu incompleto y bundle macOS. `scripts/install-studio.sh` usa búsqueda BSD/GNU portable para extraer el `.app`.
+- CI run [#87](https://github.com/chxchx-dev/chxchx-tech-lead/actions/runs/38728824695), commit `9565feb`: 15 jobs aplicables completados correctamente. Windows validó el parseo PowerShell y el paquete ZIP; Ubuntu/Fedora validaron TGZ; macOS ARM e Intel validaron el contenido del DMG y publicaron sus artifacts. El job de preview se omitió porque el push fue a una rama feature.
+- Validación local: compileall; pytest `250 passed, 1 skipped`; build Studio y CTest `6/6`; TGZ Fedora local validado y re-staged; YAML del workflow, `bash -n` y `git diff --check` pasan. No se hizo instalación interactiva en máquinas físicas limpias ni despliegue VPS.
 
 ## CI opcional de proyectos y CD a VPS
 
 - CLI: `ci setup/status/remove/run/logs`; GitHub Actions se prepara para Python, Node y CMake/C++/Qt. El setup/remove soporta dry-run. Los workflows ajenos o con ediciones manuales se protegen; backups quedan fuera del checkout.
 - Studio y TUI incluyen un panel CI para configurar con preview, leer ejecuciones/logs y confirmar dispatch o retiro. El bridge JSON v1 publica estado de lectura; GitHub requiere `gh auth login` para estado remoto, ejecución y logs.
-- El usuario pidió aplazar el pipeline de publicación del producto herramienta. No tocar `.github/workflows/ci.yml`, no publicar el preview ni disparar CI mediante push a `dev` en este bloque.
+- El usuario pidió aplazar el pipeline de publicación del producto herramienta. Este cambio toca `.github/workflows/ci.yml` solo para validar y subir paquetes nativos en CI; no publica el preview. Los pushes se hacen a rama feature, nunca a `dev`.
 - CD optativo para proyectos de usuario ahora tiene base implementada: Docker Compose a VPS por SSH desde GitHub Actions; manual por defecto y branch trigger solo con `--auto-deploy-on`. La implementación vive en `integrations/deploy_workflows.py` y `deploy_service.py`, CLI `deploy`, bridge read-only `bridge deploy`, TUI pestaña Despliegue VPS y Studio área CD VPS. El bridge usa `chxchx.deploy-status` v1.
 - Requisitos: exactamente un manifiesto Compose reconocido en la raíz; clon existente/limpio en VPS, `origin` coincidente, Compose instalado, usuario dedicado no root, Environment GitHub `production`, variables `VPS_SSH_HOST`, `VPS_SSH_USER`, `VPS_DEPLOY_PATH` (opcional `VPS_SSH_PORT`) y secretos `VPS_SSH_PRIVATE_KEY`, `VPS_SSH_KNOWN_HOSTS`. Para repo privado, el VPS usa una llave de lectura propia. La huella del host se verifica fuera de banda y SSH usa StrictHostKeyChecking.
 - El deploy comprueba servicios running/health, mantiene `.env`/volúmenes y trata de restaurar el commit previo ante fallo. No revierte datos ni migraciones destructivas; el formato inicial requiere servicios de larga duración. Considerar Docker rootless porque el grupo `docker` suele dar privilegios equivalentes a root.
