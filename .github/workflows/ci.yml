@@ -116,13 +116,56 @@ jobs:
           }
           if ($summary.Count -eq 2) { $summary.Add('LastTest.log had no failing-test detail.') }
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ($summary -join "`n") -Encoding utf8
+      - name: Validate PowerShell Studio installer syntax
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-Content -LiteralPath 'scripts/install-studio.ps1' -Raw
+          [void][scriptblock]::Create($installer)
+      - name: Validate Bash Studio installer syntax
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash -n scripts/install-studio.sh scripts/install-studio-fedora.sh
       - name: Create native install package
         run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
+      - name: Validate and stage macOS package
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=(build-native/packages/*.dmg)
+          test "${#packages[@]}" -eq 1
+          package="${packages[0]}"
+          mount_dir="$(mktemp -d "$RUNNER_TEMP/chxchx-dmg.XXXXXX")"
+          mounted=false
+          cleanup() {
+            if [[ "$mounted" == true ]]; then hdiutil detach "$mount_dir" >/dev/null; fi
+            rmdir "$mount_dir" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          hdiutil attach "$package" -readonly -nobrowse -mountpoint "$mount_dir" >/dev/null
+          mounted=true
+          app="$(find "$mount_dir" -type d -name '*.app' -prune -print -quit)"
+          test -n "$app"
+          python scripts/verify_studio_package.py --platform "$PLATFORM" \
+            --package-dir build-native/packages --output-dir dist/native-package \
+            --mounted-app "$app"
+      - name: Validate and stage Windows/Linux package
+        if: runner.os != 'macOS'
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          python scripts/verify_studio_package.py --platform "$PLATFORM" \
+            --package-dir build-native/packages --output-dir dist/native-package
       - name: Publish native package artifact
         uses: actions/upload-artifact@v4
         with:
           name: chxchx-studio-${{ matrix.platform }}
-          path: build-native/packages/*
+          path: dist/native-package/*
           if-no-files-found: error
           compression-level: 0
 
@@ -142,11 +185,15 @@ jobs:
         run: ctest --test-dir build-native --output-on-failure
       - name: Create Fedora install package
         run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
+      - name: Validate and stage Fedora package
+        run: |
+          python scripts/verify_studio_package.py --platform linux-fedora-x86_64 \
+            --package-dir build-native/packages --output-dir dist/native-package
       - name: Publish Fedora test artifact
         uses: actions/upload-artifact@v4
         with:
           name: chxchx-studio-fedora
-          path: build-native/packages/*.tar.gz
+          path: dist/native-package/*
           if-no-files-found: error
           compression-level: 0
 

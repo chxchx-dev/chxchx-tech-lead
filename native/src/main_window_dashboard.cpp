@@ -267,6 +267,64 @@ void MainWindow::showAreaDashboard(const QJsonObject &payload, const QString &ar
         return;
     }
 
+    if (area == QStringLiteral("deploy")) {
+        const bool configured = payload.value(QStringLiteral("configured")).toBool();
+        const bool valid = payload.value(QStringLiteral("managed")).toBool()
+            && payload.value(QStringLiteral("integrity_ok")).toBool();
+        const bool authenticated = payload.value(QStringLiteral("authenticated")).toBool();
+        const QString composeFile = payload.value(QStringLiteral("compose_file")).toString();
+        const QString branch = payload.value(QStringLiteral("auto_deploy_branch")).toString();
+        const QJsonArray runs = payload.value(QStringLiteral("recent_runs")).toArray();
+        QString mode = branch.isEmpty() ? QStringLiteral("manual")
+            : QStringLiteral("automático · %1").arg(branch);
+        m_dashboardSummary->setText(QStringLiteral("CD %1 · integridad %2 · GitHub %3 · %4 despliegue(s) reciente(s)")
+            .arg(configured ? QStringLiteral("configurado · %1").arg(mode) : QStringLiteral("desactivado"),
+                 valid ? QStringLiteral("válida") : QStringLiteral("sin validar"),
+                 authenticated ? QStringLiteral("conectado") : QStringLiteral("sin sesión"),
+                 QString::number(runs.size())));
+        addRow(composeFile.isEmpty()
+                ? QStringLiteral("Runtime: Docker Compose no detectado")
+                : QStringLiteral("Runtime: Docker Compose · %1").arg(composeFile),
+            QStringLiteral("applications-development"), QStyle::SP_ComputerIcon);
+        addRow(QStringLiteral("Variables de Environment production: %1")
+                .arg(joinedValues(payload.value(QStringLiteral("required_variables")).toArray())),
+            QStringLiteral("preferences-system"), QStyle::SP_FileDialogDetailedView);
+        addRow(QStringLiteral("Secretos de Environment production: %1")
+                .arg(joinedValues(payload.value(QStringLiteral("required_secrets")).toArray())),
+            QStringLiteral("dialog-password"), QStyle::SP_MessageBoxInformation);
+        const QString workflowPath = payload.value(QStringLiteral("workflow_path")).toString();
+        if (!workflowPath.isEmpty()) {
+            addRow(QStringLiteral("Workflow: %1").arg(workflowPath),
+                QStringLiteral("text-x-script"), QStyle::SP_FileIcon);
+        }
+        const QString message = payload.value(QStringLiteral("message")).toString();
+        if (!message.isEmpty()) {
+            addRow(message, QStringLiteral("dialog-information"), QStyle::SP_MessageBoxInformation);
+        }
+        for (const auto &warning : payload.value(QStringLiteral("warnings")).toArray()) {
+            addRow(warning.toString(), QStringLiteral("dialog-warning"), QStyle::SP_MessageBoxWarning);
+        }
+        for (const auto &value : runs) {
+            const QJsonObject run = value.toObject();
+            const QString conclusion = run.value(QStringLiteral("conclusion")).toString(
+                run.value(QStringLiteral("status")).toString());
+            QString runSummary = QStringLiteral("#%1 · %2 · %3\n%4 · %5")
+                .arg(run.value(QStringLiteral("databaseId")).toVariant().toString());
+            runSummary = runSummary.arg(run.value(QStringLiteral("workflowName")).toString())
+                .arg(conclusion)
+                .arg(run.value(QStringLiteral("headBranch")).toString())
+                .arg(run.value(QStringLiteral("url")).toString());
+            addRow(runSummary,
+                conclusion == QStringLiteral("success") ? QStringLiteral("emblem-ok") : QStringLiteral("dialog-warning"),
+                conclusion == QStringLiteral("success") ? QStyle::SP_DialogApplyButton : QStyle::SP_MessageBoxWarning);
+        }
+        if (runs.isEmpty() && !configured) {
+            addRow(QStringLiteral("CD está desactivado. Configúralo para revisar el workflow antes de guardarlo."),
+                QStringLiteral("dialog-information"), QStyle::SP_MessageBoxInformation);
+        }
+        return;
+    }
+
     if (area == QStringLiteral("projects")) {
         const QJsonArray projects = payload.value(QStringLiteral("registered_projects")).toArray();
         int trusted = 0;

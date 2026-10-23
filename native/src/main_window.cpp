@@ -787,6 +787,9 @@ QStringList MainWindow::readCommandForArea(const QString &area) const
     if (area == QStringLiteral("ci")) {
         return {QStringLiteral("bridge"), QStringLiteral("ci"), m_projectPath};
     }
+    if (area == QStringLiteral("deploy")) {
+        return {QStringLiteral("bridge"), QStringLiteral("deploy"), m_projectPath};
+    }
     if (area == QStringLiteral("handoff")) {
         return {QStringLiteral("bridge"), QStringLiteral("handoff"), m_projectPath};
     }
@@ -825,6 +828,11 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             showAreaDashboard(payload, m_commandArea);
             output = formatMods(payload);
         } else if (schema == BridgeSchemas::CiStatus) {
+            updateAreaTargets(payload, m_commandArea);
+            updateAreaActionState();
+            showAreaDashboard(payload, m_commandArea);
+            output = formatBridgeStatus(payload, m_commandArea);
+        } else if (schema == BridgeSchemas::DeployStatus) {
             updateAreaTargets(payload, m_commandArea);
             updateAreaActionState();
             showAreaDashboard(payload, m_commandArea);

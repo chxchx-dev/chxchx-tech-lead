@@ -10,9 +10,10 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Protocol
 
 from ..core.paths import ensure_home
-from .ci_workflows import CiWorkflowPlan, WORKFLOW_RELATIVE_PATH
+from .ci_workflows import WORKFLOW_RELATIVE_PATH
 
 MANAGED_MARKER = "# chxchx-tech-managed: v1"
 HASH_PREFIX = "# chxchx-tech-sha256: "
@@ -34,33 +35,42 @@ class WorkflowWriteResult:
     content: str
 
 
-def workflow_path(root: Path) -> Path:
+class WorkflowPlan(Protocol):
+    path: Path
+    content: str
+
+
+def workflow_path(root: Path, relative_path: Path = WORKFLOW_RELATIVE_PATH) -> Path:
     project = root.resolve()
-    candidate = project / WORKFLOW_RELATIVE_PATH
+    if relative_path.is_absolute() or ".." in relative_path.parts:
+        raise ValueError("La ruta del workflow no es relativa al proyecto.")
+    candidate = project / relative_path
     if candidate.is_symlink() or not _inside_root(project, candidate):
         raise ValueError("La ruta de workflow apunta fuera del proyecto; no la modificaré.")
     return candidate
 
 
-def current_workflow_state(root: Path) -> WorkflowState:
-    path = workflow_path(root)
+def current_workflow_state(
+    root: Path, relative_path: Path = WORKFLOW_RELATIVE_PATH
+) -> WorkflowState:
+    path = workflow_path(root, relative_path)
     if not path.exists():
         return WorkflowState(path, False, False, False)
     if not path.is_file():
-        raise ValueError("La ruta de CI existe y no es un archivo regular.")
+        raise ValueError("La ruta del workflow existe y no es un archivo regular.")
     try:
         content = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         raise ValueError(f"No pude leer {path}: {exc}") from exc
-    body, managed, valid = _managed_body(content)
+    _, managed, valid = _managed_body(content)
     return WorkflowState(path, True, managed, valid)
 
 
-def write_workflow(root: Path, plan: CiWorkflowPlan, *, dry_run: bool = False) -> WorkflowWriteResult:
-    path = workflow_path(root)
+def write_workflow(root: Path, plan: WorkflowPlan, *, dry_run: bool = False) -> WorkflowWriteResult:
+    path = workflow_path(root, plan.path)
     body = plan.content.rstrip() + "\n"
     content = _with_marker(body)
-    old_state = current_workflow_state(root)
+    old_state = current_workflow_state(root, plan.path)
     if old_state.exists and not old_state.managed:
         raise ValueError(f"{path} ya existe y no está administrado por ChxChx; lo conservaré.")
     if old_state.exists and not old_state.integrity_ok:
@@ -70,13 +80,19 @@ def write_workflow(root: Path, plan: CiWorkflowPlan, *, dry_run: bool = False) -
     if dry_run:
         return WorkflowWriteResult(path, True, None, content)
 
-    backup = _backup_existing(root, path) if old_state.exists else None
+    scope = plan.path.stem.removeprefix("chxchx-")
+    backup = _backup_existing(root, path, scope) if old_state.exists else None
     _atomic_write(path, content)
     return WorkflowWriteResult(path, True, backup, content)
 
 
-def remove_workflow(root: Path, *, dry_run: bool = False) -> WorkflowWriteResult:
-    state = current_workflow_state(root)
+def remove_workflow(
+    root: Path,
+    relative_path: Path = WORKFLOW_RELATIVE_PATH,
+    *,
+    dry_run: bool = False,
+) -> WorkflowWriteResult:
+    state = current_workflow_state(root, relative_path)
     if not state.exists:
         return WorkflowWriteResult(state.path, False, None, "")
     if not state.managed or not state.integrity_ok:
@@ -84,7 +100,8 @@ def remove_workflow(root: Path, *, dry_run: bool = False) -> WorkflowWriteResult
     content = state.path.read_text(encoding="utf-8")
     if dry_run:
         return WorkflowWriteResult(state.path, True, None, content)
-    backup = _backup_existing(root, state.path)
+    scope = relative_path.stem.removeprefix("chxchx-")
+    backup = _backup_existing(root, state.path, scope)
     state.path.unlink()
     return WorkflowWriteResult(state.path, True, backup, content)
 
@@ -107,12 +124,13 @@ def _managed_body(content: str) -> tuple[str, bool, bool]:
     return body, True, actual == expected
 
 
-def _backup_existing(root: Path, source: Path) -> Path:
+def _backup_existing(root: Path, source: Path, scope: str) -> Path:
     project = root.resolve()
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     key = hashlib.sha256(str(project).encode("utf-8")).hexdigest()[:12]
-    backup_root = ensure_home() / "backups" / f"{project.name}-{key}" / "ci" / stamp
-    backup_path = backup_root / WORKFLOW_RELATIVE_PATH
+    backup_root = ensure_home() / "backups" / f"{project.name}-{key}" / scope / stamp
+    relative_path = source.relative_to(project)
+    backup_path = backup_root / relative_path
     backup_root.mkdir(parents=True, exist_ok=False)
     try:
         backup_path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,7 +145,7 @@ def _atomic_write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not _inside_root(path.parents[2], path):
         raise ValueError("El directorio del workflow apunta fuera del proyecto.")
-    descriptor, temporary = tempfile.mkstemp(prefix=".chxchx-ci-", dir=path.parent)
+    descriptor, temporary = tempfile.mkstemp(prefix=".chxchx-workflow-", dir=path.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
             stream.write(content)

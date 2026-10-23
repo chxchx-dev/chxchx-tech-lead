@@ -30,6 +30,8 @@ def test_ci_workflow_dry_run_write_update_and_remove_keep_backups(tmp_path: Path
     first = write_workflow(project, plan)
     assert first.changed is True
     assert first.backup is None
+    generated = first.path.read_text(encoding="utf-8")
+    assert generated.endswith(plan.content.rstrip() + "\n")
     assert current_workflow_state(project).integrity_ok is True
     assert write_workflow(project, plan).changed is False
 
