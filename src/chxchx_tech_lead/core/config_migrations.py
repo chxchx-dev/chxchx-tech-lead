@@ -37,7 +37,7 @@ def default_config_data(info: ProjectInfo) -> dict[str, Any]:
         "workspace": {
             "name": info.name,
             "adapter": "zellij",
-            "editor": "sublime",
+            "editor": "studio",
             "auto_open_editor": False,
             "auto_attach": True,
             "auto_start": False,

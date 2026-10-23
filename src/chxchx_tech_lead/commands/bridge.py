@@ -11,6 +11,7 @@ from ..workspace.bridge_contracts import ERROR_SCHEMA, SCHEMA_VERSION
 from ..workspace.bridge_resources import resources_overview_payload
 from ..integrations.ci_service import ci_status_payload
 from ..integrations.deploy_service import deployment_status_payload
+from ..integrations.studio_update_install import apply_update, update_status
 from ..workspace.bridge_history import (
     conversation_payload,
     conversations_payload,
@@ -104,6 +105,14 @@ def bridge_deploy(
 ) -> None:
     """Lee el estado local de CD a VPS y las ejecuciones remotas, sin modificarlas."""
     _emit_payload(deployment_status_payload, path)
+
+
+@bridge_app.command("studio-update")
+def bridge_studio_update(
+    apply: bool = typer.Option(False, "--apply", help="Instala la versión publicada tras confirmación del usuario."),
+) -> None:
+    """Consulta actualizaciones de Studio o instala explícitamente la publicada."""
+    _emit_payload(apply_update if apply else update_status)
 
 
 def _emit_payload(builder, *args) -> None:

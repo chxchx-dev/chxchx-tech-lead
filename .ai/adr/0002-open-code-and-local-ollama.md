@@ -21,9 +21,11 @@ proyecto.
 - El inicio y la cuota de recursos siguen pasando por los servicios y adapters
   compartidos existentes. No se descarga ni configura automáticamente un modelo:
   Ollama presenta su selector cuando se inicia su integración.
-- OpenCode acepta sesiones nuevas mediante `--prompt` y puede leer la memoria
-  explícita ya persistida localmente. La extracción/captura desde transcripts no
-  se atribuye a OpenCode; permanece limitada a Codex y Claude.
+- OpenCode acepta sesiones nuevas mediante `--prompt`; puede recuperar la
+  memoria local existente y conectar Basic Memory/Serena por MCP con la CLI oficial.
+- El wrapper captura solicitudes explícitas de OpenCode exportando sesiones con
+  `opencode export --sanitize`; solo acepta sesiones cuya ruta coincida con el
+  proyecto activo y nunca lee directamente su base de datos interna.
 
 ## Consecuencias
 
@@ -34,5 +36,5 @@ proyecto.
 - La integración local necesita que el usuario instale Ollama y elija un modelo
   acorde a su equipo. No se promete una detección automática de GPU/RAM ni un
   nivel de capacidad del modelo.
-- Chats e historial de transcripciones continúan limitados a los proveedores
-  que ya tienen adapters de historial.
+- El panel Chats sigue mostrando Codex/Claude. La recuperación de memoria
+  de OpenCode es una integración aparte basada en los comandos oficiales de exportación.

@@ -161,6 +161,20 @@ jobs:
         run: |
           python scripts/verify_studio_package.py --platform "$PLATFORM" \
             --package-dir build-native/packages --output-dir dist/native-package
+      - name: Build Windows executable installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nsis --yes --no-progress
+          $makensisPath = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+          if (-not (Test-Path -LiteralPath $makensisPath -PathType Leaf)) {
+            $makensisPath = (Get-Command makensis.exe -ErrorAction Stop).Source
+          }
+          & $makensisPath '/INPUTCHARSET' 'UTF8' '/NOCD' 'scripts/windows-studio-setup.nsi'
+          if ($LASTEXITCODE -ne 0) { throw "makensis falló con código $LASTEXITCODE." }
+          $setup = 'scripts/chxchx-studio-windows-x86_64-setup.exe'
+          if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'NSIS no generó el instalador ejecutable.' }
+          Move-Item -LiteralPath $setup -Destination 'dist/native-package/chxchx-studio-windows-x86_64-setup.exe'
       - name: Publish native package artifact
         uses: actions/upload-artifact@v4
         with:
@@ -170,9 +184,10 @@ jobs:
           compression-level: 0
 
   native-fedora:
-    name: Native Qt build · Fedora
+    name: Native Qt build and portable package · Fedora
     runs-on: ubuntu-latest
     container: fedora:latest
+    needs: native-build
     steps:
       - name: Install build dependencies
         run: dnf install -y cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qt5compat-devel git
@@ -183,10 +198,15 @@ jobs:
         run: cmake --build build-native --parallel 2
       - name: Smoke test Scintilla editor
         run: ctest --test-dir build-native --output-on-failure
-      - name: Create Fedora install package
-        run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
-      - name: Validate and stage Fedora package
+      - name: Download self-contained Linux Qt package
+        uses: actions/download-artifact@v4
+        with:
+          name: chxchx-studio-linux-ubuntu-x86_64
+          path: dist/ubuntu-package
+      - name: Validate and stage Fedora-compatible package
         run: |
+          mkdir -p build-native/packages
+          cp dist/ubuntu-package/*.tar.gz build-native/packages/chxchx-studio-fedora-x86_64.tar.gz
           python scripts/verify_studio_package.py --platform linux-fedora-x86_64 \
             --package-dir build-native/packages --output-dir dist/native-package
       - name: Publish Fedora test artifact
@@ -269,6 +289,7 @@ jobs:
           publish_asset linux-ubuntu-x86_64 '*.tar.gz' chxchx-studio-ubuntu-x86_64.tar.gz
           publish_asset linux-fedora-x86_64 '*.tar.gz' chxchx-studio-fedora-x86_64.tar.gz
           publish_asset windows-x86_64 '*.zip' chxchx-studio-windows-x86_64.zip
+          publish_asset windows-x86_64 '*-setup.exe' chxchx-studio-windows-x86_64-setup.exe
           publish_asset macos-arm64 '*.dmg' chxchx-studio-macos-arm64.dmg
           publish_asset macos-x86_64 '*.dmg' chxchx-studio-macos-x86_64.dmg
           wheel="$(find dist/downloads/cli-wheel -type f -name 'chxchx_tech_lead-*-py3-none-any.whl' -print -quit)"
@@ -286,6 +307,7 @@ jobs:
               "linux-ubuntu-x86_64": "chxchx-studio-ubuntu-x86_64.tar.gz",
               "linux-fedora-x86_64": "chxchx-studio-fedora-x86_64.tar.gz",
               "windows-x86_64": "chxchx-studio-windows-x86_64.zip",
+              "windows-setup": "chxchx-studio-windows-x86_64-setup.exe",
               "macos-arm64": "chxchx-studio-macos-arm64.dmg",
               "macos-x86_64": "chxchx-studio-macos-x86_64.dmg",
           }

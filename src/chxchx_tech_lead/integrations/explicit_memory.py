@@ -39,18 +39,35 @@ class ExplicitMemory:
     message: str
 
 
-def recover_explicit_memories(project_root: Path, *, limit: int = 200) -> list[ExplicitMemory]:
-    """Find bounded, project-scoped explicit memory requests in recent chats."""
+def recover_explicit_memories(
+    project_root: Path,
+    *,
+    limit: int = 200,
+    opencode_executable: str | None = None,
+) -> list[ExplicitMemory]:
+    """Find bounded, project-scoped explicit memory requests across agents."""
     memories: list[ExplicitMemory] = []
     seen: set[str] = set()
-    conversations = list_conversations(project_root, limit=limit)
-    for conversation in conversations:
+
+    from .opencode_memory import explicit_user_messages
+
+    for session_id, requested_at, message in explicit_user_messages(
+        project_root, executable=opencode_executable
+    ):
+        text = " ".join(message.split())
+        key = text.casefold()
+        if not _is_explicit_request(text, key, seen):
+            continue
+        seen.add(key)
+        memories.append(ExplicitMemory("OpenCode", session_id, requested_at, text))
+        if len(memories) >= _MAX_MEMORIES:
+            return memories
+
+    for conversation in list_conversations(project_root, limit=limit):
         for message in conversation.messages:
             text = " ".join(message.text.split())
             key = text.casefold()
-            if message.role != "user" or key in seen or len(text) > _MAX_MESSAGE_CHARS:
-                continue
-            if not _REMEMBER.search(text) or _RECOVERY_QUESTION.search(text) or _SENSITIVE.search(text):
+            if message.role != "user" or not _is_explicit_request(text, key, seen):
                 continue
             seen.add(key)
             memories.append(
@@ -64,6 +81,17 @@ def recover_explicit_memories(project_root: Path, *, limit: int = 200) -> list[E
             if len(memories) >= _MAX_MEMORIES:
                 return memories
     return memories
+
+
+def _is_explicit_request(text: str, key: str, seen: set[str]) -> bool:
+    return (
+        bool(text)
+        and key not in seen
+        and len(text) <= _MAX_MESSAGE_CHARS
+        and _REMEMBER.search(text) is not None
+        and _RECOVERY_QUESTION.search(text) is None
+        and _SENSITIVE.search(text) is None
+    )
 
 
 def persist_explicit_memories(project_root: Path, memories: list[ExplicitMemory]) -> None:

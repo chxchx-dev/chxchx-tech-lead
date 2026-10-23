@@ -31,6 +31,7 @@ Thumbs.db
 !/.ai/adr/0004-claude-project-mods.md
 !/.ai/adr/0005-studio-preview-distribution.md
 !/.ai/adr/0006-opt-in-project-ci-and-deployment-boundary.md
+!/.ai/adr/0008-studio-first-editor.md
 # Documentación de trabajo privada/local del mantenedor.
 /docs/
 /.codex/

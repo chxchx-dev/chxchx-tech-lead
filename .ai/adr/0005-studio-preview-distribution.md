@@ -25,6 +25,12 @@ revisión. El objetivo es instalar desde README sin clonar el código fuente.
 - Los instaladores son idempotentes, rechazan destinos/launchers no
   administrados y aceptan `--dry-run` para verificar las descargas sin instalar.
   Las instalaciones se versionan para conservar una ruta clara de rollback.
+- Reejecutar el instalador actualiza al commit publicado más reciente; `--update`
+  (PowerShell: `-Update`) exige una instalación previa y puede combinarse con el
+  modo de preview. Studio ofrece una comprobación manual desde Ayuda; solo tras
+  confirmación descarga y verifica app y CLI, prepara ambos lado a lado y cambia
+  el launcher al final. El marcador persistido contiene el SHA completo; el
+  updater reconoce también el marcador vacío de instaladores Bash anteriores.
 - La publicación actual es un preview sin firma; no se presenta como release
   estable ni promete soporte para arquitecturas sin artefacto.
 

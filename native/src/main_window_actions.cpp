@@ -5,6 +5,7 @@
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QStatusBar>
 
 void MainWindow::trustProjectFromHome()
 {
@@ -348,6 +349,17 @@ void MainWindow::performQuaternaryAreaAction()
         QStringLiteral("--dry-run")};
     const QStringList action = {QStringLiteral("workspace"), QStringLiteral("stop"), m_projectPath};
     runPreview(preview, action, {}, QStringLiteral("Confirmar detención de procesos"));
+}
+
+void MainWindow::checkStudioUpdates()
+{
+    if (m_bridgeClient->isRunning()) {
+        statusBar()->showMessage(QStringLiteral("Espera a que termine el comando actual."));
+        return;
+    }
+    m_studioUpdateCheckPending = true;
+    runCommand({QStringLiteral("bridge"), QStringLiteral("studio-update")});
+    statusBar()->showMessage(QStringLiteral("Buscando una versión nueva de Studio…"));
 }
 
 void MainWindow::openNewWorkspaceTerminal()

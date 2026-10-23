@@ -15,6 +15,7 @@ CONVERSATION_SCHEMA: Final[Literal["chxchx.conversation"]] = "chxchx.conversatio
 ERRORS_SCHEMA: Final[Literal["chxchx.errors"]] = "chxchx.errors"
 CI_STATUS_SCHEMA: Final[Literal["chxchx.ci-status"]] = "chxchx.ci-status"
 DEPLOY_STATUS_SCHEMA: Final[Literal["chxchx.deploy-status"]] = "chxchx.deploy-status"
+STUDIO_UPDATE_SCHEMA: Final[Literal["chxchx.studio-update"]] = "chxchx.studio-update"
 ERROR_SCHEMA: Final[Literal["chxchx.error"]] = "chxchx.error"
 
 
@@ -22,6 +23,18 @@ class BridgeErrorPayload(TypedDict):
     schema: Literal["chxchx.error"]
     schema_version: int
     error: str
+
+
+class StudioUpdatePayload(TypedDict):
+    schema: Literal["chxchx.studio-update"]
+    schema_version: int
+    current_commit: str
+    current_version: str
+    latest_commit: str
+    latest_version: str
+    platform: str
+    available: bool
+    updated: bool
 
 
 class AgentStatusPayload(TypedDict):

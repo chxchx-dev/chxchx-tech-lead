@@ -12,11 +12,13 @@ fail() {
 }
 
 DRY_RUN=false
+UPDATE_ONLY=false
 for argument in "$@"; do
   case "$argument" in
     --dry-run) DRY_RUN=true ;;
+    --update) UPDATE_ONLY=true ;;
     -h|--help)
-      printf 'Uso: install-studio.sh [--dry-run]\nInstala el preview más reciente de ChxChx Studio.\n'
+      printf 'Uso: install-studio.sh [--dry-run] [--update]\nInstala o actualiza el preview más reciente de ChxChx Studio.\n'
       exit 0
       ;;
     *) fail "Opción no reconocida: $argument" ;;
@@ -111,8 +113,14 @@ else
   LAUNCHER="$HOME/.local/bin/chxchx-studio-dev"
 fi
 
+if [[ -L "$LAUNCHER" ]]; then
+  fail "El launcher $LAUNCHER es un enlace simbólico; no lo reemplacé."
+fi
 if [[ -e "$LAUNCHER" ]] && ! grep -q 'CHXCHX_STUDIO_DEV_LAUNCHER' "$LAUNCHER"; then
   fail "Ya existe $LAUNCHER y no está administrado por ChxChx; no lo sobrescribí."
+fi
+if [[ "$UPDATE_ONLY" == true && ( ! -f "$LAUNCHER" || ! -e "$LAUNCHER" ) ]]; then
+  fail "--update requiere una instalación previa con launcher administrado en $LAUNCHER."
 fi
 if [[ "$OS" == "Darwin" && ( -e "$APP_LINK" || -L "$APP_LINK" ) ]]; then
   [[ -L "$APP_LINK" ]] || fail "Ya existe $APP_LINK y no es el enlace administrado por ChxChx."
@@ -121,6 +129,17 @@ if [[ "$OS" == "Darwin" && ( -e "$APP_LINK" || -L "$APP_LINK" ) ]]; then
     "$HOME/Applications/ChxChx Studio Dev-"*.app) ;;
     *) fail "El enlace $APP_LINK apunta a una ruta ajena; no lo cambié." ;;
   esac
+  [[ -f "$LINK_TARGET/.chxchx-managed" ]] || fail "El enlace $APP_LINK no apunta a una app administrada por ChxChx."
+fi
+
+NEEDS_CLI_INSTALL=true
+if [[ -e "$APP_ROOT" || -L "$APP_ROOT" ]]; then
+  [[ ! -L "$APP_ROOT" && -d "$APP_ROOT" ]] || fail "La ruta $APP_ROOT no es un directorio administrado; no la reemplacé."
+  [[ -f "$APP_ROOT/.chxchx-managed" ]] || fail "La ruta $APP_ROOT ya existe y no está administrada por ChxChx."
+  EXISTING_COMMIT="$(cat "$APP_ROOT/.chxchx-managed")"
+  [[ -z "$EXISTING_COMMIT" || "$EXISTING_COMMIT" == "$COMMIT_SHA" ]] || fail "El marcador de $APP_ROOT corresponde a otra versión; no la reemplacé."
+  [[ -x "$APP_BINARY" ]] || fail "La instalación existente está incompleta: falta $APP_BINARY. Conservé los archivos para revisión."
+  [[ -x "$CLI_BINARY" && -x "$CLI_ROOT/.venv/bin/python" ]] && NEEDS_CLI_INSTALL=false
 fi
 
 printf 'Preview %s (%s) · %s\n' "$VERSION" "$SHORT_COMMIT" "$PLATFORM"
@@ -129,25 +148,32 @@ if [[ "$DRY_RUN" == true ]]; then
   printf 'DRY RUN: descargas y checksums válidos; no se instalaron paquetes ni se escribieron archivos fuera de /tmp.\n'
   exit 0
 fi
+if [[ "$NEEDS_CLI_INSTALL" == false ]] && ! "$CLI_BINARY" --help >/dev/null 2>&1; then
+  NEEDS_CLI_INSTALL=true
+fi
 
 if [[ "$OS" == "Linux" ]]; then
   command -v sudo >/dev/null 2>&1 || fail "Instala sudo para instalar las bibliotecas de ejecución."
   if [[ "$PLATFORM" == "linux-fedora-x86_64" ]]; then
     command -v dnf >/dev/null 2>&1 || fail "No se encontró dnf."
-    sudo dnf install -y qt6-qtbase qt6-qtbase-gui qt6-qt5compat
+    sudo dnf install -y fontconfig libglvnd-egl libxkbcommon-x11 libX11-xcb libxcb \
+      mesa-libGL xcb-util xcb-util-cursor xcb-util-image xcb-util-keysyms \
+      xcb-util-renderutil xcb-util-wm
   else
     command -v apt-get >/dev/null 2>&1 || fail "No se encontró apt-get."
     sudo apt-get update
-    sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 \
-      libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
-      libxcb-shape0 libxcb-xinerama0 libxcb-xkb1
+    sudo apt-get install -y fontconfig libegl1 libgl1 libx11-xcb1 libxkbcommon-x11-0 \
+      libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+      libxcb-glx0 libxcb-render0 libxcb-render-util0 libxcb-shape0 libxcb-shm0 \
+      libxcb-sync1 libxcb-util1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1
   fi
 fi
 
 mkdir -p "$APP_PARENT"
-if [[ -e "$APP_ROOT" ]]; then
-  [[ -f "$APP_ROOT/.chxchx-managed" ]] || fail "La ruta $APP_ROOT ya existe y no está administrada por ChxChx."
-  [[ -x "$APP_BINARY" ]] || fail "La instalación existente está incompleta: falta $APP_BINARY. Conservé los archivos para revisión."
+if [[ -d "$APP_ROOT" ]]; then
+  MARKER_TMP="$APP_ROOT/.chxchx-managed.tmp.$$"
+  printf '%s\n' "$COMMIT_SHA" > "$MARKER_TMP"
+  mv -f "$MARKER_TMP" "$APP_ROOT/.chxchx-managed"
 else
   STAGE="$(mktemp -d "$APP_PARENT/.chxchx-stage.XXXXXX")"
   if [[ "$OS" == "Darwin" ]]; then
@@ -161,30 +187,35 @@ else
     MOUNT_DIR=""
     STAGED_APP="$STAGE/ChxChx Studio Dev-${SHORT_COMMIT}.app"
     [[ -x "$STAGED_APP/Contents/MacOS/chxchx-studio" ]] || fail "El paquete macOS no contiene el ejecutable esperado."
-    touch "$STAGED_APP/.chxchx-managed"
+    printf '%s\n' "$COMMIT_SHA" > "$STAGED_APP/.chxchx-managed"
     mv "$STAGED_APP" "$APP_ROOT"
   else
     tar -xzf "$WORK_DIR/$PACKAGE" -C "$STAGE" --strip-components=1
     [[ -x "$STAGE/bin/chxchx-studio" ]] || fail "El paquete Linux no contiene bin/chxchx-studio."
-    touch "$STAGE/.chxchx-managed"
+    printf '%s\n' "$COMMIT_SHA" > "$STAGE/.chxchx-managed"
     mv "$STAGE" "$APP_ROOT"
   fi
   rmdir "$STAGE" 2>/dev/null || true
   STAGE=""
 fi
+if [[ "$NEEDS_CLI_INSTALL" == true ]]; then
+  if ! command -v uv >/dev/null 2>&1 && [[ ! -x "$HOME/.local/bin/uv" ]]; then
+    curl --fail --silent --show-error --location https://astral.sh/uv/install.sh | sh
+  fi
+  UV_BIN="$(command -v uv || true)"
+  [[ -n "$UV_BIN" ]] || UV_BIN="$HOME/.local/bin/uv"
+  [[ -x "$UV_BIN" ]] || fail "No se encontró uv después de instalarlo."
+  if [[ ! -x "$CLI_ROOT/.venv/bin/python" || ! -x "$CLI_BINARY" ]]; then
+    "$UV_BIN" venv --clear --python 3.11 "$CLI_ROOT/.venv"
+  fi
+  "$UV_BIN" pip install --python "$CLI_ROOT/.venv/bin/python" \
+    --reinstall-package chxchx-tech-lead "$WORK_DIR/$WHEEL_NAME"
+  [[ -x "$CLI_BINARY" ]] || fail "El wheel no dejó el comando chxchx-tech esperado."
+  "$CLI_BINARY" --help >/dev/null || fail "El bridge CLI instalado no puede iniciarse."
+fi
 if [[ "$OS" == "Darwin" ]]; then
   ln -sfn "$APP_ROOT" "$APP_LINK"
 fi
-
-if ! command -v uv >/dev/null 2>&1 && [[ ! -x "$HOME/.local/bin/uv" ]]; then
-  curl --fail --silent --show-error --location https://astral.sh/uv/install.sh | sh
-fi
-UV_BIN="$(command -v uv || true)"
-[[ -n "$UV_BIN" ]] || UV_BIN="$HOME/.local/bin/uv"
-[[ -x "$UV_BIN" ]] || fail "No se encontró uv después de instalarlo."
-"$UV_BIN" venv --python 3.11 "$CLI_ROOT/.venv"
-"$UV_BIN" pip install --python "$CLI_ROOT/.venv/bin/python" "$WORK_DIR/$WHEEL_NAME"
-[[ -x "$CLI_BINARY" ]] || fail "El wheel no dejó el comando chxchx-tech esperado."
 
 mkdir -p "$(dirname "$LAUNCHER")"
 LAUNCHER_TMP="$LAUNCHER.tmp.$$"

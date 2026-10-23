@@ -756,6 +756,8 @@ void MainWindow::commandFailedToStart(const QString &reason)
 {
     m_previewPending = false;
     m_governorRetryPending = false;
+    m_studioUpdateCheckPending = false;
+    m_studioUpdateApplyPending = false;
     m_confirmedActionArguments.clear();
     m_forceActionArguments.clear();
     m_confirmedActionTitle.clear();
@@ -812,6 +814,7 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
     QString output = QString::fromUtf8(m_bridgeClient->readStandardOutput()).trimmed();
     const QString error = QString::fromUtf8(m_bridgeClient->readStandardError()).trimmed();
     const auto json = QJsonDocument::fromJson(output.toUtf8());
+    QJsonObject studioUpdatePayload;
     if (json.isObject()) {
         const QJsonObject payload = json.object();
         const auto schema = payload.value(QStringLiteral("schema")).toString();
@@ -837,6 +840,12 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             updateAreaActionState();
             showAreaDashboard(payload, m_commandArea);
             output = formatBridgeStatus(payload, m_commandArea);
+        } else if (schema == BridgeSchemas::StudioUpdate) {
+            studioUpdatePayload = payload;
+            output = QStringLiteral("Studio %1 · disponible %2 (%3).")
+                .arg(payload.value(QStringLiteral("current_version")).toString(),
+                    payload.value(QStringLiteral("latest_version")).toString(),
+                    payload.value(QStringLiteral("platform")).toString());
         } else if (schema == BridgeSchemas::ProjectStatus) {
             const QJsonObject workspace = payload.value(QStringLiteral("workspace")).toObject();
             m_projectTrusted = workspace.value(QStringLiteral("trusted")).toBool();
@@ -892,6 +901,63 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
         }
     }
     appendOutput(output.isEmpty() ? error : output + (error.isEmpty() ? QString() : QStringLiteral("\n") + error));
+    if (m_studioUpdateCheckPending) {
+        m_studioUpdateCheckPending = false;
+        const bool succeeded = status == QProcess::NormalExit && exitCode == 0
+            && !studioUpdatePayload.isEmpty();
+        if (!succeeded) {
+            QMessageBox::warning(this, QStringLiteral("No se pudo buscar actualizaciones"),
+                output.isEmpty()
+                    ? (error.isEmpty() ? QStringLiteral("Revisa tu conexión y vuelve a intentarlo.") : error)
+                    : output);
+            return;
+        }
+        if (!studioUpdatePayload.value(QStringLiteral("available")).toBool()) {
+            QMessageBox::information(this, QStringLiteral("Studio está actualizado"),
+                QStringLiteral("Ya tienes la versión publicada más reciente (%1).")
+                    .arg(studioUpdatePayload.value(QStringLiteral("current_version")).toString()));
+            return;
+        }
+        const auto result = QMessageBox::question(
+            this, QStringLiteral("Actualizar ChxChx Studio"),
+            QStringLiteral("Hay una versión nueva (%1). La actualización instalará la aplicación y el bridge CLI lado a lado, conservará esta versión como rollback y cambiará el launcher para la próxima apertura.\n\n¿Descargar e instalar ahora?")
+                .arg(studioUpdatePayload.value(QStringLiteral("latest_version")).toString()),
+            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+        if (result != QMessageBox::Yes) {
+            statusBar()->showMessage(QStringLiteral("Actualización cancelada."), 4000);
+            return;
+        }
+        m_studioUpdateApplyPending = true;
+        runCommand({QStringLiteral("bridge"), QStringLiteral("studio-update"), QStringLiteral("--apply")});
+        statusBar()->showMessage(QStringLiteral("Descargando y preparando la actualización…"));
+        return;
+    }
+    if (m_studioUpdateApplyPending) {
+        m_studioUpdateApplyPending = false;
+        if (status == QProcess::NormalExit && exitCode == 0
+            && !studioUpdatePayload.isEmpty()
+            && !studioUpdatePayload.value(QStringLiteral("available")).toBool()) {
+            QMessageBox::information(this, QStringLiteral("Studio está actualizado"),
+                QStringLiteral("La versión publicada ya coincide con la instalada (%1).")
+                    .arg(studioUpdatePayload.value(QStringLiteral("current_version")).toString()));
+            return;
+        }
+        const bool succeeded = status == QProcess::NormalExit && exitCode == 0
+            && !studioUpdatePayload.isEmpty()
+            && studioUpdatePayload.value(QStringLiteral("updated")).toBool();
+        if (!succeeded) {
+            QMessageBox::warning(this, QStringLiteral("No se pudo instalar la actualización"),
+                output.isEmpty()
+                    ? (error.isEmpty()
+                        ? QStringLiteral("La versión activa se conservó. Vuelve a intentarlo más tarde.")
+                        : error)
+                    : output);
+            return;
+        }
+        QMessageBox::information(this, QStringLiteral("Actualización instalada"),
+            QStringLiteral("La nueva versión quedó instalada y el launcher ya apunta a ella. Cierra Studio y vuelve a abrirlo para usar la actualización. La versión anterior se conserva como rollback."));
+        return;
+    }
     if (m_previewPending) {
         m_previewPending = false;
         if (status != QProcess::NormalExit || exitCode != 0) {

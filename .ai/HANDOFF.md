@@ -1,11 +1,51 @@
 # Handoff
 
+## Instalación completa y TUI centrada en Studio
+
+- El workflow produce un `Setup.exe` de usuario para Windows que contiene el instalador PowerShell y conserva el ZIP Qt para el actualizador. Linux Fedora recibe el mismo bundle Qt del SDK que Ubuntu; el script macOS/Linux instala las bibliotecas gráficas nativas con apt/dnf. El verificador exige QtCore, QtWidgets, Core5Compat y `libqxcb.so` en ambos TGZ.
+- La TUI abre ChxChx Studio en segundo plano. `studio open` queda como comando explícito y Studio es el editor predeterminado de proyectos nuevos; Sublime queda como adapter opcional para configuraciones existentes.
+- La decisión durable quedó en `.ai/adr/0008-studio-first-editor.md`.
+- Validación local: compileall de `src`/`scripts`, sintaxis Bash y `git diff --check` pasan. No se ejecutaron pruebas. Falta el build CI de NSIS/paquetes y smoke de instalación en máquinas limpias. No hay PowerShell/NSIS disponibles en este entorno. La publicación del preview continúa aplazada, así que aún no se prueba una descarga desde el release.
+
+## README: uso de Studio y TUI
+
+- README abre con una elección entre Studio, TUI y CLI y comandos de primer uso para cada ruta. La guía de Studio cubre abrir el proyecto por ruta, `Preparar y entrar`, edición, terminal, agentes y memoria; la guía TUI cubre `init`, trust, áreas, atajos y regreso de Zellij.
+- Se acortó el banner inicial y se organizaron las secciones largas en pasos, tablas y temas. Se conservaron las referencias técnicas para desarrollo y operación.
+- Verificación: `git diff --check`. No se ejecutó una suite: el cambio es documentación.
+
+## OpenCode y memoria de agentes
+
+- OpenCode ya estaba disponible para añadir desde Studio; se documentó la conexión MCP fácil en `Configuración → Configurar MCP · OpenCode` (Basic Memory y Serena, CLI oficial, alcance de proyecto).
+- Se agregó la captura de memoria explícita con `opencode session list` y `opencode export --sanitize`. Se valida la raíz exacta del proyecto, se limita a diez sesiones recientes y se reutiliza el archivo `.ai/memory/PROJECT_MEMORY.md` que comparten los agentes. Las sesiones nuevas recuperan esas notas. No se lee la base interna de OpenCode.
+- Actualizados README, ADR 0002, EDITOR-PARITY y CURRENT_STATE. No se ejecutaron pruebas; pendiente smoke manual de OpenCode y Ollama.
+- Se conservaron los cambios locales existentes del actualizador de Studio y los Mods añadidos previamente.
+
+## Instalador y actualizador de Studio
+
+- Los instaladores Bash/PowerShell se pueden repetir para instalar el preview más reciente; `--update`/`-Update` requiere un launcher administrado y `--dry-run`/`-DryRun` revisa checksums y conflictos antes de escribir. Los marcadores guardan el SHA completo, y se migra el marcador vacío de versiones Bash anteriores.
+- En Studio, **Ayuda → Buscar actualizaciones…** consulta el manifiesto, muestra la versión disponible y solicita confirmación. App y bridge CLI se preparan en una carpeta versionada; se valida el nuevo CLI antes de cambiar el launcher y se mantiene la versión anterior para rollback. El ZIP de Windows se normaliza si CPack incluye una carpeta raíz adicional.
+- `README.md`, ADR 0005, `CURRENT_STATE` y este handoff documentan el flujo. Aún falta ejecutar una instalación/actualización interactiva en máquinas limpias de Windows, macOS, Ubuntu y Fedora; la publicación del preview sigue aplazada.
+- Verificación local: `python -m compileall -q src`, `bash -n scripts/install-studio.sh scripts/install-studio-fedora.sh`, `cmake --build build/native --parallel 2` y `git diff --check` pasan. No se ejecutaron suites de tests ni instalaciones reales; `pwsh` no está disponible para parsear el script PowerShell localmente (CI contiene ese chequeo en Windows).
+
+## Mods de Claude Code
+
+- El catálogo pasó a nueve: se añadieron `chxchx-git-workflow`, `chxchx-safe-refactor`, `chxchx-tech-docs` y `chxchx-performance`. Son guías Markdown instaladas por proyecto; rendimiento se recomienda según stack/lenguaje detectado.
+- Se actualizaron README, ADR 0004 y CURRENT_STATE. No se ejecutaron verificaciones en esta tarea.
+- El checkout ya contenía cambios no relacionados del actualizador integrado de Studio; se conservaron.
+
 ## Instaladores nativos de Studio — CI verificado
 
 - CPack conserva `_CPack_Packages` junto al archivo final. El workflow inspecciona el paquete, valida runtimes/plugins Qt de Ubuntu/Windows/macOS y copia solo el ZIP/DMG/TGZ final a `dist/native-package` antes de `upload-artifact`. Esto elimina el staging temporal del input de subida y corrigió la falla de artefactos macOS.
 - `scripts/verify_studio_package.py` exige binario/runtime por SO; Fedora usa dependencias Qt instalables del sistema. Las pruebas cubren staging de Windows, detección de paquete Ubuntu incompleto y bundle macOS. `scripts/install-studio.sh` usa búsqueda BSD/GNU portable para extraer el `.app`.
 - CI run [#87](https://github.com/chxchx-dev/chxchx-tech-lead/actions/runs/38728824695), commit `9565feb`: 15 jobs aplicables completados correctamente. Windows validó el parseo PowerShell y el paquete ZIP; Ubuntu/Fedora validaron TGZ; macOS ARM e Intel validaron el contenido del DMG y publicaron sus artifacts. El job de preview se omitió porque el push fue a una rama feature.
 - Validación local: compileall; pytest `250 passed, 1 skipped`; build Studio y CTest `6/6`; TGZ Fedora local validado y re-staged; YAML del workflow, `bash -n` y `git diff --check` pasan. No se hizo instalación interactiva en máquinas físicas limpias ni despliegue VPS.
+
+## Estado para empezar a usar Studio
+
+- Studio está funcional y los paquetes nativos superaron CI (#87, 15 jobs aplicables). Esto no cierra la validación para uso diario: sigue pendiente probarlo en Fedora con un proyecto confiable, cubriendo Init/trust, skills y sincronización, edición/guardado, terminal, agente/contexto, preflight de RAM y cierre limpio.
+- No consta una instalación interactiva en una segunda máquina Fedora. El run #87 validó y cargó los paquetes, pero `publish-studio-preview` se omitió en la rama feature; la publicación del preview permanece aplazada.
+- El flujo de consulta, confirmación y aplicación del actualizador está implementado en el bridge y Studio. Las carpetas versionadas conservan rollback y el launcher solo cambia después de preparar y validar la app y su CLI. Se corrigió el marcador vacío que producían los instaladores Bash anteriores.
+- Siguiente paso: validar manualmente instalación, actualización, reejecución y rollback en Windows, macOS, Ubuntu y Fedora cuando haya un preview publicado. La descarga remota no se ejecutó desde este cambio y la publicación continúa aplazada.
 
 ## CI opcional de proyectos y CD a VPS
 

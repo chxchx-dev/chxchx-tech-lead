@@ -161,7 +161,7 @@ def editor_open(
     path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
     dry_run: bool = typer.Option(False, "--dry-run", help="Muestra el comando sin ejecutarlo."),
 ):
-    """Abre el proyecto en Sublime mediante su adapter."""
+    """Abre el proyecto en el editor configurado (Studio de forma predeterminada)."""
     try:
         result = _workspace_service(path).open_editor(dry_run=dry_run)
     except WorkspaceOperationError as exc:

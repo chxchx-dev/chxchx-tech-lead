@@ -48,9 +48,12 @@ def main() -> int:
     if not command:
         print("El comando del agente está vacío", file=sys.stderr)
         return 2
+
+    opencode_executable = _opencode_executable(command)
+    memory_options = {"opencode_executable": opencode_executable} if opencode_executable else {}
     if recover_memory and project_root is not None:
         try:
-            memories = recover_explicit_memories(project_root)
+            memories = recover_explicit_memories(project_root, **memory_options)
             persist_explicit_memories(project_root, memories)
             if memories and command:
                 command[-1] += format_recovered_memories(memories)
@@ -64,11 +67,20 @@ def main() -> int:
     completed = subprocess.run(command, cwd=os.getcwd(), env=environment, check=False)
     if capture_memory and project_root is not None:
         try:
-            memories = recover_explicit_memories(project_root)
+            memories = recover_explicit_memories(project_root, **memory_options)
             persist_explicit_memories(project_root, memories)
         except OSError as exc:
             print(f"No pude guardar la memoria local del proyecto: {exc}", file=sys.stderr, flush=True)
     return completed.returncode
+
+
+def _opencode_executable(command: list[str]) -> str | None:
+    if not command:
+        return None
+    executable = Path(command[0].replace("\\", "/")).name.casefold()
+    for suffix in (".exe", ".cmd", ".bat"):
+        executable = executable.removesuffix(suffix)
+    return command[0] if executable == "opencode" else None
 
 
 def _usage_instrumentation(command: list[str], name: str) -> tuple[list[str], dict[str, str]]:

@@ -179,6 +179,7 @@ void MainWindow::buildActions()
             }
         }
     });
+    helpMenu->addAction(QStringLiteral("Buscar actualizaciones…"), this, &MainWindow::checkStudioUpdates);
     helpMenu->addAction(QStringLiteral("Acerca de ChxChx Studio"), this, [this] {
         QMessageBox::about(this, QStringLiteral("Acerca de ChxChx Studio"),
             QStringLiteral("ChxChx Studio\nControl plane local para proyectos de desarrollo asistido."));

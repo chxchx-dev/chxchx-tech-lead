@@ -67,7 +67,7 @@ def _supports_new_chat(command: Sequence[str]) -> bool:
 
 def _captures_explicit_memory(command: Sequence[str]) -> bool:
     executable = _executable_name(command)
-    return executable in {"codex", "claude"}
+    return executable in {"codex", "claude"} or _is_opencode(command)
 
 
 def _executable_name(command: Sequence[str]) -> str:

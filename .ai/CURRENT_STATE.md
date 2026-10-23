@@ -1,5 +1,39 @@
 # Current State
 
+## Instalación completa y TUI centrada en Studio
+
+- Windows genera `chxchx-studio-windows-x86_64-setup.exe` con NSIS. El ejecutable incluye el instalador PowerShell, que descarga y valida el ZIP Qt y el bridge CLI; volver a abrirlo actualiza. El ZIP se mantiene para el actualizador integrado.
+- Ubuntu y Fedora ahora requieren los mismos componentes Qt y el plugin xcb dentro del TGZ; el instalador común macOS/Linux añade con apt/dnf las bibliotecas gráficas del sistema. macOS conserva la app con frameworks desplegados en el DMG. El workflow comprueba los runtimes Qt para ambos paquetes Linux.
+- La TUI abre ChxChx Studio en segundo plano y ya no ofrece preparar un proyecto Sublime. `chxchx-tech studio open` abre Studio; proyectos nuevos lo configuran como editor. Sublime sigue disponible si un proyecto lo configura explícitamente.
+- Validación local: `python -m compileall -q src scripts`, `bash -n scripts/install-studio.sh scripts/install-studio-fedora.sh` y `git diff --check` pasan. No se ejecutó la suite. Este entorno no tiene PowerShell ni NSIS, así que el nuevo `Setup.exe` y el workflow todavía requieren build CI. No se probó instalación en equipos limpios; la publicación del preview sigue aplazada y el enlace de descarga aún no estará disponible hasta publicarla.
+
+## README: guía de inicio para Studio y TUI
+
+- El comienzo del README ahora ayuda a elegir Studio, la TUI o la CLI y ofrece pasos concretos para lanzar cada interfaz sobre un proyecto.
+- La guía de Studio explica instalación/launcher, **Preparar y entrar**, edición, búsqueda, terminal, agentes y memoria. La TUI documenta preparación con `init`, trust, áreas principales, teclas y salida de Zellij.
+- Se sustituyó el banner ASCII extenso y los bloques de uso de Studio/TUI se dividieron por recorrido y tema. Se mantienen las referencias técnicas y el catálogo de capacidades.
+
+## OpenCode y memoria compartida entre agentes
+
+- Studio ya permite añadir OpenCode u OpenCode con Ollama desde Agentes y conectar MCP de Basic Memory/Serena desde Configuración, con preview, confirmación y alcance local al proyecto.
+- El wrapper ahora captura solicitudes explícitas desde sesiones OpenCode con `opencode session list` y `opencode export --sanitize`, valida que la sesión pertenezca a la ruta exacta del proyecto y comparte `.ai/memory/PROJECT_MEMORY.md` con Codex y Claude. Al iniciar chat nuevo, recupera y adjunta las solicitudes locales sin duplicarlas.
+- No se lee la base de datos interna de OpenCode. La captura está acotada a las diez sesiones recientes y a cinco segundos por comando. La vista Chats permanece enfocada en Codex/Claude.
+- No se ejecutaron pruebas en esta tarea; falta smoke manual con OpenCode normal y OpenCode con Ollama.
+
+## Catálogo de Mods para Claude Code
+
+- Se amplió de cinco a nueve guías locales con flujo Git, refactorización segura, documentación técnica y rendimiento basado en mediciones. Siguen siendo instrucciones instaladas por proyecto, sin hooks, ejecutables ni cambios globales.
+- La recomendación de rendimiento depende de stacks/lenguajes detectados; las otras tres guías son de flujo general. README y ADR 0004 describen el catálogo actualizado.
+- La instalación y actualización del preview de Studio se documenta en la sección siguiente.
+
+## Studio: funcional; validación final para uso diario pendiente
+
+- Studio tiene la funcionalidad principal implementada y los instaladores nativos pasaron CI: run #87 terminó con los 15 jobs aplicables en verde. La rama feature no publicó `studio-dev-preview`, de acuerdo con la decisión de aplazar esa publicación.
+- Aún no se debe marcar como validado para uso diario. Falta recorrer en Fedora, con un proyecto confiable, Init y trust, skills/sync, edición y guardado, terminal, sesión de agente con contexto, preflight de RAM y cierre limpio. Tampoco hay evidencia de instalación interactiva en una segunda máquina Fedora.
+- El menú **Ayuda → Buscar actualizaciones…** consulta el release y pide confirmación antes de aplicar. El actualizador valida los SHA-256, instala app y bridge CLI en una carpeta versionada, valida que el CLI nuevo arranque y cambia el launcher al final; conserva la versión anterior para rollback. El descubrimiento de instalación admite el marcador SHA completo y el marcador vacío de instaladores antiguos.
+- Los instaladores Bash y PowerShell se pueden volver a ejecutar para actualizar; `--update`/`-Update` exige una instalación previa y `--dry-run`/`-DryRun` valida descargas y conflictos antes de escribir. Windows normaliza ZIP con raíz anidada. No se probó una instalación interactiva en equipos limpios; la publicación del preview continúa aplazada y el chequeo en Studio requiere que haya un release publicado.
+- Verificación local: `python -m compileall -q src`, `bash -n` de instaladores, build nativo Qt y `git diff --check` pasan. No se ejecutó pytest ni una instalación; `pwsh` no está disponible localmente.
+
 ## CI opcional para proyectos de usuario
 
 - ChxChx genera de forma opt-in GitHub Actions para Python, Node.js y CMake/C++/Qt; el setup ofrece `--dry-run`, conserva workflows no administrados y verifica el hash de los administrados antes de actualizarlos o retirarlos. Los reemplazos/retiros dejan backup local fuera del repositorio.
@@ -25,10 +59,10 @@
 ## Estado actual
 
 - Inicio de Studio ofrece `Preparar y entrar`: vista previa y confirmación de Init, skills recomendadas, skills de Tech Packs detectados y Mods de Claude aplicables, sincronización del contexto, trust local y apertura de un chat nuevo con el agente elegido. Los Mods se incluyen solo si el proyecto ya tiene contexto/configuración Claude y nunca modifican ajustes globales.
-- El catálogo contiene cinco Mods instalables y retirables en `.claude/skills`: asesor de modelo, revisión previa a integrar, depuración con evidencia, plan de funcionalidad y guía C++/Qt. Studio tiene vista Mods con recomendaciones, estado, aplicación individual/por detección y retiro; el CLI expone `mod list/apply/remove`. El asesor muestra `/model <alias>` para que el usuario confirme el cambio dentro de Claude Code.
-- CI prepara un release rodante `studio-dev-preview` para Ubuntu/Fedora x86_64, Windows x86_64 y macOS Intel/Apple Silicon, más el wheel del bridge CLI con su nombre versionado válido. El manifiesto SHA-256 y los instaladores de Linux/macOS/Windows permiten instalar sin clonar. La publicación del run `38684041970` queda por confirmar.
+- El catálogo contiene nueve Mods instalables y retirables en `.claude/skills`: asesor de modelo, revisión previa a integrar, depuración con evidencia, planificación, guía C++/Qt, flujo Git, refactorización segura, documentación técnica y rendimiento. Studio tiene vista Mods con recomendaciones, estado, aplicación individual/por detección y retiro; el CLI expone `mod list/apply/remove`. El asesor muestra `/model <alias>` para que el usuario confirme el cambio dentro de Claude Code.
+- CI prepara un release rodante `studio-dev-preview` para Ubuntu/Fedora x86_64, Windows x86_64 y macOS Intel/Apple Silicon, más el wheel del bridge CLI con su nombre versionado válido. El manifiesto SHA-256 y los instaladores de Linux/macOS/Windows permiten instalar sin clonar. La publicación del preview continúa aplazada.
 - Validación de este bloque: `python -m compileall -q src tests scripts`; pytest (`217 passed, 1 skipped`); `cmake --build build/native --parallel 2`; CTest (`6/6`); CLI JSON de `mod list`; `projects prepare . --dry-run --trust`; sintaxis Bash, ayuda de ambos instaladores, nombre de wheel versionado con `packaging` y `git diff --check` pasan. No se pudo descargar el release con `--dry-run` ni construir el wheel localmente porque la sesión no resuelve PyPI/raw.githubusercontent.com; `pwsh` tampoco está instalado. El workflow se validó sintácticamente como YAML, pero necesita CI tras el push para verificar los assets por sistema.
-- Studio puede añadir OpenCode u OpenCode con Ollama desde Agentes, con `--dry-run`, confirmación y backup idempotente de `.ai/chxchx-tech.toml`. OpenCode recibe prompt de chat nuevo y memoria explícita local existente; la captura desde transcripts sigue implementada solo para Codex/Claude. Ollama hace su selección guiada de modelo al iniciar `ollama launch opencode`.
+- Studio añade OpenCode u OpenCode con Ollama desde Agentes, con `--dry-run`, confirmación y backup idempotente de `.ai/chxchx-tech.toml`. Configuración ofrece `Configurar MCP · OpenCode` para conectar Basic Memory y Serena mediante la CLI oficial. El wrapper usa `opencode session list` y `opencode export --sanitize` para capturar solicitudes explícitas y recuperar memoria del mismo proyecto. Ollama hace su selección guiada de modelo al iniciar `ollama launch opencode`.
 - Validación de esta integración: `python -m compileall -q src tests scripts`, pytest (`210 passed, 1 skipped`), `git diff --check`, build Qt Linux y CTest (`6/6`). No se cambió la configuración local del proyecto durante el desarrollo.
 - Catálogo ampliado a 21 skills y 13 Tech Packs: añade ingeniería C++, desarrollo Qt 6, builds CMake/empaquetado y software nativo multiplataforma. El detector reconoce fuentes C++ y proyectos Qt para recomendar estas guías y packs automáticamente.
 - Editor y navegación visualmente refinados: colores Scintilla en el orden RGB correcto; pestañas alinean el título a la izquierda y reservan una zona fija para la `×`; un clic abre archivos y alterna expandir/contraer carpetas. Build Linux y CTest pasan; falta revisión visual real.
@@ -208,7 +242,7 @@
 
 ## Memoria explícita al iniciar chat nuevo
 
-- `agent_pane` revisa transcripts al terminar cada sesión Codex/Claude y guarda solicitudes explícitas de recordar en `.ai/memory/PROJECT_MEMORY.md`. Antes de iniciar `--new-chat`, vuelve a revisar el historial local del mismo proyecto, evita duplicar solicitudes idénticas y adjunta las entradas recuperadas al prompt.
+- `agent_pane` revisa transcripts Codex/Claude y exportaciones sanitizadas de OpenCode al terminar sesiones, y guarda solicitudes explícitas en `.ai/memory/PROJECT_MEMORY.md`. OpenCode se consulta con `opencode session list` y `opencode export --sanitize`, filtrando por la ruta exacta del proyecto. Antes de iniciar `--new-chat`, revisa la memoria local del proyecto, evita duplicados y adjunta las entradas recuperadas al prompt.
 - Excluye preguntas que piden recuperar una frase anterior, mensajes de asistente y mensajes que coinciden con indicadores de secretos; no corre al iniciar agentes normalmente.
 - Validación: `python -m compileall -q src tests`; suite Python `201 passed, 1 skipped`; `git diff --check` limpio.
 - Pendiente: probar en Studio un mensaje exacto de memoria, cerrar el proyecto, iniciar chat nuevo y pedir la frase. La recuperación depende de que el transcript local del proveedor exista y contenga el mensaje original.
@@ -218,6 +252,6 @@
 ## Memoria resiliente de agentes
 
 - Las reglas administradas del proyecto piden guardar solicitudes explícitas de “recuerda esto” en `.ai/memory/PROJECT_MEMORY.md`, conservar frases/nombres literalmente, no guardar secretos o datos sensibles y consultar las entradas pertinentes al iniciar una tarea.
-- El prompt de “Nueva sesión” de Codex/Claude también carga esa nota e indica guardar la petición en el momento, sin esperar a cerrar la conversación. La carpeta `.ai/memory/` ya es la carpeta local asociada a Basic Memory durante la integración.
+- El prompt de “Nueva sesión” de Codex, Claude y OpenCode carga esa nota e indica guardar la petición en el momento. Configuración conecta Basic Memory/Serena a OpenCode mediante la CLI oficial y alcance de proyecto; `.ai/memory/` permanece como memoria local resiliente.
 - El cierre de Studio sigue sin reabrir el proceso del agente ni restaurar su transcripción. La persistencia está en el archivo del proyecto; solicitudes de memoria anteriores que nunca se guardaron no se recuperan automáticamente.
 - Validar manualmente en una conversación nueva: pedir una frase no sensible, confirmar que el agente informa la ruta, cerrar/reabrir Studio y pedir que la repita. No ejecutar esta prueba sobre información privada o secretos.

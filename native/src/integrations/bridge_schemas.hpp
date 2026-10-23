@@ -16,5 +16,6 @@ inline constexpr QLatin1StringView Conversation{"chxchx.conversation"};
 inline constexpr QLatin1StringView Errors{"chxchx.errors"};
 inline constexpr QLatin1StringView CiStatus{"chxchx.ci-status"};
 inline constexpr QLatin1StringView DeployStatus{"chxchx.deploy-status"};
+inline constexpr QLatin1StringView StudioUpdate{"chxchx.studio-update"};
 
 } // namespace BridgeSchemas

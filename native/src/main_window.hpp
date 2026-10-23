@@ -81,6 +81,7 @@ private slots:
     void attachAgentTerminal();
     void openSelectedAgent(bool newChat = false);
     void openAllAgentSessions();
+    void checkStudioUpdates();
 
 private:
     void closeEvent(QCloseEvent *event) override;
@@ -231,4 +232,6 @@ private:
     bool m_restoringEditorSession = false;
     bool m_prepareAndEnterPending = false;
     bool m_openAgentAfterRefresh = false;
+    bool m_studioUpdateCheckPending = false;
+    bool m_studioUpdateApplyPending = false;
 };
