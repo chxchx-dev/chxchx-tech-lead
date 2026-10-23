@@ -1,0 +1,5 @@
+name = "qt-cross-platform-desktop"
+description = "Aplicaciones de escritorio nativas con Qt y distribución para Windows, macOS y Linux."
+stacks = ["qt"]
+languages = []
+skills = ["cpp-engineering", "qt-development", "cpp-build-systems", "cross-platform-native", "architecture", "testing", "security-review", "code-review"]

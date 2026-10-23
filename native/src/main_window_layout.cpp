@@ -56,6 +56,8 @@ QIcon areaIcon(const QString &id)
         {"projects", "folder", QStyle::SP_DirIcon},
         {"skills", "preferences-plugin", QStyle::SP_DialogApplyButton},
         {"packs", "package-x-generic", QStyle::SP_DirLinkIcon},
+        {"mods", "applications-utilities", QStyle::SP_DialogApplyButton},
+        {"ci", "applications-development", QStyle::SP_ComputerIcon},
         {"resources", "drive-harddisk", QStyle::SP_DriveHDIcon},
         {"handoff", "document-edit", QStyle::SP_FileIcon},
         {"memory", "view-history", QStyle::SP_FileDialogInfoView},
@@ -225,7 +227,9 @@ void MainWindow::buildLayout()
     m_homeSuspendButton = new QPushButton(QStringLiteral("Suspender"), m_homeQuickActions);
     m_homeStopButton = new QPushButton(QStringLiteral("Detener procesos"), m_homeQuickActions);
     m_homeTerminalButton = new QPushButton(QStringLiteral("Terminal +"), m_homeQuickActions);
-    m_homePrepareButton = new QPushButton(QStringLiteral("Preparar proyecto"), m_homeQuickActions);
+    m_homePrepareButton = new QPushButton(QStringLiteral("Preparar y entrar"), m_homeQuickActions);
+    m_homePrepareButton->setToolTip(QStringLiteral(
+        "Inicializa el proyecto, aplica sus skills y packs detectados, actualiza la confianza y abre una sesión nueva."));
     m_homeSyncSkillsButton = new QPushButton(QStringLiteral("Sincronizar skills"), m_homeQuickActions);
     m_homeDoctorButton = new QPushButton(QStringLiteral("Diagnóstico"), m_homeQuickActions);
     m_homeAgentSelector = new QComboBox(m_homeQuickActions);
@@ -238,7 +242,7 @@ void MainWindow::buildLayout()
     m_homeSuspendButton->setIcon(studioIcon(QStringLiteral("media-playback-pause"), QStyle::SP_MediaPause));
     m_homeStopButton->setIcon(studioIcon(QStringLiteral("media-playback-stop"), QStyle::SP_MediaStop));
     m_homeTerminalButton->setIcon(studioIcon(QStringLiteral("utilities-terminal"), QStyle::SP_CommandLink));
-    m_homePrepareButton->setIcon(studioIcon(QStringLiteral("document-new"), QStyle::SP_FileDialogNewFolder));
+    m_homePrepareButton->setIcon(studioIcon(QStringLiteral("system-run"), QStyle::SP_CommandLink));
     m_homeSyncSkillsButton->setIcon(studioIcon(QStringLiteral("view-refresh"), QStyle::SP_BrowserReload));
     m_homeDoctorButton->setIcon(studioIcon(QStringLiteral("tools-report-bug"), QStyle::SP_MessageBoxInformation));
     m_homeAgentButton->setIcon(studioIcon(QStringLiteral("system-run"), QStyle::SP_CommandLink));

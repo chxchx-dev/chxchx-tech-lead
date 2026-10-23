@@ -5,6 +5,7 @@
 #include <QEventLoop>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QStringList>
 #include <QTimer>
 
 #include <cstdio>
@@ -22,6 +23,10 @@ bool terminalCommandFinishesSuccessfully()
     terminal.show();
     auto *emulator = terminal.findChild<VtTerminalWidget *>();
     if (emulator == nullptr) return false;
+
+    QByteArray sentInput;
+    QObject::connect(emulator, &VtTerminalWidget::inputReady, &terminal,
+        [&sentInput](const QByteArray &bytes) { sentInput.append(bytes); });
 
     int resizedColumns = 0;
     int resizedRows = 0;
@@ -56,9 +61,18 @@ bool terminalCommandFinishesSuccessfully()
     poll.start();
     loop.exec();
     poll.stop();
-    if (resizedColumns <= 0 || resizedRows <= 0) return false;
+    if (resizedColumns <= 0 || resizedRows <= 0) {
+        std::fprintf(stderr, "Workspace terminal emitted invalid dimensions %dx%d.\n",
+            resizedColumns, resizedRows);
+        return false;
+    }
     for (const auto *label : terminal.findChildren<QLabel *>())
         if (label->text().contains(QStringLiteral("código 0"))) return true;
+    QStringList status;
+    for (const auto *label : terminal.findChildren<QLabel *>()) status.append(label->text());
+    std::fprintf(stderr, "Workspace terminal failed: size=%dx%d input=%s status=%s\n",
+        resizedColumns, resizedRows, sentInput.toHex().constData(),
+        qPrintable(status.join(QStringLiteral(" | "))));
     return false;
 }
 

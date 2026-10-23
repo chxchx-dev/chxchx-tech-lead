@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from textual.timer import Timer
 
@@ -29,6 +30,9 @@ class WorkspaceSessionState:
     pack_matches: dict[str, PackRecommendation] = field(default_factory=dict)
     conversations: dict[str, Conversation] = field(default_factory=dict)
     cached_errors: dict[str, CachedError] = field(default_factory=dict)
+    ci_pending: str | None = None
+    ci_selected_run: str | None = None
+    ci_target_root: Path | None = None
     palette_open: bool = False
     attach_pending: bool = False
     start_pending: bool = False

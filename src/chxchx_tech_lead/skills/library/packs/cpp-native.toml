@@ -1,0 +1,5 @@
+name = "cpp-native"
+description = "Base para desarrollar y mantener software nativo en C++."
+stacks = ["cpp"]
+languages = []
+skills = ["cpp-engineering", "cpp-build-systems", "testing", "security-review", "code-review"]

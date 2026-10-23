@@ -6,10 +6,37 @@ import typer
 
 from ..ui.cli_output import console, print_agent_statuses as _print_agent_statuses
 from ..cli_registry import agent_app, workspace_app
+from ..workspace.agent_setup import AgentSetupError, add_agent
 from ..workspace.handoff import update_handoff
 from ..workspace.project_context import workspace_service_for as _workspace_service
 from ..workspace.service import WorkspaceOperationError
 from .resource_guard import guard_cli_agent_start
+
+
+@agent_app.command("add")
+def agent_add(
+    provider: str = typer.Argument(..., help="Proveedor: opencode u ollama-opencode."),
+    path: Path = typer.Option(Path.cwd(), "--path", exists=True, file_okay=False, resolve_path=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Previsualiza el cambio sin escribir ni crear backups."),
+):
+    """Añade OpenCode o OpenCode con el selector de modelos local de Ollama."""
+    try:
+        result = add_agent(path, provider, dry_run=dry_run)
+    except AgentSetupError as exc:
+        console.print(f"[red]✗ {exc}[/]")
+        raise typer.Exit(code=1)
+    if not result.changed:
+        console.print(f"[green]✓[/] {result.preview} ({result.path})")
+        return
+    console.print(
+        f"[green]✓[/] {'DRY RUN: se añadiría' if dry_run else 'Agente añadido'} "
+        f"`{result.provider.id}` en {result.path}"
+    )
+    if dry_run:
+        console.print(result.preview)
+    elif result.backup_path is not None:
+        console.print(f"Backup: {result.backup_path}")
+        console.print("Vuelve a confiar el proyecto antes de iniciar agentes; la configuración cambió.")
 
 @agent_app.command("start")
 def agent_start(

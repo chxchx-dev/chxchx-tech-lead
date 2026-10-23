@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
 #include <QListWidgetItem>
@@ -188,6 +189,139 @@ void MainWindow::showAreaDashboard(const QJsonObject &payload, const QString &ar
         }
         m_dashboardSummary->setText(QStringLiteral("%1 Tech Packs disponibles · %2 detectados")
             .arg(QString::number(packs.size()), QString::number(detected)));
+        return;
+    }
+
+    if (area == QStringLiteral("mods")) {
+        const QJsonArray mods = payload.value(QStringLiteral("mods")).toArray();
+        int recommended = 0;
+        int applied = 0;
+        for (const auto &value : mods) {
+            const QJsonObject mod = value.toObject();
+            const bool isRecommended = mod.value(QStringLiteral("recommended")).toBool();
+            const bool isApplied = mod.value(QStringLiteral("applied")).toBool();
+            const bool conflict = mod.value(QStringLiteral("conflict")).toBool();
+            if (isRecommended) ++recommended;
+            if (isApplied) ++applied;
+            QString state = isApplied ? QStringLiteral("Aplicado")
+                : (conflict ? QStringLiteral("Conflicto")
+                            : (isRecommended ? QStringLiteral("Recomendado") : QStringLiteral("Disponible")));
+            QString details = mod.value(QStringLiteral("description")).toString();
+            const QString reasons = joinedValues(mod.value(QStringLiteral("reasons")).toArray());
+            if (isRecommended && reasons != QStringLiteral("sin detectar")) {
+                details += QStringLiteral("\nMotivo: ") + reasons;
+            }
+            addRow(QStringLiteral("%1 · %2\n%3")
+                    .arg(mod.value(QStringLiteral("name")).toString(), state, details),
+                conflict ? QStringLiteral("dialog-warning") : QStringLiteral("applications-utilities"),
+                conflict ? QStyle::SP_MessageBoxWarning
+                         : (isApplied ? QStyle::SP_DialogApplyButton : QStyle::SP_FileIcon));
+        }
+        m_dashboardSummary->setText(QStringLiteral("%1 Mods disponibles · %2 recomendados · %3 aplicados")
+            .arg(QString::number(mods.size()), QString::number(recommended), QString::number(applied)));
+        if (mods.isEmpty()) addRow(QStringLiteral("No hay Mods disponibles en el catálogo."),
+            QStringLiteral("dialog-information"), QStyle::SP_MessageBoxInformation);
+        return;
+    }
+
+    if (area == QStringLiteral("ci")) {
+        const bool configured = payload.value(QStringLiteral("configured")).toBool();
+        const bool integrity = payload.value(QStringLiteral("integrity_ok")).toBool();
+        const bool authenticated = payload.value(QStringLiteral("authenticated")).toBool();
+        const QJsonArray stacks = payload.value(QStringLiteral("supported_stacks")).toArray();
+        const QJsonArray runs = payload.value(QStringLiteral("recent_runs")).toArray();
+        QString summary = QStringLiteral("CI %1 · integridad %2 · GitHub %3 · %4 ejecución(es) reciente(s)")
+            .arg(configured ? QStringLiteral("configurado") : QStringLiteral("desactivado"));
+        summary = summary.arg(integrity ? QStringLiteral("válida") : QStringLiteral("sin validar"))
+            .arg(authenticated ? QStringLiteral("conectado") : QStringLiteral("sin sesión"))
+            .arg(QString::number(runs.size()));
+        m_dashboardSummary->setText(summary);
+        addRow(QStringLiteral("Stacks detectados: %1")
+                .arg(joinedValues(stacks)),
+            QStringLiteral("applications-development"), QStyle::SP_ComputerIcon);
+        const QString message = payload.value(QStringLiteral("message")).toString();
+        if (!message.isEmpty()) {
+            addRow(message, QStringLiteral("dialog-information"), QStyle::SP_MessageBoxInformation);
+        }
+        for (const auto &warning : payload.value(QStringLiteral("warnings")).toArray()) {
+            addRow(warning.toString(), QStringLiteral("dialog-warning"), QStyle::SP_MessageBoxWarning);
+        }
+        for (const auto &value : runs) {
+            const QJsonObject run = value.toObject();
+            const QString conclusion = run.value(QStringLiteral("conclusion")).toString(
+                run.value(QStringLiteral("status")).toString());
+            QString runSummary = QStringLiteral("#%1 · %2 · %3\n%4 · %5")
+                .arg(run.value(QStringLiteral("databaseId")).toVariant().toString());
+            runSummary = runSummary.arg(run.value(QStringLiteral("workflowName")).toString())
+                .arg(conclusion)
+                .arg(run.value(QStringLiteral("headBranch")).toString())
+                .arg(run.value(QStringLiteral("url")).toString());
+            addRow(runSummary,
+                conclusion == QStringLiteral("success") ? QStringLiteral("emblem-ok") : QStringLiteral("dialog-warning"),
+                conclusion == QStringLiteral("success") ? QStyle::SP_DialogApplyButton : QStyle::SP_MessageBoxWarning);
+        }
+        if (runs.isEmpty() && !configured) {
+            addRow(QStringLiteral("CI está desactivado. Elige Configurar pipeline para revisar la propuesta."),
+                QStringLiteral("dialog-information"), QStyle::SP_MessageBoxInformation);
+        }
+        return;
+    }
+
+    if (area == QStringLiteral("deploy")) {
+        const bool configured = payload.value(QStringLiteral("configured")).toBool();
+        const bool valid = payload.value(QStringLiteral("managed")).toBool()
+            && payload.value(QStringLiteral("integrity_ok")).toBool();
+        const bool authenticated = payload.value(QStringLiteral("authenticated")).toBool();
+        const QString composeFile = payload.value(QStringLiteral("compose_file")).toString();
+        const QString branch = payload.value(QStringLiteral("auto_deploy_branch")).toString();
+        const QJsonArray runs = payload.value(QStringLiteral("recent_runs")).toArray();
+        QString mode = branch.isEmpty() ? QStringLiteral("manual")
+            : QStringLiteral("automático · %1").arg(branch);
+        m_dashboardSummary->setText(QStringLiteral("CD %1 · integridad %2 · GitHub %3 · %4 despliegue(s) reciente(s)")
+            .arg(configured ? QStringLiteral("configurado · %1").arg(mode) : QStringLiteral("desactivado"),
+                 valid ? QStringLiteral("válida") : QStringLiteral("sin validar"),
+                 authenticated ? QStringLiteral("conectado") : QStringLiteral("sin sesión"),
+                 QString::number(runs.size())));
+        addRow(composeFile.isEmpty()
+                ? QStringLiteral("Runtime: Docker Compose no detectado")
+                : QStringLiteral("Runtime: Docker Compose · %1").arg(composeFile),
+            QStringLiteral("applications-development"), QStyle::SP_ComputerIcon);
+        addRow(QStringLiteral("Variables de Environment production: %1")
+                .arg(joinedValues(payload.value(QStringLiteral("required_variables")).toArray())),
+            QStringLiteral("preferences-system"), QStyle::SP_FileDialogDetailedView);
+        addRow(QStringLiteral("Secretos de Environment production: %1")
+                .arg(joinedValues(payload.value(QStringLiteral("required_secrets")).toArray())),
+            QStringLiteral("dialog-password"), QStyle::SP_MessageBoxInformation);
+        const QString workflowPath = payload.value(QStringLiteral("workflow_path")).toString();
+        if (!workflowPath.isEmpty()) {
+            addRow(QStringLiteral("Workflow: %1").arg(workflowPath),
+                QStringLiteral("text-x-script"), QStyle::SP_FileIcon);
+        }
+        const QString message = payload.value(QStringLiteral("message")).toString();
+        if (!message.isEmpty()) {
+            addRow(message, QStringLiteral("dialog-information"), QStyle::SP_MessageBoxInformation);
+        }
+        for (const auto &warning : payload.value(QStringLiteral("warnings")).toArray()) {
+            addRow(warning.toString(), QStringLiteral("dialog-warning"), QStyle::SP_MessageBoxWarning);
+        }
+        for (const auto &value : runs) {
+            const QJsonObject run = value.toObject();
+            const QString conclusion = run.value(QStringLiteral("conclusion")).toString(
+                run.value(QStringLiteral("status")).toString());
+            QString runSummary = QStringLiteral("#%1 · %2 · %3\n%4 · %5")
+                .arg(run.value(QStringLiteral("databaseId")).toVariant().toString());
+            runSummary = runSummary.arg(run.value(QStringLiteral("workflowName")).toString())
+                .arg(conclusion)
+                .arg(run.value(QStringLiteral("headBranch")).toString())
+                .arg(run.value(QStringLiteral("url")).toString());
+            addRow(runSummary,
+                conclusion == QStringLiteral("success") ? QStringLiteral("emblem-ok") : QStringLiteral("dialog-warning"),
+                conclusion == QStringLiteral("success") ? QStyle::SP_DialogApplyButton : QStyle::SP_MessageBoxWarning);
+        }
+        if (runs.isEmpty() && !configured) {
+            addRow(QStringLiteral("CD está desactivado. Configúralo para revisar el workflow antes de guardarlo."),
+                QStringLiteral("dialog-information"), QStyle::SP_MessageBoxInformation);
+        }
         return;
     }
 

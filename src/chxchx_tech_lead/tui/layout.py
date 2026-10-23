@@ -20,6 +20,7 @@ def compose_workspace(project: ProjectInfo) -> ComposeResult:
                 yield from _processes()
         yield from _projects(project)
         yield from _skills()
+        yield from _ci()
         with TabPane("Más", id="more"):
             yield Static("Herramientas avanzadas y ayuda", classes="summary")
             with TabbedContent(initial="guide", id="more-tabs"):
@@ -146,6 +147,53 @@ def _skills() -> ComposeResult:
                 with Horizontal(classes="wide"):
                     yield DataTable(id="packs-table", cursor_type="row")
                     yield Static("Selecciona un pack para consultar sus skills.", id="pack-detail", markup=False)
+
+
+def _ci() -> ComposeResult:
+    with TabPane("CI/CD", id="ci"):
+        with TabbedContent(initial="ci-pipeline", id="ci-tabs"):
+            with TabPane("Integración continua", id="ci-pipeline"):
+                yield Static(
+                    "CI es opcional. Revisa la propuesta antes de guardar o ejecutar un workflow remoto.",
+                    id="ci-summary",
+                    classes="summary",
+                )
+                with Horizontal(classes="toolbar"):
+                    yield Button("Configurar / actualizar CI", id="btn-ci-setup", variant="primary")
+                    yield Button("Ejecutar CI", id="btn-ci-run", variant="success")
+                    yield Button("Retirar CI", id="btn-ci-remove", variant="error")
+                    yield Button("Actualizar estado", id="btn-ci-refresh")
+                    yield Button("Ver logs fallidos", id="btn-ci-logs")
+                with Horizontal(classes="wide"):
+                    yield DataTable(id="ci-runs", cursor_type="row")
+                    yield Static(
+                        "Selecciona una ejecución para consultar los logs fallidos.",
+                        id="ci-detail",
+                        markup=False,
+                    )
+            with TabPane("Despliegue a VPS", id="deploy"):
+                yield Static(
+                    "CD es opcional y se limita a Docker Compose sobre un servidor Linux propio o VPS. "
+                    "Empieza en modo manual; el despliegue automático requiere que lo habilites al configurar.",
+                    id="deploy-summary",
+                    classes="summary",
+                )
+                with Horizontal(classes="toolbar"):
+                    yield Label("Auto despliegue en rama (opcional):", classes="input-label")
+                    yield Input(placeholder="vacío = solo manual", id="deploy-branch", classes="field")
+                with Horizontal(classes="toolbar"):
+                    yield Button("Previsualizar / configurar CD", id="btn-deploy-setup", variant="primary")
+                    yield Button("Confirmar despliegue", id="btn-deploy-run", variant="success")
+                    yield Button("Retirar workflow CD", id="btn-deploy-remove", variant="error")
+                    yield Button("Actualizar estado", id="btn-deploy-refresh")
+                    yield Button("Ver logs fallidos", id="btn-deploy-logs")
+                with Horizontal(classes="wide"):
+                    yield DataTable(id="deploy-runs", cursor_type="row")
+                    yield Static(
+                        "Selecciona un despliegue para consultar los logs fallidos.",
+                        id="deploy-detail",
+                        markup=False,
+                    )
 
 
 def _handoff() -> ComposeResult:

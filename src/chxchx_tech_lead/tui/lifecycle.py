@@ -46,6 +46,9 @@ def refresh_visible_panel(app) -> None:
         return
     if section == "projects":
         app._refresh_projects()
+    elif section == "ci":
+        app._refresh_ci()
+        app._refresh_deploy()
     elif section == "skills":
         app._refresh_skills()
     elif section == "work":
@@ -85,6 +88,8 @@ def setup_tables(app) -> None:
         "#errors-table": ("Fecha UTC", "Proyecto", "Acción", "Error"),
         "#skills-table": ("Activa", "Skill", "Stack", "Descripción"),
         "#packs-table": ("Tech Pack", "Coincidencias", "Skills"),
+        "#ci-runs": ("ID", "Workflow", "Rama", "Estado", "Resultado"),
+        "#deploy-runs": ("ID", "Rama", "Estado", "Resultado"),
     }
     for selector, headings in columns.items():
         app._query(selector, DataTable).add_columns(*headings)
@@ -115,6 +120,10 @@ def setup_panel_titles(app) -> None:
         "#packs-table": "RECOMENDADOS PARA EL PROYECTO",
         "#skill-detail": "DETALLE DE SKILL",
         "#pack-detail": "DETALLE DE TECH PACK",
+        "#ci-runs": "EJECUCIONES RECIENTES",
+        "#ci-detail": "LOGS FALLIDOS",
+        "#deploy-runs": "DESPLIEGUES RECIENTES",
+        "#deploy-detail": "LOGS FALLIDOS",
         "#brand-banner": "CHXCHX",
     }
     for selector, title in titles.items():

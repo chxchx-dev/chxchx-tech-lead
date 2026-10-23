@@ -20,6 +20,17 @@ Thumbs.db
 **/.ai/
 **/.serena/
 **/.basic-memory/
+# Exponer solo ADRs públicas del repositorio, conservando privada la config local.
+!/.ai/
+.ai/*
+!/.ai/adr/
+.ai/adr/*
+!/.ai/adr/0001-native-cpp-qt-skills.md
+!/.ai/adr/0002-open-code-and-local-ollama.md
+!/.ai/adr/0003-studio-prepare-and-enter.md
+!/.ai/adr/0004-claude-project-mods.md
+!/.ai/adr/0005-studio-preview-distribution.md
+!/.ai/adr/0006-opt-in-project-ci-and-deployment-boundary.md
 # Documentación de trabajo privada/local del mantenedor.
 /docs/
 /.codex/

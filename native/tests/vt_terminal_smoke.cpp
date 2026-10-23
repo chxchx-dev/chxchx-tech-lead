@@ -4,6 +4,8 @@
 #include <QImage>
 #include <QKeyEvent>
 
+#include <cstdio>
+
 namespace {
 
 QImage render(VtTerminalWidget &terminal)
@@ -32,7 +34,7 @@ int main(int argc, char *argv[])
     QCoreApplication::processEvents();
 
     QByteArray output = "\033[31mANSI-RED\033[0m\r\n";
-    for (int line = 0; line < 48; ++line)
+    for (int line = 0; line < 120; ++line)
         output.append("history-line-").append(QByteArray::number(line)).append("\r\n");
     terminal.feed(output);
     QCoreApplication::processEvents();
@@ -40,14 +42,23 @@ int main(int argc, char *argv[])
     const QImage liveView = render(terminal);
     press(terminal, Qt::Key_Home, Qt::ControlModifier);
     const QImage oldestView = render(terminal);
-    if (oldestView == liveView) return 1;
+    if (oldestView == liveView) {
+        std::fprintf(stderr, "Scrollback home did not change the rendered view.\n");
+        return 1;
+    }
 
     press(terminal, Qt::Key_PageDown, Qt::ShiftModifier);
     const QImage laterHistoryView = render(terminal);
-    if (laterHistoryView == oldestView || laterHistoryView == liveView) return 2;
+    if (laterHistoryView == oldestView || laterHistoryView == liveView) {
+        std::fprintf(stderr, "PageDown did not move within scrollback.\n");
+        return 2;
+    }
 
     press(terminal, Qt::Key_End, Qt::ControlModifier);
-    if (render(terminal) != liveView) return 3;
+    if (render(terminal) != liveView) {
+        std::fprintf(stderr, "Scrollback End did not restore the live view.\n");
+        return 3;
+    }
 
     bool foundRedAnsiPixel = false;
     for (int y = 0; y < oldestView.height() && !foundRedAnsiPixel; ++y) {
@@ -59,7 +70,10 @@ int main(int argc, char *argv[])
             }
         }
     }
-    if (!foundRedAnsiPixel) return 4;
+    if (!foundRedAnsiPixel) {
+        std::fprintf(stderr, "ANSI red text was not rendered in the historical view.\n");
+        return 4;
+    }
 
     int resizedColumns = 0;
     int resizedRows = 0;
@@ -70,10 +84,17 @@ int main(int argc, char *argv[])
         });
     terminal.resize(480, 320);
     QCoreApplication::processEvents();
-    if (resizedColumns <= 0 || resizedRows <= 0) return 5;
+    if (resizedColumns <= 0 || resizedRows <= 0) {
+        std::fprintf(stderr, "Resize emitted no terminal dimensions (%d x %d).\n",
+            resizedColumns, resizedRows);
+        return 5;
+    }
     const QImage resizedLiveView = render(terminal);
     press(terminal, Qt::Key_Home, Qt::ControlModifier);
-    if (render(terminal) == resizedLiveView) return 6;
+    if (render(terminal) == resizedLiveView) {
+        std::fprintf(stderr, "Scrollback after resize did not change the rendered view.\n");
+        return 6;
+    }
     press(terminal, Qt::Key_End, Qt::ControlModifier);
     return 0;
 }

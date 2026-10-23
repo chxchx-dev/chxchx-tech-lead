@@ -37,6 +37,8 @@ def dispatch_table_row_highlighted(app, event: DataTable.RowHighlighted) -> None
         "agents-table": app.agent_row_highlighted,
         "skills-table": app.skill_row_highlighted,
         "packs-table": app.pack_row_highlighted,
+        "ci-runs": app.ci_row_highlighted,
+        "deploy-runs": app.deploy_row_highlighted,
     }
     handler = handlers.get(event.data_table.id)
     if handler is not None:

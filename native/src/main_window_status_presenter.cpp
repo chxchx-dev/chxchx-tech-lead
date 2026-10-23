@@ -27,11 +27,85 @@ QString displayPercent(const QJsonValue &value)
         : QStringLiteral("no disponible");
 }
 
+QString joinedValues(const QJsonArray &values)
+{
+    QStringList entries;
+    for (const auto &value : values) {
+        entries << value.toString();
+    }
+    return entries.isEmpty() ? QStringLiteral("sin detectar") : entries.join(QStringLiteral(" · "));
+}
 
 } // namespace
 
 QString MainWindow::formatBridgeStatus(const QJsonObject &payload, const QString &area) const
 {
+    if (area == QStringLiteral("deploy")) {
+        QStringList lines;
+        lines << QStringLiteral("Workflow: %1")
+            .arg(payload.value(QStringLiteral("configured")).toBool()
+                ? QStringLiteral("configurado") : QStringLiteral("desactivado"));
+        lines << QStringLiteral("Integridad: %1 · GitHub CLI: %2")
+            .arg(payload.value(QStringLiteral("integrity_ok")).toBool()
+                ? QStringLiteral("válida") : QStringLiteral("requiere revisión"),
+                 payload.value(QStringLiteral("authenticated")).toBool()
+                ? QStringLiteral("conectado") : QStringLiteral("sin sesión"));
+        lines << QStringLiteral("Runtime: Docker Compose · %1")
+            .arg(payload.value(QStringLiteral("compose_file")).toString(QStringLiteral("no detectado")));
+        const QString branch = payload.value(QStringLiteral("auto_deploy_branch")).toString();
+        lines << (branch.isEmpty() ? QStringLiteral("Modo: manual")
+            : QStringLiteral("Modo: automático · %1").arg(branch));
+        if (!payload.value(QStringLiteral("message")).toString().isEmpty()) {
+            lines << payload.value(QStringLiteral("message")).toString();
+        }
+        for (const auto &warning : payload.value(QStringLiteral("warnings")).toArray()) {
+            lines << QStringLiteral("Aviso: %1").arg(warning.toString());
+        }
+        const QJsonArray runs = payload.value(QStringLiteral("recent_runs")).toArray();
+        for (const auto &value : runs) {
+            const QJsonObject run = value.toObject();
+            QString runSummary = QStringLiteral("#%1 · %2 · %3 · %4")
+                .arg(run.value(QStringLiteral("databaseId")).toVariant().toString());
+            runSummary = runSummary.arg(run.value(QStringLiteral("workflowName")).toString())
+                .arg(run.value(QStringLiteral("headBranch")).toString())
+                .arg(run.value(QStringLiteral("conclusion")).toString(
+                    run.value(QStringLiteral("status")).toString()));
+            lines << runSummary;
+        }
+        return lines.join(QLatin1Char('\n'));
+    }
+    if (area == QStringLiteral("ci")) {
+        QStringList lines;
+        lines << QStringLiteral("Workflow: %1")
+            .arg(payload.value(QStringLiteral("configured")).toBool()
+                ? QStringLiteral("configurado") : QStringLiteral("desactivado"));
+        QString integrity = QStringLiteral("Integridad: %1 · GitHub CLI: %2")
+            .arg(payload.value(QStringLiteral("integrity_ok")).toBool()
+                ? QStringLiteral("válida") : QStringLiteral("requiere revisión"));
+        integrity = integrity.arg(payload.value(QStringLiteral("authenticated")).toBool()
+            ? QStringLiteral("conectado") : QStringLiteral("sin sesión"));
+        lines << integrity;
+        lines << QStringLiteral("Stacks: %1")
+            .arg(joinedValues(payload.value(QStringLiteral("supported_stacks")).toArray()));
+        if (!payload.value(QStringLiteral("message")).toString().isEmpty()) {
+            lines << payload.value(QStringLiteral("message")).toString();
+        }
+        for (const auto &warning : payload.value(QStringLiteral("warnings")).toArray()) {
+            lines << QStringLiteral("Aviso: %1").arg(warning.toString());
+        }
+        const QJsonArray runs = payload.value(QStringLiteral("recent_runs")).toArray();
+        for (const auto &value : runs) {
+            const QJsonObject run = value.toObject();
+            QString runSummary = QStringLiteral("#%1 · %2 · %3 · %4")
+                .arg(run.value(QStringLiteral("databaseId")).toVariant().toString());
+            runSummary = runSummary.arg(run.value(QStringLiteral("workflowName")).toString())
+                .arg(run.value(QStringLiteral("headBranch")).toString())
+                .arg(run.value(QStringLiteral("conclusion")).toString(
+                    run.value(QStringLiteral("status")).toString()));
+            lines << runSummary;
+        }
+        return lines.join(QLatin1Char('\n'));
+    }
     const QJsonObject project = payload.value(QStringLiteral("project")).toObject();
     const QJsonObject workspace = payload.value(QStringLiteral("workspace")).toObject();
     const QJsonObject resources = payload.value(QStringLiteral("resources")).toObject();
@@ -217,5 +291,28 @@ QString MainWindow::formatResourcesOverview(const QJsonObject &payload) const
     if (payload.value(QStringLiteral("projects")).toArray().isEmpty()) {
         lines << QStringLiteral("No hay proyectos registrados.");
     }
+    return lines.join(QLatin1Char('\n'));
+}
+
+QString MainWindow::formatMods(const QJsonObject &payload) const
+{
+    QStringList lines{QStringLiteral("Mods de Claude Code · instrucciones locales del proyecto")};
+    for (const auto &value : payload.value(QStringLiteral("mods")).toArray()) {
+        const QJsonObject mod = value.toObject();
+        QStringList reasons;
+        for (const auto &reason : mod.value(QStringLiteral("reasons")).toArray()) {
+            reasons << reason.toString();
+        }
+        const QString state = mod.value(QStringLiteral("conflict")).toBool()
+            ? QStringLiteral("conflicto: archivo externo")
+            : (mod.value(QStringLiteral("applied")).toBool() ? QStringLiteral("aplicado")
+                : (mod.value(QStringLiteral("recommended")).toBool() ? QStringLiteral("recomendado")
+                                                                       : QStringLiteral("disponible")));
+        lines << QStringLiteral("%1 · %2\n  %3%4")
+            .arg(mod.value(QStringLiteral("name")).toString(), state,
+                 mod.value(QStringLiteral("description")).toString(),
+                 reasons.isEmpty() ? QString() : QStringLiteral("\n  Motivo: ") + reasons.join(QStringLiteral("; ")));
+    }
+    lines << QStringLiteral("El asesor de modelo recomienda y muestra /model <alias>; Claude Code aplica el cambio tras tu confirmación.");
     return lines.join(QLatin1Char('\n'));
 }

@@ -23,6 +23,21 @@ def test_detect_packs_explains_matching_stack_and_language(tmp_path: Path) -> No
     nextjs_pack = TechPackRegistry().get("nextjs-app")
     assert nextjs_pack is not None and "ui-ux-design" in nextjs_pack.skills
 
+def test_cpp_qt_projects_recommend_native_skills_and_packs(tmp_path: Path) -> None:
+    project = tmp_path / "qt-app"
+    project.mkdir()
+    (project / "main.cpp").write_text("int main() { return 0; }\n", encoding="utf-8")
+    (project / "CMakeLists.txt").write_text(
+        "project(sample LANGUAGES CXX)\nfind_package(Qt6 REQUIRED COMPONENTS Widgets)\n",
+        encoding="utf-8",
+    )
+
+    skill_names = {skill.name for skill in SkillRegistry().recommend(project)}
+    pack_names = {match.pack.name for match in TechPackRegistry().detect(project)}
+
+    assert {"cpp-engineering", "qt-development", "cpp-build-systems", "cross-platform-native"} <= skill_names
+    assert {"cpp-native", "qt-cross-platform-desktop"} <= pack_names
+
 
 def test_every_pack_references_known_skills() -> None:
     packs = TechPackRegistry().list()

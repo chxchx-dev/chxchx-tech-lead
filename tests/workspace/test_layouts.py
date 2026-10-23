@@ -122,3 +122,31 @@ def test_new_chat_prompt_uses_exact_configured_memory_project(tmp_path: Path):
     assert "`demo-exact-project`" in prompt
     assert "exactamente ese nombre en `project`" in prompt
     assert "no reutilices" in prompt
+
+
+def test_opencode_new_chat_uses_prompt_flag_and_only_recovers_project_memory(tmp_path: Path):
+    from chxchx_tech_lead.workspace.agent_commands import agent_pane_command
+
+    command = agent_pane_command(
+        "opencode", ["opencode"], label="", logo="", new_chat=True, project_root=str(tmp_path)
+    )
+
+    assert "--recover-explicit-memory" in command
+    assert "--capture-explicit-memory" not in command
+    assert command[-3] == "opencode"
+    assert command[-2] == "--prompt"
+    assert "Basic Memory" in command[-1]
+
+
+def test_ollama_launcher_passes_new_chat_prompt_through_to_opencode():
+    from chxchx_tech_lead.workspace.agent_commands import agent_pane_command
+
+    command = agent_pane_command(
+        "ollama-opencode", ["ollama", "launch", "opencode"],
+        label="", logo="", new_chat=True,
+    )
+
+    assert command[-4] == "opencode"
+    assert command[-3] == "--"
+    assert command[-2] == "--prompt"
+    assert "Basic Memory" in command[-1]

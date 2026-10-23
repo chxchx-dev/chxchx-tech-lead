@@ -83,7 +83,7 @@ void MainWindow::launchAgentFromSelector(QComboBox *selector, bool newChat)
     const QJsonArray studioCommand = QJsonDocument::fromJson(encodedCommand).array();
     if (newChat && studioCommand.isEmpty()) {
         QMessageBox::information(this, QStringLiteral("Chat nuevo no disponible"),
-            QStringLiteral("La recuperación de contexto está disponible para Codex y Claude Code."));
+            QStringLiteral("La recuperación de contexto está disponible para Codex, Claude Code y OpenCode."));
         return;
     }
     if (!studioCommand.isEmpty()) {

@@ -4,9 +4,24 @@
 #include <QEventLoop>
 #include <QTimer>
 
+#include <cstdio>
+#include <cstring>
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
+#ifdef Q_OS_WIN
+    if (argc > 1 && std::strcmp(argv[1], "--pty-smoke-child") == 0) {
+        std::fputs("READY", stdout);
+        std::fflush(stdout);
+        char input[256]{};
+        if (!std::fgets(input, sizeof(input), stdin)) return 10;
+        input[std::strcspn(input, "\r\n")] = '\0';
+        std::printf("PTY_OK=%s\n", input);
+        std::fflush(stdout);
+        return 0;
+    }
+#endif
     PtySession session;
     QByteArray output;
     int exitCode = -1;
@@ -32,21 +47,36 @@ int main(int argc, char *argv[])
         [&loop, &exitCode](int code) { exitCode = code; loop.quit(); });
 
 #ifdef Q_OS_WIN
-    const bool started = session.start(QStringLiteral("powershell.exe"),
-        {QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile"), QStringLiteral("-Command"),
-         QStringLiteral("$answer = Read-Host 'READY'; Write-Output ('PTY_OK=' + $answer)")}, {}, 80, 24);
+    QString startError;
+    const bool started = session.start(QCoreApplication::applicationFilePath(),
+        {QStringLiteral("--pty-smoke-child")}, {}, 80, 24, &startError);
 #else
     const bool started = session.start(QStringLiteral("/bin/sh"),
         {QStringLiteral("-c"), QStringLiteral("stty -echo; printf READY; read line; printf 'PTY_OK=%s\\n' \"$line\"; stty size")}, {}, 80, 24);
 #endif
-    if (!started) return 1;
+    if (!started) {
+#ifdef Q_OS_WIN
+        std::fprintf(stderr, "PTY start failed: %s\n", qPrintable(startError));
+#else
+        std::fprintf(stderr, "PTY start failed.\n");
+#endif
+        return 1;
+    }
     timeout.start(5000);
     loop.exec();
     if (timeout.isActive()) timeout.stop();
     session.stop();
-    if (exitCode != 0 || !output.contains("PTY_OK=chxchx-input") || !inputSent) return 2;
+    if (exitCode != 0 || !output.contains("PTY_OK=chxchx-input") || !inputSent) {
+        std::fprintf(stderr, "PTY smoke failed: exit=%d inputSent=%d output=", exitCode, inputSent);
+        std::fwrite(output.constData(), 1, static_cast<size_t>(output.size()), stderr);
+        std::fputc('\n', stderr);
+        return 2;
+    }
 #ifndef Q_OS_WIN
-    if (!output.contains("30 96")) return 3;
+    if (!output.contains("30 96")) {
+        std::fprintf(stderr, "PTY resize failed: output did not contain 30 96.\n");
+        return 3;
+    }
 #endif
     return 0;
 }

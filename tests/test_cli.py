@@ -1,4 +1,5 @@
 from pathlib import Path
+import tomllib
 
 from typer.testing import CliRunner
 
@@ -18,6 +19,38 @@ def test_version_command():
 
     assert result.exit_code == 0
     assert "chxchx-tech-lead" in result.stdout
+
+
+def test_agent_add_cli_previews_then_creates_a_backup_and_appends_provider(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    config = project / ".ai" / "chxchx-tech.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        'version = 2\n[workspace]\nname = "demo"\n\n'
+        '[[workspace.agents]]\nid = "codex"\ncommand = ["codex"]\n',
+        encoding="utf-8",
+    )
+    original = config.read_bytes()
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "chxchx-home"))
+
+    preview = runner.invoke(app, ["agent", "add", "opencode", "--path", str(project), "--dry-run"])
+
+    assert preview.exit_code == 0, preview.stdout
+    assert "DRY RUN" in preview.stdout
+    assert 'id = "opencode"' in preview.stdout
+    assert config.read_bytes() == original
+    assert not (tmp_path / "chxchx-home").exists()
+
+    added = runner.invoke(app, ["agent", "add", "opencode", "--path", str(project)])
+    parsed = tomllib.loads(config.read_text(encoding="utf-8"))
+
+    assert added.exit_code == 0, added.stdout
+    assert "Backup:" in added.stdout
+    assert "vuelve a confiar" in added.stdout.lower()
+    assert parsed["workspace"]["agents"][-1]["command"] == ["opencode"]
+    backups = list((tmp_path / "chxchx-home" / "backups").rglob("chxchx-tech.toml"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == original
 
 
 def test_editor_setup_dry_run_and_generation_are_idempotent(tmp_path: Path):
@@ -318,9 +351,9 @@ def test_skill_and_pack_lists_report_catalog_size():
     packs = runner.invoke(app, ["pack", "list"])
 
     assert skills.exit_code == 0, skills.stdout
-    assert "17 skills disponibles" in skills.stdout
+    assert "21 skills disponibles" in skills.stdout
     assert packs.exit_code == 0, packs.stdout
-    assert "11 packs" in packs.stdout
+    assert "13 packs" in packs.stdout
     assert "nestjs-api" in packs.stdout
     assert "nestjs" in packs.stdout
     assert "typescript-engineering" in packs.stdout

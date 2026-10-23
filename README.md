@@ -28,6 +28,9 @@
 ```
 ChxChx Tech Lead prepara el contexto de un proyecto, conecta herramientas externas y administra un workspace ligero desde la terminal. No reemplaza a Git, Zellij, Sublime, Codex, Claude ni OpenCode: los detecta y los orquesta mediante adapters.
 
+**ChxChx Studio** es su aplicación nativa de escritorio en C++20/Qt 6 para
+Windows, macOS y Linux. Puedes [instalar el preview sin clonar el repositorio](#instalar-chxchx-studio-sin-clonar-el-repositorio); el instalador descarga el paquete correcto y su bridge CLI aislado.
+
 ## Funciones
 
 La versión pública estable `0.2.0` incluye preparación idempotente de proyectos, perfiles y detección de stack, backups y rollback, integraciones MCP, registro multiproyecto, diagnóstico y smoke test. Terminal Workspace todavía no forma parte de esa release.
@@ -42,16 +45,19 @@ La rama `dev` añade el Terminal Workspace. El PR pasó la matriz automatizada d
 - dashboard con Textual y operación multiproyecto mediante sesiones recuperables;
 - Skill Registry local con búsqueda, consulta de instrucciones y recomendaciones por stack.
 
-El catálogo contiene 17 skills generales y para Python, TypeScript, React/Next.js,
-NestJS, .NET, React Native, PostgreSQL, Prisma, Redis, Docker y diseño UI/UX de
-producto. La skill UI/UX se recomienda para proyectos React, Next.js y React
-Native y forma parte de sus Tech Packs.
+El catálogo contiene 21 skills generales y para Python, TypeScript, React/Next.js,
+NestJS, .NET, React Native, PostgreSQL, Prisma, Redis, Docker, diseño UI/UX y
+software nativo en C++/Qt. Las guías C++/Qt cubren ingeniería moderna, builds
+con CMake, aplicaciones Qt 6 y distribución para Windows, macOS y Linux. La skill
+UI/UX se recomienda para proyectos React, Next.js y React Native y forma parte
+de sus Tech Packs.
 Las recomendaciones no cambian el proyecto. Habilita de forma explícita las
 skills que quieres añadir al contexto:
 
 ```bash
 chxchx-tech skill list
 chxchx-tech skill search python
+chxchx-tech skill search qt
 chxchx-tech skill info python-engineering
 chxchx-tech skill recommend .
 chxchx-tech skill enable nextjs .
@@ -59,6 +65,7 @@ chxchx-tech skill sync . --dry-run
 chxchx-tech skill sync .
 chxchx-tech pack list
 chxchx-tech pack detect .
+chxchx-tech pack info qt-cross-platform-desktop
 chxchx-tech pack apply-detected . --dry-run
 chxchx-tech pack apply-detected .
 chxchx-tech skill status .
@@ -68,7 +75,7 @@ La selección por proyecto se guarda en `.ai/chxchx-skills.toml`; `skill sync`
 genera las instrucciones activas en `.ai/SKILLS.md` y añade una referencia
 administrada a `AGENTS.md`. Usa `skill disable NOMBRE .` y vuelve a sincronizar
 para retirar una skill del contexto.
-No instalas cada skill por separado: las 17 guías y 11 Tech Packs vienen con
+No instalas cada skill por separado: las 21 guías y 13 Tech Packs vienen con
 ChxChx. `skill list` informa el total de guías; `pack list` muestra cada pack,
 cuántas skills incluye y sus nombres; `pack info NOMBRE` consulta uno en
 particular. Así puedes ver exactamente qué se añadirá antes de aplicarlo.
@@ -79,6 +86,33 @@ añade de una vez la unión de los packs compatibles, sin escribir sus nombres;
 `skill status` cuenta cuáles están activas y después `skill sync .` carga esa
 selección sin volver a nombrar las skills. Son instrucciones Markdown para los
 agentes, no paquetes ejecutables ni utilidades instaladas individualmente.
+
+### Mods locales para Claude Code
+
+El catálogo incluye cinco Mods de instrucciones de proyecto: asesor de modelo,
+revisión antes de integrar, depuración con evidencia, plan de funcionalidades y
+desarrollo nativo C++/Qt. Se aplican en `.claude/skills/`, no instalan ejecutables,
+hooks ni ajustes globales de Claude. Claude Code carga las skills del proyecto al
+abrir una sesión nueva; consulta la [documentación oficial de skills](https://code.claude.com/docs/en/skills).
+
+```bash
+chxchx-tech mod list --path .
+chxchx-tech mod apply --path . --dry-run
+chxchx-tech mod apply --path .
+chxchx-tech mod apply chxchx-model-advisor --path .
+chxchx-tech mod remove chxchx-model-advisor --path . --dry-run
+```
+
+`mod apply` instala los Mods recomendados por stack y muestra conflictos antes
+de escribir. Los cambios son locales al repositorio, se pueden repetir sin
+duplicar archivos y crean backup en `.ai/backups/claude-mods/` al actualizar un
+Mod administrado. La preparación rápida de Studio los previsualiza y aplica si
+detecta un agente Claude, `.claude/` o `CLAUDE.md`.
+
+El asesor clasifica el trabajo y recomienda Haiku para tareas mecánicas, Sonnet
+para trabajo habitual u Opus para problemas difíciles o de alto impacto. Indica
+el comando oficial, como `/model sonnet`; el usuario confirma el cambio dentro
+de Claude Code antes de continuar. No cambia el modelo silenciosamente.
 
 ## Requisitos
 
@@ -113,16 +147,87 @@ irm https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/main/scripts/b
 
 Estos instaladores solo dejan `chxchx-tech` como herramienta global; la configuración de cada proyecto se crea aparte.
 
-### Prueba rápida de ChxChx Studio en Fedora
+### Instalar ChxChx Studio sin clonar el repositorio
 
-El instalador descarga el paquete público de la pre-release Fedora más reciente de `dev`, instala las bibliotecas Qt de ejecución y deja Studio en `~/.local/opt/chxchx-studio/`. También instala el bridge CLI en un entorno aislado para esta versión y crea `~/.local/bin/chxchx-studio-dev`; no reemplaza otro `chxchx-tech` global. Requiere Fedora x86_64, conexión a GitHub, `sudo` y que CI termine correctamente.
+Puedes instalar la aplicación de escritorio y su bridge CLI desde los paquetes
+públicos del preview. El instalador detecta el sistema y la arquitectura,
+descarga solo esos archivos, comprueba sus SHA-256 y configura una carpeta
+aislada por versión. No descarga ni clona el código fuente del repositorio.
+
+| Sistema | Paquete disponible | Instalación |
+| --- | --- | --- |
+| Ubuntu 22.04 o posterior, x86_64 | TGZ con runtime Qt | Bash; `sudo` instala bibliotecas gráficas del sistema |
+| Fedora x86_64 | TGZ con dependencias Qt de Fedora | Bash; `sudo` instala bibliotecas Qt |
+| macOS Apple Silicon e Intel | DMG con app `.app` | Bash; primera apertura puede requerir confirmar la app sin firma |
+| Windows x86_64 | ZIP con runtime Qt | PowerShell; instala solo en el perfil del usuario |
+
+Estos comandos instalan el **preview de desarrollo** más reciente de la rama
+`dev`, no una versión estable. El paquete aparece cuando todos los builds y
+comprobaciones de CI terminan correctamente. [Ver el release publicado](https://github.com/chxchx-dev/chxchx-tech-lead/releases/tag/studio-dev-preview).
+
+#### Linux y macOS
+
+Primero puedes descargar y verificar el paquete sin instalarlo. El modo
+`--dry-run` descarga a una carpeta temporal, valida los checksums y no modifica
+el sistema ni tu instalación de Studio.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio-fedora.sh | bash
-chxchx-studio-dev /ruta/al/proyecto
+curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio.sh | bash -s -- --dry-run
 ```
 
-Es una compilación de desarrollo para pruebas, no una versión estable. Después de cada push a `dev`, espera a que los jobs Fedora y de publicación terminen; el enlace siempre instala el paquete más reciente publicado. Para quitarla, elimina el launcher y la carpeta `~/.local/opt/chxchx-studio/dev-<commit>` indicada al instalar. Las dependencias Qt instaladas mediante DNF se administran aparte con `dnf remove` si ya no las necesita otra aplicación.
+Cuando quieras instalar:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio.sh | bash
+```
+
+En Ubuntu y Fedora el instalador solicita `sudo` solo para instalar las
+bibliotecas gráficas de ejecución. Studio queda en `~/.local/opt/chxchx-studio/`
+y el comando `chxchx-studio-dev` en `~/.local/bin/`. Abre un proyecto así:
+
+```bash
+chxchx-studio-dev /ruta/a/tu/proyecto
+```
+
+En macOS puedes abrirlo también desde `~/Applications`. Al ser un preview sin
+firma de desarrollador, macOS puede bloquear la primera apertura; desde Finder,
+usa **clic derecho → Abrir** y confirma una sola vez. El preview no requiere
+Homebrew ni clonar el repositorio.
+
+En Linux/macOS, si el comando no aparece en una terminal nueva, agrega
+`~/.local/bin` a `PATH`; en macOS también puedes abrir la app desde Finder.
+
+#### Windows 10/11
+
+En PowerShell descarga el pequeño instalador, revisa el contenido si lo deseas,
+previsualiza la instalación y después ejecútalo:
+
+```powershell
+$installer = Join-Path $env:TEMP 'install-chxchx-studio.ps1'
+Invoke-WebRequest 'https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio.ps1' -OutFile $installer
+powershell -ExecutionPolicy Bypass -File $installer -DryRun
+powershell -ExecutionPolicy Bypass -File $installer
+Remove-Item $installer
+```
+
+Studio queda instalado en `%LOCALAPPDATA%\Programs\ChxChxStudio\`; también
+aparece un acceso **ChxChx Studio Dev** en el menú Inicio. El bridge CLI queda
+en un entorno virtual propio de esa versión y no reemplaza otro `chxchx-tech`.
+
+#### Actualizar y desinstalar
+
+Vuelve a ejecutar el instalador para obtener el último commit publicado. Cada
+commit queda en una carpeta propia para conservar la versión anterior; el
+launcher apunta al nuevo preview. En Linux/macOS, quita `~/.local/bin/chxchx-studio-dev`
+y las carpetas `~/.local/opt/chxchx-studio/dev-*`. En macOS, quita además el
+enlace `~/Applications/ChxChx Studio Dev.app` y las apps
+`~/Applications/ChxChx Studio Dev-*.app`. En Windows elimina la carpeta
+`%LOCALAPPDATA%\Programs\ChxChxStudio\` y el acceso del menú Inicio. Las
+bibliotecas de Ubuntu/Fedora y `uv` se instalan en el usuario/sistema y se
+administran aparte; no las elimines si las usan otras herramientas.
+
+Las rutas ya existentes sin el marcador `.chxchx-managed` no se sobrescriben.
+Las descargas se comprueban contra el manifiesto del release antes de instalar.
 
 ## Instalación desde un clon
 
@@ -471,12 +576,32 @@ Para ahorrar tokens, abre una conversación limpia y haz que el agente reconstru
 
 ```bash
 chxchx-tech agent start codex --new-chat --path .
-# o para Codex y Claude configurados:
+# o para agentes configurados compatibles (Codex, Claude Code y OpenCode):
 chxchx-tech agent start --all --new-chat --path .
 chxchx-tech workspace attach .
 ```
 
-`--new-chat` está disponible para las CLIs oficiales `codex` y `claude`. Al terminar cada sesión de esos agentes, ChxChx revisa los transcripts locales del proyecto y guarda solicitudes explícitas de recordar en `.ai/memory/PROJECT_MEMORY.md`; al iniciar un chat nuevo las recupera sin duplicarlas y las pasa al contexto inicial. Omite preguntas de recuperación, conversaciones de otros proyectos y mensajes que parezcan contener secretos; no carga transcripciones completas. También incluye el valor exacto de `memory_project` desde `.ai/chxchx-tech.toml`: las herramientas Basic Memory deben usar ese nombre en el argumento `project`, sin reutilizar IDs de otros proyectos ni el ámbito predeterminado. Las frases se buscan primero en el archivo local; si la memoria no está configurada, el agente no debe hacer búsquedas globales. La captura depende de que el transcript local del proveedor exista y pueda leerse al terminar la sesión; no puede recuperar mensajes ausentes de esos archivos. `.ai/` es local a cada checkout y está excluido de Git. Los agentes distintos de Codex/Claude siguen pudiendo iniciarse normalmente, pero aún no reciben esta captura automática.
+`--new-chat` está disponible para Codex, Claude Code y OpenCode. Al terminar cada sesión de Codex o Claude, ChxChx revisa los transcripts locales del proyecto y guarda solicitudes explícitas de recordar en `.ai/memory/PROJECT_MEMORY.md`; al iniciar un chat nuevo las recupera sin duplicarlas. OpenCode recibe el prompt inicial y puede leer esa memoria local, pero todavía no captura solicitudes desde sus transcripts. La captura de Codex/Claude omite preguntas de recuperación, conversaciones de otros proyectos y mensajes que parezcan contener secretos; no carga transcripciones completas. Si se configuró `memory_project`, el prompt indica su nombre exacto para Basic Memory. `.ai/` es local a cada checkout y está excluido de Git.
+
+Puedes incorporar agentes al proyecto sin editar el TOML a mano:
+
+```bash
+chxchx-tech agent add opencode --path . --dry-run
+chxchx-tech agent add opencode --path .
+# Opción guiada para usar OpenCode con modelos de Ollama:
+chxchx-tech agent add ollama-opencode --path .
+```
+
+La operación es idempotente, conserva el resto de la configuración y crea un
+backup antes de escribir. En Studio, abre `Agentes → Añadir agente`, elige
+OpenCode o OpenCode con Ollama local, revisa la vista previa y confirma. Luego
+el agente aparece en el selector normal y mantiene el preflight de confianza y
+RAM de Studio. Como cambió el hash de configuración, vuelve a dar trust al
+proyecto antes del primer inicio. Para la ruta guiada local, instala Ollama
+0.15 o posterior; al iniciar `ollama launch opencode`, Ollama guía la selección del modelo. Los
+requisitos de memoria dependen del modelo y su contexto elegido. Consulta la
+[guía oficial de Ollama Launch](https://ollama.com/blog/launch) y la
+[documentación de OpenCode CLI](https://dev.opencode.ai/docs/cli/).
 
 Para iniciar un proceso manualmente:
 
@@ -588,6 +713,7 @@ chxchx-tech projects list              lista proyectos registrados
 chxchx-tech projects current           muestra el último proyecto activado
 chxchx-tech projects switch ALIAS      suspende el activo y activa otro proyecto
 chxchx-tech projects sync              sincroniza proyectos registrados
+chxchx-tech projects prepare [PATH]     prepara skills/packs y trust local
 chxchx-tech run [PATH]                 start + agentes + attach
 chxchx-tech attach [PATH]              atajo para entrar a Zellij
 chxchx-tech stop [PATH]                atajo para detener procesos gestionados
@@ -611,7 +737,9 @@ chxchx-tech editor open [PATH]         abre el proyecto en Sublime
 chxchx-tech editor setup [PATH]        genera proyecto Sublime local y lo abre
 chxchx-tech editor setup [PATH] --no-open solo genera el proyecto Sublime
 chxchx-tech agent start ID --path .    inicia un agente configurado
-chxchx-tech agent start ID --new-chat --path . inicia conversación nueva con contexto persistido (Codex/Claude)
+chxchx-tech agent add opencode --path . añade OpenCode (acepta --dry-run)
+chxchx-tech agent add ollama-opencode --path . añade OpenCode con Ollama local
+chxchx-tech agent start ID --new-chat --path . inicia chat nuevo con contexto (Codex/Claude/OpenCode)
 chxchx-tech agent start --all --path . inicia todos los agentes configurados
 chxchx-tech agent start --preset ID --path . inicia un preset de agentes
 chxchx-tech agent list --path .       muestra disponibilidad y panes de agentes
@@ -686,15 +814,123 @@ r        actualizar
 
 La TUI muestra estado de confianza, sesión, procesos, agentes, recursos y handoff. Todas las acciones pasan por el servicio de workspace y sus adapters; la CLI continúa siendo la interfaz recomendada para scripts y CI.
 
+## CI opcional para tus proyectos
+
+ChxChx puede preparar un workflow de GitHub Actions para proyectos Python,
+Node.js y CMake/C++/Qt. Primero revisa la propuesta; solo se escribe el archivo
+cuando confirmas la instalación:
+
+```bash
+chxchx-tech ci setup . --dry-run
+chxchx-tech ci setup .
+chxchx-tech ci status
+```
+
+La plantilla ejecuta comprobaciones en `push`, `pull_request` y `workflow_dispatch`,
+con permisos `contents: read`. Las acciones externas quedan fijadas a commits;
+no incorpora secretos ni inicia despliegues. Para activarla en GitHub, sube
+`.github/workflows/chxchx-ci.yml` al repositorio. El workflow debe existir en la
+rama por defecto antes de pedir una ejecución manual.
+
+Con GitHub CLI (`gh`) instalada y autenticada puedes seguir ejecuciones, lanzar
+una ejecución manual y consultar logs fallidos:
+
+```bash
+chxchx-tech ci status
+chxchx-tech ci run --ref main
+chxchx-tech ci logs 123456789
+```
+
+La TUI y Studio muestran estado, ejecuciones y logs. Escribir, retirar o
+ejecutar CI manualmente pide confirmación; las consultas son de solo lectura.
+Si el workflow ya existe sin el marcador de ChxChx, se conserva.
+Si alguien modifica el archivo administrado, ChxChx detiene la actualización o
+retirada hasta que se revise. Al actualizar o retirar un workflow íntegro, se
+guarda un backup fuera del repositorio. Para retirarlo, usa `ci remove --dry-run`
+y luego `ci remove`.
+
+### CD opcional a tu servidor o VPS
+
+Para proyectos que ya usan Docker Compose, ChxChx puede preparar un workflow
+GitHub Actions que despliega por SSH a un servidor propio o VPS. El despliegue
+es manual por defecto; activar una rama para despliegue automático es opcional.
+ChxChx no despliega este repositorio ni almacena credenciales del servidor.
+
+```bash
+chxchx-tech deploy setup . --dry-run
+chxchx-tech deploy setup .
+chxchx-tech deploy status .
+chxchx-tech deploy run . --dry-run
+chxchx-tech deploy run . --confirm
+chxchx-tech deploy logs 123456789 --path .
+chxchx-tech deploy remove . --dry-run
+chxchx-tech deploy remove .
+```
+
+El asistente inicial admite un único `compose.yaml`, `compose.yml`,
+`docker-compose.yaml` o `docker-compose.yml` en la raíz. En Studio, abre
+**CD VPS**; en la TUI usa la pestaña **Despliegue VPS**. Ambas interfaces
+previsualizan setup y retirada, y piden confirmación antes de despachar un
+despliegue remoto. Para usar el modo automático:
+
+```bash
+chxchx-tech deploy setup . --auto-deploy-on main --dry-run
+chxchx-tech deploy setup . --auto-deploy-on main
+```
+
+#### Preparar GitHub y el VPS
+
+1. Instala Docker Engine y el plugin Docker Compose en el VPS. Crea un usuario
+   dedicado sin iniciar sesión como `root`, clona allí este mismo repositorio y
+   confirma que `origin` apunta al repositorio GitHub correcto. El árbol
+   versionado debe estar limpio. El usuario necesita permisos para actualizar
+   el checkout y ejecutar Compose; pertenecer al grupo `docker` puede equivaler
+   a tener acceso root, así que considera Docker rootless.
+2. Mantén la configuración de producción en el servidor. Por ejemplo, coloca
+   `.env` dentro de `VPS_DEPLOY_PATH`; Git y este workflow la dejan intacta. Si
+   el repositorio es privado, instala en el VPS una llave de lectura para que
+   `git fetch` pueda obtener el código. Esa llave es distinta de la llave SSH
+   que permite a GitHub Actions conectarse al VPS.
+3. En GitHub crea el Environment `production` y agrega estas **variables**:
+   `VPS_SSH_HOST` (nombre DNS o dirección IPv4), `VPS_SSH_USER` (usuario dedicado) y
+   `VPS_DEPLOY_PATH` (ruta absoluta del clon). `VPS_SSH_PORT` es opcional y
+   usa el puerto 22 por defecto.
+4. En los secretos del Environment configura `VPS_SSH_PRIVATE_KEY`, la llave
+   privada cuya llave pública está autorizada para el usuario del VPS, y
+   `VPS_SSH_KNOWN_HOSTS`, con la entrada conocida del host. Obtén y verifica
+   la huella del host por un canal confiable antes de guardarla; la conexión
+   exige validación estricta y no acepta claves aprendidas automáticamente.
+5. Revisa y sube `.github/workflows/chxchx-deploy.yml`. Para el primer despacho
+   manual, GitHub requiere que el workflow exista en la rama por defecto.
+   Después ejecuta `deploy run . --dry-run`, revisa la referencia y confirma
+   con `deploy run . --confirm`. Puedes exigir aprobación adicional desde las
+   reglas del Environment `production`.
+
+El workflow usa permisos GitHub mínimos (`contents: read`), serializa los
+despliegues de producción, actualiza el VPS al commit elegido y ejecuta
+`docker compose up -d --build`. Comprueba que los servicios permanezcan en
+`running` y que sus healthchecks no estén fallando. Si el inicio o la
+comprobación falla, intenta volver al commit previo y reconstruirlo; el log de
+la ejecución informa si también falló ese rollback. Configura `healthcheck` en
+Compose para comprobar que la aplicación está lista. Esta reversión no puede
+deshacer cambios destructivos de esquema o datos; prepara las migraciones de
+base de datos para que sean compatibles con la versión previa. Los servicios
+del workflow inicial deben ser procesos de larga duración; proyectos con tareas
+Compose de una sola ejecución necesitan ajustar el workflow generado.
+
+El setup detecta colisiones y protege los workflows ajenos o editados. Para
+actualizar o retirar un workflow administrado, genera backup fuera del checkout.
+La configuración de CD es independiente de la CI y puedes dejarla desactivada.
+
 ## Aplicación nativa en desarrollo
 
-ChxChx Studio es una aplicación de escritorio en C++20 y Qt 6 Widgets. Incluye navegación del proyecto, pestañas de edición, guardado atómico y lecturas asíncronas mediante el CLI instalado. Las acciones están agrupadas en los menús Archivo, Edición, Ver, Navegar, Herramientas y Ayuda; la barra superior conserva accesos rápidos con iconos y tooltips, e incluye botones marcados para mostrar u ocultar Explorador, Secciones/acciones y Actividad. `Edición → Configurar atajos` permite cambiar las combinaciones, valida duplicados y guarda las preferencias del usuario. El explorador muestra iconos del sistema para archivos y carpetas, con tamaño legible. Su campo superior filtra nombres visibles; `Navegar → Buscar en el proyecto` (`Ctrl+Shift+F`) busca nombres/rutas indexados o contenido en segundo plano. El índice omite directorios generados comunes y limita el catálogo a 100.000 archivos; el escaneo de contenido omite binarios y archivos mayores de 1 MiB, con máximo de 64 MiB leídos y 100 coincidencias por consulta. Al elegir una coincidencia se abre el archivo en la línea correspondiente. `Navegar → Símbolos del archivo actual` (`Ctrl+Shift+O`) lista declaraciones comunes de Python, C/C++, JavaScript/TypeScript, Java y C# y salta a su línea; es un escáner de declaraciones, no resolución semántica. Studio usa el tema de iconos del sistema y recurre a iconos estándar de Qt cuando no encuentra uno. En el árbol, un clic despliega carpetas y abre archivos. Proyecto permite dar trust, iniciar/reanudar, suspender y detener procesos del workspace; Proyectos lista las rutas registradas, permite dar trust a un destino y cambiar al proyecto elegido sin adjuntar la terminal. Agentes abre el comando CLI configurado dentro de una pestaña central junto a los archivos, con una terminal VT interactiva sobre PTY/ConPTY. Antes de abrir agentes, Studio vuelve a verificar trust y RAM mediante un preflight de solo lectura; cualquier advertencia del RAM Governor requiere confirmación explícita. Studio usa el wrapper compartido para conservar la instrumentación del agente, y “Nueva sesión” agrega el prompt de recuperación de contexto disponible para Codex y Claude Code. `Terminal +` y `Ctrl+Shift+T` abren una shell integrada en una pestaña del proyecto; la rueda y `Shift+PageUp/PageDown` recorren hasta 5000 líneas de scrollback, y `Ctrl+End` vuelve al final. La paleta puede adjuntar Zellij dentro de una pestaña PTY tras preview y confirmación; el emulador externo sigue disponible. `Herramientas → Diff Git del archivo actual` muestra en solo lectura el cambio rastreado del archivo respecto de `HEAD`, con salida acotada a 2 MiB; no incluye archivos sin seguimiento ni cambios que sigan solo en el buffer. La actividad de operaciones vive en un panel independiente que se puede mostrar desde Ver o desde la barra, y se oculta al iniciar para dar más espacio al editor y las terminales. La interfaz, los controles y las solicitudes de permiso pertenecen al CLI del agente; Studio administra pestañas y cierre de sesiones. Se admiten comandos configurados como listas de argumentos; los comandos de shell personalizados no se pueden embeber. Procesos permite iniciar/detener procesos configurados. Skills muestra catálogo, selección activa y recomendaciones; permite habilitar/deshabilitar skills y sincronizar contexto. Tech Packs muestra composición y detección; permite aplicar un pack o todos los detectados y sincronizar. Handoff permite revisar el estado, editar resumen/pendiente/validación y guardar con preview y confirmación. Memoria permite buscar y leer notas locales en solo lectura. Chats permite filtrar el historial local de Codex y Claude Code y abrir transcripciones; Errores muestra los registros recientes filtrados al proyecto. Configuración permite previsualizar y ejecutar setup, init completo/mínimo, instalación de herramientas e integración MCP; Doctor es de solo lectura. Guía incluye un recorrido paso a paso con botones que llevan a Configuración, Skills, Proyecto y Agentes; Marca y la paleta filtrable de comandos también están disponibles en la navegación. Inicio, Proyecto, Agentes, Procesos, Proyectos, Skills, Tech Packs y Recursos muestran su estado en el área central; Skills distingue habilitadas/recomendadas y Agentes muestra disponibilidad y sesiones activas de Studio.
+ChxChx Studio es una aplicación de escritorio en C++20 y Qt 6 Widgets. Incluye navegación del proyecto, pestañas de edición, guardado atómico y lecturas asíncronas mediante el CLI instalado. Las acciones están agrupadas en los menús Archivo, Edición, Ver, Navegar, Herramientas y Ayuda; la barra superior conserva accesos rápidos con iconos y tooltips, e incluye botones marcados para mostrar u ocultar Explorador, Secciones/acciones y Actividad. `Edición → Configurar atajos` permite cambiar las combinaciones, valida duplicados y guarda las preferencias del usuario. El explorador muestra iconos del sistema para archivos y carpetas, con tamaño legible. Su campo superior filtra nombres visibles; `Navegar → Buscar en el proyecto` (`Ctrl+Shift+F`) busca nombres/rutas indexados o contenido en segundo plano. El índice omite directorios generados comunes y limita el catálogo a 100.000 archivos; el escaneo de contenido omite binarios y archivos mayores de 1 MiB, con máximo de 64 MiB leídos y 100 coincidencias por consulta. Al elegir una coincidencia se abre el archivo en la línea correspondiente. `Navegar → Símbolos del archivo actual` (`Ctrl+Shift+O`) lista declaraciones comunes de Python, C/C++, JavaScript/TypeScript, Java y C# y salta a su línea; es un escáner de declaraciones, no resolución semántica. Studio usa el tema de iconos del sistema y recurre a iconos estándar de Qt cuando no encuentra uno. En el árbol, un clic despliega carpetas y abre archivos. Proyecto permite dar trust, iniciar/reanudar, suspender y detener procesos del workspace; Proyectos lista las rutas registradas, permite dar trust a un destino y cambiar al proyecto elegido sin adjuntar la terminal. Agentes abre el comando CLI configurado dentro de una pestaña central junto a los archivos, con una terminal VT interactiva sobre PTY/ConPTY. Antes de abrir agentes, Studio vuelve a verificar trust y RAM mediante un preflight de solo lectura; cualquier advertencia del RAM Governor requiere confirmación explícita. Studio usa el wrapper compartido para conservar la instrumentación del agente. “Agentes → Añadir agente” conecta OpenCode u OpenCode con Ollama tras preview, confirmación y backup; “Nueva sesión” agrega el prompt contextual para Codex, Claude Code y OpenCode. `Terminal +` y `Ctrl+Shift+T` abren una shell integrada en una pestaña del proyecto; la rueda y `Shift+PageUp/PageDown` recorren hasta 5000 líneas de scrollback, y `Ctrl+End` vuelve al final. La paleta puede adjuntar Zellij dentro de una pestaña PTY tras preview y confirmación; el emulador externo sigue disponible. `Herramientas → Diff Git del archivo actual` muestra en solo lectura el cambio rastreado del archivo respecto de `HEAD`, con salida acotada a 2 MiB; no incluye archivos sin seguimiento ni cambios que sigan solo en el buffer. La actividad de operaciones vive en un panel independiente que se puede mostrar desde Ver o desde la barra, y se oculta al iniciar para dar más espacio al editor y las terminales. La interfaz, los controles y las solicitudes de permiso pertenecen al CLI del agente; Studio administra pestañas y cierre de sesiones. Se admiten comandos configurados como listas de argumentos; los comandos de shell personalizados no se pueden embeber. Procesos permite iniciar/detener procesos configurados. Skills muestra catálogo, selección activa y recomendaciones; permite habilitar/deshabilitar skills y sincronizar contexto. Tech Packs muestra composición y detección; permite aplicar un pack o todos los detectados y sincronizar. Handoff permite revisar el estado, editar resumen/pendiente/validación y guardar con preview y confirmación. Memoria permite buscar y leer notas locales en solo lectura. Chats permite filtrar el historial local de Codex y Claude Code y abrir transcripciones; Errores muestra los registros recientes filtrados al proyecto. Configuración permite previsualizar y ejecutar setup, init completo/mínimo, instalación de herramientas e integración MCP; Doctor es de solo lectura. Guía incluye un recorrido paso a paso con botones que llevan a Configuración, Skills, Proyecto y Agentes; Marca y la paleta filtrable de comandos también están disponibles en la navegación. Inicio, Proyecto, Agentes, Procesos, Proyectos, Skills, Tech Packs y Recursos muestran su estado en el área central; Skills distingue habilitadas/recomendadas y Agentes muestra disponibilidad y sesiones activas de Studio.
 
 Las vistas Inicio, Proyecto, Agentes, Procesos, Proyectos, Skills y Tech Packs consultan el contrato JSON local y versionado de `chxchx-tech bridge status .`. Recursos usa `chxchx-tech bridge resources .` para mostrar una muestra global de RAM/swap/CPU y consumo agregado de procesos gestionados para cada proyecto registrado. Handoff y Memoria usan lecturas bajo demanda con `chxchx-tech bridge handoff PATH` y `chxchx-tech bridge memory PATH --query TEXTO`. Chats usa `bridge chats` para buscar y carga cada transcripción seleccionada con `bridge conversation`; Errores consulta `bridge errors`. Son lecturas locales y no cambian sesiones ni la caché de errores.
 
-La memoria resiliente entre sesiones vive por proyecto en `.ai/memory/PROJECT_MEMORY.md`. El wrapper guarda las solicitudes explícitas al terminar la sesión del agente y ChxChx las recupera al iniciar un chat nuevo, siempre desde transcripts locales del mismo proyecto. El prompt incluye el nombre exacto de Basic Memory configurado para ese checkout y prohíbe usar IDs o ámbitos predeterminados de otros proyectos. No se guardan conversaciones completas, preguntas de recuperación ni mensajes que parezcan contener secretos. Esta nota persiste al cerrar y abrir Studio en el mismo checkout; `.ai/` está excluido de Git, así que no se copia a otro clon automáticamente. Si Basic Memory está configurado para el proyecto, usa esa carpeta local como su directorio de notas.
+La memoria resiliente entre sesiones vive por proyecto en `.ai/memory/PROJECT_MEMORY.md`. El wrapper captura solicitudes explícitas desde transcripts locales de Codex y Claude; Codex, Claude y OpenCode recuperan la memoria local al iniciar un chat nuevo. OpenCode todavía no captura solicitudes desde sus transcripts. El prompt incluye el nombre exacto de Basic Memory configurado para ese checkout y prohíbe usar IDs o ámbitos predeterminados de otros proyectos. No se guardan conversaciones completas, preguntas de recuperación ni mensajes que parezcan contener secretos. Esta nota persiste al cerrar y abrir Studio en el mismo checkout; `.ai/` está excluido de Git, así que no se copia a otro clon automáticamente. Si Basic Memory está configurado para el proyecto, usa esa carpeta local como su directorio de notas.
 
-Inicio incluye un panel central de acciones rápidas para confiar el proyecto, iniciar/reanudar, suspender o detener el workspace, abrir una terminal, preparar el proyecto, sincronizar skills y abrir agentes o sesiones nuevas. Estas acciones conservan la previsualización, confirmación y preflight de trust/RAM de sus flujos compartidos; ya no requieren abrir primero el panel lateral de Secciones y acciones.
+Inicio incluye un panel central de acciones rápidas para confiar el proyecto, iniciar/reanudar, suspender o detener el workspace, abrir una terminal y sincronizar skills. `Preparar y entrar` previsualiza Init, skills, Tech Packs y Mods de Claude Code aplicables, sincroniza el contexto, confirma trust local y abre una sesión nueva con el agente seleccionado. Los Mods se ofrecen cuando detecta una configuración Claude; no se instalan plugins ejecutables ni se modifican ajustes globales. También puedes abrir agentes y sesiones nuevas por separado. Las acciones conservan la previsualización, confirmación y preflight de trust/RAM de sus flujos compartidos; no requieren abrir primero el panel lateral de Secciones y acciones.
 
 La paleta de comandos también puede adjuntar a una sesión Zellij dentro de una pestaña PTY/libvterm integrada; conserva una segunda opción para abrir ese attach en el emulador externo como fallback.
 
@@ -728,7 +964,7 @@ ctest --test-dir build/native --output-on-failure
 
 En Windows y macOS se ejecuta el binario generado desde `build/native` con el proyecto como argumento. El editor Scintilla tiene UTF-8, guardado atómico, números de línea, búsqueda en archivo y lexers para C/C++, Python, JavaScript/TypeScript, JSON, YAML, TOML, Markdown, HTML/XML, CSS, SQL, Bash y CMake. `Terminal +` o `Ctrl+Shift+T` abre una shell integrada con PTY/ConPTY y libvterm; el scrollback se navega con la rueda, `Shift+PageUp/PageDown`, `Ctrl+Home` (inicio) y `Ctrl+End` (final). Attach a Zellij puede usar la terminal integrada; el launcher externo requiere Windows Terminal en Windows, un emulador compatible instalado en Linux o Terminal.app en macOS. Las sesiones de agentes configuradas como argumentos también se abren dentro de Studio. Studio recuerda hasta 20 archivos recientes dentro del proyecto y restaura archivos limpios y grupos divididos al cerrar/reabrir. Siguen pendientes LSP, QA interactivo de todos los flujos y verificación de los paquetes en los runners objetivo.
 
-CPack genera un ZIP para Windows, DMG para macOS y TGZ para Linux. Para crear uno localmente, agrega `-DCMAKE_BUILD_TYPE=Release` al configurar y ejecuta `cpack --config build/native/CPackConfig.cmake -C Release -B build/native/packages`. Los jobs de CI con Qt SDK generan esos paquetes y publican cada uno como artefacto de la ejecución. El TGZ generado con Qt instalado desde los paquetes de Fedora/Ubuntu puede depender de las bibliotecas Qt del sistema; para distribuirlo, usa el artefacto CI creado desde Qt SDK y valida las dependencias de la plataforma destino. Los avisos de Scintilla, Lexilla y libvterm se incluyen en el paquete.
+CPack genera un ZIP para Windows, DMG para macOS y TGZ para Linux. Para crear uno localmente, agrega `-DCMAKE_BUILD_TYPE=Release` al configurar y ejecuta `cpack --config build/native/CPackConfig.cmake -C Release -B build/native/packages`. El CI valida el contenido de cada paquete: Qt y sus plugins para Ubuntu/Windows/macOS, runtime del sistema para Fedora, y los binarios/documentación esperados. Antes de subirlo, copia solo el artefacto final fuera del directorio temporal de CPack. El preview de desarrollo aparece únicamente cuando terminan las compilaciones, smoke tests y validaciones de empaquetado. Un TGZ que generes localmente puede depender del runtime Qt del host. Los avisos de Scintilla, Lexilla y libvterm se incluyen en el paquete.
 
 ## MCP, Basic Memory y Serena
 

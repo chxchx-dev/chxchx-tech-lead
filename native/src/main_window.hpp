@@ -102,6 +102,7 @@ private:
     QString currentFilePath() const;
     QStringList readCommandForArea(const QString &area) const;
     QString formatBridgeStatus(const QJsonObject &payload, const QString &area) const;
+    QString formatMods(const QJsonObject &payload) const;
     QString formatResourcesOverview(const QJsonObject &payload) const;
     void configureAreaActions();
     void updateAreaActionState();
@@ -218,6 +219,7 @@ private:
     QStringList m_forceActionArguments;
     QString m_confirmedActionTitle;
     QString m_pendingProjectPath;
+    QString m_prepareAndEnterAgentId;
     QString m_workspaceStatus;
     int m_nextTerminalNumber = 1;
     bool m_wordWrapEnabled = true;
@@ -227,4 +229,6 @@ private:
     bool m_refreshAfterAction = false;
     bool m_refreshQueued = false;
     bool m_restoringEditorSession = false;
+    bool m_prepareAndEnterPending = false;
+    bool m_openAgentAfterRefresh = false;
 };

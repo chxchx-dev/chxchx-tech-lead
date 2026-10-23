@@ -396,11 +396,11 @@ def test_new_chat_rejects_unrecognized_agent_cli(tmp_path: Path, monkeypatch):
     project.mkdir()
     _write_config(project, auto_start=False)
     config = project / ".ai" / "chxchx-tech.toml"
-    content = config.read_text(encoding="utf-8").replace('id = "codex"\ncommand = ["codex"]', 'id = "other"\ncommand = ["opencode"]')
+    content = config.read_text(encoding="utf-8").replace('id = "codex"\ncommand = ["codex"]', 'id = "other"\ncommand = ["custom-coder"]')
     config.write_text(content, encoding="utf-8")
     trust_project(project)
 
-    with pytest.raises(WorkspaceOperationError, match="solo está configurado para Codex y Claude"):
+    with pytest.raises(WorkspaceOperationError, match="no está configurado para custom-coder"):
         WorkspaceService(ProjectInfo(project, "project"), terminal=FakeTerminal(), editor=FakeEditor()).start_agent(
             "other", dry_run=True, new_chat=True
         )

@@ -9,6 +9,19 @@ handoff, navegación, edición, búsqueda de nombres/contenido, archivos recient
 y restauración de grupos divididos, además de ajustes configurables.
 El inventario de capacidades está en `.ai/EDITOR-PARITY.md`.
 
+## CI/CD opcional de proyectos
+
+- CI por proyecto está disponible en CLI/TUI/Studio para Python, Node.js y
+  CMake/C++/Qt. El usuario conserva el control de instalación, ejecución y
+  retirada; no hay credenciales de despliegue en ese workflow.
+- CD de proyectos del usuario tiene una primera implementación opt-in en
+  CLI/TUI/Studio para GitHub Actions por SSH a un VPS con Docker Compose. Es
+  manual por defecto; el trigger automático por rama requiere opt-in explícito.
+  Revisa `.ai/adr/0007-opt-in-compose-vps-deployment.md` para el alcance y los
+  límites de la primera versión.
+- El pipeline de publicación de ChxChx queda fuera de este bloque y aplazado;
+  no se modifica ni se publica Studio como consecuencia del CD de proyectos.
+
 ## Cierre para empezar a usar Studio en proyectos reales
 
 1. Recompilar y abrir un repositorio de trabajo con `./scripts/dev-studio.sh
@@ -50,10 +63,12 @@ verde; la configuración del workflow no equivale a que haya pasado.
   9.55 ms y escanea contenido en 99–100 ms. Falta medir primer frame y RAM de
   Studio en repos reales grandes, y fijar límites antes de publicar.
 - CPack y CI generan ZIP para Windows, DMG para macOS y TGZ para Ubuntu desde Qt
-  SDK. Fedora empaqueta TGZ con las bibliotecas Qt del sistema y publica una
-  pre-release rodante con assets descargables anónimamente; el instalador valida
-  el SHA-256 del manifiesto. Falta ejecutar el workflow actualizado y probar
-  instalación/arranque en una segunda máquina Fedora.
+  SDK. Fedora empaqueta TGZ con las bibliotecas Qt del sistema. El workflow
+  ahora valida binarios, runtimes/plugins y el bundle macOS, y sube solo el
+  paquete final fuera del staging temporal de CPack; el instalador valida el
+  SHA-256 del manifiesto. CI run #87 pasó las validaciones de paquete en todos
+  los runners configurados. Sigue pendiente probar la instalación/arranque en
+  una segunda máquina Fedora.
 - Decidir si el núcleo Python seguirá siendo la autoridad mediante el bridge o
   si comienza una migración gradual a un núcleo C++ compartido. No bloquear el
   uso de Studio con una reescritura sin una necesidad medida.

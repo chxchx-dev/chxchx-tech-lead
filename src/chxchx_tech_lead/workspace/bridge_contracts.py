@@ -13,6 +13,8 @@ MEMORY_SCHEMA: Final[Literal["chxchx.memory"]] = "chxchx.memory"
 CONVERSATIONS_SCHEMA: Final[Literal["chxchx.conversations"]] = "chxchx.conversations"
 CONVERSATION_SCHEMA: Final[Literal["chxchx.conversation"]] = "chxchx.conversation"
 ERRORS_SCHEMA: Final[Literal["chxchx.errors"]] = "chxchx.errors"
+CI_STATUS_SCHEMA: Final[Literal["chxchx.ci-status"]] = "chxchx.ci-status"
+DEPLOY_STATUS_SCHEMA: Final[Literal["chxchx.deploy-status"]] = "chxchx.deploy-status"
 ERROR_SCHEMA: Final[Literal["chxchx.error"]] = "chxchx.error"
 
 
@@ -102,3 +104,37 @@ class ErrorsPayload(TypedDict):
     project: str
     cache_path: str
     errors: list[dict[str, str]]
+
+
+class CiStatusPayload(TypedDict):
+    schema: Literal["chxchx.ci-status"]
+    schema_version: int
+    project: str
+    configured: bool
+    managed: bool
+    integrity_ok: bool
+    workflow_path: str
+    supported_stacks: list[str]
+    warnings: list[str]
+    authenticated: bool
+    recent_runs: list[dict[str, object]]
+    message: str
+
+
+class DeployStatusPayload(TypedDict):
+    schema: Literal["chxchx.deploy-status"]
+    schema_version: int
+    project: str
+    configured: bool
+    managed: bool
+    integrity_ok: bool
+    workflow_path: str
+    runtime: str
+    compose_file: str
+    auto_deploy_branch: str | None
+    required_variables: list[str]
+    required_secrets: list[str]
+    authenticated: bool
+    recent_runs: list[dict[str, object]]
+    warnings: list[str]
+    message: str

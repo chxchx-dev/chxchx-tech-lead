@@ -105,7 +105,7 @@ TUI_CSS = """
         border: solid #aeb1c2;
         overflow-y: auto;
     }
-    #chat-detail, #memory-detail, #error-detail, #skill-detail, #pack-detail {
+    #chat-detail, #memory-detail, #error-detail, #skill-detail, #pack-detail, #ci-detail {
         width: 1fr;
         height: 1fr;
         margin-left: 1;
