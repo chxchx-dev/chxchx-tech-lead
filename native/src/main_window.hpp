@@ -11,6 +11,7 @@ class QJsonObject;
 class QAction;
 class BridgeClient;
 class ProjectFileIndex;
+class AgentChatWidget;
 class AgentSessionWidget;
 class WorkspaceTerminalWidget;
 class QDockWidget;
@@ -66,6 +67,8 @@ private slots:
     void doctorFromHome();
     void openHomeSelectedAgent(bool newChat = false);
     void openAllHomeAgentSessions();
+    void openHomeVisualChat();
+    void openVisualChat();
     void selectMemoryNote(QListWidgetItem *item);
     void selectChatConversation(QListWidgetItem *item);
     void openCommandPalette();
@@ -110,6 +113,8 @@ private:
     void updateHomeActionState();
     void launchAgentFromSelector(QComboBox *selector, bool newChat);
     void openAgentSessions(QComboBox *selector);
+    void launchVisualChatFromSelector(QComboBox *selector);
+    void createAgentChatSession(const QString &agentId);
     void updateAreaTargets(const QJsonObject &payload, const QString &area);
     void showHandoff(const QJsonObject &payload);
     void showMemory(const QJsonObject &payload);
@@ -177,6 +182,7 @@ private:
     QPushButton *m_homeAgentButton = nullptr;
     QPushButton *m_homeNewChatButton = nullptr;
     QPushButton *m_homeAllAgentsButton = nullptr;
+    QPushButton *m_homeVisualChatButton = nullptr;
     QWidget *m_handoffPage = nullptr;
     QWidget *m_memoryPage = nullptr;
     QWidget *m_chatsPage = nullptr;

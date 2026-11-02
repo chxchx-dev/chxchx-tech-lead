@@ -1052,6 +1052,22 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             schedulePendingRefresh();
             return;
         }
+        if (!arguments.isEmpty() && arguments.first() == QStringLiteral("__launch_agent_chat__")
+            && arguments.size() >= 2) {
+            m_forceActionArguments.clear();
+            if (output.contains(QStringLiteral("RAM Governor"))
+                && QMessageBox::warning(this, QStringLiteral("RAM Governor"),
+                       QStringLiteral("El preflight detectó que el inicio supera el presupuesto configurado:\n\n%1\n\n¿Confirmas abrir el chat de todas formas?")
+                           .arg(output),
+                       QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes) {
+                m_refreshAfterAction = false;
+                statusBar()->showMessage(QStringLiteral("Chat cancelado por el RAM Governor."), 5000);
+                return;
+            }
+            createAgentChatSession(arguments.at(1));
+            schedulePendingRefresh();
+            return;
+        }
         if (!arguments.isEmpty()
             && arguments.first() == QStringLiteral("__launch_embedded_workspace_terminal__")) {
             m_forceActionArguments.clear();

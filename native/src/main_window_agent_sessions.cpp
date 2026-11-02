@@ -1,4 +1,5 @@
 #include "main_window.hpp"
+#include "integrations/agent_chat_widget.hpp"
 #include "integrations/agent_session_widget.hpp"
 #include "integrations/bridge_client.hpp"
 #include "integrations/workspace_terminal_widget.hpp"
@@ -161,6 +162,50 @@ void MainWindow::createEmbeddedAgentSession(const QString &agentId, const QStrin
         updateAgentDashboard();
     });
     statusBar()->showMessage(QStringLiteral("Terminal de %1 integrada en Studio.").arg(agentId), 5000);
+}
+
+void MainWindow::openHomeVisualChat()
+{
+    launchVisualChatFromSelector(m_homeAgentSelector);
+}
+
+void MainWindow::openVisualChat()
+{
+    launchVisualChatFromSelector(m_currentArea == QStringLiteral("agents") ? m_targetSelector : m_homeAgentSelector);
+}
+
+void MainWindow::launchVisualChatFromSelector(QComboBox *selector)
+{
+    if (selector == nullptr || selector->currentIndex() < 0) {
+        QMessageBox::information(this, QStringLiteral("Chat visual"),
+            QStringLiteral("Elige un agente en Inicio o en Agentes. Si la lista está vacía, actualiza la vista."));
+        return;
+    }
+    const QString agentId = selector->currentText();
+    const QString program = selector->currentData(Qt::UserRole + 1).toString();
+    if (!AgentChatWidget::supportsProgram(program) || selector->currentData(Qt::UserRole + 4).toBool()) {
+        QMessageBox::information(this, QStringLiteral("Chat visual no disponible"),
+            QStringLiteral("El chat visual funciona con agentes Codex o Claude Code configurados como lista de argumentos. "
+                           "Para otros agentes usa la terminal integrada."));
+        return;
+    }
+    // Same trust/RAM preflight and confirmation as the terminal agent tabs.
+    const QStringList preview = {QStringLiteral("agent"), QStringLiteral("preflight"),
+        QStringLiteral("--agent"), agentId, QStringLiteral("--path"), m_projectPath,
+        QStringLiteral("--additional-active"), QString::number(currentProjectEmbeddedAgentCount())};
+    runPreview(preview, {QStringLiteral("__launch_agent_chat__"), agentId}, {},
+        QStringLiteral("Abrir chat visual con el agente"));
+}
+
+void MainWindow::createAgentChatSession(const QString &agentId)
+{
+    QTabWidget *tabs = activeEditorTabs();
+    auto *chat = new AgentChatWidget(m_projectPath, agentId, m_bridgeClient->program(), tabs);
+    const int tab = tabs->addTab(chat, QStringLiteral("%1 · chat").arg(agentId));
+    tabs->setTabToolTip(tab, QStringLiteral("Chat visual con %1\n%2").arg(agentId, m_projectPath));
+    tabs->setCurrentWidget(chat);
+    chat->focusInput();
+    statusBar()->showMessage(QStringLiteral("Chat visual con %1 listo.").arg(agentId), 5000);
 }
 
 int MainWindow::currentProjectEmbeddedAgentCount() const

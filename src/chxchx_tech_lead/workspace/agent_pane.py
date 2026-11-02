@@ -11,13 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..integrations.agent_usage import usage_snapshot_path
-from ..integrations.explicit_memory import (
-    format_recovered_memories,
-    persist_explicit_memories,
-    recover_explicit_memories,
-)
-from .context_compaction import auto_compact_enabled, compact_context
-from .session_journal import recent_sessions_prompt, record_session, summarize_latest_session
+from .chat_context import capture_after_session, prepare_new_chat
 
 _JOURNAL_PROVIDERS = {"codex": "Codex", "claude": "Claude"}
 
@@ -55,22 +49,8 @@ def main() -> int:
         return 2
 
     opencode_executable = _opencode_executable(command)
-    memory_options = {"opencode_executable": opencode_executable} if opencode_executable else {}
     if recover_memory and project_root is not None:
-        _compact_context(project_root)
-        try:
-            memories = recover_explicit_memories(project_root, **memory_options)
-            persist_explicit_memories(project_root, memories)
-            if memories and command:
-                command[-1] += format_recovered_memories(memories)
-            if memories:
-                print(f"Memoria explícita recuperada: {len(memories)} solicitud(es) del proyecto.", flush=True)
-        except OSError as exc:
-            print(f"No pude recuperar la memoria local del proyecto: {exc}", file=sys.stderr, flush=True)
-        try:
-            command[-1] += recent_sessions_prompt(project_root)
-        except OSError as exc:
-            print(f"No pude leer el diario de sesiones: {exc}", file=sys.stderr, flush=True)
+        command[-1] += prepare_new_chat(project_root, _print_notice, opencode_executable=opencode_executable)
     provider = _JOURNAL_PROVIDERS.get(_executable_name(command[0]))
     started_at = datetime.now(timezone.utc)
     print(f"\033[1;36m{banner(name, label, logo)}\033[0m", flush=True)
@@ -78,36 +58,18 @@ def main() -> int:
     command, environment = _usage_instrumentation(command, name)
     completed = subprocess.run(command, cwd=os.getcwd(), env=environment, check=False)
     if capture_memory and project_root is not None:
-        try:
-            memories = recover_explicit_memories(project_root, **memory_options)
-            persist_explicit_memories(project_root, memories)
-        except OSError as exc:
-            print(f"No pude guardar la memoria local del proyecto: {exc}", file=sys.stderr, flush=True)
-        if provider is not None:
-            _record_session(project_root, provider, started_at)
+        capture_after_session(
+            project_root,
+            _print_notice,
+            provider=provider,
+            started_at=started_at,
+            opencode_executable=opencode_executable,
+        )
     return completed.returncode
 
 
-def _compact_context(project_root: Path) -> None:
-    if not auto_compact_enabled(project_root):
-        return
-    try:
-        result = compact_context(project_root)
-    except OSError as exc:
-        print(f"No pude compactar el contexto del proyecto: {exc}", file=sys.stderr, flush=True)
-        return
-    moved = sum(len(item.moved) for item in result.files)
-    if moved:
-        print(f"Contexto compactado: {moved} sección(es) antiguas movidas a .ai/history/.", flush=True)
-
-
-def _record_session(project_root: Path, provider: str, started_at: datetime) -> None:
-    try:
-        summary = summarize_latest_session(project_root, provider=provider, started_at=started_at)
-        if summary is not None:
-            record_session(project_root, summary)
-    except OSError as exc:
-        print(f"No pude guardar el resumen de la sesión: {exc}", file=sys.stderr, flush=True)
+def _print_notice(message: str, is_error: bool) -> None:
+    print(message, file=sys.stderr if is_error else sys.stdout, flush=True)
 
 
 def _executable_name(program: str) -> str:

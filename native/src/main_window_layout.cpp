@@ -237,6 +237,9 @@ void MainWindow::buildLayout()
     m_homeAgentButton = new QPushButton(QStringLiteral("Abrir agente"), m_homeQuickActions);
     m_homeNewChatButton = new QPushButton(QStringLiteral("Nueva sesión"), m_homeQuickActions);
     m_homeAllAgentsButton = new QPushButton(QStringLiteral("Abrir todos"), m_homeQuickActions);
+    m_homeVisualChatButton = new QPushButton(QStringLiteral("Chat visual"), m_homeQuickActions);
+    m_homeVisualChatButton->setToolTip(QStringLiteral(
+        "Conversa con Codex o Claude en un panel nativo: mensajes, comandos y cambios en vez de la terminal."));
     m_homeTrustButton->setIcon(studioIcon(QStringLiteral("security-high"), QStyle::SP_DialogApplyButton));
     m_homeWorkspaceButton->setIcon(studioIcon(QStringLiteral("media-playback-start"), QStyle::SP_MediaPlay));
     m_homeSuspendButton->setIcon(studioIcon(QStringLiteral("media-playback-pause"), QStyle::SP_MediaPause));
@@ -248,6 +251,7 @@ void MainWindow::buildLayout()
     m_homeAgentButton->setIcon(studioIcon(QStringLiteral("system-run"), QStyle::SP_CommandLink));
     m_homeNewChatButton->setIcon(studioIcon(QStringLiteral("chat-message-new"), QStyle::SP_MessageBoxInformation));
     m_homeAllAgentsButton->setIcon(studioIcon(QStringLiteral("view-dual"), QStyle::SP_DesktopIcon));
+    m_homeVisualChatButton->setIcon(studioIcon(QStringLiteral("dialog-messages"), QStyle::SP_MessageBoxQuestion));
     homeActionsGrid->addWidget(m_homeTrustButton, 0, 0);
     homeActionsGrid->addWidget(m_homeWorkspaceButton, 0, 1);
     homeActionsGrid->addWidget(m_homeSuspendButton, 0, 2);
@@ -260,6 +264,7 @@ void MainWindow::buildLayout()
     homeActionsGrid->addWidget(m_homeAgentButton, 2, 1);
     homeActionsGrid->addWidget(m_homeNewChatButton, 2, 2);
     homeActionsGrid->addWidget(m_homeAllAgentsButton, 2, 3);
+    homeActionsGrid->addWidget(m_homeVisualChatButton, 3, 1, 1, 2);
     m_homeQuickActions->setVisible(m_currentArea == QStringLiteral("overview"));
     auto *dashboardListTitle = new QLabel(QStringLiteral("Estado actual"), m_dashboardPage);
     dashboardListTitle->setStyleSheet(QStringLiteral("color: #78a9ff; font-weight: 700; margin-top: 5px;"));
@@ -570,6 +575,7 @@ void MainWindow::buildLayout()
     connect(m_homeAgentButton, &QPushButton::clicked, this, [this] { openHomeSelectedAgent(false); });
     connect(m_homeNewChatButton, &QPushButton::clicked, this, [this] { openHomeSelectedAgent(true); });
     connect(m_homeAllAgentsButton, &QPushButton::clicked, this, &MainWindow::openAllHomeAgentSessions);
+    connect(m_homeVisualChatButton, &QPushButton::clicked, this, &MainWindow::openHomeVisualChat);
     connect(m_homeAgentSelector, &QComboBox::currentTextChanged, this, &MainWindow::updateHomeActionState);
 
     m_controlDock = new QDockWidget(QStringLiteral("Secciones y acciones"), this);

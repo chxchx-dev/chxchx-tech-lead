@@ -2,6 +2,13 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Paso 3: chat visual Codex/Claude — rama `feature/reliable-chat-memory`
+
+- Hecho: adapter `integrations/agent_stream.py`, caso de uso `workspace/agent_chat.py`, CLI `agent chat`, `AgentChatModel`/`AgentChatWidget` en Studio y ADR 0009. Toolchain instalado en este Fedora: build en `build/native` con `-DCHXCHX_BUILD_TESTS=ON`.
+- Validación: pytest `280 passed, 1 skipped`; compileall; CTest `7/7`; Studio arranca. Turnos reales con Codex por CLI y en el widget (capturas offscreen revisadas). Las salidas largas se recortan y no hay scroll horizontal.
+- Pendiente: validar con Claude Code real (no instalado); QA interactivo del panel dentro de Studio (foco, atajos, tema claro); aprobación por acción (`codex app-server` / `--permission-prompt-tool`); mostrar diffs de `file_change`; los chats en curso no cuentan para el RAM Governor; los chats visuales no se reabren al reiniciar Studio.
+- Siguiente según ROADMAP: fluidez de Studio (caché del snapshot, lecturas paralelas, refresco automático) y QA en Fedora.
+
 ## Fase 2 de mejora: contexto liviano — rama `feature/reliable-chat-memory`
 
 - Hecho: compactación automática y manual, diario de sesiones inyectado en el chat nuevo, y `Estado actual` condensado. En este repo el contexto que lee un chat nuevo bajó de ~95 KB a ~24 KB.

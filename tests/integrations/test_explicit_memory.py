@@ -65,7 +65,7 @@ def test_persists_multiple_requests_from_one_chat(tmp_path: Path) -> None:
 
 
 def test_agent_pane_captures_memory_after_codex_exits(tmp_path: Path, monkeypatch) -> None:
-    from chxchx_tech_lead.workspace import agent_pane
+    from chxchx_tech_lead.workspace import agent_pane, chat_context
 
     memory = explicit_memory.ExplicitMemory(
         "Codex", "session-3", "2026-10-07", "Recuerda esta frase: el río cruza el valle."
@@ -85,8 +85,9 @@ def test_agent_pane_captures_memory_after_codex_exits(tmp_path: Path, monkeypatc
         ],
     )
     monkeypatch.setattr(agent_pane.subprocess, "run", lambda *args, **kwargs: type("Result", (), {"returncode": 0})())
-    monkeypatch.setattr(agent_pane, "recover_explicit_memories", lambda root: [memory])
-    monkeypatch.setattr(agent_pane, "persist_explicit_memories", lambda root, items: saved.append(root))
+    monkeypatch.setattr(chat_context, "recover_explicit_memories", lambda root: [memory])
+    monkeypatch.setattr(chat_context, "persist_explicit_memories", lambda root, items: saved.append(root))
+    monkeypatch.setattr(chat_context, "summarize_latest_session", lambda root, provider, started_at: None)
 
     result = agent_pane.main()
 
@@ -197,7 +198,7 @@ def test_prune_keeps_hand_written_notes_and_backs_up(tmp_path: Path, monkeypatch
 
 
 def test_agent_pane_new_chat_compacts_and_injects_recent_sessions(tmp_path: Path, monkeypatch) -> None:
-    from chxchx_tech_lead.workspace import agent_pane, session_journal
+    from chxchx_tech_lead.workspace import agent_pane, chat_context, session_journal
 
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "home"))
     state = tmp_path / ".ai" / "HANDOFF.md"
@@ -213,13 +214,13 @@ def test_agent_pane_new_chat_compacts_and_injects_recent_sessions(tmp_path: Path
         ["agent_pane", "--name", "claude", "--capture-explicit-memory", "--recover-explicit-memory",
          "--project-root", str(tmp_path), "--", "claude", "PROMPT"],
     )
-    monkeypatch.setattr(agent_pane, "recover_explicit_memories", lambda root, **options: [])
+    monkeypatch.setattr(chat_context, "recover_explicit_memories", lambda root, **options: [])
     monkeypatch.setattr(
         agent_pane.subprocess, "run",
         lambda command, **kwargs: launched.append(command) or type("Result", (), {"returncode": 0})(),
     )
     monkeypatch.setattr(
-        agent_pane, "summarize_latest_session",
+        chat_context, "summarize_latest_session",
         lambda root, provider, started_at: recorded.append(provider) or None,
     )
 

@@ -15,12 +15,14 @@ from pathlib import Path
 
 from ..integrations.chat_history import Conversation, list_conversations
 from ..integrations.explicit_memory import contains_secret, user_visible_text
+from .agent_commands import CHAT_PANEL_REQUEST_MARKER, NEW_CHAT_PROMPT
 
 JOURNAL = Path(".ai") / "history" / "SESSIONS.md"
 MAX_ENTRIES = 30
 _TITLE = "# Sesiones recientes de agentes\n\n"
 _TOOL_PLACEHOLDER = re.compile(r"\[Herramienta: [^\]]*\]")
 _REDACTED = "(omitido: posible secreto)"
+_CONTEXT_PREAMBLE = " ".join(NEW_CHAT_PROMPT.split()[:8])
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +72,7 @@ def recent_sessions_prompt(project_root: Path, *, count: int = 2) -> str:
 
 
 def _summarize(conversation: Conversation) -> SessionSummary | None:
-    user = [text for text in (user_visible_text(m.text) for m in conversation.messages if m.role == "user") if text]
+    user = [text for text in (_own_words(m.text) for m in conversation.messages if m.role == "user") if text]
     assistant = [
         text
         for text in (
@@ -90,6 +92,14 @@ def _summarize(conversation: Conversation) -> SessionSummary | None:
         tuple(_safe(text, 200) for text in user[1:][-3:]),
         _safe(assistant[-1], 600) if assistant else "",
     )
+
+
+def _own_words(message: str) -> str:
+    """User text without the context preamble ChxChx injects into new chats."""
+    text = user_visible_text(message)
+    if CHAT_PANEL_REQUEST_MARKER in text:
+        return text.split(CHAT_PANEL_REQUEST_MARKER, 1)[1].strip()
+    return "" if text.startswith(_CONTEXT_PREAMBLE) else text
 
 
 def _render(summary: SessionSummary, marker: str) -> str:

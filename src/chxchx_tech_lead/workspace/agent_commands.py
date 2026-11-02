@@ -35,6 +35,9 @@ NEW_CHAT_PROMPT = (
     "No guardes saludos, preguntas triviales, secretos ni transcripciones completas."
 )
 
+# Separates the injected context from the user's own words in a chat-panel turn.
+CHAT_PANEL_REQUEST_MARKER = "Primera solicitud del usuario en el panel de chat de ChxChx Studio:"
+
 
 def new_chat_prompt(project_root: str) -> str:
     """Bind memory-tool guidance to the project configured in this checkout."""

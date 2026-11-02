@@ -1,4 +1,5 @@
 #include "main_window.hpp"
+#include "integrations/agent_chat_widget.hpp"
 
 #include <QComboBox>
 #include <QJsonArray>
@@ -218,6 +219,8 @@ void MainWindow::updateHomeActionState()
     m_homeAgentButton->setEnabled(agentConfigured);
     m_homeNewChatButton->setEnabled(agentConfigured
         && !m_homeAgentSelector->itemData(index, Qt::UserRole + 6).toString().isEmpty());
+    m_homeVisualChatButton->setEnabled(agentConfigured
+        && AgentChatWidget::supportsProgram(m_homeAgentSelector->itemData(index, Qt::UserRole + 1).toString()));
     bool hasConfiguredAgent = false;
     for (int agentIndex = 0; agentIndex < m_homeAgentSelector->count(); ++agentIndex) {
         hasConfiguredAgent = hasConfiguredAgent

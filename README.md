@@ -1054,7 +1054,7 @@ estar instalados por separado y configurados como agentes del proyecto.
 | Inicio | Preparar el proyecto y acceder a acciones frecuentes |
 | Proyecto | Consultar trust y estado; iniciar, suspender o detener el workspace |
 | Proyectos | Cambiar entre proyectos registrados |
-| Agentes | Iniciar una CLI, abrir un chat nuevo o conectar OpenCode |
+| Agentes | Iniciar una CLI, abrir un chat nuevo o visual, o conectar OpenCode |
 | Procesos | Iniciar y detener comandos configurados |
 | Skills y Tech Packs | Revisar recomendaciones, aplicar instrucciones y sincronizar el contexto |
 | Handoff y Memoria | Guardar el siguiente paso y consultar notas locales |
@@ -1069,6 +1069,22 @@ Studio vuelve a comprobar trust y uso de RAM antes de iniciar agentes. Las
 acciones que modifican archivos o configuración muestran una vista previa y
 piden confirmación. El menú **Ayuda** incluye una guía rápida y la búsqueda
 manual de actualizaciones.
+
+### Chat visual con Codex y Claude
+
+**Chat visual**, en Inicio o en `Herramientas → Chat visual con agente` (también
+desde la paleta), abre una pestaña de conversación nativa con el agente
+seleccionado. Antes pasa por el mismo control de trust y RAM que la terminal.
+Las respuestas se muestran con formato. Los comandos y cambios de archivos
+aparecen como tarjetas con su estado y una vista previa de la salida. El primer
+mensaje incluye el contexto del proyecto (estado, handoff, memoria y últimas
+sesiones), y los siguientes continúan la misma sesión. **Permisos** elige entre
+*Solo lectura* y *Editar workspace*. **Detener** corta el turno, y cerrar la
+pestaña también. **Nuevo chat** empieza otra conversación.
+
+Por debajo, cada mensaje ejecuta `chxchx-tech agent chat AGENTE --path . --prompt
+"…"`, que emite eventos JSONL `chxchx.agent-event` v1 (ver ADR 0009). Funciona
+con agentes Codex y Claude Code; para OpenCode usa la terminal integrada.
 
 ### Memoria entre sesiones
 

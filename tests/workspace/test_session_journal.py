@@ -71,3 +71,23 @@ def test_records_newest_first_refreshes_resumed_sessions_and_caps(tmp_path: Path
 
 def test_no_journal_means_no_prompt(tmp_path: Path) -> None:
     assert session_journal.recent_sessions_prompt(tmp_path) == ""
+
+
+def test_opening_skips_the_injected_context_preamble(tmp_path: Path, monkeypatch) -> None:
+    from chxchx_tech_lead.workspace.agent_commands import CHAT_PANEL_REQUEST_MARKER, new_chat_prompt
+
+    started = datetime(2026, 11, 1, 12, tzinfo=timezone.utc)
+    terminal = Conversation("Codex", "c1", "t", started + timedelta(minutes=1), tmp_path, tmp_path / "c1.jsonl", (
+        ConversationMessage("user", new_chat_prompt(str(tmp_path))),
+        ConversationMessage("user", "Arregla el login"),
+    ))
+    panel = Conversation("Claude", "c2", "t", started + timedelta(minutes=1), tmp_path, tmp_path / "c2.jsonl", (
+        ConversationMessage("user", f"{new_chat_prompt(str(tmp_path))}\n\n{CHAT_PANEL_REQUEST_MARKER}\n¿Qué imprime app.py?"),
+    ))
+    monkeypatch.setattr(session_journal, "list_conversations", lambda root, limit: [terminal, panel])
+
+    codex = session_journal.summarize_latest_session(tmp_path, provider="Codex", started_at=started)
+    claude = session_journal.summarize_latest_session(tmp_path, provider="Claude", started_at=started)
+
+    assert codex is not None and codex.opening == "Arregla el login"
+    assert claude is not None and claude.opening == "¿Qué imprime app.py?"
