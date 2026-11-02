@@ -165,16 +165,33 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          choco install nsis --yes --no-progress
-          $makensisPath = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
-          if (-not (Test-Path -LiteralPath $makensisPath -PathType Leaf)) {
-            $makensisPath = (Get-Command makensis.exe -ErrorAction Stop).Source
+          # Errors are echoed as annotations: job logs are not readable without signing in.
+          function Report([string] $title, [string] $text) {
+            if ($text.Length -gt 3000) { $text = $text.Substring($text.Length - 3000) }
+            $escaped = $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=$title::$escaped"
           }
-          & $makensisPath '/INPUTCHARSET' 'UTF8' '/NOCD' 'scripts/windows-studio-setup.nsi'
-          if ($LASTEXITCODE -ne 0) { throw "makensis falló con código $LASTEXITCODE." }
-          $setup = 'scripts/chxchx-studio-windows-x86_64-setup.exe'
-          if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'NSIS no generó el instalador ejecutable.' }
-          Move-Item -LiteralPath $setup -Destination 'dist/native-package/chxchx-studio-windows-x86_64-setup.exe'
+          try {
+            choco install nsis --yes --no-progress | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "choco install nsis terminó con código $LASTEXITCODE." }
+            $makensisPath = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+            if (-not (Test-Path -LiteralPath $makensisPath -PathType Leaf)) {
+              $makensisPath = (Get-Command makensis.exe -ErrorAction Stop).Source
+            }
+            $output = & $makensisPath '/V3' '/INPUTCHARSET' 'UTF8' '/NOCD' 'scripts/windows-studio-setup.nsi' 2>&1 | Out-String
+            Write-Output $output
+            if ($LASTEXITCODE -ne 0) {
+              Report 'makensis' $output
+              throw "makensis falló con código $LASTEXITCODE."
+            }
+            $setup = 'scripts/chxchx-studio-windows-x86_64-setup.exe'
+            if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'NSIS no generó el instalador ejecutable.' }
+            New-Item -ItemType Directory -Force -Path 'dist/native-package' | Out-Null
+            Move-Item -LiteralPath $setup -Destination 'dist/native-package/chxchx-studio-windows-x86_64-setup.exe' -Force
+          } catch {
+            Report 'Windows installer' ($_ | Out-String)
+            throw
+          }
       - name: Publish native package artifact
         uses: actions/upload-artifact@v4
         with:

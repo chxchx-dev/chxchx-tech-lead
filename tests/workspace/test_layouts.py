@@ -124,7 +124,7 @@ def test_new_chat_prompt_uses_exact_configured_memory_project(tmp_path: Path):
     assert "no reutilices" in prompt
 
 
-def test_opencode_new_chat_uses_prompt_flag_and_only_recovers_project_memory(tmp_path: Path):
+def test_opencode_new_chat_uses_prompt_flag_and_shares_project_memory(tmp_path: Path):
     from chxchx_tech_lead.workspace.agent_commands import agent_pane_command
 
     command = agent_pane_command(
@@ -132,7 +132,7 @@ def test_opencode_new_chat_uses_prompt_flag_and_only_recovers_project_memory(tmp
     )
 
     assert "--recover-explicit-memory" in command
-    assert "--capture-explicit-memory" not in command
+    assert "--capture-explicit-memory" in command
     assert command[-3] == "opencode"
     assert command[-2] == "--prompt"
     assert "Basic Memory" in command[-1]

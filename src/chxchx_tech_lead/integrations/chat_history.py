@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -130,13 +131,10 @@ def _read_codex(path: Path, *, cwd: str, session_id: str) -> Conversation | None
 
 def _claude_conversations(project_root: Path) -> list[Conversation]:
     config_dir = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")).expanduser()
-    folder_name = str(project_root).replace("\\", "/").replace(":", "-").replace("/", "-")
-    project_dir = config_dir / "projects" / folder_name
-    if not project_dir.is_dir():
-        return []
     found: list[Conversation] = []
     try:
-        candidates = sorted(project_dir.glob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)[:500]
+        transcripts = [path for folder in _claude_project_dirs(config_dir, project_root) for path in folder.glob("*.jsonl")]
+        candidates = sorted(transcripts, key=_modified_at, reverse=True)[:500]
     except OSError:
         return []
     for path in candidates:
@@ -146,10 +144,28 @@ def _claude_conversations(project_root: Path) -> list[Conversation]:
     return found
 
 
+def _claude_project_dirs(config_dir: Path, project_root: Path) -> list[Path]:
+    """Folders where Claude Code may keep this project's transcripts.
+
+    Claude Code replaces every non-alphanumeric character of the path with "-"
+    and shortens very long names with a hash suffix. The mapping is lossy, so
+    ``_read_claude`` confirms each transcript's ``cwd`` before using it.
+    """
+    projects = config_dir / "projects"
+    raw = str(project_root)
+    sanitized = re.sub(r"[^A-Za-z0-9]", "-", raw)
+    legacy = raw.replace("\\", "/").replace(":", "-").replace("/", "-")
+    folders = [projects / name for name in dict.fromkeys((sanitized, legacy))]
+    if len(sanitized) > 200:
+        folders.extend(projects.glob(f"{sanitized[:200]}-*"))
+    return [folder for folder in dict.fromkeys(folders) if folder.is_dir()]
+
+
 def _read_claude(path: Path, project_root: Path) -> Conversation | None:
     messages: list[ConversationMessage] = []
     session_id = path.stem
     custom_title: str | None = None
+    cwd_checked = False
     try:
         with path.open(encoding="utf-8") as stream:
             for line in stream:
@@ -159,6 +175,12 @@ def _read_claude(path: Path, project_root: Path) -> Conversation | None:
                     continue
                 if not isinstance(record, dict):
                     continue
+                cwd = record.get("cwd")
+                if not cwd_checked and isinstance(cwd, str):
+                    # Different paths can share a folder name; skip foreign sessions.
+                    if not _same_path(Path(cwd), project_root):
+                        return None
+                    cwd_checked = True
                 if record.get("type") == "custom-title":
                     custom_title = str(record.get("customTitle") or record.get("title") or "") or custom_title
                     continue

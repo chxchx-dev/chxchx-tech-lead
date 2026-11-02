@@ -2,7 +2,8 @@ Unicode true
 RequestExecutionLevel user
 Name "ChxChx Studio Dev"
 Caption "Instalar ChxChx Studio Dev"
-OutFile "scripts/chxchx-studio-windows-x86_64-setup.exe"
+; Paths are relative to this script, whatever directory makensis runs from.
+OutFile "${__FILEDIR__}\chxchx-studio-windows-x86_64-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\ChxChxStudio"
 SetCompressor /SOLID lzma
 ShowInstDetails show
@@ -21,7 +22,7 @@ FunctionEnd
 
 Section "Instalar ChxChx Studio"
   SetOutPath "$PLUGINSDIR"
-  File "scripts/install-studio.ps1"
+  File "${__FILEDIR__}\install-studio.ps1"
   DetailPrint "Descargando Studio y sus dependencias."
   ExecWait '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\install-studio.ps1"' $0
   ${If} $0 != 0

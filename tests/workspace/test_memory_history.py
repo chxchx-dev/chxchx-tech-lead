@@ -87,3 +87,46 @@ def test_lists_local_chat_history_for_selected_project(tmp_path: Path, monkeypat
     assert len(list_conversations(project, query="AUTH")) == 1
     codex = next(item for item in conversations if item.provider == "Codex")
     assert codex.messages[-1].text == "Use pnpm start."
+
+
+def _write_claude_transcript(folder: Path, name: str, cwd: Path, text: str) -> None:
+    import json
+
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / name).write_text(
+        json.dumps({"type": "user", "cwd": str(cwd), "message": {"role": "user", "content": text}}),
+        encoding="utf-8",
+    )
+
+
+def test_finds_claude_chats_for_paths_with_dots_and_underscores(tmp_path: Path, monkeypatch):
+    import re
+
+    from chxchx_tech_lead.integrations.chat_history import list_conversations
+
+    project = tmp_path / "my_app.v2"
+    project.mkdir()
+    folder = tmp_path / "claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(project))
+    _write_claude_transcript(folder, "c1.jsonl", project, "Recuerda que usamos pnpm")
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+
+    assert [item.title for item in list_conversations(project)] == ["Recuerda que usamos pnpm"]
+
+
+def test_ignores_claude_chats_from_a_colliding_project_folder(tmp_path: Path, monkeypatch):
+    import re
+
+    from chxchx_tech_lead.integrations.chat_history import list_conversations
+
+    project = tmp_path / "my_app"
+    other = tmp_path / "my-app"
+    project.mkdir()
+    other.mkdir()
+    folder = tmp_path / "claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(project))
+    _write_claude_transcript(folder, "mine.jsonl", project, "Chat propio")
+    _write_claude_transcript(folder, "other.jsonl", other, "Chat de otro proyecto")
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+
+    assert [item.title for item in list_conversations(project)] == ["Chat propio"]

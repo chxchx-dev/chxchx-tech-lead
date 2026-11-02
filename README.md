@@ -651,7 +651,7 @@ chxchx-tech agent start --all --new-chat --path .
 chxchx-tech workspace attach .
 ```
 
-`--new-chat` está disponible para Codex, Claude Code y OpenCode. Al terminar una sesión, ChxChx captura solicitudes explícitas de memoria de Codex/Claude y, para OpenCode, exporta las sesiones del proyecto con su CLI oficial y `--sanitize`. Comprueba que cada sesión pertenezca a la raíz del proyecto, omite preguntas de recuperación y mensajes que parezcan contener secretos, y guarda las solicitudes en `.ai/memory/PROJECT_MEMORY.md` sin duplicarlas. Al abrir un chat nuevo, recupera la memoria del mismo proyecto. En Studio puedes conectar Basic Memory y Serena desde `Configuración → Configurar MCP · OpenCode`; también está disponible `chxchx-tech integrate . --client opencode`. Esto configura MCP en el proyecto con la CLI oficial de OpenCode, sin tocar su configuración global. `.ai/` es local a cada checkout y está excluido de Git.
+`--new-chat` está disponible para Codex, Claude Code y OpenCode. Al terminar una sesión, ChxChx captura solicitudes explícitas de memoria de Codex/Claude y, para OpenCode, exporta las sesiones del proyecto con su CLI oficial y `--sanitize`. Comprueba que cada sesión pertenezca a la raíz del proyecto, omite preguntas de recuperación y mensajes que parezcan contener secretos, y guarda las solicitudes en `.ai/memory/PROJECT_MEMORY.md` sin duplicarlas. Solo cuenta como petición una directiva al inicio de frase ("Recuerda que…", "No olvides…", "Guarda en memoria…", "Remember that…"); frases como "memoria RAM" o "guarda el archivo" se ignoran, igual que el contexto que el agente inyecta en el turno. Para retirar capturas antiguas que no eran peticiones usa `chxchx-tech workspace memory-prune . --dry-run` y luego sin `--dry-run`; las notas escritas a mano se conservan y queda un backup en `~/.chxchx-tech-lead/backups/`. Al abrir un chat nuevo, recupera la memoria del mismo proyecto. Al cerrar una sesión de Codex o Claude, ChxChx escribe en `.ai/history/SESSIONS.md` un resumen breve: el pedido inicial, los últimos pedidos y el mensaje final del agente, omitiendo lo que parezca un secreto. Las dos sesiones más recientes se adjuntan al siguiente chat nuevo, así la continuidad no depende de que el agente haya actualizado el handoff. Antes de cada chat nuevo, `CURRENT_STATE.md` y `HANDOFF.md` se compactan si pasan de unas 6 secciones recientes o unos 12.000 caracteres: las secciones antiguas pasan, de la más reciente a la más antigua, a `.ai/history/`, que el prompt no carga. Las secciones de la plantilla de `init` y los bloques administrados se mantienen. La compactación deja un backup restaurable con `chxchx-tech rollback`; para desactivarla añade `auto_compact_context = false` a `.ai/chxchx-tech.toml`. También puedes ejecutarla a mano con `chxchx-tech workspace context-compact . --dry-run` (opciones `--keep` y `--budget`). En Studio puedes conectar Basic Memory y Serena desde `Configuración → Configurar MCP · OpenCode`; también está disponible `chxchx-tech integrate . --client opencode`. Esto configura MCP en el proyecto con la CLI oficial de OpenCode, sin tocar su configuración global. `.ai/` es local a cada checkout y está excluido de Git.
 
 Puedes incorporar agentes al proyecto sin editar el TOML a mano:
 
@@ -1054,7 +1054,7 @@ estar instalados por separado y configurados como agentes del proyecto.
 | Inicio | Preparar el proyecto y acceder a acciones frecuentes |
 | Proyecto | Consultar trust y estado; iniciar, suspender o detener el workspace |
 | Proyectos | Cambiar entre proyectos registrados |
-| Agentes | Iniciar una CLI, abrir un chat nuevo o conectar OpenCode |
+| Agentes | Iniciar una CLI, abrir un chat nuevo o visual, o conectar OpenCode |
 | Procesos | Iniciar y detener comandos configurados |
 | Skills y Tech Packs | Revisar recomendaciones, aplicar instrucciones y sincronizar el contexto |
 | Handoff y Memoria | Guardar el siguiente paso y consultar notas locales |
@@ -1065,10 +1065,66 @@ Atajos útiles: `Ctrl+P` abre la paleta, `Ctrl+Shift+F` busca archivos o conteni
 del proyecto, `Ctrl+Shift+O` muestra declaraciones del archivo actual,
 `Ctrl+Shift+T` abre una terminal y `Shift+PageUp/PageDown` recorre su historial.
 
+Inicio, Proyecto, Agentes, Procesos y Recursos se actualizan solos cada 10
+segundos mientras la ventana está activa. Las vistas que comparten el mismo
+estado se muestran al instante y se refrescan en segundo plano, y las consultas
+nunca bloquean las acciones.
+
 Studio vuelve a comprobar trust y uso de RAM antes de iniciar agentes. Las
 acciones que modifican archivos o configuración muestran una vista previa y
 piden confirmación. El menú **Ayuda** incluye una guía rápida y la búsqueda
 manual de actualizaciones.
+
+### Temas y coloreado de código
+
+`Ver → Apariencia…` (`Ctrl+K`, `Ctrl+T`), el selector de la barra de estado o
+`Tema: …` en la paleta cambian el tema al instante. Hay seis temas: Medianoche,
+Grafito, Aurora, Bosque, Ámbar y Claro. Cada uno colorea la interfaz, los
+iconos, el editor, la terminal integrada y el chat visual con la misma paleta,
+y Studio recuerda la elección.
+
+El editor colorea por significado (comentarios, palabras clave, tipos, cadenas,
+números, funciones, etiquetas, etc.) en C/C++, Python, JavaScript/TypeScript,
+Java, C#, Kotlin, Go, Rust, Shell, PowerShell, JSON, YAML, TOML, Markdown, CSS,
+SQL, CMake, HTML y XML. También resalta el paréntesis que corresponde al que
+tiene el cursor. Las líneas largas que se parten conservan la sangría y llevan
+una marca de continuación. En el explorador, cada archivo tiene un icono según su
+tipo (código, documento, configuración, estilos, imagen o build), coloreado con
+el tema. La terminal usa una paleta ANSI legible tanto en temas oscuros como en
+el claro. La barra de estado muestra la línea, la columna, el lenguaje y
+el tema.
+
+### Chat visual con Codex y Claude
+
+**Chat visual**, en Inicio o en `Herramientas → Chat visual con agente` (también
+desde la paleta), abre una pestaña de conversación nativa con el agente
+seleccionado. Tiene el estilo de los chats de los IDE actuales: burbujas,
+avatar del agente, bloques de código con botón **Copiar**, herramientas como
+tarjetas que se despliegan, un indicador animado mientras el agente trabaja y
+sugerencias para empezar. Antes pasa por el mismo control de trust y RAM que la terminal.
+Las respuestas se muestran con formato. Los comandos y cambios de archivos
+aparecen como tarjetas con su estado y una vista previa de la salida. El primer
+mensaje incluye el contexto del proyecto (estado, handoff, memoria y últimas
+sesiones), y los siguientes continúan la misma sesión. **Permisos** elige entre
+*Solo lectura* y *Editar workspace*. **Detener** corta el turno, y cerrar la
+pestaña también. **Nuevo chat** empieza otra conversación.
+
+- **Modelo y Effort** muestran las opciones reales de cada agente. En Codex
+  salen de su catálogo local, con los niveles que admite cada modelo. En Claude
+  son los alias documentados (`sonnet`, `opus`, `haiku`…) y `--effort`. *Por
+  defecto* usa lo que tengas configurado en el agente.
+- La barra de uso muestra el contexto usado frente a la ventana del modelo, los
+  límites de 5 h y semanal del plan de Codex con su hora de reinicio, y los
+  tokens de la sesión. En Claude también muestra el costo estimado.
+- 📎 adjunta imágenes; también puedes pegarlas con `Ctrl+V` o arrastrarlas al
+  cuadro de texto. Se copian a `.ai/chat-attachments/`: Codex las recibe con
+  `--image` y Claude las lee desde esa ruta.
+- Si el agente no está instalado, el chat lo indica y muestra el comando para
+  instalarlo.
+
+Por debajo, cada mensaje ejecuta `chxchx-tech agent chat AGENTE --path . --prompt
+"…"`, que emite eventos JSONL `chxchx.agent-event` v1 (ver ADR 0009). Funciona
+con agentes Codex y Claude Code; para OpenCode usa la terminal integrada.
 
 ### Memoria entre sesiones
 
@@ -1108,6 +1164,13 @@ cmake --build build/native
 ctest --test-dir build/native --output-on-failure
 ./build/native/chxchx-studio /ruta/al/proyecto
 ```
+
+Después de la ruta del proyecto puedes pasar archivos para abrirlos al arrancar:
+`chxchx-studio /ruta/al/proyecto src/main.py`. Para documentación o QA visual,
+`CHXCHX_STUDIO_SCREENSHOT=captura.png` guarda una imagen de la ventana y cierra
+Studio. `CHXCHX_STUDIO_SCREENSHOT_DELAY_MS` ajusta la espera (2500 ms por
+defecto), `CHXCHX_STUDIO_SCREENSHOT_SIZE=1024x700` fija el tamaño de la ventana y
+`CHXCHX_STUDIO_SCREENSHOT_AREA=agents` abre una sección.
 
 En Windows, ejecuta `build/native/chxchx-studio.exe` con la ruta del proyecto
 como argumento. Studio usa Qt Widgets, Scintilla/Lexilla para editar y libvterm
