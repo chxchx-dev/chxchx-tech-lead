@@ -2,6 +2,14 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## README y merge de ramas
+
+- Se integró `main` en `dev` (`cd86d46`) y luego `feature/reliable-chat-memory` (`9ceb081`); los 10 commits de esa rama quedan conservados en `dev`.
+- Se actualizó la cabecera del README con el arte ASCII solicitado, badges de CI/Python/Qt/plataformas y navegación rápida. Se conservaron las guías, comandos y detalles que ya estaban documentados.
+- No se hizo push. `dev` está 15 commits por delante de `origin/dev`; `.vscode/` sin seguimiento se preservó. Se eliminó la rama local ya integrada; la referencia remota seguirá como respaldo hasta que se publique `dev`.
+- Verificación: `git diff --check` sin errores. No se ejecutaron tests en esta ronda.
+- Basic Memory no está disponible en las herramientas de esta sesión; el checkpoint quedó en `.ai/CURRENT_STATE.md` y este archivo.
+
 ## Responsivo y pendientes menores
 
 - Hecho: lista de secciones estable (acciones movidas a la barra del área), cuadrículas que se adaptan al ancho, páginas con desplazamiento, chat en paneles estrechos e iconos por tipo de archivo. También títulos Markdown completos, paleta ANSI para el tema claro y líneas partidas con sangría.

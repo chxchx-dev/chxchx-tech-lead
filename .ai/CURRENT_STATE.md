@@ -2,6 +2,12 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## README y ramas
+
+- `main` se integró en `dev` (`cd86d46`) y los 10 commits de `feature/reliable-chat-memory` también quedaron integrados (`9ceb081`): memoria por chat, diario/compactación de contexto, chat visual y mejoras de Studio.
+- README conserva sus instrucciones y ahora abre con el arte ASCII solicitado, badges y enlaces rápidos a Studio, TUI y CLI.
+- El árbol está en `dev`, 15 commits por delante de `origin/dev`; no se ha hecho push. La rama local de feature se eliminó tras comprobar el merge; `origin/feature/reliable-chat-memory` se conserva como respaldo hasta publicar `dev`.
+
 ## Responsivo y pendientes menores del rediseño
 
 - `ResponsiveGrid` (`responsive_grid.cpp`) reparte los widgets visibles en 1–4 columnas según el ancho y se reordena al mostrar u ocultar alguno. Se usa en "Acciones rápidas" de Inicio, en la barra de acciones de área y en las sugerencias del chat.

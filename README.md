@@ -1,21 +1,49 @@
-# ChxChx Tech Lead
+<div align="center">
 
-ChxChx Tech Lead prepara el contexto de un proyecto, conecta herramientas externas y administra un workspace ligero desde la terminal. ChxChx Studio es el editor integrado; Git, Zellij y los agentes mantienen sus propias herramientas y ChxChx los conecta mediante adapters. Sublime sigue disponible como editor externo opcional durante la transición.
+<pre>
+██████╗██╗  ██╗██╗  ██╗ ██████╗██╗  ██╗██╗  ██╗     ███████╗████████╗██╗   ██╗██████╗ ██╗ ██████╗
+██╔════╝██║  ██║╚██╗██╔╝██╔════╝██║  ██║╚██╗██╔╝     ██╔════╝╚══██╔══╝██║   ██║██╔══██╗██║██╔═══██╗
+██║     ███████║ ╚███╔╝ ██║     ███████║ ╚███╔╝█████╗███████╗   ██║   ██║   ██║██║  ██║██║██║   ██║
+██║     ██╔══██║ ██╔██╗ ██║     ██╔══██║ ██╔██╗╚════╝╚════██║   ██║   ██║   ██║██║  ██║██║██║   ██║
+╚██████╗██║  ██║██╔╝ ██╗╚██████╗██║  ██║██╔╝ ██╗     ███████║   ██║   ╚██████╔╝██████╔╝██║╚██████╔╝
+ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝     ╚══════╝   ╚═╝    ╚═════╝ ╚═════╝ ╚═╝ ╚═════╝
+</pre>
 
-**ChxChx Studio** es su aplicación nativa de escritorio en C++20/Qt 6 para
-Windows, macOS y Linux. Puedes [instalar el preview sin clonar el repositorio](#instalar-chxchx-studio-sin-clonar-el-repositorio); el instalador descarga el paquete correcto y su bridge CLI aislado.
+<h1>ChxChx Tech Lead</h1>
+
+<p><strong>Prepara y opera repositorios de desarrollo asistido por agentes.</strong></p>
+
+<p>
+  <a href="#usar-chxchx-studio">Studio</a> ·
+  <a href="#usar-la-tui">TUI</a> ·
+  <a href="#comandos-disponibles">CLI</a>
+</p>
+
+<p>
+  <a href="https://github.com/chxchx-dev/chxchx-tech-lead/actions/workflows/ci.yml"><img src="https://github.com/chxchx-dev/chxchx-tech-lead/actions/workflows/ci.yml/badge.svg?branch=dev" alt="CI en dev"></a>
+  <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11 o posterior">
+  <img src="https://img.shields.io/badge/Qt-6-41CD52?logo=qt&logoColor=white" alt="Qt 6">
+  <img src="https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-supported-555555" alt="Windows, macOS y Linux">
+</p>
+
+</div>
+
+ChxChx Tech Lead prepara el contexto de un proyecto, conecta herramientas
+externas y administra un workspace desde la terminal. ChxChx Studio es el
+editor integrado, una aplicación nativa C++20/Qt 6 para Windows, macOS y Linux.
+Git, Zellij y los agentes conservan sus propias herramientas y se conectan
+mediante adapters; Sublime sigue disponible como editor externo opcional.
+Puedes [instalar el preview de Studio sin clonar el repositorio](#instalar-chxchx-studio-sin-clonar-el-repositorio):
+el instalador descarga el paquete correspondiente y su bridge CLI aislado.
 
 ## Empieza aquí: Studio o TUI
 
-Ambas interfaces trabajan con la misma configuración y los mismos servicios del
-proyecto. Elige Studio para editar código en una ventana, la TUI para trabajar
-desde la terminal o la CLI para automatizar comandos.
+Studio, la TUI y la CLI trabajan con la misma configuración y los mismos
+servicios. Elige la interfaz según tu forma de trabajar:
 
-| Quiero… | Abro… |
-| --- | --- |
-| Editar archivos y manejar el proyecto en una ventana | [ChxChx Studio](#usar-chxchx-studio) |
-| Operar el proyecto desde una terminal interactiva | [La TUI](#usar-la-tui) |
-| Ejecutar una acción puntual o automatizarla | [Los comandos CLI](#comandos-disponibles) |
+| 🖥️ [ChxChx Studio](#usar-chxchx-studio) | ⌨️ [La TUI](#usar-la-tui) | ⚙️ [La CLI](#comandos-disponibles) |
+| --- | --- | --- |
+| Edita archivos y maneja el proyecto en una ventana. | Opera el workspace desde una terminal interactiva. | Ejecuta acciones puntuales y automatiza tareas. |
 
 ### Primera vez en Studio
 
