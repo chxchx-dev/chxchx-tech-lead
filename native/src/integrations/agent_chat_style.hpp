@@ -36,7 +36,7 @@ inline QString agentChatStyleSheet(const StudioTheme &theme)
         #welcomeTitle { color: @text@; font-size: 20px; font-weight: 700; }
         #welcomeSubtitle { color: @textMuted@; font-size: 13px; }
         #suggestionChip { background-color: @surfaceRaised@; border: 1px solid @borderStrong@; border-radius: 12px;
-            padding: 10px 14px; color: @text@; text-align: left; min-width: 230px; }
+            padding: 10px 14px; color: @text@; text-align: left; }
         #suggestionChip:hover { background-color: @surfaceHover@; border-color: @accent@; color: @selectedText@; }
 
         #userBubble { background-color: @accentSoft@; border: 1px solid @borderStrong@; border-radius: 14px; }

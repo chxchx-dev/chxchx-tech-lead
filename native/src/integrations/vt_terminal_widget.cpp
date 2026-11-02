@@ -37,7 +37,28 @@ struct VtTerminalWidget::State {
     qreal cellWidth = 8;
     qreal cellHeight = 18;
     qreal ascent = 14;
+    int ansiPalette = -1;  // 0 dark, 1 light; -1 until the first paint
 };
+
+namespace {
+
+// 16-colour ANSI palettes tuned for contrast on dark and on light backgrounds.
+void applyAnsiPalette(VTerm *terminal, bool light)
+{
+    static constexpr unsigned int dark[16] = {0x1d2433, 0xf7768e, 0x9ece6a, 0xe0af68, 0x7aa2f7, 0xbb9af7, 0x7dcfff,
+        0xc0caf5, 0x414868, 0xff7a93, 0xb9f27c, 0xff9e64, 0x7da6ff, 0xc0a8ff, 0x0db9d7, 0xe6edf7};
+    static constexpr unsigned int bright[16] = {0x1f2328, 0xc62828, 0x2e7d32, 0x8d6e00, 0x1565c0, 0x8e24aa, 0x00838f,
+        0x6e7781, 0x57606a, 0xe53935, 0x43a047, 0xb08800, 0x1e88e5, 0xab47bc, 0x00acc1, 0x8c959f};
+    VTermState *state = vterm_obtain_state(terminal);
+    for (int index = 0; index < 16; ++index) {
+        const unsigned int rgb = light ? bright[index] : dark[index];
+        VTermColor color;
+        vterm_color_rgb(&color, (rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
+        vterm_state_set_palette_color(state, index, &color);
+    }
+}
+
+} // namespace
 
 VtTerminalWidget::VtTerminalWidget(QWidget *parent)
     : QWidget(parent), m_state(std::make_unique<State>())
@@ -193,6 +214,13 @@ void VtTerminalWidget::paintEvent(QPaintEvent *event)
     // Default colours follow the application palette, so the terminal matches the theme.
     const QColor defaultForeground = palette().color(QPalette::WindowText);
     const QColor defaultBackground = palette().color(QPalette::Window);
+    const int ansiPalette = defaultBackground.lightness() > 140 ? 1 : 0;
+    if (ansiPalette != m_state->ansiPalette && m_state->terminal != nullptr) {
+        const bool firstPaint = m_state->ansiPalette < 0;
+        applyAnsiPalette(m_state->terminal, ansiPalette == 1);
+        m_state->ansiPalette = ansiPalette;
+        if (!firstPaint) update();  // Cells outside this paint region still use the old palette.
+    }
     painter.fillRect(event->rect(), defaultBackground);
     painter.setFont(font());
     const QRect dirty = event->rect();

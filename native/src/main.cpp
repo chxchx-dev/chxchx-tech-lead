@@ -26,6 +26,11 @@ int main(int argc, char *argv[])
     // Developer aid for docs and visual QA: save a capture of the window and quit.
     const QString screenshot = qEnvironmentVariable("CHXCHX_STUDIO_SCREENSHOT");
     if (!screenshot.isEmpty()) {
+        // Optional WIDTHxHEIGHT to check layouts at other window sizes.
+        const QStringList size = qEnvironmentVariable("CHXCHX_STUDIO_SCREENSHOT_SIZE").split(QLatin1Char('x'));
+        if (size.size() == 2) window.resize(size.at(0).toInt(), size.at(1).toInt());
+        const QString area = qEnvironmentVariable("CHXCHX_STUDIO_SCREENSHOT_AREA");
+        if (!area.isEmpty()) window.showArea(area);
         const int delay = qEnvironmentVariableIntValue("CHXCHX_STUDIO_SCREENSHOT_DELAY_MS");
         QTimer::singleShot(delay > 0 ? delay : 2500, &window, [&window, &application, screenshot] {
             window.grab().save(screenshot);

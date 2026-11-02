@@ -1,4 +1,6 @@
 #include "main_window.hpp"
+#include "file_icon_provider.hpp"
+#include "responsive_grid.hpp"
 #include "main_window_areas.hpp"
 #include "integrations/bridge_client.hpp"
 #include "integrations/agent_session_widget.hpp"
@@ -29,6 +31,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QSortFilterProxyModel>
+#include <QScrollArea>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -105,6 +108,8 @@ private:
 void MainWindow::buildLayout()
 {
     m_fileModel = new QFileSystemModel(this);
+    static StudioFileIconProvider fileIcons;
+    m_fileModel->setIconProvider(&fileIcons);
     m_fileModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
     m_fileModel->setRootPath(m_projectPath);
     m_projectProxy = new ProjectTreeProxyModel(m_projectPath, m_fileModel, this);
@@ -184,13 +189,34 @@ void MainWindow::buildLayout()
     m_editorSplit->addWidget(m_secondaryEditorTabs);
     m_editorSplit->setStretchFactor(0, 1);
     m_editorSplit->setStretchFactor(1, 1);
-    m_mainPages = new QStackedWidget(this);
-    const int sectionTab = m_editorTabs->addTab(m_mainPages, areaIcon(QStringLiteral("overview")),
+    m_sectionContainer = new QWidget(this);
+    auto *sectionLayout = new QVBoxLayout(m_sectionContainer);
+    sectionLayout->setContentsMargins(0, 0, 0, 0);
+    sectionLayout->setSpacing(0);
+    // Area actions live above the page, not in the side panel, so switching
+    // areas never resizes the section list under the cursor.
+    m_areaActionBar = new QFrame(m_sectionContainer);
+    m_areaActionBar->setObjectName(QStringLiteral("areaActionBar"));
+    auto *actionBarLayout = new QVBoxLayout(m_areaActionBar);
+    actionBarLayout->setContentsMargins(24, 12, 24, 12);
+    m_areaActions = new ResponsiveGrid(190, 4, m_areaActionBar);
+    actionBarLayout->addWidget(m_areaActions);
+    // Pages scroll instead of imposing their minimum height on the window.
+    auto *pageScroll = new QScrollArea(m_sectionContainer);
+    pageScroll->setFrameShape(QFrame::NoFrame);
+    pageScroll->setWidgetResizable(true);
+    pageScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_mainPages = new QStackedWidget(pageScroll);
+    pageScroll->setWidget(m_mainPages);
+    sectionLayout->addWidget(m_areaActionBar);
+    sectionLayout->addWidget(pageScroll, 1);
+    m_areaActionBar->hide();
+    const int sectionTab = m_editorTabs->addTab(m_sectionContainer, areaIcon(QStringLiteral("overview")),
         QStringLiteral("Inicio"));
     m_editorTabs->setTabToolTip(sectionTab, QStringLiteral("Inicio · Secciones del proyecto"));
     m_editorTabs->tabBar()->setTabButton(sectionTab, QTabBar::RightSide, nullptr);
     connect(m_editorTabs->tabBar(), &QTabBar::tabMoved, this, [this](int, int) {
-        const int index = m_editorTabs->indexOf(m_mainPages);
+        const int index = m_editorTabs->indexOf(m_sectionContainer);
         if (index >= 0) {
             m_editorTabs->tabBar()->setTabButton(index, QTabBar::RightSide, nullptr);
         }
@@ -213,10 +239,10 @@ void MainWindow::buildLayout()
     m_dashboardSummary->setObjectName(QStringLiteral("dashboardSummary"));
     m_homeQuickActions = new QGroupBox(QStringLiteral("Acciones rápidas"), m_dashboardPage);
     m_homeQuickActions->setObjectName(QStringLiteral("homeQuickActions"));
-    auto *homeActionsGrid = new QGridLayout(m_homeQuickActions);
-    homeActionsGrid->setContentsMargins(8, 12, 8, 6);
-    homeActionsGrid->setHorizontalSpacing(8);
-    homeActionsGrid->setVerticalSpacing(8);
+    auto *homeActionsLayout = new QVBoxLayout(m_homeQuickActions);
+    homeActionsLayout->setContentsMargins(8, 12, 8, 6);
+    auto *homeActionsGrid = new ResponsiveGrid(170, 4, m_homeQuickActions);
+    homeActionsLayout->addWidget(homeActionsGrid);
     m_homeTrustButton = new QPushButton(QStringLiteral("Confiar proyecto"), m_homeQuickActions);
     m_homeWorkspaceButton = new QPushButton(QStringLiteral("Iniciar workspace"), m_homeQuickActions);
     m_homeSuspendButton = new QPushButton(QStringLiteral("Suspender"), m_homeQuickActions);
@@ -247,19 +273,12 @@ void MainWindow::buildLayout()
     m_homeNewChatButton->setIcon(studioIcon(QStringLiteral("chat-message-new"), QStyle::SP_MessageBoxInformation));
     m_homeAllAgentsButton->setIcon(studioIcon(QStringLiteral("view-dual"), QStyle::SP_DesktopIcon));
     m_homeVisualChatButton->setIcon(studioIcon(QStringLiteral("dialog-messages"), QStyle::SP_MessageBoxQuestion));
-    homeActionsGrid->addWidget(m_homeTrustButton, 0, 0);
-    homeActionsGrid->addWidget(m_homeWorkspaceButton, 0, 1);
-    homeActionsGrid->addWidget(m_homeSuspendButton, 0, 2);
-    homeActionsGrid->addWidget(m_homeStopButton, 0, 3);
-    homeActionsGrid->addWidget(m_homeTerminalButton, 1, 0);
-    homeActionsGrid->addWidget(m_homePrepareButton, 1, 1);
-    homeActionsGrid->addWidget(m_homeSyncSkillsButton, 1, 2);
-    homeActionsGrid->addWidget(m_homeDoctorButton, 1, 3);
-    homeActionsGrid->addWidget(m_homeAgentSelector, 2, 0, 1, 1);
-    homeActionsGrid->addWidget(m_homeAgentButton, 2, 1);
-    homeActionsGrid->addWidget(m_homeNewChatButton, 2, 2);
-    homeActionsGrid->addWidget(m_homeAllAgentsButton, 2, 3);
-    homeActionsGrid->addWidget(m_homeVisualChatButton, 3, 1, 1, 2);
+    for (QWidget *widget : std::initializer_list<QWidget *>{m_homeTrustButton, m_homeWorkspaceButton,
+             m_homeSuspendButton, m_homeStopButton, m_homeTerminalButton, m_homePrepareButton,
+             m_homeSyncSkillsButton, m_homeDoctorButton, m_homeAgentSelector, m_homeAgentButton,
+             m_homeNewChatButton, m_homeAllAgentsButton, m_homeVisualChatButton}) {
+        homeActionsGrid->addWidget(widget);
+    }
     m_homeQuickActions->setVisible(m_currentArea == QStringLiteral("overview"));
     auto *dashboardListTitle = new QLabel(QStringLiteral("Estado actual"), m_dashboardPage);
     dashboardListTitle->setObjectName(QStringLiteral("sectionTitle"));
@@ -525,17 +544,16 @@ void MainWindow::buildLayout()
             m_areaList->setCurrentRow(firstVisible);
         }
     });
-    m_targetSelector = new QComboBox(control);
+    m_targetSelector = new QComboBox(m_areaActions);
     m_targetSelector->setPlaceholderText(QStringLiteral("Selecciona un elemento"));
-    m_primaryAction = new QPushButton(control);
-    m_secondaryAction = new QPushButton(control);
-    m_tertiaryAction = new QPushButton(control);
-    m_quaternaryAction = new QPushButton(control);
-    controlLayout->addWidget(m_targetSelector);
-    controlLayout->addWidget(m_primaryAction);
-    controlLayout->addWidget(m_secondaryAction);
-    controlLayout->addWidget(m_tertiaryAction);
-    controlLayout->addWidget(m_quaternaryAction);
+    m_primaryAction = new QPushButton(m_areaActions);
+    m_primaryAction->setProperty("primary", true);
+    m_secondaryAction = new QPushButton(m_areaActions);
+    m_tertiaryAction = new QPushButton(m_areaActions);
+    m_quaternaryAction = new QPushButton(m_areaActions);
+    m_areaActions->addWidget(m_targetSelector, true);
+    for (QPushButton *button : {m_primaryAction, m_secondaryAction, m_tertiaryAction, m_quaternaryAction})
+        m_areaActions->addWidget(button);
     connect(m_areaList, &QListWidget::currentRowChanged, this, &MainWindow::selectArea);
     const auto connectGuideNavigation = [this](QPushButton *button, const QString &areaId) {
         connect(button, &QPushButton::clicked, this, [this, areaId] {
@@ -576,6 +594,10 @@ void MainWindow::buildLayout()
         | QDockWidget::DockWidgetClosable);
     m_controlDock->setWidget(control);
     addDockWidget(Qt::RightDockWidgetArea, m_controlDock);
+    // Side panels keep readable labels on small screens; the editor flexes instead.
+    m_projectDock->widget()->setMinimumWidth(200);
+    control->setMinimumWidth(210);
+    resizeDocks({m_projectDock, m_controlDock}, {260, 250}, Qt::Horizontal);
 
     m_output = new QPlainTextEdit(this);
     m_output->setReadOnly(true);

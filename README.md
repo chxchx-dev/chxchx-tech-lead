@@ -1087,7 +1087,11 @@ El editor colorea por significado (comentarios, palabras clave, tipos, cadenas,
 números, funciones, etiquetas, etc.) en C/C++, Python, JavaScript/TypeScript,
 Java, C#, Kotlin, Go, Rust, Shell, PowerShell, JSON, YAML, TOML, Markdown, CSS,
 SQL, CMake, HTML y XML. También resalta el paréntesis que corresponde al que
-tiene el cursor. La barra de estado muestra la línea, la columna, el lenguaje y
+tiene el cursor. Las líneas largas que se parten conservan la sangría y llevan
+una marca de continuación. En el explorador, cada archivo tiene un icono según su
+tipo (código, documento, configuración, estilos, imagen o build), coloreado con
+el tema. La terminal usa una paleta ANSI legible tanto en temas oscuros como en
+el claro. La barra de estado muestra la línea, la columna, el lenguaje y
 el tema.
 
 ### Chat visual con Codex y Claude
@@ -1164,8 +1168,9 @@ ctest --test-dir build/native --output-on-failure
 Después de la ruta del proyecto puedes pasar archivos para abrirlos al arrancar:
 `chxchx-studio /ruta/al/proyecto src/main.py`. Para documentación o QA visual,
 `CHXCHX_STUDIO_SCREENSHOT=captura.png` guarda una imagen de la ventana y cierra
-Studio; `CHXCHX_STUDIO_SCREENSHOT_DELAY_MS` ajusta la espera (2500 ms por
-defecto).
+Studio. `CHXCHX_STUDIO_SCREENSHOT_DELAY_MS` ajusta la espera (2500 ms por
+defecto), `CHXCHX_STUDIO_SCREENSHOT_SIZE=1024x700` fija el tamaño de la ventana y
+`CHXCHX_STUDIO_SCREENSHOT_AREA=agents` abre una sección.
 
 En Windows, ejecuta `build/native/chxchx-studio.exe` con la ruta del proyecto
 como argumento. Studio usa Qt Widgets, Scintilla/Lexilla para editar y libvterm

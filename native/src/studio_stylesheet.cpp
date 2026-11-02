@@ -123,6 +123,7 @@ QString studioStyleSheet(const StudioTheme &theme)
         #dashboardSummary { background-color: @surface@; border: 1px solid @border@; border-left: 3px solid @accent@;
             border-radius: 10px; padding: 12px 14px; color: @text@; font-weight: 600; }
         #homeQuickActions QPushButton { text-align: left; padding: 9px 12px; }
+        #areaActionBar { background-color: @surface@; border-bottom: 1px solid @border@; }
         #guideStepCard { background-color: @surface@; border: 1px solid @border@; border-radius: 12px; }
         #guideStepCard QLabel { background: transparent; }
         #guideNumber { color: @accent@; font-size: 18px; font-weight: 700; }

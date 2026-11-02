@@ -11,6 +11,8 @@ ChatPillPicker::ChatPillPicker(QWidget *parent)
     setPopupMode(QToolButton::InstantPopup);
     setToolButtonStyle(Qt::ToolButtonTextOnly);
     setCursor(Qt::PointingHandCursor);
+    // Allow shrinking below the label width; the composer switches to compact text.
+    setMinimumWidth(56);
     m_menu = new QMenu(this);
     m_menu->setObjectName(QStringLiteral("pillMenu"));
     m_group = new QActionGroup(this);
@@ -77,7 +79,17 @@ QString ChatPillPicker::currentText() const
     return m_current >= 0 && m_current < actions.size() ? actions.at(m_current)->text() : QString();
 }
 
+void ChatPillPicker::setCompact(bool compact)
+{
+    if (compact == m_compact) return;
+    m_compact = compact;
+    updateLabel();
+}
+
 void ChatPillPicker::updateLabel()
 {
-    setText(currentText().isEmpty() ? QStringLiteral("…  ▾") : currentText() + QStringLiteral("  ▾"));
+    QString label = currentText();
+    if (m_compact) label = label.section(QStringLiteral(" · "), 0, 0);
+    setText(label.isEmpty() ? QStringLiteral("…  ▾") : label + QStringLiteral("  ▾"));
+    setToolTip(currentText());
 }

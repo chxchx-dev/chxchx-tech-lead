@@ -110,6 +110,10 @@ void configureCodeEditor(ScintillaEditBase *editor, const QString &path, bool wo
     editor->send(SCI_SETINDENTATIONGUIDES, SC_IV_LOOKBOTH);
     editor->send(SCI_SETTABWIDTH, 4);
     editor->send(SCI_SETWRAPMODE, wordWrapEnabled ? SC_WRAP_WORD : SC_WRAP_NONE);
+    // Wrapped lines keep the indentation and show a continuation mark, so they
+    // never read as new lines.
+    editor->send(SCI_SETWRAPINDENTMODE, SC_WRAPINDENT_INDENT);
+    editor->send(SCI_SETWRAPVISUALFLAGS, SC_WRAPVISUALFLAG_END);
     editor->send(SCI_SETHSCROLLBAR, wordWrapEnabled ? 0 : 1);
     applyEditorTheme(editor, path, ThemeManager::current());
 }
@@ -128,6 +132,16 @@ MainWindow::MainWindow(QString projectPath, QWidget *parent)
     m_fileIndex = new ProjectFileIndex(m_projectPath, this);
     restoreEditorSession();
     statusBar()->showMessage(m_projectPath);
+}
+
+void MainWindow::showArea(const QString &id)
+{
+    for (int row = 0; row < m_areaList->count(); ++row) {
+        if (m_areaList->item(row)->data(Qt::UserRole).toString() == id) {
+            m_areaList->setCurrentRow(row);
+            return;
+        }
+    }
 }
 
 void MainWindow::openFiles(const QStringList &paths)
@@ -264,7 +278,7 @@ QTabWidget *MainWindow::tabGroupFor(QWidget *page) const
 void MainWindow::showTabContextMenu(QTabWidget *tabs, const QPoint &position)
 {
     const int index = tabs->tabBar()->tabAt(position);
-    if (index < 0 || tabs->widget(index) == m_mainPages) return;
+    if (index < 0 || tabs->widget(index) == m_sectionContainer) return;
 
     QMenu menu(this);
     QAction *splitRight = menu.addAction(QStringLiteral("Dividir a la derecha"));
@@ -290,7 +304,7 @@ void MainWindow::showTabContextMenu(QTabWidget *tabs, const QPoint &position)
 
 void MainWindow::moveTabToOtherGroup(QTabWidget *source, int index, Qt::Orientation orientation)
 {
-    if (index < 0 || index >= source->count() || source->widget(index) == m_mainPages) return;
+    if (index < 0 || index >= source->count() || source->widget(index) == m_sectionContainer) return;
     QTabWidget *destination = source == m_editorTabs ? m_secondaryEditorTabs : m_editorTabs;
     const bool openingSplit = destination == m_secondaryEditorTabs && !destination->isVisible();
     m_editorSplit->setOrientation(orientation);
@@ -475,7 +489,7 @@ void MainWindow::closeEditorTab(QTabWidget *tabs, int index)
     if (tabs == nullptr || index < 0 || index >= tabs->count()) {
         return;
     }
-    if (tabs->widget(index) == m_mainPages) {
+    if (tabs->widget(index) == m_sectionContainer) {
         return;
     }
     auto *editor = qobject_cast<ScintillaEditBase *>(tabs->widget(index));
@@ -533,7 +547,7 @@ void MainWindow::selectArea(int row)
     } else {
         m_mainPages->setCurrentWidget(m_dashboardPage);
     }
-    const int sectionTab = m_editorTabs->indexOf(m_mainPages);
+    const int sectionTab = m_editorTabs->indexOf(m_sectionContainer);
     if (sectionTab >= 0) {
         m_editorTabs->setCurrentIndex(sectionTab);
     }

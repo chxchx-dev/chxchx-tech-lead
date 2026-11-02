@@ -2,6 +2,12 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Responsivo y pendientes menores
+
+- Hecho: lista de secciones estable (acciones movidas a la barra del área), cuadrículas que se adaptan al ancho, páginas con desplazamiento, chat en paneles estrechos e iconos por tipo de archivo. También títulos Markdown completos, paleta ANSI para el tema claro y líneas partidas con sangría.
+- Validación: CTest `8/8`; pytest `291 passed, 1 skipped`; capturas a 1024×700, 1280×800 y 1920×1080, y chat a 460/560/1000 px. Antes, la ventana no bajaba de 814 px de alto ni el chat de 724 px de ancho.
+- Pendiente: probar a mano cómo se arrastran los separadores de paneles y el comportamiento en Windows/macOS. La terminal en tema claro no se verificó con un programa real (sin pantalla aquí).
+
 ## Rediseño visual, temas y coloreado de código
 
 - Hecho: motor de temas, iconos propios, hoja de estilos moderna, coloreado semántico, selector de apariencia y barra de estado. Capturas offscreen revisadas en Medianoche, Claro, Aurora y Bosque (inicio, editor Python/C++/Markdown/CMake, diálogo de Apariencia, chat).

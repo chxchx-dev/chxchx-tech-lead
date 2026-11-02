@@ -109,6 +109,10 @@ qt_add_executable(chxchx-studio
     src/appearance_dialog.cpp
     src/appearance_dialog.hpp
     src/main_window_appearance.cpp
+    src/responsive_grid.cpp
+    src/responsive_grid.hpp
+    src/file_icon_provider.cpp
+    src/file_icon_provider.hpp
     src/main_window_data_pages.cpp
     src/main_window_dashboard.cpp
     src/main_window_layout.cpp
@@ -273,8 +277,16 @@ if(CHXCHX_BUILD_TESTS)
         src/integrations/agent_chat_usage.cpp src/integrations/agent_chat_usage.hpp
         src/integrations/agent_chat_style.hpp
         src/integrations/chat_pill_picker.cpp src/integrations/chat_pill_picker.hpp
-        src/studio_theme.cpp src/studio_themes.cpp src/studio_stylesheet.cpp src/studio_icons.cpp)
+        src/studio_theme.cpp src/studio_themes.cpp src/studio_stylesheet.cpp src/studio_icons.cpp
+        src/responsive_grid.cpp src/responsive_grid.hpp)
     target_link_libraries(chxchx-agent-chat-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
     add_test(NAME native-agent-chat-smoke COMMAND chxchx-agent-chat-smoke)
+
+    add_executable(chxchx-layout-smoke tests/layout_smoke.cpp
+        src/responsive_grid.cpp src/responsive_grid.hpp src/file_icon_provider.cpp src/file_icon_provider.hpp
+        src/studio_theme.cpp src/studio_themes.cpp src/studio_stylesheet.cpp src/studio_icons.cpp)
+    target_link_libraries(chxchx-layout-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+    add_test(NAME native-layout-smoke COMMAND chxchx-layout-smoke)
+    set_tests_properties(native-layout-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     set_tests_properties(native-agent-chat-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

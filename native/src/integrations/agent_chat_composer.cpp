@@ -1,4 +1,5 @@
 #include "agent_chat_composer.hpp"
+#include "chat_pill_picker.hpp"
 
 #include <QApplication>
 #include <QClipboard>
@@ -15,6 +16,7 @@
 #include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QStyle>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -73,6 +75,7 @@ AgentChatComposer::AgentChatComposer(QWidget *parent)
     m_attach->setToolTip(QStringLiteral("Adjuntar imágenes. También puedes pegarlas (Ctrl+V) o arrastrarlas aquí."));
     m_hint = new QLabel(IdleHint, this);
     m_hint->setObjectName(QStringLiteral("composerHint"));
+    m_hint->setMinimumWidth(1);
     m_send = new QPushButton(QStringLiteral("↑"), this);
     m_send->setObjectName(QStringLiteral("sendButton"));
     m_send->setCursor(Qt::PointingHandCursor);
@@ -241,6 +244,15 @@ void AgentChatComposer::updateAttachments()
         m_attachmentRow->addWidget(chip);
     }
     m_attachmentRow->addStretch(1);
+}
+
+void AgentChatComposer::resizeEvent(QResizeEvent *event)
+{
+    QFrame::resizeEvent(event);
+    // Narrow panels (split tabs) drop secondary text instead of forcing width.
+    const int width = event->size().width();
+    m_hint->setVisible(width >= 700);
+    for (ChatPillPicker *pill : findChildren<ChatPillPicker *>()) pill->setCompact(width < 600);
 }
 
 void AgentChatComposer::setFocused(bool focused)

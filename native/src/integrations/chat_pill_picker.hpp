@@ -21,6 +21,8 @@ public:
     int findData(const QVariant &data) const;
     QVariant currentData() const;
     QString currentText() const;
+    // Compact pills drop the " · por defecto" suffix to fit narrow panels.
+    void setCompact(bool compact);
 
 signals:
     void currentIndexChanged(int index);
@@ -31,4 +33,5 @@ private:
     QMenu *m_menu = nullptr;
     QActionGroup *m_group = nullptr;
     int m_current = -1;
+    bool m_compact = false;
 };

@@ -2,6 +2,14 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## Responsivo y pendientes menores del rediseño
+
+- `ResponsiveGrid` (`responsive_grid.cpp`) reparte los widgets visibles en 1–4 columnas según el ancho y se reordena al mostrar u ocultar alguno. Se usa en "Acciones rápidas" de Inicio, en la barra de acciones de área y en las sugerencias del chat.
+- Las acciones de área (selector y 4 botones) pasaron del dock "Secciones y acciones" a `#areaActionBar`, sobre las páginas, dentro de `m_sectionContainer`, que ahora es la pestaña "Inicio". La lista de secciones mantiene su alto al cambiar de área. Las páginas viven en un `QScrollArea`, así que la ventana puede tener cualquier alto. Los docks tienen ancho mínimo (200/210) y uno inicial razonable.
+- El editor parte líneas conservando la sangría y con marca de continuación. Markdown colorea títulos completos (`lexer.markdown.header.eolfill`). `StudioFileIconProvider` pinta iconos por tipo de archivo con colores del tema. La terminal elige una paleta ANSI clara u oscura según la luminosidad del fondo.
+- Chat en paneles estrechos: píldoras en modo compacto (sin "· por defecto"), sugerencias en una columna y texto de ayuda oculto. Se validó a 460 px.
+- Nuevo CTest `native-layout-smoke` (columnas, reflujo al ocultar, tipos de archivo). La captura acepta `CHXCHX_STUDIO_SCREENSHOT_SIZE` y `CHXCHX_STUDIO_SCREENSHOT_AREA`.
+
 ## Rediseño visual y temas
 
 - `studio_theme.{hpp,cpp}` + `studio_themes.cpp`: `StudioTheme` con tokens de interfaz, del editor y de sintaxis. Seis temas originales (medianoche, grafito, aurora, bosque, ambar, claro). `ThemeManager` aplica paleta y hoja de estilos, guarda `appearance/theme` en QSettings y emite `themeChanged`. `studio_stylesheet.cpp` es una plantilla con `@tokens@` y `@img:…@`, que apuntan a PNGs generados por tema.

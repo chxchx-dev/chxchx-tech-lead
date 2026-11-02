@@ -97,6 +97,8 @@ verde; la configuración del workflow no equivale a que haya pasado.
 - [x] Rediseño visual de todo Studio: motor de temas (6 temas), iconos propios, hoja de estilos moderna y barra de estado útil.
 - [x] Cambio de tema y coloreado de código por lenguaje según la paleta del tema.
 - [x] Validar Claude en el chat visual con la CLI real (2.1.316): imagen, modelo, effort, costo, contexto y reanudación.
+- [x] Pendientes menores del rediseño: títulos Markdown completos, iconos por tipo en el explorador y paleta ANSI para el tema claro.
+- [x] Responsivo: las acciones de área salen del panel lateral (la lista de secciones ya no se mueve), cuadrículas que se adaptan al ancho, páginas con desplazamiento, anchos mínimos de paneles y un chat que cabe en paneles divididos.
 
 ## Evolución posterior
 

@@ -327,6 +327,9 @@ void applyEditorTheme(ScintillaEditBase *editor, const QString &path, const Stud
     if (it != languages().cend()) {
         if (Scintilla::ILexer5 *lexer = CreateLexer(it->lexer)) {
             editor->send(SCI_SETILEXER, 0, reinterpret_cast<Scintilla::sptr_t>(lexer));
+            // Without this Lexilla colours only the leading '#' of Markdown headings.
+            editor->send(SCI_SETPROPERTY, reinterpret_cast<Scintilla::uptr_t>("lexer.markdown.header.eolfill"),
+                reinterpret_cast<Scintilla::sptr_t>("1"));
             for (size_t set = 0; set < it->keywords.size(); ++set)
                 editor->send(SCI_SETKEYWORDS, set, reinterpret_cast<Scintilla::sptr_t>(it->keywords.at(set)));
             for (const auto &[style, role] : it->roles) {

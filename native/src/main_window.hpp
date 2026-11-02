@@ -11,6 +11,8 @@
 
 class QJsonObject;
 class QAction;
+class QFrame;
+class ResponsiveGrid;
 class QToolButton;
 class QTimer;
 class BridgeClient;
@@ -48,6 +50,8 @@ public:
     explicit MainWindow(QString projectPath, QWidget *parent = nullptr);
     // Opens files passed on the command line, relative to the project.
     void openFiles(const QStringList &paths);
+    // Selects a section by id ("overview", "agents"…); used for screenshots and QA.
+    void showArea(const QString &id);
 
 private slots:
     void openFile();
@@ -199,6 +203,9 @@ private:
     QPushButton *m_homeNewChatButton = nullptr;
     QPushButton *m_homeAllAgentsButton = nullptr;
     QPushButton *m_homeVisualChatButton = nullptr;
+    QWidget *m_sectionContainer = nullptr;
+    QFrame *m_areaActionBar = nullptr;
+    ResponsiveGrid *m_areaActions = nullptr;
     QMenu *m_themeMenu = nullptr;
     QLabel *m_statusPosition = nullptr;
     QLabel *m_statusLanguage = nullptr;

@@ -1,10 +1,12 @@
 #include "main_window.hpp"
 #include "integrations/agent_chat_widget.hpp"
+#include "responsive_grid.hpp"
 
 #include <QComboBox>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QFrame>
 #include <QPushButton>
 
 void MainWindow::configureAreaActions()
@@ -84,6 +86,7 @@ void MainWindow::configureAreaActions()
         m_primaryAction->setText(QStringLiteral("Previsualizar y ejecutar"));
         m_secondaryAction->setText(QStringLiteral("Ejecutar diagnóstico"));
     }
+    m_areaActionBar->setVisible(m_areaActions->hasVisibleItems());
     updateAreaActionState();
 }
 

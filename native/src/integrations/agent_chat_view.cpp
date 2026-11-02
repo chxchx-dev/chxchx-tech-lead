@@ -1,7 +1,7 @@
 #include "agent_chat_view.hpp"
+#include "../responsive_grid.hpp"
 #include "../studio_theme.hpp"
 
-#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -156,18 +156,20 @@ void AgentChatView::rebuildWelcome()
         QStringLiteral("Revisa los cambios sin commitear y busca bugs"),
         QStringLiteral("Propón tests para la parte más crítica"),
     };
-    auto *grid = new QGridLayout;
-    grid->setSpacing(8);
-    for (qsizetype index = 0; index < suggestions.size(); ++index) {
-        auto *chip = new QPushButton(suggestions.at(index), m_welcome);
+    // Two columns when there is room, one in narrow split panels.
+    auto *grid = new ResponsiveGrid(240, 2, m_welcome);
+    grid->setMaximumWidth(620);
+    for (const QString &suggestion : suggestions) {
+        auto *chip = new QPushButton(suggestion);
         chip->setObjectName(QStringLiteral("suggestionChip"));
         chip->setCursor(Qt::PointingHandCursor);
-        connect(chip, &QPushButton::clicked, this, [this, text = suggestions.at(index)] { emit suggestionChosen(text); });
-        grid->addWidget(chip, int(index / 2), int(index % 2));
+        connect(chip, &QPushButton::clicked, this, [this, suggestion] { emit suggestionChosen(suggestion); });
+        grid->addWidget(chip);
     }
+    // Stretches centre the grid; an alignment flag would shrink it to its hint.
     auto *centered = new QHBoxLayout;
     centered->addStretch(1);
-    centered->addLayout(grid);
+    centered->addWidget(grid, 10);
     centered->addStretch(1);
     column->addLayout(centered);
     m_layout->insertWidget(0, m_welcome);
