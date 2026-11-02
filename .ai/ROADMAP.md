@@ -94,6 +94,9 @@ verde; la configuración del workflow no equivale a que haya pasado.
 - [x] Mostrar lo gastado y lo que queda: contexto usado/ventana, límites de 5 h y semanal (Codex), costo (Claude) y tokens de la sesión.
 - [x] Adjuntar imágenes en el chat visual (archivo y pegar desde el portapapeles).
 - [x] Interfaz del chat más vistosa, a la altura de otros IDE: tarjetas nativas, código copiable, píldoras de modelo, effort y permisos, y medidores de uso.
+- [x] Rediseño visual de todo Studio: motor de temas (6 temas), iconos propios, hoja de estilos moderna y barra de estado útil.
+- [x] Cambio de tema y coloreado de código por lenguaje según la paleta del tema.
+- [x] Validar Claude en el chat visual con la CLI real (2.1.316): imagen, modelo, effort, costo, contexto y reanudación.
 
 ## Evolución posterior
 

@@ -2,6 +2,33 @@
 
 Secciones archivadas automáticamente, de la más reciente a la más antigua.
 
+## README: guía de inicio para Studio y TUI
+
+- El comienzo del README ahora ayuda a elegir Studio, la TUI o la CLI y ofrece pasos concretos para lanzar cada interfaz sobre un proyecto.
+- La guía de Studio explica instalación/launcher, **Preparar y entrar**, edición, búsqueda, terminal, agentes y memoria. La TUI documenta preparación con `init`, trust, áreas principales, teclas y salida de Zellij.
+- Se sustituyó el banner ASCII extenso y los bloques de uso de Studio/TUI se dividieron por recorrido y tema. Se mantienen las referencias técnicas y el catálogo de capacidades.
+
+## OpenCode y memoria compartida entre agentes
+
+- Studio ya permite añadir OpenCode u OpenCode con Ollama desde Agentes y conectar MCP de Basic Memory/Serena desde Configuración, con preview, confirmación y alcance local al proyecto.
+- El wrapper ahora captura solicitudes explícitas desde sesiones OpenCode con `opencode session list` y `opencode export --sanitize`, valida que la sesión pertenezca a la ruta exacta del proyecto y comparte `.ai/memory/PROJECT_MEMORY.md` con Codex y Claude. Al iniciar chat nuevo, recupera y adjunta las solicitudes locales sin duplicarlas.
+- No se lee la base de datos interna de OpenCode. La captura está acotada a las diez sesiones recientes y a cinco segundos por comando. La vista Chats permanece enfocada en Codex/Claude.
+- No se ejecutaron pruebas en esta tarea; falta smoke manual con OpenCode normal y OpenCode con Ollama.
+
+## Catálogo de Mods para Claude Code
+
+- Se amplió de cinco a nueve guías locales con flujo Git, refactorización segura, documentación técnica y rendimiento basado en mediciones. Siguen siendo instrucciones instaladas por proyecto, sin hooks, ejecutables ni cambios globales.
+- La recomendación de rendimiento depende de stacks/lenguajes detectados; las otras tres guías son de flujo general. README y ADR 0004 describen el catálogo actualizado.
+- La instalación y actualización del preview de Studio se documenta en la sección siguiente.
+
+## Studio: funcional; validación final para uso diario pendiente
+
+- Studio tiene la funcionalidad principal implementada y los instaladores nativos pasaron CI: run #87 terminó con los 15 jobs aplicables en verde. La rama feature no publicó `studio-dev-preview`, de acuerdo con la decisión de aplazar esa publicación.
+- Aún no se debe marcar como validado para uso diario. Falta recorrer en Fedora, con un proyecto confiable, Init y trust, skills/sync, edición y guardado, terminal, sesión de agente con contexto, preflight de RAM y cierre limpio. Tampoco hay evidencia de instalación interactiva en una segunda máquina Fedora.
+- El menú **Ayuda → Buscar actualizaciones…** consulta el release y pide confirmación antes de aplicar. El actualizador valida los SHA-256, instala app y bridge CLI en una carpeta versionada, valida que el CLI nuevo arranque y cambia el launcher al final; conserva la versión anterior para rollback. El descubrimiento de instalación admite el marcador SHA completo y el marcador vacío de instaladores antiguos.
+- Los instaladores Bash y PowerShell se pueden volver a ejecutar para actualizar; `--update`/`-Update` exige una instalación previa y `--dry-run`/`-DryRun` valida descargas y conflictos antes de escribir. Windows normaliza ZIP con raíz anidada. No se probó una instalación interactiva en equipos limpios; la publicación del preview continúa aplazada y el chequeo en Studio requiere que haya un release publicado.
+- Verificación local: `python -m compileall -q src`, `bash -n` de instaladores, build nativo Qt y `git diff --check` pasan. No se ejecutó pytest ni una instalación; `pwsh` no está disponible localmente.
+
 ## Estado actual (versión extensa archivada el 2026-11-01)
 
 - Inicio de Studio ofrece `Preparar y entrar`: vista previa y confirmación de Init, skills recomendadas, skills de Tech Packs detectados y Mods de Claude aplicables, sincronización del contexto, trust local y apertura de un chat nuevo con el agente elegido. Los Mods se incluyen solo si el proyecto ya tiene contexto/configuración Claude y nunca modifican ajustes globales.

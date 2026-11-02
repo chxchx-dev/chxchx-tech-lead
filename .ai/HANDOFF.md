@@ -2,6 +2,14 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Rediseño visual, temas y coloreado de código
+
+- Hecho: motor de temas, iconos propios, hoja de estilos moderna, coloreado semántico, selector de apariencia y barra de estado. Capturas offscreen revisadas en Medianoche, Claro, Aurora y Bosque (inicio, editor Python/C++/Markdown/CMake, diálogo de Apariencia, chat).
+- Validación: CTest `7/7`; pytest `290 passed, 1 skipped`; build sin warnings; Claude real validado por CLI.
+- Corrección: la paleta de comandos es una lista fija y antes no incluía el chat visual (la documentación decía lo contrario). Ahora sí lo incluye.
+- Con el uso real se vio que la compactación automática y el diario funcionan. También salió un bug: Codex registra AGENTS.md como primer mensaje del usuario y el diario lo tomaba como "Inicio". Corregido y con prueba.
+- Pendiente: QA con mouse (menús, hover, diálogo) y en Windows/macOS. Los encabezados Markdown solo colorean el `#`. Faltan iconos de tipo de archivo en el explorador. La terminal hereda la paleta, pero sus colores ANSI no se adaptan al tema claro.
+
 ## Chat visual con estilo de IDE
 
 - Hecho: rediseño completo de la vista del chat con widgets nativos y el tema de Studio; capturas offscreen revisadas (bienvenida, turno real de Codex con imagen y código, Claude no instalado).

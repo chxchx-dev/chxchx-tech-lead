@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QIcon>
 #include <QStringList>
+#include <QTimer>
 
 int main(int argc, char *argv[])
 {
@@ -20,6 +21,16 @@ int main(int argc, char *argv[])
         : QDir::currentPath();
 
     MainWindow window(projectPath);
+    window.openFiles(arguments.mid(2));
     window.show();
+    // Developer aid for docs and visual QA: save a capture of the window and quit.
+    const QString screenshot = qEnvironmentVariable("CHXCHX_STUDIO_SCREENSHOT");
+    if (!screenshot.isEmpty()) {
+        const int delay = qEnvironmentVariableIntValue("CHXCHX_STUDIO_SCREENSHOT_DELAY_MS");
+        QTimer::singleShot(delay > 0 ? delay : 2500, &window, [&window, &application, screenshot] {
+            window.grab().save(screenshot);
+            application.quit();
+        });
+    }
     return application.exec();
 }

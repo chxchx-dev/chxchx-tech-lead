@@ -23,6 +23,7 @@ _TITLE = "# Sesiones recientes de agentes\n\n"
 _TOOL_PLACEHOLDER = re.compile(r"\[Herramienta: [^\]]*\]")
 _REDACTED = "(omitido: posible secreto)"
 _CONTEXT_PREAMBLE = " ".join(NEW_CHAT_PROMPT.split()[:8])
+_CODEX_AGENTS_PREAMBLE = "# AGENTS.md instructions for"
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,7 +100,10 @@ def _own_words(message: str) -> str:
     text = user_visible_text(message)
     if CHAT_PANEL_REQUEST_MARKER in text:
         return text.split(CHAT_PANEL_REQUEST_MARKER, 1)[1].strip()
-    return "" if text.startswith(_CONTEXT_PREAMBLE) else text
+    # Codex records AGENTS.md as a user turn ("# AGENTS.md instructions for <path>").
+    if text.startswith(_CONTEXT_PREAMBLE) or text.startswith(_CODEX_AGENTS_PREAMBLE):
+        return ""
+    return text
 
 
 def _render(summary: SessionSummary, marker: str) -> str:

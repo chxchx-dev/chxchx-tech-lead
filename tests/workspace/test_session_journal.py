@@ -91,3 +91,16 @@ def test_opening_skips_the_injected_context_preamble(tmp_path: Path, monkeypatch
 
     assert codex is not None and codex.opening == "Arregla el login"
     assert claude is not None and claude.opening == "¿Qué imprime app.py?"
+
+
+def test_opening_skips_agents_instructions_injected_by_codex(tmp_path: Path, monkeypatch) -> None:
+    started = datetime(2026, 11, 2, 6, tzinfo=timezone.utc)
+    conversation = Conversation("Codex", "c3", "t", started + timedelta(minutes=1), tmp_path, tmp_path / "c3.jsonl", (
+        ConversationMessage("user", f"# AGENTS.md instructions for {tmp_path}\n\n<INSTRUCTIONS>\nReglas\n</INSTRUCTIONS>"),
+        ConversationMessage("user", "Hola, dame un resumen del proyecto"),
+    ))
+    monkeypatch.setattr(session_journal, "list_conversations", lambda root, limit: [conversation])
+
+    summary = session_journal.summarize_latest_session(tmp_path, provider="Codex", started_at=started)
+
+    assert summary is not None and summary.opening == "Hola, dame un resumen del proyecto"

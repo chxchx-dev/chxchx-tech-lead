@@ -2,6 +2,15 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## Rediseño visual y temas
+
+- `studio_theme.{hpp,cpp}` + `studio_themes.cpp`: `StudioTheme` con tokens de interfaz, del editor y de sintaxis. Seis temas originales (medianoche, grafito, aurora, bosque, ambar, claro). `ThemeManager` aplica paleta y hoja de estilos, guarda `appearance/theme` en QSettings y emite `themeChanged`. `studio_stylesheet.cpp` es una plantilla con `@tokens@` y `@img:…@`, que apuntan a PNGs generados por tema.
+- `studio_icons.cpp`: ~45 iconos de línea dibujados con QPainter mediante un `QIconEngine` que pinta con el color del tema activo (muted/hover/accent/disabled). `studioIcon()` conserva su firma y hace fallback al tema del sistema.
+- `editor_theme.cpp`: roles semánticos por lexer con las constantes de `SciLexer.h` y listas de palabras clave. Corrige el mapeo anterior (mismos números de estilo para todos los lenguajes) y que JS/TS/HTML no se coloreaban porque esos lexers no existen en Lexilla: ahora usan `cpp` y `hypertext`. Añade Rust, Go, Java, C#, Kotlin y PowerShell. Incluye fuente mono preferida, resaltado de paréntesis y marcadores de plegado según el tema.
+- `appearance_dialog.cpp` (tarjetas con vista previa), submenú Ver → Tema, `Ctrl+K Ctrl+T`, entradas `Tema: …` en la paleta y barra de estado (Ln/Col, lenguaje, tema). La terminal toma sus colores por defecto de la paleta. El chat expande su hoja de estilos desde el tema.
+- `chxchx-studio PROYECTO archivo…` abre archivos; `CHXCHX_STUDIO_SCREENSHOT` captura la ventana para QA.
+- Claude Code 2.1.316 ya está instalado aquí y quedó validado en el chat: imagen por ruta, `--model`/`--effort`, costo, `contextWindow` y `--resume`. El uso de Claude suma los tokens en caché a la entrada.
+
 ## Chat visual con estilo de IDE
 
 - El transcript dejó de ser HTML en `QTextBrowser`. `AgentChatView` (QScrollArea) sincroniza `ChatEntryCard`s nativas por revisión: burbuja del usuario a la derecha con miniaturas, respuestas con avatar por proveedor (Codex verde `</>`, Claude naranja `✳`), `ChatCodeBlock` con lenguaje y Copiar, `ChatToolCard` desplegable con spinner y borde según estado, razonamiento plegable y errores con el comando copiable.

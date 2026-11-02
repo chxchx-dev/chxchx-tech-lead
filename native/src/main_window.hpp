@@ -11,6 +11,7 @@
 
 class QJsonObject;
 class QAction;
+class QToolButton;
 class QTimer;
 class BridgeClient;
 class ProjectFileIndex;
@@ -45,6 +46,8 @@ class MainWindow final : public QMainWindow {
 
 public:
     explicit MainWindow(QString projectPath, QWidget *parent = nullptr);
+    // Opens files passed on the command line, relative to the project.
+    void openFiles(const QStringList &paths);
 
 private slots:
     void openFile();
@@ -88,11 +91,15 @@ private slots:
     void openSelectedAgent(bool newChat = false);
     void openAllAgentSessions();
     void checkStudioUpdates();
+    void showAppearanceDialog();
+    void updateEditorStatus();
 
 private:
     void closeEvent(QCloseEvent *event) override;
     void buildActions();
     void buildLayout();
+    void buildAppearance();
+    void applyThemeToEditors();
     void configureShortcuts();
     void setWordWrapEnabled(bool enabled);
     void performEditAction(const QString &actionId);
@@ -192,6 +199,10 @@ private:
     QPushButton *m_homeNewChatButton = nullptr;
     QPushButton *m_homeAllAgentsButton = nullptr;
     QPushButton *m_homeVisualChatButton = nullptr;
+    QMenu *m_themeMenu = nullptr;
+    QLabel *m_statusPosition = nullptr;
+    QLabel *m_statusLanguage = nullptr;
+    QToolButton *m_statusTheme = nullptr;
     QWidget *m_handoffPage = nullptr;
     QWidget *m_memoryPage = nullptr;
     QWidget *m_chatsPage = nullptr;

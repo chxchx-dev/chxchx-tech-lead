@@ -43,7 +43,9 @@ AgentChatWidget::AgentChatWidget(QString projectPath, QString agentId, QString c
 {
     setObjectName(QStringLiteral("agentChat"));
     setAttribute(Qt::WA_StyledBackground);
-    setStyleSheet(agentChatStyleSheet());
+    setStyleSheet(agentChatStyleSheet(ThemeManager::current()));
+    connect(ThemeManager::instance(), &ThemeManager::themeChanged, this,
+        [this](const StudioTheme &theme) { setStyleSheet(agentChatStyleSheet(theme)); });
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);

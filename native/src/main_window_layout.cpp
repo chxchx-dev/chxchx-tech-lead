@@ -54,19 +54,20 @@ QIcon areaIcon(const QString &id)
         {"project", "folder-open", QStyle::SP_DirOpenIcon},
         {"agents", "system-run", QStyle::SP_CommandLink},
         {"processes", "utilities-system-monitor", QStyle::SP_MediaPlay},
-        {"projects", "folder", QStyle::SP_DirIcon},
-        {"skills", "preferences-plugin", QStyle::SP_DialogApplyButton},
+        {"projects", "folders", QStyle::SP_DirIcon},
+        {"skills", "studio-skills", QStyle::SP_DialogApplyButton},
         {"packs", "package-x-generic", QStyle::SP_DirLinkIcon},
-        {"mods", "applications-utilities", QStyle::SP_DialogApplyButton},
-        {"ci", "applications-development", QStyle::SP_ComputerIcon},
+        {"mods", "studio-mods", QStyle::SP_DialogApplyButton},
+        {"ci", "studio-ci", QStyle::SP_ComputerIcon},
+        {"deploy", "studio-deploy", QStyle::SP_ComputerIcon},
         {"resources", "drive-harddisk", QStyle::SP_DriveHDIcon},
         {"handoff", "document-edit", QStyle::SP_FileIcon},
-        {"memory", "view-history", QStyle::SP_FileDialogInfoView},
+        {"memory", "studio-memory", QStyle::SP_FileDialogInfoView},
         {"chats", "chat-message", QStyle::SP_MessageBoxInformation},
         {"errors", "dialog-warning", QStyle::SP_MessageBoxWarning},
         {"setup", "preferences-system", QStyle::SP_ComputerIcon},
         {"guide", "help-contents", QStyle::SP_DialogHelpButton},
-        {"brand", "applications-development", QStyle::SP_TitleBarMenuButton},
+        {"brand", "studio-brand", QStyle::SP_TitleBarMenuButton},
     };
     for (const auto &entry : icons) {
         if (id == QString::fromUtf8(entry.id)) {
@@ -185,7 +186,7 @@ void MainWindow::buildLayout()
     m_editorSplit->setStretchFactor(1, 1);
     m_mainPages = new QStackedWidget(this);
     const int sectionTab = m_editorTabs->addTab(m_mainPages, areaIcon(QStringLiteral("overview")),
-        QString());
+        QStringLiteral("Inicio"));
     m_editorTabs->setTabToolTip(sectionTab, QStringLiteral("Inicio · Secciones del proyecto"));
     m_editorTabs->tabBar()->setTabButton(sectionTab, QTabBar::RightSide, nullptr);
     connect(m_editorTabs->tabBar(), &QTabBar::tabMoved, this, [this](int, int) {
@@ -206,19 +207,12 @@ void MainWindow::buildLayout()
     m_dashboardTitle->setFont(dashboardTitleFont);
     m_areaDescription = new QLabel(m_dashboardPage);
     m_areaDescription->setWordWrap(true);
-    m_areaDescription->setStyleSheet(QStringLiteral("color: #91a7c2; font-size: 14px;"));
+    m_areaDescription->setObjectName(QStringLiteral("pageIntro"));
     m_dashboardSummary = new QLabel(m_dashboardPage);
     m_dashboardSummary->setWordWrap(true);
-    m_dashboardSummary->setStyleSheet(QStringLiteral(
-        "background: #101c2e; border: 1px solid #24364f; border-left: 3px solid #20c5d4; "
-        "border-radius: 8px; padding: 12px 14px; color: #dce8f7; font-weight: 600;"));
+    m_dashboardSummary->setObjectName(QStringLiteral("dashboardSummary"));
     m_homeQuickActions = new QGroupBox(QStringLiteral("Acciones rápidas"), m_dashboardPage);
     m_homeQuickActions->setObjectName(QStringLiteral("homeQuickActions"));
-    m_homeQuickActions->setStyleSheet(QStringLiteral(
-        "QGroupBox#homeQuickActions { background: #101c2e; border: 1px solid #263a55; "
-        "border-radius: 8px; margin-top: 8px; padding: 10px; font-weight: 700; } "
-        "QGroupBox#homeQuickActions::title { subcontrol-origin: margin; left: 12px; "
-        "padding: 0 6px; color: #63e6ee; }"));
     auto *homeActionsGrid = new QGridLayout(m_homeQuickActions);
     homeActionsGrid->setContentsMargins(8, 12, 8, 6);
     homeActionsGrid->setHorizontalSpacing(8);
@@ -268,7 +262,7 @@ void MainWindow::buildLayout()
     homeActionsGrid->addWidget(m_homeVisualChatButton, 3, 1, 1, 2);
     m_homeQuickActions->setVisible(m_currentArea == QStringLiteral("overview"));
     auto *dashboardListTitle = new QLabel(QStringLiteral("Estado actual"), m_dashboardPage);
-    dashboardListTitle->setStyleSheet(QStringLiteral("color: #78a9ff; font-weight: 700; margin-top: 5px;"));
+    dashboardListTitle->setObjectName(QStringLiteral("sectionTitle"));
     m_dashboardItems = new QListWidget(m_dashboardPage);
     m_dashboardItems->setIconSize(QSize(20, 20));
     m_dashboardItems->setSpacing(3);
@@ -401,30 +395,27 @@ void MainWindow::buildLayout()
         "Sigue esta ruta para preparar el proyecto, elegir contexto y comenzar una sesión con un agente."),
         m_guidePage);
     guideIntro->setWordWrap(true);
-    guideIntro->setStyleSheet(QStringLiteral("color: #91a7c2; font-size: 14px;"));
+    guideIntro->setObjectName(QStringLiteral("pageIntro"));
     guideLayout->addWidget(guideIntro);
 
     const auto addGuideStep = [this, guideLayout](const QString &number, const QString &title,
         const QString &description, const QString &buttonText) {
         auto *card = new QFrame(m_guidePage);
         card->setObjectName(QStringLiteral("guideStepCard"));
-        card->setStyleSheet(QStringLiteral(
-            "QFrame#guideStepCard { background: #101c2e; border: 1px solid #263a55; "
-            "border-radius: 8px; }"));
         auto *row = new QHBoxLayout(card);
         row->setContentsMargins(14, 11, 14, 11);
         row->setSpacing(13);
         auto *numberLabel = new QLabel(number, card);
-        numberLabel->setStyleSheet(QStringLiteral("color: #63e6ee; font-size: 18px; font-weight: 700;"));
+        numberLabel->setObjectName(QStringLiteral("guideNumber"));
         numberLabel->setFixedWidth(30);
         row->addWidget(numberLabel, 0, Qt::AlignTop);
         auto *copy = new QVBoxLayout();
         copy->setSpacing(4);
         auto *stepTitle = new QLabel(title, card);
-        stepTitle->setStyleSheet(QStringLiteral("font-weight: 700; color: #dce8f7;"));
+        stepTitle->setObjectName(QStringLiteral("guideTitle"));
         auto *stepDescription = new QLabel(description, card);
         stepDescription->setWordWrap(true);
-        stepDescription->setStyleSheet(QStringLiteral("color: #91a7c2;"));
+        stepDescription->setObjectName(QStringLiteral("mutedText"));
         copy->addWidget(stepTitle);
         copy->addWidget(stepDescription);
         row->addLayout(copy, 1);
@@ -453,7 +444,7 @@ void MainWindow::buildLayout()
         "en una pestaña para dividirla. Los atajos se editan desde Edición → Configurar atajos."),
         m_guidePage);
     dailyUse->setWordWrap(true);
-    dailyUse->setStyleSheet(QStringLiteral("color: #91a7c2; padding-top: 5px;"));
+    dailyUse->setObjectName(QStringLiteral("mutedText"));
     guideLayout->addWidget(dailyUse);
     guideLayout->addStretch(1);
     m_mainPages->addWidget(m_guidePage);
@@ -466,7 +457,7 @@ void MainWindow::buildLayout()
     brandLogo->setPixmap(logo.scaled(280, 280, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     brandLayout->addWidget(brandLogo);
     auto *brandSubtitle = new QLabel(QStringLiteral("TECH LEAD  ·  STUDIO"), m_brandPage);
-    brandSubtitle->setStyleSheet(QStringLiteral("letter-spacing: 3px; color: #78a9ff;"));
+    brandSubtitle->setObjectName(QStringLiteral("brandSubtitle"));
     brandSubtitle->setAlignment(Qt::AlignHCenter);
     brandLayout->addWidget(brandSubtitle);
     auto *brandDescription = new QLabel(
@@ -498,9 +489,9 @@ void MainWindow::buildLayout()
     controlLayout->setContentsMargins(12, 12, 12, 12);
     controlLayout->setSpacing(9);
     auto *studioHeading = new QLabel(QStringLiteral("CHXCHX  /  STUDIO"), control);
-    studioHeading->setStyleSheet(QStringLiteral("color: #63e6ee; font-weight: 700; letter-spacing: 2px;"));
+    studioHeading->setObjectName(QStringLiteral("studioHeading"));
     auto *projectHeading = new QLabel(QDir(m_projectPath).dirName(), control);
-    projectHeading->setStyleSheet(QStringLiteral("color: #91a7c2; padding-bottom: 4px;"));
+    projectHeading->setObjectName(QStringLiteral("projectHeading"));
     projectHeading->setToolTip(m_projectPath);
     auto *areaSearch = new QLineEdit(control);
     areaSearch->setPlaceholderText(QStringLiteral("Filtrar secciones…"));

@@ -4,7 +4,9 @@
 #include "integrations/bridge_schemas.hpp"
 #include "integrations/terminal_launcher.hpp"
 #include "integrations/vt_terminal_widget.hpp"
+#include "editor_theme.hpp"
 #include "project_file_index.hpp"
+#include "studio_theme.hpp"
 
 #include <ScintillaEditBase.h>
 #include <ILexer.h>
@@ -65,14 +67,6 @@
 
 namespace {
 
-constexpr int scintillaColor(unsigned int rgb)
-{
-    const unsigned int red = (rgb >> 16) & 0xFF;
-    const unsigned int green = (rgb >> 8) & 0xFF;
-    const unsigned int blue = rgb & 0xFF;
-    return static_cast<int>(red | (green << 8) | (blue << 16));
-}
-
 void setEditorText(ScintillaEditBase *editor, const QString &text)
 {
     const QByteArray utf8 = text.toUtf8();
@@ -98,33 +92,6 @@ QString editorTabTitle(const QString &path, bool modified)
     return modified ? QStringLiteral("● %1").arg(title) : title;
 }
 
-QString lexerNameForPath(const QString &path)
-{
-    const QString suffix = QFileInfo(path).suffix().toLower();
-    if (suffix == QStringLiteral("c") || suffix == QStringLiteral("cc")
-        || suffix == QStringLiteral("cpp") || suffix == QStringLiteral("cxx")
-        || suffix == QStringLiteral("h") || suffix == QStringLiteral("hh")
-        || suffix == QStringLiteral("hpp") || suffix == QStringLiteral("hxx")) {
-        return QStringLiteral("cpp");
-    }
-    if (suffix == QStringLiteral("py")) return QStringLiteral("python");
-    if (suffix == QStringLiteral("js") || suffix == QStringLiteral("jsx")) return QStringLiteral("javascript");
-    if (suffix == QStringLiteral("ts") || suffix == QStringLiteral("tsx")) return QStringLiteral("typescript");
-    if (suffix == QStringLiteral("json")) return QStringLiteral("json");
-    if (suffix == QStringLiteral("yaml") || suffix == QStringLiteral("yml")) return QStringLiteral("yaml");
-    if (suffix == QStringLiteral("toml")) return QStringLiteral("toml");
-    if (suffix == QStringLiteral("md") || suffix == QStringLiteral("markdown")) return QStringLiteral("markdown");
-    if (suffix == QStringLiteral("html") || suffix == QStringLiteral("htm")) return QStringLiteral("html");
-    if (suffix == QStringLiteral("xml")) return QStringLiteral("xml");
-    if (suffix == QStringLiteral("css")) return QStringLiteral("css");
-    if (suffix == QStringLiteral("sql")) return QStringLiteral("sql");
-    if (suffix == QStringLiteral("sh")) return QStringLiteral("bash");
-    if (suffix == QStringLiteral("cmake") || QFileInfo(path).fileName() == QStringLiteral("CMakeLists.txt")) {
-        return QStringLiteral("cmake");
-    }
-    return {};
-}
-
 void configureCodeEditor(ScintillaEditBase *editor, const QString &path, bool wordWrapEnabled)
 {
     editor->send(SCI_SETCODEPAGE, SC_CP_UTF8);
@@ -140,44 +107,11 @@ void configureCodeEditor(ScintillaEditBase *editor, const QString &path, bool wo
     editor->send(SCI_SETPROPERTY, reinterpret_cast<Scintilla::uptr_t>("fold.compact"),
         reinterpret_cast<Scintilla::sptr_t>("1"));
 
-    const QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    const QByteArray family = QFontInfo(font).family().toUtf8();
-    editor->send(SCI_STYLESETFONT, STYLE_DEFAULT, reinterpret_cast<Scintilla::sptr_t>(family.constData()));
-    editor->send(SCI_STYLESETSIZE, STYLE_DEFAULT, font.pointSize());
-    editor->send(SCI_STYLESETFORE, STYLE_DEFAULT, scintillaColor(0xB9C6D8));
-    editor->send(SCI_STYLESETBACK, STYLE_DEFAULT, scintillaColor(0x0E1728));
-    editor->send(SCI_STYLECLEARALL);
-    editor->send(SCI_STYLESETFORE, STYLE_LINENUMBER, scintillaColor(0x7189A6));
-    editor->send(SCI_STYLESETBACK, STYLE_LINENUMBER, scintillaColor(0x122941));
-    editor->send(SCI_SETCARETFORE, scintillaColor(0x63E6EE));
-    editor->send(SCI_SETSELFORE, 1, scintillaColor(0xFFFFFF));
-    editor->send(SCI_SETSELBACK, 1, scintillaColor(0x17485B));
-    editor->send(SCI_SETCARETLINEVISIBLE, 1);
-    editor->send(SCI_SETCARETLINEBACK, scintillaColor(0x112338));
     editor->send(SCI_SETINDENTATIONGUIDES, SC_IV_LOOKBOTH);
     editor->send(SCI_SETTABWIDTH, 4);
     editor->send(SCI_SETWRAPMODE, wordWrapEnabled ? SC_WRAP_WORD : SC_WRAP_NONE);
     editor->send(SCI_SETHSCROLLBAR, wordWrapEnabled ? 0 : 1);
-
-    const QByteArray lexerName = lexerNameForPath(path).toLatin1();
-    if (!lexerName.isEmpty()) {
-        Scintilla::ILexer5 *lexer = CreateLexer(lexerName.constData());
-        if (lexer != nullptr) {
-            editor->send(SCI_SETILEXER, 0, reinterpret_cast<Scintilla::sptr_t>(lexer));
-            editor->send(SCI_STYLECLEARALL);
-            const std::array<std::pair<int, int>, 11> syntaxColors = {{
-                {1, 0x8B949E}, {2, 0x8B949E}, {3, 0x8B949E}, {4, 0xD29922},
-                {5, 0x79C0FF}, {6, 0x98B5CC}, {7, 0x98B5CC}, {8, 0xFF7B72},
-                {9, 0xD2A8FF}, {10, 0xD2A8FF}, {11, 0x7EE787},
-            }};
-            for (const auto &[style, color] : syntaxColors) {
-                editor->send(SCI_STYLESETFORE, static_cast<Scintilla::uptr_t>(style), scintillaColor(color));
-            }
-        }
-    }
-    editor->send(SCI_STYLESETFORE, STYLE_LINENUMBER, scintillaColor(0x7896B5));
-    editor->send(SCI_STYLESETBACK, STYLE_LINENUMBER, scintillaColor(0x122941));
-    editor->send(SCI_SETMARGINBACKN, 0, scintillaColor(0x122941));
+    applyEditorTheme(editor, path, ThemeManager::current());
 }
 
 } // namespace
@@ -190,9 +124,18 @@ MainWindow::MainWindow(QString projectPath, QWidget *parent)
     resize(1440, 920);
     buildActions();
     buildLayout();
+    buildAppearance();
     m_fileIndex = new ProjectFileIndex(m_projectPath, this);
     restoreEditorSession();
     statusBar()->showMessage(m_projectPath);
+}
+
+void MainWindow::openFiles(const QStringList &paths)
+{
+    for (const QString &path : paths) {
+        const QFileInfo info(QDir(m_projectPath), path);
+        if (info.isFile()) openPath(info.absoluteFilePath());
+    }
 }
 
 void MainWindow::setWordWrapEnabled(bool enabled)
@@ -451,6 +394,10 @@ void MainWindow::openPath(const QString &path, int lineNumber)
             tabs->setTabText(tabIndex, editorTabTitle(path, dirty));
         }
     });
+    connect(editor, &ScintillaEditBase::updateUi, this, [this, editor](Scintilla::Update) {
+        updateBraceHighlight(editor);
+        if (editor == currentEditor()) updateEditorStatus();
+    });
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -641,10 +588,16 @@ void MainWindow::openCommandPalette()
         {QStringLiteral("Adjuntar a Zellij integrada"), QStringLiteral("workspace-attach")},
         {QStringLiteral("Adjuntar a Zellij externa · fallback"), QStringLiteral("workspace-attach-external")},
         {QStringLiteral("Adjuntar a la terminal del agente seleccionado"), QStringLiteral("agent-attach")},
+        {QStringLiteral("Abrir chat visual con agente"), QStringLiteral("agent-chat")},
+        {QStringLiteral("Apariencia: elegir tema…"), QStringLiteral("appearance")},
     };
     for (const auto &entry : entries) {
         auto *item = new QListWidgetItem(entry.first, commands);
         item->setData(Qt::UserRole, entry.second);
+    }
+    for (const StudioTheme &theme : studioThemes()) {
+        auto *item = new QListWidgetItem(QStringLiteral("Tema: %1").arg(theme.name), commands);
+        item->setData(Qt::UserRole, QStringLiteral("theme:") + theme.id);
     }
     layout->addWidget(query);
     layout->addWidget(commands, 1);
@@ -684,6 +637,12 @@ void MainWindow::executePaletteCommand(QListWidgetItem *item)
                 return;
             }
         }
+    } else if (command.startsWith(QStringLiteral("theme:"))) {
+        ThemeManager::instance()->setTheme(command.mid(6));
+    } else if (command == QStringLiteral("appearance")) {
+        showAppearanceDialog();
+    } else if (command == QStringLiteral("agent-chat")) {
+        openVisualChat();
     } else if (command == QStringLiteral("open")) {
         openFile();
     } else if (command == QStringLiteral("file-search")) {

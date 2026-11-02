@@ -1,4 +1,5 @@
 #include "agent_chat_view.hpp"
+#include "../studio_theme.hpp"
 
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -177,7 +178,7 @@ void AgentChatView::animate()
 {
     ++m_frame;
     static const QStringList dots = {QStringLiteral("●○○"), QStringLiteral("○●○"), QStringLiteral("○○●")};
-    m_typingLabel->setText(QStringLiteral("%1  <span style='color:#20c5d4;'>%2</span>")
-        .arg(m_busyLabel.toHtmlEscaped(), dots.at((m_frame / 4) % dots.size())));
+    m_typingLabel->setText(QStringLiteral("%1  <span style='color:%2;'>%3</span>")
+        .arg(m_busyLabel.toHtmlEscaped(), ThemeManager::current().accent.name(), dots.at((m_frame / 4) % dots.size())));
     for (ChatEntryCard *card : m_cards) card->tick(m_frame);
 }

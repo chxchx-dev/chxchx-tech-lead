@@ -190,10 +190,11 @@ void VtTerminalWidget::paintEvent(QPaintEvent *event)
 {
     QPainter painter(this);
     painter.setClipRegion(event->region());
-    painter.fillRect(event->rect(), QColor(18, 20, 25));
+    // Default colours follow the application palette, so the terminal matches the theme.
+    const QColor defaultForeground = palette().color(QPalette::WindowText);
+    const QColor defaultBackground = palette().color(QPalette::Window);
+    painter.fillRect(event->rect(), defaultBackground);
     painter.setFont(font());
-    const QColor defaultForeground(220, 224, 232);
-    const QColor defaultBackground(18, 20, 25);
     const QRect dirty = event->rect();
     const int firstRow = std::clamp(static_cast<int>(dirty.top() / m_state->cellHeight), 0, m_state->rows - 1);
     const int lastRow = std::clamp(static_cast<int>(dirty.bottom() / m_state->cellHeight), 0, m_state->rows - 1);

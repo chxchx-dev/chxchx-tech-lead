@@ -147,11 +147,13 @@ def _claude(record: dict[str, Any]) -> list[Event]:
         return [{"type": "session", "session_id": record["session_id"]}]
     if kind == "result":
         usage = record.get("usage") if isinstance(record.get("usage"), dict) else {}
-        events = [_usage(usage.get("input_tokens"), usage.get("output_tokens"), record.get("total_cost_usd"))]
+        # Claude reports uncached input separately from cache reads/writes; the
+        # tokens actually processed (and the context in use) are their sum.
         context = sum(
             value for key in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
             if isinstance(value := usage.get(key), int)
         )
+        events = [_usage(context, usage.get("output_tokens"), record.get("total_cost_usd"))]
         window = _claude_context_window(record.get("modelUsage"))
         if context or window:
             events.append({"type": "limits", "context_tokens": context or None, "context_window": window,

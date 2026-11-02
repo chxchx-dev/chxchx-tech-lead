@@ -2,6 +2,32 @@
 
 Secciones archivadas automáticamente, de la más reciente a la más antigua.
 
+## README: uso de Studio y TUI
+
+- README abre con una elección entre Studio, TUI y CLI y comandos de primer uso para cada ruta. La guía de Studio cubre abrir el proyecto por ruta, `Preparar y entrar`, edición, terminal, agentes y memoria; la guía TUI cubre `init`, trust, áreas, atajos y regreso de Zellij.
+- Se acortó el banner inicial y se organizaron las secciones largas en pasos, tablas y temas. Se conservaron las referencias técnicas para desarrollo y operación.
+- Verificación: `git diff --check`. No se ejecutó una suite: el cambio es documentación.
+
+## OpenCode y memoria de agentes
+
+- OpenCode ya estaba disponible para añadir desde Studio; se documentó la conexión MCP fácil en `Configuración → Configurar MCP · OpenCode` (Basic Memory y Serena, CLI oficial, alcance de proyecto).
+- Se agregó la captura de memoria explícita con `opencode session list` y `opencode export --sanitize`. Se valida la raíz exacta del proyecto, se limita a diez sesiones recientes y se reutiliza el archivo `.ai/memory/PROJECT_MEMORY.md` que comparten los agentes. Las sesiones nuevas recuperan esas notas. No se lee la base interna de OpenCode.
+- Actualizados README, ADR 0002, EDITOR-PARITY y CURRENT_STATE. No se ejecutaron pruebas; pendiente smoke manual de OpenCode y Ollama.
+- Se conservaron los cambios locales existentes del actualizador de Studio y los Mods añadidos previamente.
+
+## Instalador y actualizador de Studio
+
+- Los instaladores Bash/PowerShell se pueden repetir para instalar el preview más reciente; `--update`/`-Update` requiere un launcher administrado y `--dry-run`/`-DryRun` revisa checksums y conflictos antes de escribir. Los marcadores guardan el SHA completo, y se migra el marcador vacío de versiones Bash anteriores.
+- En Studio, **Ayuda → Buscar actualizaciones…** consulta el manifiesto, muestra la versión disponible y solicita confirmación. App y bridge CLI se preparan en una carpeta versionada; se valida el nuevo CLI antes de cambiar el launcher y se mantiene la versión anterior para rollback. El ZIP de Windows se normaliza si CPack incluye una carpeta raíz adicional.
+- `README.md`, ADR 0005, `CURRENT_STATE` y este handoff documentan el flujo. Aún falta ejecutar una instalación/actualización interactiva en máquinas limpias de Windows, macOS, Ubuntu y Fedora; la publicación del preview sigue aplazada.
+- Verificación local: `python -m compileall -q src`, `bash -n scripts/install-studio.sh scripts/install-studio-fedora.sh`, `cmake --build build/native --parallel 2` y `git diff --check` pasan. No se ejecutaron suites de tests ni instalaciones reales; `pwsh` no está disponible para parsear el script PowerShell localmente (CI contiene ese chequeo en Windows).
+
+## Mods de Claude Code
+
+- El catálogo pasó a nueve: se añadieron `chxchx-git-workflow`, `chxchx-safe-refactor`, `chxchx-tech-docs` y `chxchx-performance`. Son guías Markdown instaladas por proyecto; rendimiento se recomienda según stack/lenguaje detectado.
+- Se actualizaron README, ADR 0004 y CURRENT_STATE. No se ejecutaron verificaciones en esta tarea.
+- El checkout ya contenía cambios no relacionados del actualizador integrado de Studio; se conservaron.
+
 ## Instaladores nativos de Studio — CI verificado
 
 - CPack conserva `_CPack_Packages` junto al archivo final. El workflow inspecciona el paquete, valida runtimes/plugins Qt de Ubuntu/Windows/macOS y copia solo el ZIP/DMG/TGZ final a `dist/native-package` antes de `upload-artifact`. Esto elimina el staging temporal del input de subida y corrigió la falla de artefactos macOS.

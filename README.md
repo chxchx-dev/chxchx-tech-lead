@@ -1075,6 +1075,21 @@ acciones que modifican archivos o configuración muestran una vista previa y
 piden confirmación. El menú **Ayuda** incluye una guía rápida y la búsqueda
 manual de actualizaciones.
 
+### Temas y coloreado de código
+
+`Ver → Apariencia…` (`Ctrl+K`, `Ctrl+T`), el selector de la barra de estado o
+`Tema: …` en la paleta cambian el tema al instante. Hay seis temas: Medianoche,
+Grafito, Aurora, Bosque, Ámbar y Claro. Cada uno colorea la interfaz, los
+iconos, el editor, la terminal integrada y el chat visual con la misma paleta,
+y Studio recuerda la elección.
+
+El editor colorea por significado (comentarios, palabras clave, tipos, cadenas,
+números, funciones, etiquetas, etc.) en C/C++, Python, JavaScript/TypeScript,
+Java, C#, Kotlin, Go, Rust, Shell, PowerShell, JSON, YAML, TOML, Markdown, CSS,
+SQL, CMake, HTML y XML. También resalta el paréntesis que corresponde al que
+tiene el cursor. La barra de estado muestra la línea, la columna, el lenguaje y
+el tema.
+
 ### Chat visual con Codex y Claude
 
 **Chat visual**, en Inicio o en `Herramientas → Chat visual con agente` (también
@@ -1145,6 +1160,12 @@ cmake --build build/native
 ctest --test-dir build/native --output-on-failure
 ./build/native/chxchx-studio /ruta/al/proyecto
 ```
+
+Después de la ruta del proyecto puedes pasar archivos para abrirlos al arrancar:
+`chxchx-studio /ruta/al/proyecto src/main.py`. Para documentación o QA visual,
+`CHXCHX_STUDIO_SCREENSHOT=captura.png` guarda una imagen de la ventana y cierra
+Studio; `CHXCHX_STUDIO_SCREENSHOT_DELAY_MS` ajusta la espera (2500 ms por
+defecto).
 
 En Windows, ejecuta `build/native/chxchx-studio.exe` con la ruta del proyecto
 como argumento. Studio usa Qt Widgets, Scintilla/Lexilla para editar y libvterm

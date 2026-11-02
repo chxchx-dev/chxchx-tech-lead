@@ -98,3 +98,4 @@ def test_claude_flags_for_model_and_effort_and_context_limits() -> None:
                                   "modelUsage": {"claude-opus": {"contextWindow": 200000}}})
     assert events[1] == {"type": "limits", "context_tokens": 100, "context_window": 200000,
                          "primary": None, "secondary": None, "plan": None}
+    assert events[0]["input_tokens"] == 100 and events[0]["cost_usd"] == 0.2

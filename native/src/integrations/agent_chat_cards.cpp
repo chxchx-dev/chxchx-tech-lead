@@ -1,5 +1,6 @@
 #include "agent_chat_cards.hpp"
 #include "agent_chat_markdown.hpp"
+#include "../studio_theme.hpp"
 
 #include <QApplication>
 #include <QClipboard>
@@ -245,7 +246,7 @@ ChatIdentity chatIdentityFor(const QString &provider, const QString &fallbackNam
 {
     if (provider == QStringLiteral("Codex")) return {QStringLiteral("Codex"), QStringLiteral("</>"), QStringLiteral("#10a37f")};
     if (provider == QStringLiteral("Claude")) return {QStringLiteral("Claude"), QStringLiteral("✳"), QStringLiteral("#d97757")};
-    return {fallbackName, QStringLiteral("◆"), QStringLiteral("#20c5d4")};
+    return {fallbackName, QStringLiteral("◆"), ThemeManager::current().accent.name()};
 }
 
 QLabel *createChatAvatar(const ChatIdentity &identity, int size, QWidget *parent)
@@ -358,13 +359,14 @@ void ChatToolCard::refresh(const AgentChatModel::Entry &entry)
 
 void ChatToolCard::tick(int frame)
 {
+    const StudioTheme &theme = ThemeManager::current();
     if (m_status == QStringLiteral("completed")) {
-        m_badge->setText(QStringLiteral("<span style='color:#42be65;'>✓</span>"));
+        m_badge->setText(QStringLiteral("<span style='color:%1;'>✓</span>").arg(theme.success.name()));
     } else if (m_status == QStringLiteral("failed")) {
-        m_badge->setText(QStringLiteral("<span style='color:#fa4d56;'>✗</span>"));
+        m_badge->setText(QStringLiteral("<span style='color:%1;'>✗</span>").arg(theme.danger.name()));
     } else {
-        m_badge->setText(QStringLiteral("<span style='color:#20c5d4;'>%1</span>")
-            .arg(SpinnerFrames.at(frame % SpinnerFrames.size())));
+        m_badge->setText(QStringLiteral("<span style='color:%1;'>%2</span>")
+            .arg(theme.accent.name(), SpinnerFrames.at(frame % SpinnerFrames.size())));
     }
 }
 

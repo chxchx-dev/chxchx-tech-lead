@@ -1,24 +1,89 @@
 #pragma once
 
+#include <QColor>
+#include <QList>
+#include <QObject>
+#include <QString>
+#include <QTemporaryDir>
+
 class QApplication;
 
-// Studio's dark navy palette and widget stylesheet; shared by the app and the
-// native tests so screenshots match what users see.
-void applyStudioTheme(QApplication &application);
+// Every colour Studio paints with: interface, editor chrome and syntax roles.
+// Widgets, icons, the code editor and the agent chat all read from here so a
+// theme switch restyles the whole app at once.
+struct StudioTheme {
+    QString id;
+    QString name;
+    QString description;
+    bool dark = true;
 
-namespace StudioColors {
-inline constexpr const char *Background = "#0b1220";
-inline constexpr const char *Surface = "#0e1728";
-inline constexpr const char *SurfaceRaised = "#101c2e";
-inline constexpr const char *SurfaceHover = "#17243a";
-inline constexpr const char *Border = "#1d2b40";
-inline constexpr const char *BorderStrong = "#263a55";
-inline constexpr const char *Text = "#e6edf7";
-inline constexpr const char *TextMuted = "#91a7c2";
-inline constexpr const char *Accent = "#20c5d4";
-inline constexpr const char *AccentDeep = "#087e8b";
-inline constexpr const char *AccentLight = "#8cf2f4";
-inline constexpr const char *Success = "#42be65";
-inline constexpr const char *Warning = "#f1c21b";
-inline constexpr const char *Danger = "#fa4d56";
-} // namespace StudioColors
+    QColor background;
+    QColor surface;
+    QColor surfaceRaised;
+    QColor surfaceHover;
+    QColor border;
+    QColor borderStrong;
+    QColor text;
+    QColor textMuted;
+    QColor textFaint;
+    QColor accent;
+    QColor accentStrong;
+    QColor onAccent;
+    QColor accentSoft;
+    QColor selectedText;
+    QColor success;
+    QColor warning;
+    QColor danger;
+
+    QColor editorBackground;
+    QColor gutterText;
+    QColor gutterActive;
+    QColor caret;
+    QColor caretLine;
+    QColor selection;
+    QColor indentGuide;
+
+    QColor comment;
+    QColor keyword;
+    QColor type;
+    QColor string;
+    QColor number;
+    QColor function;
+    QColor constant;
+    QColor operatorColor;
+    QColor preprocessor;
+    QColor tag;
+    QColor attribute;
+    QColor variable;
+};
+
+const QList<StudioTheme> &studioThemes();
+const StudioTheme &studioThemeById(const QString &id);
+
+// Owns the active theme, persists the choice and restyles the application.
+class ThemeManager final : public QObject {
+    Q_OBJECT
+public:
+    static ThemeManager *instance();
+    static const StudioTheme &current() { return instance()->m_theme; }
+
+    void setTheme(const QString &id);
+    // Replaces @token@ placeholders (e.g. @accent@) with the theme's colours.
+    static QString expand(QString styleSheet, const StudioTheme &theme);
+    // Path of a themed PNG (chevron, close, check) usable from stylesheets.
+    QString chromeImage(const QString &name) const;
+
+signals:
+    void themeChanged(const StudioTheme &theme);
+
+private:
+    ThemeManager();
+    void apply();
+
+    StudioTheme m_theme;
+    QTemporaryDir m_chrome;
+};
+
+// Loads the saved theme (default "medianoche") and styles the application.
+void applyStudioTheme(QApplication &application);
+QString studioStyleSheet(const StudioTheme &theme);
