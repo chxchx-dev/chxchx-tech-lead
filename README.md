@@ -1087,6 +1087,19 @@ sesiones), y los siguientes continúan la misma sesión. **Permisos** elige entr
 *Solo lectura* y *Editar workspace*. **Detener** corta el turno, y cerrar la
 pestaña también. **Nuevo chat** empieza otra conversación.
 
+- **Modelo y Effort** muestran las opciones reales de cada agente. En Codex
+  salen de su catálogo local, con los niveles que admite cada modelo. En Claude
+  son los alias documentados (`sonnet`, `opus`, `haiku`…) y `--effort`. *Por
+  defecto* usa lo que tengas configurado en el agente.
+- La barra de uso muestra el contexto usado frente a la ventana del modelo, los
+  límites de 5 h y semanal del plan de Codex con su hora de reinicio, y los
+  tokens de la sesión. En Claude también muestra el costo estimado.
+- 📎 adjunta imágenes; también puedes pegarlas con `Ctrl+V` o arrastrarlas al
+  cuadro de texto. Se copian a `.ai/chat-attachments/`: Codex las recibe con
+  `--image` y Claude las lee desde esa ruta.
+- Si el agente no está instalado, el chat lo indica y muestra el comando para
+  instalarlo.
+
 Por debajo, cada mensaje ejecuta `chxchx-tech agent chat AGENTE --path . --prompt
 "…"`, que emite eventos JSONL `chxchx.agent-event` v1 (ver ADR 0009). Funciona
 con agentes Codex y Claude Code; para OpenCode usa la terminal integrada.

@@ -1,15 +1,15 @@
 #include "agent_chat_widget.hpp"
+#include "agent_chat_composer.hpp"
+#include "agent_chat_settings.hpp"
 
 #include <QComboBox>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QJsonDocument>
-#include <QKeySequence>
 #include <QLabel>
-#include <QPlainTextEdit>
+#include <QPalette>
 #include <QPushButton>
 #include <QScrollBar>
-#include <QShortcut>
 #include <QTextBrowser>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -18,6 +18,12 @@ namespace {
 
 constexpr int RenderDelayMs = 40;
 constexpr int StopTimeoutMs = 5000;
+
+QJsonObject localEvent(const QString &type, const QString &message)
+{
+    return {{QStringLiteral("schema"), QStringLiteral("chxchx.agent-event")}, {QStringLiteral("schema_version"), 1},
+        {QStringLiteral("type"), type}, {QStringLiteral("message"), message}};
+}
 
 } // namespace
 
@@ -33,6 +39,7 @@ AgentChatWidget::AgentChatWidget(QString projectPath, QString agentId, QString c
 
     auto *header = new QHBoxLayout;
     auto *title = new QLabel(QStringLiteral("<b>%1</b> · chat visual").arg(m_agentId.toHtmlEscaped()), this);
+    m_settings = new AgentChatSettings(m_projectPath, m_agentId, m_cliProgram, this);
     m_mode = new QComboBox(this);
     m_mode->addItem(QStringLiteral("Solo lectura"), QStringLiteral("read-only"));
     m_mode->addItem(QStringLiteral("Editar workspace"), QStringLiteral("workspace-write"));
@@ -43,10 +50,19 @@ AgentChatWidget::AgentChatWidget(QString projectPath, QString agentId, QString c
     m_newChat->setToolTip(QStringLiteral("Empieza otra conversación con el contexto del proyecto."));
     header->addWidget(title);
     header->addStretch(1);
+    header->addWidget(m_settings);
     header->addWidget(new QLabel(QStringLiteral("Permisos:"), this));
     header->addWidget(m_mode);
     header->addWidget(m_newChat);
     layout->addLayout(header);
+
+    m_usage = new QLabel(this);
+    m_usage->setTextFormat(Qt::RichText);
+    m_usage->setWordWrap(true);
+    m_usage->setStyleSheet(QStringLiteral("color: #a8b3c4; padding: 2px 0;"));
+    m_usage->setToolTip(QStringLiteral("Contexto usado de la ventana del modelo, límites del plan y gasto de esta sesión."));
+    m_usage->hide();
+    layout->addWidget(m_usage);
 
     m_transcript = new QTextBrowser(this);
     m_transcript->setOpenExternalLinks(true);
@@ -54,38 +70,27 @@ AgentChatWidget::AgentChatWidget(QString projectPath, QString agentId, QString c
     m_transcript->setStyleSheet(QStringLiteral("QTextBrowser { background: #0d1117; border: 1px solid #262c36; }"));
     m_transcript->setPlaceholderText(QStringLiteral(
         "Escribe tu primera solicitud. El agente recibirá el contexto del proyecto (estado, handoff, memoria y últimas sesiones)."));
+    QPalette hints = m_transcript->palette();
+    hints.setColor(QPalette::PlaceholderText, QColor(0x8d, 0x96, 0xa8));
+    m_transcript->setPalette(hints);
     layout->addWidget(m_transcript, 1);
 
     m_status = new QLabel(QStringLiteral("Listo."), this);
     m_status->setStyleSheet(QStringLiteral("color: #8d96a8;"));
     layout->addWidget(m_status);
 
-    auto *inputRow = new QHBoxLayout;
-    m_input = new QPlainTextEdit(this);
-    m_input->setPlaceholderText(QStringLiteral("Mensaje para el agente… (Ctrl+Enter para enviar)"));
-    m_input->setMaximumHeight(110);
-    m_send = new QPushButton(QStringLiteral("Enviar"), this);
-    m_send->setMinimumHeight(36);
-    inputRow->addWidget(m_input, 1);
-    inputRow->addWidget(m_send);
-    layout->addLayout(inputRow);
+    m_composer = new AgentChatComposer(this);
+    layout->addWidget(m_composer);
 
     m_renderTimer = new QTimer(this);
     m_renderTimer->setSingleShot(true);
     m_renderTimer->setInterval(RenderDelayMs);
     connect(m_renderTimer, &QTimer::timeout, this, &AgentChatWidget::render);
 
-    auto *sendShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), m_input);
-    sendShortcut->setContext(Qt::WidgetShortcut);
-    connect(sendShortcut, &QShortcut::activated, m_send, &QPushButton::click);
-    connect(m_send, &QPushButton::clicked, this, [this] {
-        if (isRunning()) {
-            stop();
-            return;
-        }
-        sendMessage(m_input->toPlainText());
-    });
+    connect(m_composer, &AgentChatComposer::sendRequested, this, &AgentChatWidget::sendMessage);
+    connect(m_composer, &AgentChatComposer::stopRequested, this, &AgentChatWidget::stop);
     connect(m_newChat, &QPushButton::clicked, this, &AgentChatWidget::startNewChat);
+    connect(m_settings, &AgentChatSettings::availabilityChanged, this, &AgentChatWidget::setAvailability);
 
     m_process.setWorkingDirectory(m_projectPath);
     m_process.setProcessChannelMode(QProcess::SeparateChannels);
@@ -94,10 +99,8 @@ AgentChatWidget::AgentChatWidget(QString projectPath, QString agentId, QString c
         this, &AgentChatWidget::finishTurn);
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error != QProcess::FailedToStart) return;
-        QJsonObject event{{QStringLiteral("schema"), QStringLiteral("chxchx.agent-event")},
-            {QStringLiteral("schema_version"), 1}, {QStringLiteral("type"), QStringLiteral("error")},
-            {QStringLiteral("message"), QStringLiteral("No se pudo iniciar chxchx-tech: %1").arg(m_process.errorString())}};
-        m_model.apply(event);
+        m_model.apply(localEvent(QStringLiteral("error"),
+            QStringLiteral("No se pudo iniciar chxchx-tech: %1").arg(m_process.errorString())));
         setRunning(false);
         scheduleRender();
     });
@@ -129,25 +132,33 @@ bool AgentChatWidget::isRunning() const
     return m_process.state() != QProcess::NotRunning;
 }
 
-void AgentChatWidget::focusInput()
+bool AgentChatWidget::isAvailable() const
 {
-    m_input->setFocus(Qt::OtherFocusReason);
+    return m_available;
 }
 
-void AgentChatWidget::sendMessage(const QString &text)
+void AgentChatWidget::focusInput()
+{
+    m_composer->focusInput();
+}
+
+void AgentChatWidget::sendMessage(const QString &text, const QStringList &images)
 {
     const QString message = text.trimmed();
-    if (message.isEmpty() || isRunning()) return;
+    if (message.isEmpty() || isRunning() || !m_available) return;
     if (m_cliProgram.isEmpty()) {
         m_status->setText(QStringLiteral("No se encontró chxchx-tech. Configura CHXCHX_TECH_CLI o añádelo al PATH."));
         return;
     }
-    m_model.addUserMessage(message);
-    m_input->clear();
+    m_model.addUserMessage(message, images);
+    m_composer->clear();
     QStringList arguments = {QStringLiteral("agent"), QStringLiteral("chat"), m_agentId,
         QStringLiteral("--path"), m_projectPath, QStringLiteral("--prompt"), message,
         QStringLiteral("--mode"), m_mode->currentData().toString(), QStringLiteral("--cancel-on-stdin")};
     if (!m_model.sessionId().isEmpty()) arguments << QStringLiteral("--session") << m_model.sessionId();
+    if (!m_settings->model().isEmpty()) arguments << QStringLiteral("--model") << m_settings->model();
+    if (!m_settings->effort().isEmpty()) arguments << QStringLiteral("--effort") << m_settings->effort();
+    for (const QString &image : images) arguments << QStringLiteral("--image") << image;
     m_pending.clear();
     m_process.start(m_cliProgram, arguments);
     setRunning(true);
@@ -169,8 +180,26 @@ void AgentChatWidget::startNewChat()
     if (isRunning()) return;
     m_model.clear();
     m_transcript->clear();
+    m_usage->hide();
     m_status->setText(QStringLiteral("Chat nuevo: el próximo mensaje recibirá el contexto del proyecto."));
     focusInput();
+}
+
+void AgentChatWidget::setAvailability(bool available, const QString &installHint)
+{
+    m_available = available;
+    m_composer->setInputEnabled(available, available ? QString()
+        : QStringLiteral("El agente no está disponible. Revisa el aviso de arriba."));
+    if (available) return;
+    const QString message = installHint.startsWith(QStringLiteral("curl"))
+            || installHint.startsWith(QStringLiteral("npm"))
+        ? QStringLiteral("%1 no está instalado o no está en el PATH.\nInstálalo con:\n\n%2\n\n"
+                         "Después cierra esta pestaña y vuelve a abrir el chat visual.")
+              .arg(m_agentId, installHint)
+        : installHint;
+    m_model.apply(localEvent(QStringLiteral("error"), message));
+    m_status->setText(QStringLiteral("Agente no disponible."));
+    render();
 }
 
 void AgentChatWidget::readOutput()
@@ -193,14 +222,10 @@ void AgentChatWidget::finishTurn(int exitCode, QProcess::ExitStatus status)
     const QString stderrText = QString::fromUtf8(m_process.readAllStandardError()).trimmed();
     const bool reported = !m_model.entries().isEmpty()
         && m_model.entries().constLast().kind == AgentChatModel::Kind::Error;
-    if ((status != QProcess::NormalExit || exitCode != 0) && !reported && !stderrText.isEmpty()) {
-        m_model.apply(QJsonObject{{QStringLiteral("schema"), QStringLiteral("chxchx.agent-event")},
-            {QStringLiteral("schema_version"), 1}, {QStringLiteral("type"), QStringLiteral("error")},
-            {QStringLiteral("message"), stderrText.right(2000)}});
-    }
+    if ((status != QProcess::NormalExit || exitCode != 0) && !reported && !stderrText.isEmpty())
+        m_model.apply(localEvent(QStringLiteral("error"), stderrText.right(2000)));
     setRunning(false);
-    const QString usage = m_model.usageSummary();
-    m_status->setText(usage.isEmpty() ? QStringLiteral("Listo.") : QStringLiteral("Listo · %1").arg(usage));
+    m_status->setText(QStringLiteral("Listo."));
     render();
     focusInput();
 }
@@ -217,11 +242,14 @@ void AgentChatWidget::render()
     const int previous = scroll->value();
     m_transcript->setHtml(m_model.renderHtml());
     scroll->setValue(atBottom ? scroll->maximum() : previous);
+    const QString usage = m_model.usageHtml();
+    m_usage->setText(usage);
+    m_usage->setVisible(!usage.isEmpty());
 }
 
 void AgentChatWidget::setRunning(bool running)
 {
-    m_send->setText(running ? QStringLiteral("Detener") : QStringLiteral("Enviar"));
+    m_composer->setRunning(running);
     m_newChat->setEnabled(!running);
     emit runningStateChanged(running);
 }

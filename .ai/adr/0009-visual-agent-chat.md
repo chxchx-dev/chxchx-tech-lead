@@ -34,6 +34,18 @@ también ofrece un `app-server` JSON-RPC, todavía experimental.
   árbol de procesos del agente: grupo POSIX, o `taskkill /T` en Windows. Cerrar
   la pestaña cancela el turno.
 - La pestaña PTY se mantiene como alternativa completa y para OpenCode.
+- Modelo y effort: `bridge agent-options` (`chxchx.agent-options` v1) entrega
+  disponibilidad, comando de instalación, valores por defecto y opciones. En
+  Codex las lee de `models_cache.json` y `config.toml`; en Claude usa los alias
+  documentados y `settings.json`. El turno pasa `-m`/`-c
+  model_reasoning_effort` en Codex y `--model`/`--effort` en Claude.
+- Uso: el evento `limits` informa del contexto usado y la ventana. En Codex
+  añade los límites de 5 h y semanal, leídos del rollout del hilo; en Claude
+  sale del `result`, y su costo llega en `usage`.
+- Imágenes: se copian a `.ai/chat-attachments/`. Codex las recibe con
+  `--image` (validado en vivo, también en `resume`). Claude recibe sus rutas en
+  el prompt para leerlas con Read, porque el formato de imágenes por stdin no
+  está documentado.
 
 ## Consecuencias
 

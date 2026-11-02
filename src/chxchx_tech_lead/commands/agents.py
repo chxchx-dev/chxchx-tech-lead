@@ -161,6 +161,9 @@ def agent_chat(
     prompt: str = typer.Option(..., "--prompt", help="Mensaje del usuario para este turno."),
     session: str = typer.Option("", "--session", help="Sesión a continuar; vacío inicia un chat con contexto."),
     mode: str = typer.Option("read-only", "--mode", help=f"Permisos del agente: {', '.join(MODES)}."),
+    model: str = typer.Option("", "--model", help="Modelo; vacío usa el configurado en el agente."),
+    effort: str = typer.Option("", "--effort", help="Nivel de razonamiento; vacío usa el configurado."),
+    images: list[Path] = typer.Option([], "--image", help="Imagen adjunta (repetible)."),
     cancel_on_stdin: bool = typer.Option(False, "--cancel-on-stdin",
         help="Detiene el agente al leer `cancel` o EOF por stdin (uso de Studio)."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Muestra el comando del turno sin ejecutarlo."),
@@ -168,7 +171,8 @@ def agent_chat(
     """Ejecuta un turno de chat estructurado y emite eventos JSONL `chxchx.agent-event` v1."""
     emit = json_line_emitter()
     try:
-        plan = plan_chat_turn(_workspace_service(path), agent_id, mode=mode, session_id=session or None)
+        plan = plan_chat_turn(_workspace_service(path), agent_id, mode=mode, session_id=session or None,
+                              model=model or None, effort=effort or None, images=tuple(images))
     except WorkspaceOperationError as exc:
         emit({"type": "error", "message": str(exc)})
         emit({"type": "done", "exit_code": 1, "cancelled": False, "session_id": session or None})

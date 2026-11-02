@@ -12,6 +12,9 @@ the `chxchx.agent-event` v1 shapes below; unknown events are dropped.
 - tool:      {"type": "tool", "id": str, "kind": str, "title": str,
               "status": "running" | "completed" | "failed", "output": str}
 - usage:     {"type": "usage", "input_tokens": int, "output_tokens": int, "cost_usd": float | None}
+- limits:    {"type": "limits", "context_tokens": int | None, "context_window": int | None,
+              "primary": window | None, "secondary": window | None, "plan": str | None}
+             where window = {"used_percent": float, "window_minutes": int, "resets_at": epoch}
 - error:     {"type": "error", "message": str}
 """
 
@@ -37,18 +40,42 @@ def provider_for(command: Sequence[str]) -> str | None:
     return PROVIDERS.get(executable)
 
 
-def turn_command(command: Sequence[str], *, mode: str, session_id: str | None) -> list[str]:
-    """Build the structured-turn argv; the prompt is written to stdin."""
+def turn_command(
+    command: Sequence[str],
+    *,
+    mode: str,
+    session_id: str | None,
+    model: str | None = None,
+    effort: str | None = None,
+    images: Sequence[str] = (),
+) -> list[str]:
+    """Build the structured-turn argv; the prompt is written to stdin.
+
+    Claude receives images as paths inside the prompt (see `agent_chat`), so
+    only Codex takes them as arguments.
+    """
     if mode not in MODES:
         raise ValueError(f"Modo no soportado: {mode}")
     provider = provider_for(command)
     executable, configured = command[0], list(command[1:])
     if provider == "Codex":
-        argv = [executable, "exec", *configured, "--json", "-s", _CODEX_SANDBOX[mode], "--skip-git-repo-check"]
+        argv = [executable, "exec", *configured, "--json", "-s", _CODEX_SANDBOX[mode]]
+        if model:
+            argv += ["-m", model]
+        if effort:
+            argv += ["-c", f'model_reasoning_effort="{effort}"']
+        for image in images:
+            argv += ["--image", image]
+        # A flag after --image ends its value list before the positional prompt.
+        argv.append("--skip-git-repo-check")
         return [*argv, "resume", session_id, "-"] if session_id else [*argv, "-"]
     if provider == "Claude":
         argv = [executable, *configured, "-p", "--output-format", "stream-json", "--verbose",
                 "--permission-mode", _CLAUDE_PERMISSION[mode]]
+        if model:
+            argv += ["--model", model]
+        if effort:
+            argv += ["--effort", effort]
         return [*argv, "--resume", session_id] if session_id else argv
     raise ValueError("El chat visual solo está disponible para Codex y Claude Code")
 
@@ -121,6 +148,14 @@ def _claude(record: dict[str, Any]) -> list[Event]:
     if kind == "result":
         usage = record.get("usage") if isinstance(record.get("usage"), dict) else {}
         events = [_usage(usage.get("input_tokens"), usage.get("output_tokens"), record.get("total_cost_usd"))]
+        context = sum(
+            value for key in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
+            if isinstance(value := usage.get(key), int)
+        )
+        window = _claude_context_window(record.get("modelUsage"))
+        if context or window:
+            events.append({"type": "limits", "context_tokens": context or None, "context_window": window,
+                           "primary": None, "secondary": None, "plan": None})
         if record.get("is_error"):
             events.append({"type": "error", "message": str(record.get("result") or record.get("subtype") or "Error")})
         return events
@@ -144,6 +179,16 @@ def _claude(record: dict[str, Any]) -> list[Event]:
             status = "failed" if block.get("is_error") else "completed"
             events.append(_tool(str(block.get("tool_use_id", "")), "", "", status, _text_of(block.get("content"))))
     return events
+
+
+def _claude_context_window(model_usage: Any) -> int | None:
+    if not isinstance(model_usage, dict):
+        return None
+    windows = [
+        entry["contextWindow"] for entry in model_usage.values()
+        if isinstance(entry, dict) and isinstance(entry.get("contextWindow"), int)
+    ]
+    return max(windows) if windows else None
 
 
 def _claude_kind(name: str) -> str:

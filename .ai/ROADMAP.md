@@ -79,7 +79,20 @@ verde; la configuración del workflow no equivale a que haya pasado.
 2. Contexto liviano: hecho. Compactación hacia `.ai/history/` y diario automático de sesiones inyectado en el chat nuevo.
 3. **Integración visual de Codex y Claude en Studio**: primera versión hecha (ADR 0009, chat por turnos estructurados). Pendiente: aprobación por acción, diffs visuales y validar Claude. Antes solo corrían como CLI en una pestaña PTY. Objetivo: un panel de chat nativo con mensajes renderizados, herramientas y diffs propuestos, aprobación de cambios, historial y reanudación de sesión. Hay que evaluar los modos estructurados oficiales de cada agente (salida JSON/stream, SDK) mediante un adapter en `integrations/`, y conservar la pestaña PTY como alternativa.
 4. Fluidez de Studio: hecho. Detector ~2× más rápido, canal de lectura separado, caché por comando y refresco automático; falta QA manual.
-5. QA interactivo en Fedora y, a continuación, lo que falta para reemplazar VSCode: LSP, Git visual y panel de problemas.
+5. QA interactivo en Fedora (en curso, ver "Correcciones desde QA manual").
+6. Lo que falta para reemplazar VSCode, en este orden:
+   - Git visual: estado, stage/unstage por archivo o hunk, commit, diff lado a lado, ramas y push/pull con confirmación.
+   - LSP: autocompletado, ir a definición, referencias, hover y diagnósticos en línea. El servidor de lenguaje corre fuera del proceso UI y lo administra el workspace.
+   - Panel de problemas que junte LSP, salida de tests y CI.
+   - Chat visual: aprobación por acción (`codex app-server` / `--permission-prompt-tool`) y diffs visuales de `file_change`.
+   - Validar Claude en el chat visual con la CLI real.
+
+### Correcciones desde QA manual (noviembre 2026)
+
+- [x] Chat visual con agente no instalado: antes mostraba `[Errno 2] No such file or directory: 'claude'`. Debe avisar antes y dar el comando de instalación.
+- [x] Elegir modelo y effort en el chat visual, con las opciones reales de cada agente.
+- [x] Mostrar lo gastado y lo que queda: contexto usado/ventana, límites de 5 h y semanal (Codex), costo (Claude) y tokens de la sesión.
+- [x] Adjuntar imágenes en el chat visual (archivo y pegar desde el portapapeles).
 
 ## Evolución posterior
 

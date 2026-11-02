@@ -120,6 +120,10 @@ qt_add_executable(chxchx-studio
     src/integrations/agent_chat_model.hpp
     src/integrations/agent_chat_widget.cpp
     src/integrations/agent_chat_widget.hpp
+    src/integrations/agent_chat_settings.cpp
+    src/integrations/agent_chat_settings.hpp
+    src/integrations/agent_chat_composer.cpp
+    src/integrations/agent_chat_composer.hpp
     src/integrations/vt_terminal_widget.cpp
     src/integrations/vt_terminal_widget.hpp
     src/integrations/pty_session.cpp
@@ -239,7 +243,9 @@ if(CHXCHX_BUILD_TESTS)
 
     add_executable(chxchx-agent-chat-smoke tests/agent_chat_smoke.cpp
         src/integrations/agent_chat_model.cpp src/integrations/agent_chat_model.hpp
-        src/integrations/agent_chat_widget.cpp src/integrations/agent_chat_widget.hpp)
+        src/integrations/agent_chat_widget.cpp src/integrations/agent_chat_widget.hpp
+        src/integrations/agent_chat_settings.cpp src/integrations/agent_chat_settings.hpp
+        src/integrations/agent_chat_composer.cpp src/integrations/agent_chat_composer.hpp)
     target_link_libraries(chxchx-agent-chat-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
     add_test(NAME native-agent-chat-smoke COMMAND chxchx-agent-chat-smoke)
     set_tests_properties(native-agent-chat-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

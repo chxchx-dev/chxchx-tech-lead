@@ -23,6 +23,13 @@ print(json.dumps({"type": "item.completed", "item": {"id": "i0", "type": "agent_
 print("ruido que no es JSON", flush=True)
 """
 
+FAKE_CLAUDE = r"""
+import json, sys
+prompt = sys.stdin.read()
+print(json.dumps({"type": "assistant", "message": {"content": [
+    {"type": "text", "text": "eco: " + prompt.strip().splitlines()[-1]}]}}), flush=True)
+"""
+
 
 @pytest.fixture
 def isolated_home(tmp_path: Path, monkeypatch) -> None:
@@ -43,7 +50,8 @@ def _plan(root: Path, *, session_id: str | None = None) -> agent_chat.ChatTurnPl
     return agent_chat.ChatTurnPlan("codex", "Codex", root, root, [sys.executable, str(script)], "read-only", session_id)
 
 
-def test_plan_requires_trust_and_a_supported_agent(tmp_path: Path) -> None:
+def test_plan_requires_trust_and_a_supported_agent(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(agent_chat, "executable_available", lambda executable: True)
     with pytest.raises(WorkspaceOperationError, match="confiable"):
         agent_chat.plan_chat_turn(_service(tmp_path, trusted=False), "codex", mode="read-only", session_id=None)
     with pytest.raises(WorkspaceOperationError, match="Codex y Claude"):
@@ -92,3 +100,41 @@ def test_emitter_adds_versioned_schema() -> None:
     assert json.loads(stream.getvalue()) == {
         "schema": "chxchx.agent-event", "schema_version": 1, "type": "done", "exit_code": 0
     }
+
+
+def test_plan_explains_how_to_install_a_missing_agent(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(agent_chat, "executable_available", lambda executable: False)
+
+    with pytest.raises(WorkspaceOperationError, match="install.sh"):
+        agent_chat.plan_chat_turn(_service(tmp_path, command=["claude"]), "codex", mode="read-only", session_id=None)
+
+
+def test_plan_validates_images_and_passes_model_and_effort(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(agent_chat, "executable_available", lambda executable: True)
+    image = tmp_path / "captura.png"
+    image.write_bytes(b"png")
+
+    plan = agent_chat.plan_chat_turn(_service(tmp_path), "codex", mode="read-only", session_id=None,
+                                     model="gpt-x", effort="high", images=(image,))
+    assert ["-m", "gpt-x"] == plan.argv[plan.argv.index("-m"):plan.argv.index("-m") + 2]
+    assert str(image) in plan.argv
+
+    with pytest.raises(WorkspaceOperationError, match="no soportado"):
+        agent_chat.plan_chat_turn(_service(tmp_path), "codex", mode="read-only", session_id=None,
+                                  images=(tmp_path / "notas.txt",))
+
+
+def test_claude_images_are_staged_in_the_project_and_listed_in_the_prompt(tmp_path: Path, isolated_home) -> None:
+    image = tmp_path / "pantalla.png"
+    image.write_bytes(b"png")
+    script = tmp_path / "fake_claude.py"
+    script.write_text(FAKE_CLAUDE, encoding="utf-8")
+    plan = agent_chat.ChatTurnPlan("claude", "Claude", tmp_path, tmp_path, [sys.executable, str(script)],
+                                   "read-only", "s-fake", ("claude",), None, None, (image,))
+    events: list[dict] = []
+
+    agent_chat.run_chat_turn(plan, "¿Qué ves?", events.append)
+
+    staged = list((tmp_path / ".ai" / "chat-attachments").iterdir())
+    assert len(staged) == 1 and staged[0].read_bytes() == b"png"
+    assert events[1]["text"].startswith("eco: - .ai/chat-attachments/")

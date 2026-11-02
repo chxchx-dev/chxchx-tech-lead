@@ -75,7 +75,26 @@ def test_normalizes_claude_stream_json() -> None:
     ]
     events = [event for record in records for event in normalize("Claude", record)]
 
-    assert [event["type"] for event in events] == ["session", "message", "tool", "tool", "usage"]
+    assert [event["type"] for event in events] == ["session", "message", "tool", "tool", "usage", "limits"]
     assert events[2]["title"] == "Bash: cat app.py" and events[2]["kind"] == "command"
     assert events[3]["id"] == "toolu_1" and events[3]["status"] == "completed" and events[3]["output"] == "print('hola')"
     assert events[4]["cost_usd"] == 0.01
+
+
+def test_codex_flags_for_model_effort_and_images_end_before_the_prompt() -> None:
+    command = turn_command(["codex"], mode="read-only", session_id="t1", model="gpt-x", effort="high",
+                           images=["a.png", "b.png"])
+    assert command[command.index("-m") + 1] == "gpt-x"
+    assert 'model_reasoning_effort="high"' in command
+    assert command[-6:] == ["--image", "b.png", "--skip-git-repo-check", "resume", "t1", "-"]
+
+
+def test_claude_flags_for_model_and_effort_and_context_limits() -> None:
+    command = turn_command(["claude"], mode="read-only", session_id=None, model="opus", effort="max")
+    assert command[-4:] == ["--model", "opus", "--effort", "max"]
+
+    events = normalize("Claude", {"type": "result", "is_error": False, "total_cost_usd": 0.2,
+                                  "usage": {"input_tokens": 10, "cache_read_input_tokens": 90, "output_tokens": 5},
+                                  "modelUsage": {"claude-opus": {"contextWindow": 200000}}})
+    assert events[1] == {"type": "limits", "context_tokens": 100, "context_window": 200000,
+                         "primary": None, "secondary": None, "plan": None}

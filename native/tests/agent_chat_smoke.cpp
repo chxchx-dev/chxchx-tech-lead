@@ -3,6 +3,8 @@
 
 #include <QApplication>
 #include <QElapsedTimer>
+#include <QImage>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QThread>
@@ -25,6 +27,21 @@ void emitLine(const QJsonObject &fields)
     std::cout << QJsonDocument(event(fields)).toJson(QJsonDocument::Compact).toStdString() << std::endl;
 }
 
+// Stands in for `chxchx-tech bridge agent-options`: "claude" is not installed.
+int fakeOptions(const QStringList &arguments)
+{
+    const bool claude = arguments.value(arguments.indexOf(QStringLiteral("--agent")) + 1) == QStringLiteral("claude");
+    QJsonObject payload{{QStringLiteral("schema"), QStringLiteral("chxchx.agent-options")},
+        {QStringLiteral("schema_version"), 1}, {QStringLiteral("available"), !claude},
+        {QStringLiteral("install_hint"), QStringLiteral("curl -fsSL https://claude.ai/install.sh | bash")},
+        {QStringLiteral("default_model"), QStringLiteral("gpt-b")}, {QStringLiteral("default_effort"), QString()},
+        {QStringLiteral("models"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("gpt-a")},
+            {QStringLiteral("label"), QStringLiteral("GPT A")}, {QStringLiteral("default_effort"), QStringLiteral("low")},
+            {QStringLiteral("efforts"), QJsonArray{QStringLiteral("low"), QStringLiteral("ultra")}}}}}};
+    std::cout << QJsonDocument(payload).toJson(QJsonDocument::Compact).toStdString() << std::endl;
+    return 0;
+}
+
 // Stands in for `chxchx-tech agent chat` so the smoke test runs on every OS.
 int fakeCli(const QStringList &arguments)
 {
@@ -37,8 +54,18 @@ int fakeCli(const QStringList &arguments)
         emitLine({{QStringLiteral("type"), QStringLiteral("done")}, {QStringLiteral("cancelled"), true}});
         return 0;
     }
+    const QString extras = QStringLiteral(" [%1 img, modelo=%2]").arg(arguments.count(QStringLiteral("--image")))
+        .arg(arguments.contains(QStringLiteral("--model"))
+            ? arguments.value(arguments.indexOf(QStringLiteral("--model")) + 1) : QStringLiteral("-"));
     emitLine({{QStringLiteral("type"), QStringLiteral("message")}, {QStringLiteral("role"), QStringLiteral("assistant")},
-        {QStringLiteral("text"), (resumed ? QStringLiteral("reanudado: ") : QStringLiteral("eco: ")) + prompt}});
+        {QStringLiteral("text"), (resumed ? QStringLiteral("reanudado: ") : QStringLiteral("eco: ")) + prompt
+            + (arguments.contains(QStringLiteral("--image")) ? extras : QString())}});
+    emitLine({{QStringLiteral("type"), QStringLiteral("usage")}, {QStringLiteral("input_tokens"), 1000},
+        {QStringLiteral("output_tokens"), 10}});
+    emitLine({{QStringLiteral("type"), QStringLiteral("limits")}, {QStringLiteral("context_tokens"), 50000},
+        {QStringLiteral("context_window"), 200000}, {QStringLiteral("plan"), QStringLiteral("plus")},
+        {QStringLiteral("primary"), QJsonObject{{QStringLiteral("used_percent"), 12.0},
+            {QStringLiteral("window_minutes"), 300}, {QStringLiteral("resets_at"), 1793633900}}}});
     emitLine({{QStringLiteral("type"), QStringLiteral("done")}, {QStringLiteral("exit_code"), 0},
         {QStringLiteral("session_id"), QStringLiteral("fake-1")}});
     return 0;
@@ -80,6 +107,15 @@ int modelChecks()
     if (!html.contains(QStringLiteral("listo")) || html.contains(QStringLiteral("<script>")) || !html.contains(QStringLiteral("✓")))
         return 14;
     if (!model.usageSummary().contains(QStringLiteral("10"))) return 15;
+    model.apply(event({{QStringLiteral("type"), QStringLiteral("usage")}, {QStringLiteral("input_tokens"), 5},
+        {QStringLiteral("output_tokens"), 1}, {QStringLiteral("cost_usd"), 0.25}}));
+    model.apply(event({{QStringLiteral("type"), QStringLiteral("limits")}, {QStringLiteral("context_tokens"), 100000},
+        {QStringLiteral("context_window"), 200000}, {QStringLiteral("secondary"), QJsonObject{
+            {QStringLiteral("used_percent"), 90.0}, {QStringLiteral("window_minutes"), 10080}}}}));
+    if (model.usage().inputTokens != 15 || !model.usage().hasCost) return 17;
+    const QString usageHtml = model.usageHtml();
+    if (!usageHtml.contains(QStringLiteral("100k / 200k (50%)")) || !usageHtml.contains(QStringLiteral("Semanal"))
+        || !usageHtml.contains(QStringLiteral("0.2500"))) return 18;
     if (!AgentChatWidget::supportsProgram(QStringLiteral("C:\\npm\\claude.cmd"))
         || AgentChatWidget::supportsProgram(QStringLiteral("opencode"))) return 16;
     return 0;
@@ -94,6 +130,8 @@ int main(int argc, char **argv)
     for (int index = 0; index < argc; ++index) arguments << QString::fromLocal8Bit(argv[index]);
     if (arguments.size() > 2 && arguments.at(1) == QStringLiteral("agent") && arguments.at(2) == QStringLiteral("chat"))
         return fakeCli(arguments);
+    if (arguments.size() > 2 && arguments.at(1) == QStringLiteral("bridge"))
+        return fakeOptions(arguments);
     QApplication app(argc, argv);
 
     if (const int failure = modelChecks()) return failure;
@@ -109,6 +147,28 @@ int main(int argc, char **argv)
     chat->sendMessage(QStringLiteral("sigue"));
     if (!waitIdle(*chat)) return 23;
     if (chat->model().entries().constLast().text != QStringLiteral("reanudado: sigue")) return 24;
+
+    QTemporaryDir images;
+    const QString image = images.filePath(QStringLiteral("captura.png"));
+    QImage pixel(4, 4, QImage::Format_RGB32);
+    pixel.fill(Qt::red);
+    pixel.save(image);
+    chat->sendMessage(QStringLiteral("mira"), {image});
+    if (!waitIdle(*chat)) return 27;
+    const auto &withImage = chat->model().entries();
+    if (withImage.at(withImage.size() - 2).images != QStringList{image}) return 28;
+    if (!withImage.constLast().text.contains(QStringLiteral("[1 img, modelo=-]"))) return 29;
+    if (chat->model().usage().contextWindow != 200000 || chat->model().usage().primary.usedPercent != 12.0) return 30;
+
+    auto *missing = new AgentChatWidget(project.path(), QStringLiteral("claude"), QCoreApplication::applicationFilePath());
+    QElapsedTimer loading;
+    loading.start();
+    while (missing->isAvailable() && loading.elapsed() < 10000) QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    if (missing->isAvailable()) return 31;
+    if (!missing->model().entries().constLast().text.contains(QStringLiteral("install.sh"))) return 32;
+    missing->sendMessage(QStringLiteral("hola"));
+    if (missing->isRunning() || missing->model().entries().size() != 1) return 33;
+    delete missing;
 
     chat->sendMessage(QStringLiteral("dormir"));
     QCoreApplication::processEvents();

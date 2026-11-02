@@ -4,11 +4,13 @@
 
 #include <QByteArray>
 #include <QProcess>
+#include <QStringList>
 #include <QWidget>
 
+class AgentChatComposer;
+class AgentChatSettings;
 class QComboBox;
 class QLabel;
-class QPlainTextEdit;
 class QPushButton;
 class QTextBrowser;
 class QTimer;
@@ -27,9 +29,10 @@ public:
 
     QString agentId() const { return m_agentId; }
     bool isRunning() const;
+    bool isAvailable() const;
     void focusInput();
-    // Exposed for headless tests; Studio normally sends from the input box.
-    void sendMessage(const QString &text);
+    // Exposed for headless tests; Studio normally sends from the composer.
+    void sendMessage(const QString &text, const QStringList &images = {});
     const AgentChatModel &model() const { return m_model; }
 
 signals:
@@ -38,6 +41,7 @@ signals:
 private:
     void stop();
     void startNewChat();
+    void setAvailability(bool available, const QString &installHint);
     void readOutput();
     void finishTurn(int exitCode, QProcess::ExitStatus status);
     void scheduleRender();
@@ -50,11 +54,13 @@ private:
     AgentChatModel m_model;
     QProcess m_process;
     QByteArray m_pending;
+    bool m_available = true;
+    AgentChatSettings *m_settings = nullptr;
     QComboBox *m_mode = nullptr;
     QPushButton *m_newChat = nullptr;
+    QLabel *m_usage = nullptr;
     QTextBrowser *m_transcript = nullptr;
     QLabel *m_status = nullptr;
-    QPlainTextEdit *m_input = nullptr;
-    QPushButton *m_send = nullptr;
+    AgentChatComposer *m_composer = nullptr;
     QTimer *m_renderTimer = nullptr;
 };

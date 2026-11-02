@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include <QList>
 #include <QString>
+#include <QStringList>
 
 // Transcript of a visual agent chat built from `chxchx.agent-event` v1 lines
 // emitted by `chxchx-tech agent chat`. It owns no process and no widgets so the
@@ -18,10 +19,30 @@ public:
         QString toolKind;
         QString status;
         QString output;
+        QStringList images;
         mutable QString cachedHtml;
     };
 
-    void addUserMessage(const QString &text);
+    struct LimitWindow {
+        double usedPercent = -1;
+        int windowMinutes = 0;
+        qint64 resetsAt = 0;
+    };
+
+    // What the session has spent and how much room is left.
+    struct Usage {
+        qint64 inputTokens = 0;
+        qint64 outputTokens = 0;
+        double costUsd = 0;
+        bool hasCost = false;
+        qint64 contextTokens = 0;
+        qint64 contextWindow = 0;
+        LimitWindow primary;
+        LimitWindow secondary;
+        QString plan;
+    };
+
+    void addUserMessage(const QString &text, const QStringList &images = {});
     // Applies one decoded event; returns false for unknown or foreign schemas.
     bool apply(const QJsonObject &event);
     void clear();
@@ -30,12 +51,14 @@ public:
     const QList<Entry> &entries() const { return m_entries; }
     QString sessionId() const { return m_sessionId; }
     void resetSession() { m_sessionId.clear(); }
-    QString usageSummary() const { return m_usage; }
+    const Usage &usage() const { return m_usage; }
+    QString usageSummary() const;
+    QString usageHtml() const;
 
 private:
     QString entryHtml(const Entry &entry) const;
 
     QList<Entry> m_entries;
     QString m_sessionId;
-    QString m_usage;
+    Usage m_usage;
 };
