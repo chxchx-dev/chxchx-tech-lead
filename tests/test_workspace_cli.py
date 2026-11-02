@@ -112,3 +112,19 @@ def test_workspace_memory_prune_dry_run_lists_noise(tmp_path: Path, monkeypatch)
     assert "se retirarían 1 entrada(s)" in result.stdout
     assert "memoria RAM" in result.stdout
     assert memory.read_text(encoding="utf-8") == before
+
+
+def test_workspace_context_compact_dry_run_lists_sections(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    handoff = project / ".ai" / "HANDOFF.md"
+    handoff.parent.mkdir(parents=True)
+    handoff.write_text("# Handoff\n\n" + "".join(f"## Paso {i}\n\n- x\n\n" for i in range(8, 0, -1)), encoding="utf-8")
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    before = handoff.read_text(encoding="utf-8")
+
+    result = runner.invoke(app, ["workspace", "context-compact", str(project), "--dry-run"])
+
+    assert result.exit_code == 0, result.stdout
+    assert "2 sección(es) se archivarían" in result.stdout
+    assert "Paso 1" in result.stdout
+    assert handoff.read_text(encoding="utf-8") == before

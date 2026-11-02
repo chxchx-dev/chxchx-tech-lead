@@ -72,7 +72,7 @@ def recover_explicit_memories(
     for session_id, requested_at, message in explicit_user_messages(
         project_root, executable=opencode_executable
     ):
-        text = _user_text(message)
+        text = user_visible_text(message)
         key = text.casefold()
         if not _is_explicit_request(text, key, seen):
             continue
@@ -83,7 +83,7 @@ def recover_explicit_memories(
 
     for conversation in list_conversations(project_root, limit=limit):
         for message in conversation.messages:
-            text = _user_text(message.text)
+            text = user_visible_text(message.text)
             key = text.casefold()
             if message.role != "user" or not _is_explicit_request(text, key, seen):
                 continue
@@ -101,8 +101,13 @@ def recover_explicit_memories(
     return memories
 
 
-def _user_text(message: str) -> str:
+def user_visible_text(message: str) -> str:
+    """Collapse whitespace and drop blocks the agent injected into a user turn."""
     return " ".join(_INJECTED_BLOCK.sub(" ", message).split())
+
+
+def contains_secret(text: str) -> bool:
+    return _SENSITIVE.search(text) is not None
 
 
 def _is_explicit_request(text: str, key: str, seen: set[str]) -> bool:
@@ -112,7 +117,7 @@ def _is_explicit_request(text: str, key: str, seen: set[str]) -> bool:
         and len(text) <= _MAX_MESSAGE_CHARS
         and _REMEMBER.search(text) is not None
         and _RECOVERY_QUESTION.search(text) is None
-        and _SENSITIVE.search(text) is None
+        and not contains_secret(text)
     )
 
 
@@ -166,7 +171,7 @@ def prune_explicit_memories(project_root: Path, *, dry_run: bool = False) -> Mem
 
     def keep_or_drop(match: re.Match[str]) -> str:
         quoted = re.search(r"^> (.*)$", match.group(0), re.MULTILINE)
-        text = _user_text(quoted.group(1)) if quoted else ""
+        text = user_visible_text(quoted.group(1)) if quoted else ""
         key = text.casefold()
         if _is_explicit_request(text, key, seen):
             seen.add(key)

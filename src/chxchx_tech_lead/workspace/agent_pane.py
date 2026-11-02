@@ -7,6 +7,7 @@ import json
 import shlex
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ..integrations.agent_usage import usage_snapshot_path
@@ -15,6 +16,10 @@ from ..integrations.explicit_memory import (
     persist_explicit_memories,
     recover_explicit_memories,
 )
+from .context_compaction import auto_compact_enabled, compact_context
+from .session_journal import recent_sessions_prompt, record_session, summarize_latest_session
+
+_JOURNAL_PROVIDERS = {"codex": "Codex", "claude": "Claude"}
 
 
 def banner(name: str, label: str = "CHXCHX TECH", logo: str = "") -> str:
@@ -52,6 +57,7 @@ def main() -> int:
     opencode_executable = _opencode_executable(command)
     memory_options = {"opencode_executable": opencode_executable} if opencode_executable else {}
     if recover_memory and project_root is not None:
+        _compact_context(project_root)
         try:
             memories = recover_explicit_memories(project_root, **memory_options)
             persist_explicit_memories(project_root, memories)
@@ -61,6 +67,12 @@ def main() -> int:
                 print(f"Memoria explícita recuperada: {len(memories)} solicitud(es) del proyecto.", flush=True)
         except OSError as exc:
             print(f"No pude recuperar la memoria local del proyecto: {exc}", file=sys.stderr, flush=True)
+        try:
+            command[-1] += recent_sessions_prompt(project_root)
+        except OSError as exc:
+            print(f"No pude leer el diario de sesiones: {exc}", file=sys.stderr, flush=True)
+    provider = _JOURNAL_PROVIDERS.get(_executable_name(command[0]))
+    started_at = datetime.now(timezone.utc)
     print(f"\033[1;36m{banner(name, label, logo)}\033[0m", flush=True)
     print(flush=True)
     command, environment = _usage_instrumentation(command, name)
@@ -71,22 +83,48 @@ def main() -> int:
             persist_explicit_memories(project_root, memories)
         except OSError as exc:
             print(f"No pude guardar la memoria local del proyecto: {exc}", file=sys.stderr, flush=True)
+        if provider is not None:
+            _record_session(project_root, provider, started_at)
     return completed.returncode
+
+
+def _compact_context(project_root: Path) -> None:
+    if not auto_compact_enabled(project_root):
+        return
+    try:
+        result = compact_context(project_root)
+    except OSError as exc:
+        print(f"No pude compactar el contexto del proyecto: {exc}", file=sys.stderr, flush=True)
+        return
+    moved = sum(len(item.moved) for item in result.files)
+    if moved:
+        print(f"Contexto compactado: {moved} sección(es) antiguas movidas a .ai/history/.", flush=True)
+
+
+def _record_session(project_root: Path, provider: str, started_at: datetime) -> None:
+    try:
+        summary = summarize_latest_session(project_root, provider=provider, started_at=started_at)
+        if summary is not None:
+            record_session(project_root, summary)
+    except OSError as exc:
+        print(f"No pude guardar el resumen de la sesión: {exc}", file=sys.stderr, flush=True)
+
+
+def _executable_name(program: str) -> str:
+    executable = Path(program.replace("\\", "/")).name.casefold()
+    for suffix in (".exe", ".cmd", ".bat"):
+        executable = executable.removesuffix(suffix)
+    return executable
 
 
 def _opencode_executable(command: list[str]) -> str | None:
     if not command:
         return None
-    executable = Path(command[0].replace("\\", "/")).name.casefold()
-    for suffix in (".exe", ".cmd", ".bat"):
-        executable = executable.removesuffix(suffix)
-    return command[0] if executable == "opencode" else None
+    return command[0] if _executable_name(command[0]) == "opencode" else None
 
 
 def _usage_instrumentation(command: list[str], name: str) -> tuple[list[str], dict[str, str]]:
-    executable = Path(command[0].replace("\\", "/")).name.casefold()
-    for suffix in (".exe", ".cmd", ".bat"):
-        executable = executable.removesuffix(suffix)
+    executable = _executable_name(command[0])
     if executable == "codex":
         status_items = 'tui.status_line=["model","context-remaining","rate-limits"]'
         return [command[0], "--config", status_items, *command[1:]], os.environ.copy()

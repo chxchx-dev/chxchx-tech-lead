@@ -194,3 +194,36 @@ def test_prune_keeps_hand_written_notes_and_backs_up(tmp_path: Path, monkeypatch
     assert "Recuerda que el deploy es los viernes." in content
     assert "Usamos Qt 6.8." in content and "No tocar." in content
     assert explicit_memory.prune_explicit_memories(tmp_path).removed == ()
+
+
+def test_agent_pane_new_chat_compacts_and_injects_recent_sessions(tmp_path: Path, monkeypatch) -> None:
+    from chxchx_tech_lead.workspace import agent_pane, session_journal
+
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "home"))
+    state = tmp_path / ".ai" / "HANDOFF.md"
+    state.parent.mkdir(parents=True)
+    state.write_text("# Handoff\n\n" + "".join(f"## Paso {i}\n\n- x\n\n" for i in range(10, 0, -1)), encoding="utf-8")
+    session_journal.record_session(
+        tmp_path, session_journal.SessionSummary("Claude", "prev", "2026-11-01", "Arreglar memoria", (), "Hecho")
+    )
+    launched: list[list[str]] = []
+    recorded: list[str] = []
+    monkeypatch.setattr(
+        "sys.argv",
+        ["agent_pane", "--name", "claude", "--capture-explicit-memory", "--recover-explicit-memory",
+         "--project-root", str(tmp_path), "--", "claude", "PROMPT"],
+    )
+    monkeypatch.setattr(agent_pane, "recover_explicit_memories", lambda root, **options: [])
+    monkeypatch.setattr(
+        agent_pane.subprocess, "run",
+        lambda command, **kwargs: launched.append(command) or type("Result", (), {"returncode": 0})(),
+    )
+    monkeypatch.setattr(
+        agent_pane, "summarize_latest_session",
+        lambda root, provider, started_at: recorded.append(provider) or None,
+    )
+
+    assert agent_pane.main() == 0
+    assert launched[0][-1].startswith("PROMPT") and "Arreglar memoria" in launched[0][-1]
+    assert (tmp_path / ".ai" / "history" / "HANDOFF.md").is_file()
+    assert recorded == ["Claude"]

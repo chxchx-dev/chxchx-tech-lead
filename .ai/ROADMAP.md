@@ -76,7 +76,7 @@ verde; la configuración del workflow no equivale a que haya pasado.
 ## Plan de mejora acordado (noviembre 2026)
 
 1. Memoria por chat confiable: hecho en `feature/reliable-chat-memory`.
-2. Contexto liviano: estado vigente corto, historial archivado fuera del prompt de chat nuevo y resumen automático del handoff al cerrar sesión.
+2. Contexto liviano: hecho. Compactación hacia `.ai/history/` y diario automático de sesiones inyectado en el chat nuevo.
 3. **Integración visual de Codex y Claude en Studio**, que hoy solo corren como CLI en una pestaña PTY. Objetivo: un panel de chat nativo con mensajes renderizados, herramientas y diffs propuestos, aprobación de cambios, historial y reanudación de sesión. Hay que evaluar los modos estructurados oficiales de cada agente (salida JSON/stream, SDK) mediante un adapter en `integrations/`, y conservar la pestaña PTY como alternativa.
 4. Fluidez de Studio: caché del snapshot `bridge status`, lecturas en paralelo separadas de las acciones y refresco automático de procesos/RAM.
 5. QA interactivo en Fedora y, a continuación, lo que falta para reemplazar VSCode: LSP, Git visual y panel de problemas.

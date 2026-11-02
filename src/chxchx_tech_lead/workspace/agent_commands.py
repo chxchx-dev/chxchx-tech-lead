@@ -9,7 +9,10 @@ import tomllib
 NEW_CHAT_PROMPT = (
     "Inicia una conversación nueva y económica en contexto. Antes de responder, "
     "lee AGENTS.md si existe, .ai/PROJECT.md, .ai/CURRENT_STATE.md y "
-    ".ai/HANDOFF.md. Lee también .ai/memory/PROJECT_MEMORY.md si existe y "
+    ".ai/HANDOFF.md. No leas .ai/history/ salvo que la tarea necesite contexto "
+    "anterior; ahí se archivan secciones antiguas y resúmenes de sesiones. "
+    "Al actualizar estado o handoff, añade una sección breve al inicio y no "
+    "repitas historial. Lee también .ai/memory/PROJECT_MEMORY.md si existe y "
     "recupera sus instrucciones explícitas de memoria, preservando literalmente "
     "frases y nombres que el usuario pidió recordar. Cuando el usuario pida "
     "explícitamente recordar algo durante esta conversación, añádelo de inmediato "

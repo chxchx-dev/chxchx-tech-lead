@@ -12,6 +12,7 @@ from ..ui.cli_output import (
     print_workspace_action as _print_workspace_action,
 )
 from ..cli_registry import editor_app, workspace_app
+from ..workspace.context_compaction import DEFAULT_BUDGET_CHARS, DEFAULT_KEEP_SECTIONS, compact_context
 from ..workspace.error_cache import record_error
 from ..workspace.project_context import workspace_service_for as _workspace_service
 from ..workspace.service import WorkspaceOperationError
@@ -177,6 +178,38 @@ def workspace_memory_prune(
         console.print(f"  - {message[:160] or '(entrada vacía)'}")
     if result.backup is not None:
         console.print(f"[bold]Backup:[/] {result.backup}")
+    if dry_run:
+        console.print("[yellow]No se realizaron cambios (--dry-run).[/]")
+
+
+@workspace_app.command("context-compact")
+def workspace_context_compact(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    keep: int = typer.Option(DEFAULT_KEEP_SECTIONS, "--keep", min=1, help="Secciones recientes que se conservan."),
+    budget: int = typer.Option(DEFAULT_BUDGET_CHARS, "--budget", min=1000, help="Tamaño máximo orientativo en caracteres."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Muestra qué se archivaría sin modificar archivos."),
+):
+    """Archiva secciones antiguas de CURRENT_STATE/HANDOFF en .ai/history/."""
+    try:
+        result = compact_context(path, keep=keep, budget=budget, dry_run=dry_run)
+    except OSError as exc:
+        console.print(f"[red]✗ No pude compactar el contexto: {exc}[/]")
+        raise typer.Exit(code=1)
+    if not result.changed:
+        console.print("[green]✓ El contexto ya es compacto.[/]")
+        return
+    for item in result.files:
+        if not item.moved:
+            continue
+        verb = "se archivarían" if dry_run else "archivadas"
+        console.print(
+            f"[green]✓[/] {item.path.name}: {len(item.moved)} sección(es) {verb} en {item.archive} "
+            f"({item.chars_before} → {item.chars_after} caracteres)"
+        )
+        for heading in item.moved:
+            console.print(f"  - {heading}")
+    if result.backup is not None:
+        console.print(f"[bold]Backup:[/] {result.backup} (restaurable con `chxchx-tech rollback`)")
     if dry_run:
         console.print("[yellow]No se realizaron cambios (--dry-run).[/]")
 
