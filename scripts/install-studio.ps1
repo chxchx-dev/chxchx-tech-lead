@@ -1,5 +1,6 @@
 param(
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$Update
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,20 +54,58 @@ try {
     if ($PackageHash -ne $Manifest["sha256.$Platform"]) { throw 'El SHA-256 de Studio no coincide.' }
     if ($WheelHash -ne $Manifest['sha256.cli-wheel']) { throw 'El SHA-256 del CLI no coincide.' }
 
-    if ($DryRun) {
-        Write-Host "DRY RUN: las descargas y checksums son válidos. Se instalaría $AppRoot."
-        Write-Host 'No se modificaron archivos de instalación ni se instaló uv.'
-        return
-    }
-    if ((Test-Path -LiteralPath $AppRoot) -and -not (Test-Path -LiteralPath (Join-Path $AppRoot '.chxchx-managed'))) {
-        throw "La ruta $AppRoot ya existe y no está administrada por ChxChx. No la modifiqué."
+    $NeedsCliInstall = $true
+    if (Test-Path -LiteralPath $AppRoot) {
+        $AppItem = Get-Item -LiteralPath $AppRoot -Force
+        if ($AppItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+            throw "La ruta $AppRoot es un enlace o punto de reanálisis. No la modifiqué."
+        }
+        $Marker = Join-Path $AppRoot '.chxchx-managed'
+        if (-not (Test-Path -LiteralPath $Marker -PathType Leaf)) {
+            throw "La ruta $AppRoot ya existe y no está administrada por ChxChx. No la modifiqué."
+        }
+        $ExistingCommit = (Get-Content -LiteralPath $Marker -Raw).Trim()
+        if ($ExistingCommit -and $ExistingCommit -ne $Commit) {
+            throw "El marcador de $AppRoot corresponde a otra versión. No la modifiqué."
+        }
+        $AppBinary = Join-Path $AppRoot 'bin\chxchx-studio.exe'
+        if (-not (Test-Path -LiteralPath $AppBinary -PathType Leaf)) {
+            throw "La instalación administrada está incompleta: falta $AppBinary."
+        }
+        $CliBinary = Join-Path $AppRoot '.venv\Scripts\chxchx-tech.exe'
+        $Python = Join-Path $AppRoot '.venv\Scripts\python.exe'
+        if ((Test-Path -LiteralPath $CliBinary -PathType Leaf) -and (Test-Path -LiteralPath $Python -PathType Leaf)) {
+            $NeedsCliInstall = $false
+        }
     }
     if (Test-Path -LiteralPath $StartMenu) {
         $ExistingShortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($StartMenu)
         if ($ExistingShortcut.TargetPath -ne $Launcher) { throw "Ya existe un acceso no administrado: $StartMenu" }
     }
-    if ((Test-Path -LiteralPath $Launcher) -and -not ((Get-Content -LiteralPath $Launcher -Raw) -match 'CHXCHX_STUDIO_DEV_LAUNCHER')) {
-        throw "Ya existe $Launcher y no está administrado por ChxChx. No lo sobrescribí."
+    if (Test-Path -LiteralPath $Launcher) {
+        $LauncherItem = Get-Item -LiteralPath $Launcher -Force
+        if (($LauncherItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -or
+            -not ((Get-Content -LiteralPath $Launcher -Raw) -match 'CHXCHX_STUDIO_DEV_LAUNCHER')) {
+            throw "Ya existe $Launcher y no está administrado por ChxChx. No lo sobrescribí."
+        }
+    }
+    if ($Update -and (-not (Test-Path -LiteralPath $Launcher -PathType Leaf) -or -not ((Get-Content -LiteralPath $Launcher -Raw) -match 'CHXCHX_STUDIO_DEV_LAUNCHER'))) {
+        throw "-Update requiere una instalación previa con launcher administrado en $Launcher."
+    }
+    if ($DryRun) {
+        Write-Host "DRY RUN: las descargas y checksums son válidos. Se instalaría o actualizaría $AppRoot."
+        Write-Host 'No se modificaron archivos de instalación ni se instaló uv.'
+        return
+    }
+    if (-not $NeedsCliInstall) {
+        $CliReady = $false
+        try {
+            & $CliBinary --help | Out-Null
+            $CliReady = $LASTEXITCODE -eq 0
+        } catch {
+            $CliReady = $false
+        }
+        if (-not $CliReady) { $NeedsCliInstall = $true }
     }
 
     New-Item -ItemType Directory -Path $AppParent -Force | Out-Null
@@ -75,34 +114,56 @@ try {
         if (Test-Path -LiteralPath $Stage) { Remove-Item -LiteralPath $Stage -Recurse -Force }
         New-Item -ItemType Directory -Path $Stage | Out-Null
         Expand-Archive -LiteralPath $PackagePath -DestinationPath $Stage
-        $Binary = Get-ChildItem -LiteralPath $Stage -Filter 'chxchx-studio.exe' -File -Recurse | Select-Object -First 1
-        if ($null -eq $Binary) { throw 'El ZIP no contiene chxchx-studio.exe.' }
+        $ExpectedBinary = Join-Path $Stage 'bin\chxchx-studio.exe'
+        if (-not (Test-Path -LiteralPath $ExpectedBinary -PathType Leaf)) {
+            $PackageRoots = @(Get-ChildItem -LiteralPath $Stage -Directory | Where-Object {
+                Test-Path -LiteralPath (Join-Path $_.FullName 'bin\chxchx-studio.exe') -PathType Leaf
+            })
+            if ($PackageRoots.Count -ne 1) { throw 'El ZIP no contiene una raíz reconocible con bin\chxchx-studio.exe.' }
+            foreach ($Child in Get-ChildItem -LiteralPath $PackageRoots[0].FullName -Force) {
+                Move-Item -LiteralPath $Child.FullName -Destination $Stage
+            }
+            Remove-Item -LiteralPath $PackageRoots[0].FullName -Force
+        }
+        if (-not (Test-Path -LiteralPath $ExpectedBinary -PathType Leaf)) { throw 'El ZIP no contiene bin\chxchx-studio.exe.' }
         Set-Content -LiteralPath (Join-Path $Stage '.chxchx-managed') -Value $Commit -NoNewline
         Move-Item -LiteralPath $Stage -Destination $AppRoot
         $Stage = $null
-    } elseif ($null -eq (Get-ChildItem -LiteralPath $AppRoot -Filter 'chxchx-studio.exe' -File -Recurse | Select-Object -First 1)) {
-        throw "La instalación administrada está incompleta: falta chxchx-studio.exe en $AppRoot."
     }
 
-    $Uv = Get-Command uv -ErrorAction SilentlyContinue
-    if ($null -eq $Uv) {
-        $UvCandidate = Join-Path $HOME '.local\bin\uv.exe'
-        if (-not (Test-Path -LiteralPath $UvCandidate)) {
-            irm https://astral.sh/uv/install.ps1 | iex
+    $MarkerPath = Join-Path $AppRoot '.chxchx-managed'
+    $MarkerTemp = "$MarkerPath.tmp-$PID"
+    Set-Content -LiteralPath $MarkerTemp -Value $Commit -NoNewline
+    Move-Item -LiteralPath $MarkerTemp -Destination $MarkerPath -Force
+
+    if ($NeedsCliInstall) {
+        $Uv = Get-Command uv -ErrorAction SilentlyContinue
+        if ($null -eq $Uv) {
+            $UvCandidate = Join-Path $HOME '.local\bin\uv.exe'
+            if (-not (Test-Path -LiteralPath $UvCandidate)) {
+                irm https://astral.sh/uv/install.ps1 | iex
+            }
+            $UvCandidate = Join-Path $HOME '.local\bin\uv.exe'
+            if (-not (Test-Path -LiteralPath $UvCandidate)) { throw 'No se encontró uv después de instalarlo.' }
+            $UvPath = $UvCandidate
+        } else {
+            $UvPath = $Uv.Source
         }
-        $UvCandidate = Join-Path $HOME '.local\bin\uv.exe'
-        if (-not (Test-Path -LiteralPath $UvCandidate)) { throw 'No se encontró uv después de instalarlo.' }
-        $UvPath = $UvCandidate
-    } else {
-        $UvPath = $Uv.Source
-    }
 
-    $PythonEnvironment = Join-Path $AppRoot '.venv'
-    $Python = Join-Path $PythonEnvironment 'Scripts\python.exe'
-    & $UvPath venv --python 3.11 $PythonEnvironment
-    & $UvPath pip install --python $Python $WheelPath
-    if (-not (Test-Path -LiteralPath (Join-Path $PythonEnvironment 'Scripts\chxchx-tech.exe'))) {
-        throw 'El wheel no dejó el comando chxchx-tech esperado.'
+        $PythonEnvironment = Join-Path $AppRoot '.venv'
+        $Python = Join-Path $PythonEnvironment 'Scripts\python.exe'
+        $CliBinary = Join-Path $PythonEnvironment 'Scripts\chxchx-tech.exe'
+        if (-not (Test-Path -LiteralPath $Python -PathType Leaf) -or -not (Test-Path -LiteralPath $CliBinary -PathType Leaf)) {
+            & $UvPath venv --clear --python 3.11 $PythonEnvironment
+            if ($LASTEXITCODE -ne 0) { throw "uv venv falló con código $LASTEXITCODE." }
+        }
+        & $UvPath pip install --python $Python --reinstall-package chxchx-tech-lead $WheelPath
+        if ($LASTEXITCODE -ne 0) { throw "uv pip install falló con código $LASTEXITCODE." }
+        if (-not (Test-Path -LiteralPath $CliBinary -PathType Leaf)) {
+            throw 'El wheel no dejó el comando chxchx-tech esperado.'
+        }
+        & $CliBinary --help | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'El bridge CLI instalado no puede iniciarse.' }
     }
 
     $LauncherTemp = "$Launcher.tmp-$PID"

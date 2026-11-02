@@ -5,12 +5,14 @@ from pathlib import Path
 import typer
 
 from ..core.trust import trust_project
+from ..integrations.explicit_memory import prune_explicit_memories
 from ..ui.cli_output import (
     console,
     print_agent_statuses as _print_agent_statuses,
     print_workspace_action as _print_workspace_action,
 )
 from ..cli_registry import editor_app, workspace_app
+from ..workspace.context_compaction import DEFAULT_BUDGET_CHARS, DEFAULT_KEEP_SECTIONS, compact_context
 from ..workspace.error_cache import record_error
 from ..workspace.project_context import workspace_service_for as _workspace_service
 from ..workspace.service import WorkspaceOperationError
@@ -156,12 +158,68 @@ def workspace_terminal(
         raise typer.Exit(code=1)
 
 
+@workspace_app.command("memory-prune")
+def workspace_memory_prune(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Muestra las entradas a retirar sin modificar el archivo."),
+):
+    """Retira de PROJECT_MEMORY.md capturas automáticas que no eran peticiones de memoria."""
+    try:
+        result = prune_explicit_memories(path, dry_run=dry_run)
+    except OSError as exc:
+        console.print(f"[red]✗ No pude limpiar la memoria del proyecto: {exc}[/]")
+        raise typer.Exit(code=1)
+    if not result.removed:
+        console.print(f"[green]✓ La memoria explícita ya está limpia:[/] {result.path}")
+        return
+    prefix = "DRY RUN: se retirarían" if dry_run else "Retiradas"
+    console.print(f"[green]✓[/] {prefix} {len(result.removed)} entrada(s) de {result.path}")
+    for message in result.removed:
+        console.print(f"  - {message[:160] or '(entrada vacía)'}")
+    if result.backup is not None:
+        console.print(f"[bold]Backup:[/] {result.backup}")
+    if dry_run:
+        console.print("[yellow]No se realizaron cambios (--dry-run).[/]")
+
+
+@workspace_app.command("context-compact")
+def workspace_context_compact(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    keep: int = typer.Option(DEFAULT_KEEP_SECTIONS, "--keep", min=1, help="Secciones recientes que se conservan."),
+    budget: int = typer.Option(DEFAULT_BUDGET_CHARS, "--budget", min=1000, help="Tamaño máximo orientativo en caracteres."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Muestra qué se archivaría sin modificar archivos."),
+):
+    """Archiva secciones antiguas de CURRENT_STATE/HANDOFF en .ai/history/."""
+    try:
+        result = compact_context(path, keep=keep, budget=budget, dry_run=dry_run)
+    except OSError as exc:
+        console.print(f"[red]✗ No pude compactar el contexto: {exc}[/]")
+        raise typer.Exit(code=1)
+    if not result.changed:
+        console.print("[green]✓ El contexto ya es compacto.[/]")
+        return
+    for item in result.files:
+        if not item.moved:
+            continue
+        verb = "se archivarían" if dry_run else "archivadas"
+        console.print(
+            f"[green]✓[/] {item.path.name}: {len(item.moved)} sección(es) {verb} en {item.archive} "
+            f"({item.chars_before} → {item.chars_after} caracteres)"
+        )
+        for heading in item.moved:
+            console.print(f"  - {heading}")
+    if result.backup is not None:
+        console.print(f"[bold]Backup:[/] {result.backup} (restaurable con `chxchx-tech rollback`)")
+    if dry_run:
+        console.print("[yellow]No se realizaron cambios (--dry-run).[/]")
+
+
 @editor_app.command("open")
 def editor_open(
     path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
     dry_run: bool = typer.Option(False, "--dry-run", help="Muestra el comando sin ejecutarlo."),
 ):
-    """Abre el proyecto en Sublime mediante su adapter."""
+    """Abre el proyecto en el editor configurado (Studio de forma predeterminada)."""
     try:
         result = _workspace_service(path).open_editor(dry_run=dry_run)
     except WorkspaceOperationError as exc:

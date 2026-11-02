@@ -186,7 +186,7 @@ def _presets(raw: Any, agents: tuple[AgentConfig, ...]) -> tuple[AgentPresetConf
 class WorkspaceConfig:
     name: str
     adapter: str = "zellij"
-    editor: str = "sublime"
+    editor: str = "studio"
     auto_open_editor: bool = False
     auto_attach: bool = True
     auto_start: bool = False
@@ -223,7 +223,7 @@ class WorkspaceConfig:
         return cls(
             name=_as_string(raw.get("name"), "workspace.name"),
             adapter=_as_string(raw.get("adapter", "zellij"), "workspace.adapter"),
-            editor=_as_string(raw.get("editor", "sublime"), "workspace.editor"),
+            editor=_as_string(raw.get("editor", "studio"), "workspace.editor"),
             auto_open_editor=_as_bool(raw.get("auto_open_editor"), "workspace.auto_open_editor", False),
             auto_attach=_as_bool(raw.get("auto_attach"), "workspace.auto_attach", True),
             auto_start=_as_bool(raw.get("auto_start"), "workspace.auto_start", False),

@@ -45,7 +45,7 @@ def verify_archive(platform: str, package: Path) -> None:
             "/qt6core5compat.dll",
             "/platforms/qwindows.dll",
         )
-    elif platform == "linux-ubuntu-x86_64":
+    elif platform.startswith("linux-"):
         require_suffix(
             members,
             "/qt.conf",
@@ -54,8 +54,6 @@ def verify_archive(platform: str, package: Path) -> None:
             "/libqt6core5compat.so.6",
             "/platforms/libqxcb.so",
         )
-    else:
-        require_suffix(members, "/qt.conf")
 
 
 def verify_macos_bundle(bundle: Path) -> None:

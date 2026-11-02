@@ -73,6 +73,33 @@ verde; la configuración del workflow no equivale a que haya pasado.
   si comienza una migración gradual a un núcleo C++ compartido. No bloquear el
   uso de Studio con una reescritura sin una necesidad medida.
 
+## Plan de mejora acordado (noviembre 2026)
+
+1. Memoria por chat confiable: hecho en `feature/reliable-chat-memory`.
+2. Contexto liviano: hecho. Compactación hacia `.ai/history/` y diario automático de sesiones inyectado en el chat nuevo.
+3. **Integración visual de Codex y Claude en Studio**: primera versión hecha (ADR 0009, chat por turnos estructurados). Pendiente: aprobación por acción, diffs visuales y validar Claude. Antes solo corrían como CLI en una pestaña PTY. Objetivo: un panel de chat nativo con mensajes renderizados, herramientas y diffs propuestos, aprobación de cambios, historial y reanudación de sesión. Hay que evaluar los modos estructurados oficiales de cada agente (salida JSON/stream, SDK) mediante un adapter en `integrations/`, y conservar la pestaña PTY como alternativa.
+4. Fluidez de Studio: hecho. Detector ~2× más rápido, canal de lectura separado, caché por comando y refresco automático; falta QA manual.
+5. QA interactivo en Fedora (en curso, ver "Correcciones desde QA manual").
+6. Lo que falta para reemplazar VSCode, en este orden:
+   - Git visual: estado, stage/unstage por archivo o hunk, commit, diff lado a lado, ramas y push/pull con confirmación.
+   - LSP: autocompletado, ir a definición, referencias, hover y diagnósticos en línea. El servidor de lenguaje corre fuera del proceso UI y lo administra el workspace.
+   - Panel de problemas que junte LSP, salida de tests y CI.
+   - Chat visual: aprobación por acción (`codex app-server` / `--permission-prompt-tool`) y diffs visuales de `file_change`.
+   - Validar Claude en el chat visual con la CLI real.
+
+### Correcciones desde QA manual (noviembre 2026)
+
+- [x] Chat visual con agente no instalado: antes mostraba `[Errno 2] No such file or directory: 'claude'`. Debe avisar antes y dar el comando de instalación.
+- [x] Elegir modelo y effort en el chat visual, con las opciones reales de cada agente.
+- [x] Mostrar lo gastado y lo que queda: contexto usado/ventana, límites de 5 h y semanal (Codex), costo (Claude) y tokens de la sesión.
+- [x] Adjuntar imágenes en el chat visual (archivo y pegar desde el portapapeles).
+- [x] Interfaz del chat más vistosa, a la altura de otros IDE: tarjetas nativas, código copiable, píldoras de modelo, effort y permisos, y medidores de uso.
+- [x] Rediseño visual de todo Studio: motor de temas (6 temas), iconos propios, hoja de estilos moderna y barra de estado útil.
+- [x] Cambio de tema y coloreado de código por lenguaje según la paleta del tema.
+- [x] Validar Claude en el chat visual con la CLI real (2.1.316): imagen, modelo, effort, costo, contexto y reanudación.
+- [x] Pendientes menores del rediseño: títulos Markdown completos, iconos por tipo en el explorador y paleta ANSI para el tema claro.
+- [x] Responsivo: las acciones de área salen del panel lateral (la lista de secciones ya no se mueve), cuadrículas que se adaptan al ancho, páginas con desplazamiento, anchos mínimos de paneles y un chat que cabe en paneles divididos.
+
 ## Evolución posterior
 
 - Memoria de proyecto resiliente: el wrapper previo al chat nuevo recupera

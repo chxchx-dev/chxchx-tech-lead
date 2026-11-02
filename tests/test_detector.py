@@ -133,3 +133,28 @@ def test_detect_python_redis_dependency(tmp_path: Path) -> None:
     info = detect_project(tmp_path)
 
     assert {"python", "redis"}.issubset(info.stacks)
+
+
+def test_dependency_folders_do_not_change_detected_stacks(tmp_path):
+    from chxchx_tech_lead.core.detector import detect_project
+
+    package = tmp_path / "node_modules" / "native-lib"
+    package.mkdir(parents=True)
+    (package / "Native.csproj").write_text("<PackageReference Include='Npgsql' />", encoding="utf-8")
+    (package / "CMakeLists.txt").write_text("find_package(Qt6)", encoding="utf-8")
+    (tmp_path / "main.py").write_text("print(1)", encoding="utf-8")
+
+    info = detect_project(tmp_path)
+
+    assert {"dotnet", "postgres", "qt"}.isdisjoint(info.stacks)
+    assert "python" in info.languages
+
+
+def test_detection_returns_independent_copies(tmp_path):
+    from chxchx_tech_lead.core.detector import detect_project
+
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+    first = detect_project(tmp_path)
+    first.stacks.append("mutated")
+
+    assert "mutated" not in detect_project(tmp_path).stacks

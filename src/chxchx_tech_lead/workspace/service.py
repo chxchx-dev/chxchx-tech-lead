@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ..adapters.editor.sublime import SublimeAdapter
+from ..adapters.editor.base import EditorAdapter
 from ..adapters.terminal.base import TerminalWorkspaceAdapter
 from ..adapters.terminal.subprocess import SubprocessAdapter
 from ..adapters.terminal.zellij import ZellijAdapter
@@ -11,6 +11,7 @@ from ..core.detector import detect_project
 from ..core.models import ProjectInfo
 from ..core.registry import load_registry, set_last_project
 from .agent_operations import WorkspaceAgentOperations
+from .editor_operations import WorkspaceEditorOperations
 from .manager import WorkspaceInspection, WorkspaceManager
 from .layouts import workspace_layout
 from .process_manager import ProcessActionResult, ProcessManagerError, ProcessStatus
@@ -23,6 +24,7 @@ from .terminal_operations import WorkspaceTerminalOperations
 
 class WorkspaceService(
     WorkspaceAgentOperations,
+    WorkspaceEditorOperations,
     WorkspaceProcessOperations,
     WorkspaceTerminalOperations,
 ):
@@ -33,7 +35,7 @@ class WorkspaceService(
         project: ProjectInfo,
         *,
         terminal: TerminalWorkspaceAdapter | None = None,
-        editor: SublimeAdapter | None = None,
+        editor: EditorAdapter | None = None,
     ):
         self.project = project
         self._manager = WorkspaceManager(project)
@@ -89,9 +91,9 @@ class WorkspaceService(
         if start_auto and inspection.config is not None and inspection.config.auto_start:
             action.process_results.extend(self._start_auto_processes(inspection, session, dry_run))
         if inspection.config is not None and inspection.config.auto_open_editor:
-            result = self._editor_adapter().open_project(self.project.root, dry_run=dry_run)
+            result = self._editor_adapter(inspection).open_project(self.project.root, dry_run=dry_run)
             if result.returncode != 0:
-                action.messages.append(result.stderr or "No se pudo abrir Sublime")
+                action.messages.append(result.stderr or "No se pudo abrir el editor configurado")
             else:
                 action.messages.append("Editor abierto")
         if attach:
@@ -207,26 +209,6 @@ class WorkspaceService(
             raise WorkspaceOperationError(result.stderr or f"No pude adjuntar a `{session}`")
         return result
 
-    def open_editor(self, dry_run: bool = False):
-        self.inspect()
-        result = self._editor_adapter().open_project(self.project.root, dry_run=dry_run)
-        if result.returncode != 0:
-            raise WorkspaceOperationError(result.stderr or "No se pudo abrir Sublime")
-        return result
-
-    def setup_editor(self, dry_run: bool = False, open_after: bool = True):
-        self.inspect()
-        adapter = self._editor_adapter()
-        project_file, generated = adapter.generate_project(self.project.root, dry_run=dry_run)
-        if generated.returncode != 0:
-            raise WorkspaceOperationError(generated.stderr or "No se pudo generar el proyecto Sublime")
-        opened = None
-        if open_after:
-            opened = adapter.open_project(project_file, dry_run=dry_run)
-            if opened.returncode != 0:
-                raise WorkspaceOperationError(opened.stderr or "No se pudo abrir el proyecto Sublime")
-        return project_file, generated, opened
-
     def start_process(self, process_id: str, dry_run: bool = False) -> ProcessActionResult:
         """Start one configured process through the workspace service."""
         inspection = self.inspect()
@@ -278,11 +260,6 @@ class WorkspaceService(
             f"No se pudo {operation} la sesión `{session}`: Zellij no la reconoce. "
             "Comprueba `zellij list-sessions` y vuelve a ejecutar `Iniciar workspace`."
         )
-
-    def _editor_adapter(self) -> SublimeAdapter:
-        if self._editor is None:
-            self._editor = SublimeAdapter()
-        return self._editor
 
     def _session_name(self, inspection: WorkspaceInspection) -> str:
         raw = inspection.config.name if inspection.config is not None else self.project.root.name

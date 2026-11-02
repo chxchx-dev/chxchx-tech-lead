@@ -7,14 +7,13 @@ import json
 import shlex
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ..integrations.agent_usage import usage_snapshot_path
-from ..integrations.explicit_memory import (
-    format_recovered_memories,
-    persist_explicit_memories,
-    recover_explicit_memories,
-)
+from .chat_context import capture_after_session, prepare_new_chat
+
+_JOURNAL_PROVIDERS = {"codex": "Codex", "claude": "Claude"}
 
 
 def banner(name: str, label: str = "CHXCHX TECH", logo: str = "") -> str:
@@ -48,33 +47,46 @@ def main() -> int:
     if not command:
         print("El comando del agente está vacío", file=sys.stderr)
         return 2
+
+    opencode_executable = _opencode_executable(command)
     if recover_memory and project_root is not None:
-        try:
-            memories = recover_explicit_memories(project_root)
-            persist_explicit_memories(project_root, memories)
-            if memories and command:
-                command[-1] += format_recovered_memories(memories)
-            if memories:
-                print(f"Memoria explícita recuperada: {len(memories)} solicitud(es) del proyecto.", flush=True)
-        except OSError as exc:
-            print(f"No pude recuperar la memoria local del proyecto: {exc}", file=sys.stderr, flush=True)
+        command[-1] += prepare_new_chat(project_root, _print_notice, opencode_executable=opencode_executable)
+    provider = _JOURNAL_PROVIDERS.get(_executable_name(command[0]))
+    started_at = datetime.now(timezone.utc)
     print(f"\033[1;36m{banner(name, label, logo)}\033[0m", flush=True)
     print(flush=True)
     command, environment = _usage_instrumentation(command, name)
     completed = subprocess.run(command, cwd=os.getcwd(), env=environment, check=False)
     if capture_memory and project_root is not None:
-        try:
-            memories = recover_explicit_memories(project_root)
-            persist_explicit_memories(project_root, memories)
-        except OSError as exc:
-            print(f"No pude guardar la memoria local del proyecto: {exc}", file=sys.stderr, flush=True)
+        capture_after_session(
+            project_root,
+            _print_notice,
+            provider=provider,
+            started_at=started_at,
+            opencode_executable=opencode_executable,
+        )
     return completed.returncode
 
 
-def _usage_instrumentation(command: list[str], name: str) -> tuple[list[str], dict[str, str]]:
-    executable = Path(command[0].replace("\\", "/")).name.casefold()
+def _print_notice(message: str, is_error: bool) -> None:
+    print(message, file=sys.stderr if is_error else sys.stdout, flush=True)
+
+
+def _executable_name(program: str) -> str:
+    executable = Path(program.replace("\\", "/")).name.casefold()
     for suffix in (".exe", ".cmd", ".bat"):
         executable = executable.removesuffix(suffix)
+    return executable
+
+
+def _opencode_executable(command: list[str]) -> str | None:
+    if not command:
+        return None
+    return command[0] if _executable_name(command[0]) == "opencode" else None
+
+
+def _usage_instrumentation(command: list[str], name: str) -> tuple[list[str], dict[str, str]]:
+    executable = _executable_name(command[0])
     if executable == "codex":
         status_items = 'tui.status_line=["model","context-remaining","rate-limits"]'
         return [command[0], "--config", status_items, *command[1:]], os.environ.copy()

@@ -90,8 +90,7 @@ class CommandPalette(ModalScreen[str | None]):
         ("resume_workspace", "Reanudar workspace", ""),
         ("stop_workspace", "Detener workspace", ""),
         ("write_handoff", "Actualizar handoff", ""),
-        ("open_editor", "Abrir Sublime Text", ""),
-        ("setup_editor", "Preparar proyecto de Sublime", ""),
+        ("open_editor", "Abrir ChxChx Studio", ""),
     )
     BINDINGS = [("escape", "close", "Cerrar")]
 

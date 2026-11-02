@@ -168,6 +168,9 @@ void MainWindow::buildActions()
     addAction(toolsMenu, QStringLiteral("tools.terminal"), QStringLiteral("Nueva terminal integrada"),
         QKeySequence(QStringLiteral("Ctrl+Shift+T")), [this] { openNewWorkspaceTerminal(); },
         QStringLiteral("utilities-terminal"), QStyle::SP_ComputerIcon, false);
+    addAction(toolsMenu, QStringLiteral("tools.agentChat"), QStringLiteral("Chat visual con agente"),
+        QKeySequence(), [this] { openVisualChat(); }, QStringLiteral("dialog-messages"),
+        QStyle::SP_MessageBoxQuestion, false);
     addAction(toolsMenu, QStringLiteral("tools.gitDiff"), QStringLiteral("Diff Git del archivo actual"),
         QKeySequence(), [this] { showCurrentFileDiff(); }, QStringLiteral("vcs-diff"),
         QStyle::SP_FileDialogDetailedView, false);
@@ -179,6 +182,7 @@ void MainWindow::buildActions()
             }
         }
     });
+    helpMenu->addAction(QStringLiteral("Buscar actualizaciones…"), this, &MainWindow::checkStudioUpdates);
     helpMenu->addAction(QStringLiteral("Acerca de ChxChx Studio"), this, [this] {
         QMessageBox::about(this, QStringLiteral("Acerca de ChxChx Studio"),
             QStringLiteral("ChxChx Studio\nControl plane local para proyectos de desarrollo asistido."));

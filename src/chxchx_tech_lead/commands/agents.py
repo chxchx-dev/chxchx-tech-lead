@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import typer
 
 from ..ui.cli_output import console, print_agent_statuses as _print_agent_statuses
 from ..cli_registry import agent_app, workspace_app
+from ..integrations.agent_stream import MODES
+from ..workspace.agent_chat import json_line_emitter, plan_chat_turn, run_chat_turn
 from ..workspace.agent_setup import AgentSetupError, add_agent
 from ..workspace.handoff import update_handoff
 from ..workspace.project_context import workspace_service_for as _workspace_service
@@ -150,6 +153,37 @@ def agent_preflight(
         console.print("[red]✗ Indica al menos un --agent.[/]")
         raise typer.Exit(code=2)
     console.print(f"[green]✓[/] Preflight Studio listo: {', '.join(agent_ids)}. No se inició ningún proceso.")
+
+@agent_app.command("chat")
+def agent_chat(
+    agent_id: str = typer.Argument(..., help="ID del agente Codex o Claude configurado."),
+    path: Path = typer.Option(Path.cwd(), "--path", exists=True, file_okay=False, resolve_path=True),
+    prompt: str = typer.Option(..., "--prompt", help="Mensaje del usuario para este turno."),
+    session: str = typer.Option("", "--session", help="Sesión a continuar; vacío inicia un chat con contexto."),
+    mode: str = typer.Option("read-only", "--mode", help=f"Permisos del agente: {', '.join(MODES)}."),
+    model: str = typer.Option("", "--model", help="Modelo; vacío usa el configurado en el agente."),
+    effort: str = typer.Option("", "--effort", help="Nivel de razonamiento; vacío usa el configurado."),
+    images: list[Path] = typer.Option([], "--image", help="Imagen adjunta (repetible)."),
+    cancel_on_stdin: bool = typer.Option(False, "--cancel-on-stdin",
+        help="Detiene el agente al leer `cancel` o EOF por stdin (uso de Studio)."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Muestra el comando del turno sin ejecutarlo."),
+):
+    """Ejecuta un turno de chat estructurado y emite eventos JSONL `chxchx.agent-event` v1."""
+    emit = json_line_emitter()
+    try:
+        plan = plan_chat_turn(_workspace_service(path), agent_id, mode=mode, session_id=session or None,
+                              model=model or None, effort=effort or None, images=tuple(images))
+    except WorkspaceOperationError as exc:
+        emit({"type": "error", "message": str(exc)})
+        emit({"type": "done", "exit_code": 1, "cancelled": False, "session_id": session or None})
+        raise typer.Exit(code=1)
+    if dry_run:
+        emit({"type": "plan", "provider": plan.provider, "argv": plan.argv, "cwd": str(plan.cwd), "mode": plan.mode})
+        return
+    exit_code = run_chat_turn(plan, prompt, emit, cancel_input=sys.stdin if cancel_on_stdin else None)
+    if exit_code != 0:
+        raise typer.Exit(code=1)
+
 
 @agent_app.command("list")
 def agent_list(

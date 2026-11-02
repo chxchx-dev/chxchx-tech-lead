@@ -243,10 +243,7 @@ class WorkspaceActions:
         self._selected_process_action(start=False)
 
     def action_open_editor(self) -> None:
-        self._perform("Editor abierto", lambda: self.service.open_editor())
-
-    def action_setup_editor(self) -> None:
-        self._perform("Proyecto Sublime preparado", lambda: self.service.setup_editor())
+        self._perform("ChxChx Studio abierto", lambda: self.service.open_studio())
 
     def action_write_handoff(self) -> None:
         summary = self._query("#handoff-summary", Input).value.strip()

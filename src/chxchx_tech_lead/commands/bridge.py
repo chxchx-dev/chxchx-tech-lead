@@ -6,11 +6,14 @@ from pathlib import Path
 import typer
 
 from ..cli_registry import bridge_app
+from ..workspace.agent_chat import agent_options_payload
 from ..workspace.bridge import project_status_payload
+from ..workspace.project_context import workspace_service_for
 from ..workspace.bridge_contracts import ERROR_SCHEMA, SCHEMA_VERSION
 from ..workspace.bridge_resources import resources_overview_payload
 from ..integrations.ci_service import ci_status_payload
 from ..integrations.deploy_service import deployment_status_payload
+from ..integrations.studio_update_install import apply_update, update_status
 from ..workspace.bridge_history import (
     conversation_payload,
     conversations_payload,
@@ -104,6 +107,23 @@ def bridge_deploy(
 ) -> None:
     """Lee el estado local de CD a VPS y las ejecuciones remotas, sin modificarlas."""
     _emit_payload(deployment_status_payload, path)
+
+
+@bridge_app.command("studio-update")
+def bridge_studio_update(
+    apply: bool = typer.Option(False, "--apply", help="Instala la versión publicada tras confirmación del usuario."),
+) -> None:
+    """Consulta actualizaciones de Studio o instala explícitamente la publicada."""
+    _emit_payload(apply_update if apply else update_status)
+
+
+@bridge_app.command("agent-options")
+def bridge_agent_options(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    agent: str = typer.Option(..., "--agent", help="ID del agente Codex o Claude."),
+) -> None:
+    """Lista modelos, niveles de effort y disponibilidad de un agente para el chat visual."""
+    _emit_payload(lambda: agent_options_payload(workspace_service_for(path), agent))
 
 
 def _emit_payload(builder, *args) -> None:

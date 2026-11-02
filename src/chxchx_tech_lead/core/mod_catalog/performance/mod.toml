@@ -1,0 +1,4 @@
+name = "chxchx-performance"
+description = "Investiga cuellos de botella con mediciones y protege el rendimiento sin optimizaciones especulativas."
+stacks = ["python", "cpp", "qt", "react", "nextjs", "nestjs", "dotnet", "react-native"]
+languages = ["python", "cpp", "typescript", "csharp"]

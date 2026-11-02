@@ -4,13 +4,20 @@
 #include <QProcess>
 #include <QString>
 #include <QStringList>
+#include <QDateTime>
 #include <QHash>
+#include <QJsonObject>
 #include <QPointer>
 
 class QJsonObject;
 class QAction;
+class QFrame;
+class ResponsiveGrid;
+class QToolButton;
+class QTimer;
 class BridgeClient;
 class ProjectFileIndex;
+class AgentChatWidget;
 class AgentSessionWidget;
 class WorkspaceTerminalWidget;
 class QDockWidget;
@@ -41,6 +48,10 @@ class MainWindow final : public QMainWindow {
 
 public:
     explicit MainWindow(QString projectPath, QWidget *parent = nullptr);
+    // Opens files passed on the command line, relative to the project.
+    void openFiles(const QStringList &paths);
+    // Selects a section by id ("overview", "agents"…); used for screenshots and QA.
+    void showArea(const QString &id);
 
 private slots:
     void openFile();
@@ -66,6 +77,8 @@ private slots:
     void doctorFromHome();
     void openHomeSelectedAgent(bool newChat = false);
     void openAllHomeAgentSessions();
+    void openHomeVisualChat();
+    void openVisualChat();
     void selectMemoryNote(QListWidgetItem *item);
     void selectChatConversation(QListWidgetItem *item);
     void openCommandPalette();
@@ -81,11 +94,16 @@ private slots:
     void attachAgentTerminal();
     void openSelectedAgent(bool newChat = false);
     void openAllAgentSessions();
+    void checkStudioUpdates();
+    void showAppearanceDialog();
+    void updateEditorStatus();
 
 private:
     void closeEvent(QCloseEvent *event) override;
     void buildActions();
     void buildLayout();
+    void buildAppearance();
+    void applyThemeToEditors();
     void configureShortcuts();
     void setWordWrapEnabled(bool enabled);
     void performEditAction(const QString &actionId);
@@ -109,6 +127,8 @@ private:
     void updateHomeActionState();
     void launchAgentFromSelector(QComboBox *selector, bool newChat);
     void openAgentSessions(QComboBox *selector);
+    void launchVisualChatFromSelector(QComboBox *selector);
+    void createAgentChatSession(const QString &agentId);
     void updateAreaTargets(const QJsonObject &payload, const QString &area);
     void showHandoff(const QJsonObject &payload);
     void showMemory(const QJsonObject &payload);
@@ -117,6 +137,12 @@ private:
     void showErrors(const QJsonObject &payload);
     void setProjectRoot(const QString &path);
     void runCommand(const QStringList &arguments);
+    QString applyBridgePayload(const QJsonObject &payload, const QString &area,
+        QJsonObject *studioUpdatePayload = nullptr);
+    void startRead(const QStringList &arguments, bool silent);
+    void finishRead(int exitCode, QProcess::ExitStatus status);
+    void autoRefreshTick();
+    void invalidateReadCache();
     bool runPreview(
         const QStringList &previewArguments,
         const QStringList &actionArguments,
@@ -176,6 +202,14 @@ private:
     QPushButton *m_homeAgentButton = nullptr;
     QPushButton *m_homeNewChatButton = nullptr;
     QPushButton *m_homeAllAgentsButton = nullptr;
+    QPushButton *m_homeVisualChatButton = nullptr;
+    QWidget *m_sectionContainer = nullptr;
+    QFrame *m_areaActionBar = nullptr;
+    ResponsiveGrid *m_areaActions = nullptr;
+    QMenu *m_themeMenu = nullptr;
+    QLabel *m_statusPosition = nullptr;
+    QLabel *m_statusLanguage = nullptr;
+    QToolButton *m_statusTheme = nullptr;
     QWidget *m_handoffPage = nullptr;
     QWidget *m_memoryPage = nullptr;
     QWidget *m_chatsPage = nullptr;
@@ -210,6 +244,19 @@ private:
     QToolBar *m_quickToolbar = nullptr;
     QLabel *m_areaDescription = nullptr;
     BridgeClient *m_bridgeClient = nullptr;
+    // Read-only refreshes run on their own client so they never block actions.
+    BridgeClient *m_readClient = nullptr;
+    struct CachedRead {
+        QJsonObject payload;
+        QDateTime fetchedAt;
+    };
+    QHash<QString, CachedRead> m_readCache;
+    QStringList m_readArguments;
+    bool m_readSilent = false;
+    bool m_readQueued = false;
+    quint64 m_readGeneration = 0;
+    quint64 m_readStartedGeneration = 0;
+    QTimer *m_autoRefreshTimer = nullptr;
     ProjectFileIndex *m_fileIndex = nullptr;
     QStringList m_confirmedActionArguments;
     QHash<QString, AgentSessionWidget *> m_agentSessions;
@@ -231,4 +278,6 @@ private:
     bool m_restoringEditorSession = false;
     bool m_prepareAndEnterPending = false;
     bool m_openAgentAfterRefresh = false;
+    bool m_studioUpdateCheckPending = false;
+    bool m_studioUpdateApplyPending = false;
 };

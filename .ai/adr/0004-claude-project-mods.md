@@ -13,8 +13,9 @@ proyecto desde una vista previa y no debe instalar código global de terceros.
 
 - El catálogo ChxChx ofrece Mods como instrucciones Markdown compatibles con las
   skills locales de Claude Code, almacenadas en `.claude/skills/` del proyecto.
-- El catálogo inicial incluye asesor de modelo, revisión previa a integrar,
-  depuración con evidencia, planificación de funcionalidades y guía C++/Qt.
+- El catálogo incluye asesor de modelo, revisión previa a integrar, depuración
+  con evidencia, planificación de funcionalidades, guía C++/Qt, flujo Git,
+  refactorización segura, documentación técnica y rendimiento basado en medidas.
 - La instalación/remoción se limita a archivos marcados por ChxChx. `--dry-run`
   no escribe; los cambios reemplazados o retirados se guardan en backups dentro
   de `.ai/backups/claude-mods/`. Los archivos ajenos no se sobrescriben.

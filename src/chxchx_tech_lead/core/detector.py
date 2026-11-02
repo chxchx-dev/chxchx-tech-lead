@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .models import ProjectInfo
@@ -10,7 +13,48 @@ from .models import ProjectInfo
 IGNORED_DIRS = {
     ".git", ".venv", "venv", "node_modules", "dist", "build", ".next",
     ".turbo", ".nx", "coverage", "bin", "obj", ".idea", ".vscode",
+    "target", "__pycache__", ".pytest_cache", ".mypy_cache", ".tox", ".gradle", "Pods",
 }
+_QT_BUILD_NAMES = {"cmakelists.txt", "meson.build"}
+_QT_BUILD_SUFFIXES = (".cmake", ".pro", ".pri")
+# Status views call detection several times per refresh; a short cache keeps
+# them consistent and cheap while long-running UIs still see new files soon.
+_CACHE_SECONDS = 5.0
+_cache: dict[Path, tuple[float, ProjectInfo]] = {}
+
+
+@dataclass(slots=True)
+class _TreeScan:
+    suffixes: set[str] = field(default_factory=set)
+    csproj: list[Path] = field(default_factory=list)
+    qt_candidates: list[Path] = field(default_factory=list)
+
+
+def _scan_tree(root: Path) -> _TreeScan:
+    """Walk the project once, skipping dependency and build folders."""
+    scan = _TreeScan()
+    for current, dirs, files in os.walk(root):
+        dirs[:] = [directory for directory in dirs if directory not in IGNORED_DIRS]
+        for filename in files:
+            lowered = filename.casefold()
+            suffix = Path(lowered).suffix
+            if suffix:
+                scan.suffixes.add(suffix)
+            if suffix == ".csproj":
+                scan.csproj.append(Path(current, filename))
+            if lowered in _QT_BUILD_NAMES or lowered.endswith(_QT_BUILD_SUFFIXES):
+                scan.qt_candidates.append(Path(current, filename))
+    return scan
+
+
+def _csproj_mentions(scan: _TreeScan, marker: str) -> bool:
+    for path in scan.csproj:
+        try:
+            if marker in path.read_text(encoding="utf-8").lower():
+                return True
+        except OSError:
+            pass
+    return False
 
 
 def _read_package_json(root: Path) -> dict:
@@ -42,18 +86,14 @@ def _detect_ai(root: Path, package: dict) -> bool:
     return False
 
 
-def _detect_postgres(root: Path, package: dict) -> bool:
+def _detect_postgres(root: Path, package: dict, scan: _TreeScan) -> bool:
     dependencies = set((package.get("dependencies", {}) or {}).keys())
     dependencies.update((package.get("devDependencies", {}) or {}).keys())
     if dependencies.intersection({"pg", "postgres", "postgresql"}):
         return True
 
-    for path in root.rglob("*.csproj"):
-        try:
-            if "npgsql" in path.read_text(encoding="utf-8").lower():
-                return True
-        except OSError:
-            pass
+    if _csproj_mentions(scan, "npgsql"):
+        return True
 
     for filename in ("pyproject.toml", "requirements.txt", "requirements-dev.txt"):
         path = root / filename
@@ -90,7 +130,7 @@ def _detect_docker(root: Path) -> bool:
     names = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"}
     return any((root / name).is_file() for name in names)
 
-def _detect_redis(root: Path, package: dict) -> bool:
+def _detect_redis(root: Path, package: dict, scan: _TreeScan) -> bool:
     dependencies = set((package.get("dependencies", {}) or {}).keys())
     dependencies.update((package.get("devDependencies", {}) or {}).keys())
     if dependencies.intersection({"redis", "ioredis", "@redis/client"}):
@@ -105,62 +145,46 @@ def _detect_redis(root: Path, package: dict) -> bool:
                     return True
             except OSError:
                 pass
-    for path in root.rglob("*.csproj"):
+    return _csproj_mentions(scan, "stackexchange.redis")
+
+
+def _detect_qt(scan: _TreeScan) -> bool:
+    for path in scan.qt_candidates:
         try:
-            if "stackexchange.redis" in path.read_text(encoding="utf-8").lower():
-                return True
+            content = path.read_text(encoding="utf-8", errors="ignore")[:512 * 1024].casefold()
         except OSError:
-            pass
+            continue
+        if "qt6" in content or "qt5" in content:
+            return True
+        if path.suffix.casefold() in {".pro", ".pri"} and "qt +=" in content:
+            return True
     return False
-
-
-def _detect_qt(root: Path) -> bool:
-    build_names = {"cmakelists.txt", "meson.build"}
-    build_suffixes = (".cmake", ".pro", ".pri")
-    for current, dirs, files in os.walk(root):
-        dirs[:] = [directory for directory in dirs if directory not in IGNORED_DIRS]
-        for filename in files:
-            lowered = filename.casefold()
-            if lowered not in build_names and not lowered.endswith(build_suffixes):
-                continue
-            try:
-                content = Path(current, filename).read_text(
-                    encoding="utf-8", errors="ignore"
-                )[:512 * 1024].casefold()
-            except OSError:
-                continue
-            if "qt6" in content or "qt5" in content:
-                return True
-            if lowered.endswith((".pro", ".pri")) and "qt +=" in content:
-                return True
-    return False
-
-
-def _source_suffixes(root: Path) -> set[str]:
-    suffixes: set[str] = set()
-    for current, dirs, files in os.walk(root):
-        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
-        for filename in files:
-            suffix = Path(filename).suffix.lower()
-            if suffix:
-                suffixes.add(suffix)
-    return suffixes
 
 
 def detect_project(root: Path) -> ProjectInfo:
     root = root.resolve()
+    cached = _cache.get(root)
+    if cached is not None and time.monotonic() - cached[0] < _CACHE_SECONDS:
+        return copy.deepcopy(cached[1])
+    info = _detect_uncached(root)
+    _cache[root] = (time.monotonic(), copy.deepcopy(info))
+    return info
+
+
+def _detect_uncached(root: Path) -> ProjectInfo:
     info = ProjectInfo(root=root, name=root.name)
     package = _read_package_json(root)
-    suffixes = _source_suffixes(root)
+    scan = _scan_tree(root)
+    suffixes = scan.suffixes
     cpp_suffixes = {".cc", ".cpp", ".cxx", ".c++", ".hh", ".hpp", ".hxx", ".ipp"}
     if suffixes & cpp_suffixes:
         info.languages.append("cpp")
         info.stacks.append("cpp")
-    if _detect_qt(root):
+    if _detect_qt(scan):
         info.stacks.append("qt")
 
     info.stacks.extend(sorted(_detect_javascript_stacks(package)))
-    if any(root.glob("*.sln")) or any(root.rglob("*.csproj")):
+    if any(root.glob("*.sln")) or scan.csproj:
         info.stacks.append("dotnet")
     if (root / "pyproject.toml").exists() or (root / "requirements.txt").exists():
         info.stacks.append("python")
@@ -168,9 +192,9 @@ def detect_project(root: Path) -> ProjectInfo:
         info.stacks.append("rust")
     if (root / "go.mod").exists():
         info.stacks.append("go")
-    if _detect_postgres(root, package):
+    if _detect_postgres(root, package, scan):
         info.stacks.append("postgres")
-    if _detect_redis(root, package) and "redis" not in info.stacks:
+    if _detect_redis(root, package, scan) and "redis" not in info.stacks:
         info.stacks.append("redis")
     if _detect_docker(root):
         info.stacks.append("docker")

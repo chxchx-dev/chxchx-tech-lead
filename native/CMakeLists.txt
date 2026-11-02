@@ -98,6 +98,21 @@ qt_add_executable(chxchx-studio
     src/main_window_area_controller.cpp
     src/main_window_actions.cpp
     src/main_window_agent_sessions.cpp
+    src/main_window_refresh.cpp
+    src/studio_theme.cpp
+    src/studio_theme.hpp
+    src/studio_themes.cpp
+    src/studio_stylesheet.cpp
+    src/studio_icons.cpp
+    src/editor_theme.cpp
+    src/editor_theme.hpp
+    src/appearance_dialog.cpp
+    src/appearance_dialog.hpp
+    src/main_window_appearance.cpp
+    src/responsive_grid.cpp
+    src/responsive_grid.hpp
+    src/file_icon_provider.cpp
+    src/file_icon_provider.hpp
     src/main_window_data_pages.cpp
     src/main_window_dashboard.cpp
     src/main_window_layout.cpp
@@ -115,6 +130,25 @@ qt_add_executable(chxchx-studio
     src/integrations/bridge_schemas.hpp
     src/integrations/agent_session_widget.cpp
     src/integrations/agent_session_widget.hpp
+    src/integrations/agent_chat_model.cpp
+    src/integrations/agent_chat_model.hpp
+    src/integrations/agent_chat_widget.cpp
+    src/integrations/agent_chat_widget.hpp
+    src/integrations/agent_chat_settings.cpp
+    src/integrations/agent_chat_settings.hpp
+    src/integrations/agent_chat_composer.cpp
+    src/integrations/agent_chat_composer.hpp
+    src/integrations/agent_chat_markdown.cpp
+    src/integrations/agent_chat_markdown.hpp
+    src/integrations/agent_chat_cards.cpp
+    src/integrations/agent_chat_cards.hpp
+    src/integrations/agent_chat_view.cpp
+    src/integrations/agent_chat_view.hpp
+    src/integrations/agent_chat_usage.cpp
+    src/integrations/agent_chat_usage.hpp
+    src/integrations/agent_chat_style.hpp
+    src/integrations/chat_pill_picker.cpp
+    src/integrations/chat_pill_picker.hpp
     src/integrations/vt_terminal_widget.cpp
     src/integrations/vt_terminal_widget.hpp
     src/integrations/pty_session.cpp
@@ -231,4 +265,28 @@ if(CHXCHX_BUILD_TESTS)
     add_executable(chxchx-symbol-index-smoke tests/symbol_index_smoke.cpp src/symbol_index.cpp)
     target_link_libraries(chxchx-symbol-index-smoke PRIVATE Qt6::Core)
     add_test(NAME native-symbol-index-smoke COMMAND chxchx-symbol-index-smoke)
+
+    add_executable(chxchx-agent-chat-smoke tests/agent_chat_smoke.cpp
+        src/integrations/agent_chat_model.cpp src/integrations/agent_chat_model.hpp
+        src/integrations/agent_chat_widget.cpp src/integrations/agent_chat_widget.hpp
+        src/integrations/agent_chat_settings.cpp src/integrations/agent_chat_settings.hpp
+        src/integrations/agent_chat_composer.cpp src/integrations/agent_chat_composer.hpp
+        src/integrations/agent_chat_markdown.cpp src/integrations/agent_chat_markdown.hpp
+        src/integrations/agent_chat_cards.cpp src/integrations/agent_chat_cards.hpp
+        src/integrations/agent_chat_view.cpp src/integrations/agent_chat_view.hpp
+        src/integrations/agent_chat_usage.cpp src/integrations/agent_chat_usage.hpp
+        src/integrations/agent_chat_style.hpp
+        src/integrations/chat_pill_picker.cpp src/integrations/chat_pill_picker.hpp
+        src/studio_theme.cpp src/studio_themes.cpp src/studio_stylesheet.cpp src/studio_icons.cpp
+        src/responsive_grid.cpp src/responsive_grid.hpp)
+    target_link_libraries(chxchx-agent-chat-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+    add_test(NAME native-agent-chat-smoke COMMAND chxchx-agent-chat-smoke)
+
+    add_executable(chxchx-layout-smoke tests/layout_smoke.cpp
+        src/responsive_grid.cpp src/responsive_grid.hpp src/file_icon_provider.cpp src/file_icon_provider.hpp
+        src/studio_theme.cpp src/studio_themes.cpp src/studio_stylesheet.cpp src/studio_icons.cpp)
+    target_link_libraries(chxchx-layout-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+    add_test(NAME native-layout-smoke COMMAND chxchx-layout-smoke)
+    set_tests_properties(native-layout-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    set_tests_properties(native-agent-chat-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

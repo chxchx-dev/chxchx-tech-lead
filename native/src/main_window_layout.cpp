@@ -1,4 +1,6 @@
 #include "main_window.hpp"
+#include "file_icon_provider.hpp"
+#include "responsive_grid.hpp"
 #include "main_window_areas.hpp"
 #include "integrations/bridge_client.hpp"
 #include "integrations/agent_session_widget.hpp"
@@ -6,6 +8,7 @@
 
 #include <ScintillaEditBase.h>
 
+#include <QTimer>
 #include <QComboBox>
 #include <QAction>
 #include <QDir>
@@ -28,6 +31,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QSortFilterProxyModel>
+#include <QScrollArea>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -53,19 +57,20 @@ QIcon areaIcon(const QString &id)
         {"project", "folder-open", QStyle::SP_DirOpenIcon},
         {"agents", "system-run", QStyle::SP_CommandLink},
         {"processes", "utilities-system-monitor", QStyle::SP_MediaPlay},
-        {"projects", "folder", QStyle::SP_DirIcon},
-        {"skills", "preferences-plugin", QStyle::SP_DialogApplyButton},
+        {"projects", "folders", QStyle::SP_DirIcon},
+        {"skills", "studio-skills", QStyle::SP_DialogApplyButton},
         {"packs", "package-x-generic", QStyle::SP_DirLinkIcon},
-        {"mods", "applications-utilities", QStyle::SP_DialogApplyButton},
-        {"ci", "applications-development", QStyle::SP_ComputerIcon},
+        {"mods", "studio-mods", QStyle::SP_DialogApplyButton},
+        {"ci", "studio-ci", QStyle::SP_ComputerIcon},
+        {"deploy", "studio-deploy", QStyle::SP_ComputerIcon},
         {"resources", "drive-harddisk", QStyle::SP_DriveHDIcon},
         {"handoff", "document-edit", QStyle::SP_FileIcon},
-        {"memory", "view-history", QStyle::SP_FileDialogInfoView},
+        {"memory", "studio-memory", QStyle::SP_FileDialogInfoView},
         {"chats", "chat-message", QStyle::SP_MessageBoxInformation},
         {"errors", "dialog-warning", QStyle::SP_MessageBoxWarning},
         {"setup", "preferences-system", QStyle::SP_ComputerIcon},
         {"guide", "help-contents", QStyle::SP_DialogHelpButton},
-        {"brand", "applications-development", QStyle::SP_TitleBarMenuButton},
+        {"brand", "studio-brand", QStyle::SP_TitleBarMenuButton},
     };
     for (const auto &entry : icons) {
         if (id == QString::fromUtf8(entry.id)) {
@@ -103,6 +108,8 @@ private:
 void MainWindow::buildLayout()
 {
     m_fileModel = new QFileSystemModel(this);
+    static StudioFileIconProvider fileIcons;
+    m_fileModel->setIconProvider(&fileIcons);
     m_fileModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
     m_fileModel->setRootPath(m_projectPath);
     m_projectProxy = new ProjectTreeProxyModel(m_projectPath, m_fileModel, this);
@@ -182,13 +189,34 @@ void MainWindow::buildLayout()
     m_editorSplit->addWidget(m_secondaryEditorTabs);
     m_editorSplit->setStretchFactor(0, 1);
     m_editorSplit->setStretchFactor(1, 1);
-    m_mainPages = new QStackedWidget(this);
-    const int sectionTab = m_editorTabs->addTab(m_mainPages, areaIcon(QStringLiteral("overview")),
-        QString());
+    m_sectionContainer = new QWidget(this);
+    auto *sectionLayout = new QVBoxLayout(m_sectionContainer);
+    sectionLayout->setContentsMargins(0, 0, 0, 0);
+    sectionLayout->setSpacing(0);
+    // Area actions live above the page, not in the side panel, so switching
+    // areas never resizes the section list under the cursor.
+    m_areaActionBar = new QFrame(m_sectionContainer);
+    m_areaActionBar->setObjectName(QStringLiteral("areaActionBar"));
+    auto *actionBarLayout = new QVBoxLayout(m_areaActionBar);
+    actionBarLayout->setContentsMargins(24, 12, 24, 12);
+    m_areaActions = new ResponsiveGrid(190, 4, m_areaActionBar);
+    actionBarLayout->addWidget(m_areaActions);
+    // Pages scroll instead of imposing their minimum height on the window.
+    auto *pageScroll = new QScrollArea(m_sectionContainer);
+    pageScroll->setFrameShape(QFrame::NoFrame);
+    pageScroll->setWidgetResizable(true);
+    pageScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_mainPages = new QStackedWidget(pageScroll);
+    pageScroll->setWidget(m_mainPages);
+    sectionLayout->addWidget(m_areaActionBar);
+    sectionLayout->addWidget(pageScroll, 1);
+    m_areaActionBar->hide();
+    const int sectionTab = m_editorTabs->addTab(m_sectionContainer, areaIcon(QStringLiteral("overview")),
+        QStringLiteral("Inicio"));
     m_editorTabs->setTabToolTip(sectionTab, QStringLiteral("Inicio · Secciones del proyecto"));
     m_editorTabs->tabBar()->setTabButton(sectionTab, QTabBar::RightSide, nullptr);
     connect(m_editorTabs->tabBar(), &QTabBar::tabMoved, this, [this](int, int) {
-        const int index = m_editorTabs->indexOf(m_mainPages);
+        const int index = m_editorTabs->indexOf(m_sectionContainer);
         if (index >= 0) {
             m_editorTabs->tabBar()->setTabButton(index, QTabBar::RightSide, nullptr);
         }
@@ -205,23 +233,16 @@ void MainWindow::buildLayout()
     m_dashboardTitle->setFont(dashboardTitleFont);
     m_areaDescription = new QLabel(m_dashboardPage);
     m_areaDescription->setWordWrap(true);
-    m_areaDescription->setStyleSheet(QStringLiteral("color: #91a7c2; font-size: 14px;"));
+    m_areaDescription->setObjectName(QStringLiteral("pageIntro"));
     m_dashboardSummary = new QLabel(m_dashboardPage);
     m_dashboardSummary->setWordWrap(true);
-    m_dashboardSummary->setStyleSheet(QStringLiteral(
-        "background: #101c2e; border: 1px solid #24364f; border-left: 3px solid #20c5d4; "
-        "border-radius: 8px; padding: 12px 14px; color: #dce8f7; font-weight: 600;"));
+    m_dashboardSummary->setObjectName(QStringLiteral("dashboardSummary"));
     m_homeQuickActions = new QGroupBox(QStringLiteral("Acciones rápidas"), m_dashboardPage);
     m_homeQuickActions->setObjectName(QStringLiteral("homeQuickActions"));
-    m_homeQuickActions->setStyleSheet(QStringLiteral(
-        "QGroupBox#homeQuickActions { background: #101c2e; border: 1px solid #263a55; "
-        "border-radius: 8px; margin-top: 8px; padding: 10px; font-weight: 700; } "
-        "QGroupBox#homeQuickActions::title { subcontrol-origin: margin; left: 12px; "
-        "padding: 0 6px; color: #63e6ee; }"));
-    auto *homeActionsGrid = new QGridLayout(m_homeQuickActions);
-    homeActionsGrid->setContentsMargins(8, 12, 8, 6);
-    homeActionsGrid->setHorizontalSpacing(8);
-    homeActionsGrid->setVerticalSpacing(8);
+    auto *homeActionsLayout = new QVBoxLayout(m_homeQuickActions);
+    homeActionsLayout->setContentsMargins(8, 12, 8, 6);
+    auto *homeActionsGrid = new ResponsiveGrid(170, 4, m_homeQuickActions);
+    homeActionsLayout->addWidget(homeActionsGrid);
     m_homeTrustButton = new QPushButton(QStringLiteral("Confiar proyecto"), m_homeQuickActions);
     m_homeWorkspaceButton = new QPushButton(QStringLiteral("Iniciar workspace"), m_homeQuickActions);
     m_homeSuspendButton = new QPushButton(QStringLiteral("Suspender"), m_homeQuickActions);
@@ -237,6 +258,9 @@ void MainWindow::buildLayout()
     m_homeAgentButton = new QPushButton(QStringLiteral("Abrir agente"), m_homeQuickActions);
     m_homeNewChatButton = new QPushButton(QStringLiteral("Nueva sesión"), m_homeQuickActions);
     m_homeAllAgentsButton = new QPushButton(QStringLiteral("Abrir todos"), m_homeQuickActions);
+    m_homeVisualChatButton = new QPushButton(QStringLiteral("Chat visual"), m_homeQuickActions);
+    m_homeVisualChatButton->setToolTip(QStringLiteral(
+        "Conversa con Codex o Claude en un panel nativo: mensajes, comandos y cambios en vez de la terminal."));
     m_homeTrustButton->setIcon(studioIcon(QStringLiteral("security-high"), QStyle::SP_DialogApplyButton));
     m_homeWorkspaceButton->setIcon(studioIcon(QStringLiteral("media-playback-start"), QStyle::SP_MediaPlay));
     m_homeSuspendButton->setIcon(studioIcon(QStringLiteral("media-playback-pause"), QStyle::SP_MediaPause));
@@ -248,21 +272,16 @@ void MainWindow::buildLayout()
     m_homeAgentButton->setIcon(studioIcon(QStringLiteral("system-run"), QStyle::SP_CommandLink));
     m_homeNewChatButton->setIcon(studioIcon(QStringLiteral("chat-message-new"), QStyle::SP_MessageBoxInformation));
     m_homeAllAgentsButton->setIcon(studioIcon(QStringLiteral("view-dual"), QStyle::SP_DesktopIcon));
-    homeActionsGrid->addWidget(m_homeTrustButton, 0, 0);
-    homeActionsGrid->addWidget(m_homeWorkspaceButton, 0, 1);
-    homeActionsGrid->addWidget(m_homeSuspendButton, 0, 2);
-    homeActionsGrid->addWidget(m_homeStopButton, 0, 3);
-    homeActionsGrid->addWidget(m_homeTerminalButton, 1, 0);
-    homeActionsGrid->addWidget(m_homePrepareButton, 1, 1);
-    homeActionsGrid->addWidget(m_homeSyncSkillsButton, 1, 2);
-    homeActionsGrid->addWidget(m_homeDoctorButton, 1, 3);
-    homeActionsGrid->addWidget(m_homeAgentSelector, 2, 0, 1, 1);
-    homeActionsGrid->addWidget(m_homeAgentButton, 2, 1);
-    homeActionsGrid->addWidget(m_homeNewChatButton, 2, 2);
-    homeActionsGrid->addWidget(m_homeAllAgentsButton, 2, 3);
+    m_homeVisualChatButton->setIcon(studioIcon(QStringLiteral("dialog-messages"), QStyle::SP_MessageBoxQuestion));
+    for (QWidget *widget : std::initializer_list<QWidget *>{m_homeTrustButton, m_homeWorkspaceButton,
+             m_homeSuspendButton, m_homeStopButton, m_homeTerminalButton, m_homePrepareButton,
+             m_homeSyncSkillsButton, m_homeDoctorButton, m_homeAgentSelector, m_homeAgentButton,
+             m_homeNewChatButton, m_homeAllAgentsButton, m_homeVisualChatButton}) {
+        homeActionsGrid->addWidget(widget);
+    }
     m_homeQuickActions->setVisible(m_currentArea == QStringLiteral("overview"));
     auto *dashboardListTitle = new QLabel(QStringLiteral("Estado actual"), m_dashboardPage);
-    dashboardListTitle->setStyleSheet(QStringLiteral("color: #78a9ff; font-weight: 700; margin-top: 5px;"));
+    dashboardListTitle->setObjectName(QStringLiteral("sectionTitle"));
     m_dashboardItems = new QListWidget(m_dashboardPage);
     m_dashboardItems->setIconSize(QSize(20, 20));
     m_dashboardItems->setSpacing(3);
@@ -395,30 +414,27 @@ void MainWindow::buildLayout()
         "Sigue esta ruta para preparar el proyecto, elegir contexto y comenzar una sesión con un agente."),
         m_guidePage);
     guideIntro->setWordWrap(true);
-    guideIntro->setStyleSheet(QStringLiteral("color: #91a7c2; font-size: 14px;"));
+    guideIntro->setObjectName(QStringLiteral("pageIntro"));
     guideLayout->addWidget(guideIntro);
 
     const auto addGuideStep = [this, guideLayout](const QString &number, const QString &title,
         const QString &description, const QString &buttonText) {
         auto *card = new QFrame(m_guidePage);
         card->setObjectName(QStringLiteral("guideStepCard"));
-        card->setStyleSheet(QStringLiteral(
-            "QFrame#guideStepCard { background: #101c2e; border: 1px solid #263a55; "
-            "border-radius: 8px; }"));
         auto *row = new QHBoxLayout(card);
         row->setContentsMargins(14, 11, 14, 11);
         row->setSpacing(13);
         auto *numberLabel = new QLabel(number, card);
-        numberLabel->setStyleSheet(QStringLiteral("color: #63e6ee; font-size: 18px; font-weight: 700;"));
+        numberLabel->setObjectName(QStringLiteral("guideNumber"));
         numberLabel->setFixedWidth(30);
         row->addWidget(numberLabel, 0, Qt::AlignTop);
         auto *copy = new QVBoxLayout();
         copy->setSpacing(4);
         auto *stepTitle = new QLabel(title, card);
-        stepTitle->setStyleSheet(QStringLiteral("font-weight: 700; color: #dce8f7;"));
+        stepTitle->setObjectName(QStringLiteral("guideTitle"));
         auto *stepDescription = new QLabel(description, card);
         stepDescription->setWordWrap(true);
-        stepDescription->setStyleSheet(QStringLiteral("color: #91a7c2;"));
+        stepDescription->setObjectName(QStringLiteral("mutedText"));
         copy->addWidget(stepTitle);
         copy->addWidget(stepDescription);
         row->addLayout(copy, 1);
@@ -447,7 +463,7 @@ void MainWindow::buildLayout()
         "en una pestaña para dividirla. Los atajos se editan desde Edición → Configurar atajos."),
         m_guidePage);
     dailyUse->setWordWrap(true);
-    dailyUse->setStyleSheet(QStringLiteral("color: #91a7c2; padding-top: 5px;"));
+    dailyUse->setObjectName(QStringLiteral("mutedText"));
     guideLayout->addWidget(dailyUse);
     guideLayout->addStretch(1);
     m_mainPages->addWidget(m_guidePage);
@@ -460,7 +476,7 @@ void MainWindow::buildLayout()
     brandLogo->setPixmap(logo.scaled(280, 280, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     brandLayout->addWidget(brandLogo);
     auto *brandSubtitle = new QLabel(QStringLiteral("TECH LEAD  ·  STUDIO"), m_brandPage);
-    brandSubtitle->setStyleSheet(QStringLiteral("letter-spacing: 3px; color: #78a9ff;"));
+    brandSubtitle->setObjectName(QStringLiteral("brandSubtitle"));
     brandSubtitle->setAlignment(Qt::AlignHCenter);
     brandLayout->addWidget(brandSubtitle);
     auto *brandDescription = new QLabel(
@@ -492,9 +508,9 @@ void MainWindow::buildLayout()
     controlLayout->setContentsMargins(12, 12, 12, 12);
     controlLayout->setSpacing(9);
     auto *studioHeading = new QLabel(QStringLiteral("CHXCHX  /  STUDIO"), control);
-    studioHeading->setStyleSheet(QStringLiteral("color: #63e6ee; font-weight: 700; letter-spacing: 2px;"));
+    studioHeading->setObjectName(QStringLiteral("studioHeading"));
     auto *projectHeading = new QLabel(QDir(m_projectPath).dirName(), control);
-    projectHeading->setStyleSheet(QStringLiteral("color: #91a7c2; padding-bottom: 4px;"));
+    projectHeading->setObjectName(QStringLiteral("projectHeading"));
     projectHeading->setToolTip(m_projectPath);
     auto *areaSearch = new QLineEdit(control);
     areaSearch->setPlaceholderText(QStringLiteral("Filtrar secciones…"));
@@ -528,17 +544,16 @@ void MainWindow::buildLayout()
             m_areaList->setCurrentRow(firstVisible);
         }
     });
-    m_targetSelector = new QComboBox(control);
+    m_targetSelector = new QComboBox(m_areaActions);
     m_targetSelector->setPlaceholderText(QStringLiteral("Selecciona un elemento"));
-    m_primaryAction = new QPushButton(control);
-    m_secondaryAction = new QPushButton(control);
-    m_tertiaryAction = new QPushButton(control);
-    m_quaternaryAction = new QPushButton(control);
-    controlLayout->addWidget(m_targetSelector);
-    controlLayout->addWidget(m_primaryAction);
-    controlLayout->addWidget(m_secondaryAction);
-    controlLayout->addWidget(m_tertiaryAction);
-    controlLayout->addWidget(m_quaternaryAction);
+    m_primaryAction = new QPushButton(m_areaActions);
+    m_primaryAction->setProperty("primary", true);
+    m_secondaryAction = new QPushButton(m_areaActions);
+    m_tertiaryAction = new QPushButton(m_areaActions);
+    m_quaternaryAction = new QPushButton(m_areaActions);
+    m_areaActions->addWidget(m_targetSelector, true);
+    for (QPushButton *button : {m_primaryAction, m_secondaryAction, m_tertiaryAction, m_quaternaryAction})
+        m_areaActions->addWidget(button);
     connect(m_areaList, &QListWidget::currentRowChanged, this, &MainWindow::selectArea);
     const auto connectGuideNavigation = [this](QPushButton *button, const QString &areaId) {
         connect(button, &QPushButton::clicked, this, [this, areaId] {
@@ -570,6 +585,7 @@ void MainWindow::buildLayout()
     connect(m_homeAgentButton, &QPushButton::clicked, this, [this] { openHomeSelectedAgent(false); });
     connect(m_homeNewChatButton, &QPushButton::clicked, this, [this] { openHomeSelectedAgent(true); });
     connect(m_homeAllAgentsButton, &QPushButton::clicked, this, &MainWindow::openAllHomeAgentSessions);
+    connect(m_homeVisualChatButton, &QPushButton::clicked, this, &MainWindow::openHomeVisualChat);
     connect(m_homeAgentSelector, &QComboBox::currentTextChanged, this, &MainWindow::updateHomeActionState);
 
     m_controlDock = new QDockWidget(QStringLiteral("Secciones y acciones"), this);
@@ -578,6 +594,10 @@ void MainWindow::buildLayout()
         | QDockWidget::DockWidgetClosable);
     m_controlDock->setWidget(control);
     addDockWidget(Qt::RightDockWidgetArea, m_controlDock);
+    // Side panels keep readable labels on small screens; the editor flexes instead.
+    m_projectDock->widget()->setMinimumWidth(200);
+    control->setMinimumWidth(210);
+    resizeDocks({m_projectDock, m_controlDock}, {260, 250}, Qt::Horizontal);
 
     m_output = new QPlainTextEdit(this);
     m_output->setReadOnly(true);
@@ -622,5 +642,14 @@ void MainWindow::buildLayout()
     m_bridgeClient = new BridgeClient(m_projectPath, this);
     connect(m_bridgeClient, &BridgeClient::finished, this, &MainWindow::finishCommand);
     connect(m_bridgeClient, &BridgeClient::failedToStart, this, &MainWindow::commandFailedToStart);
+    m_readClient = new BridgeClient(m_projectPath, this);
+    connect(m_readClient, &BridgeClient::finished, this, &MainWindow::finishRead);
+    connect(m_readClient, &BridgeClient::failedToStart, this, [this](const QString &reason) {
+        appendOutput(QStringLiteral("No se pudo iniciar chxchx-tech: %1").arg(reason));
+    });
+    m_autoRefreshTimer = new QTimer(this);
+    m_autoRefreshTimer->setInterval(10000);
+    connect(m_autoRefreshTimer, &QTimer::timeout, this, &MainWindow::autoRefreshTick);
+    m_autoRefreshTimer->start();
     selectArea(0);
 }
