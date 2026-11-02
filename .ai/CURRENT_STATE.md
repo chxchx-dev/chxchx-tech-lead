@@ -2,6 +2,13 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## Fluidez de Studio
+
+- `bridge status` bajó de ~0,70 s a ~0,37 s. El detector recorre el árbol una sola vez sin entrar en `IGNORED_DIRS` (antes, tres `rglob("*.csproj")` entraban en `.venv`/`node_modules`/`build`) y guarda el resultado 5 s por proceso. `suggested_processes` poda las carpetas ignoradas durante el recorrido.
+- Studio usa un `BridgeClient` solo para lecturas (`main_window_refresh.cpp`), así que las consultas ya no bloquean acciones. Hay caché por comando: las vistas que comparten snapshot se pintan al instante y se refrescan en segundo plano si el dato tiene más de 3 s. Cada acción y cada cambio de proyecto invalidan la caché; un contador de generación descarta lecturas que empezaron antes de la acción.
+- Refresco automático cada 10 s de Inicio/Proyecto/Agentes/Procesos/Recursos, solo con la ventana activa y sin diálogos ni desplegables abiertos.
+- `finishCommand` delega la interpretación de esquemas en `applyBridgePayload(payload, area)`.
+
 ## Chat visual con Codex y Claude (ADR 0009)
 
 - `chxchx-tech agent chat` ejecuta un turno estructurado (`codex exec --json` / `claude -p --output-format stream-json`) y emite JSONL `chxchx.agent-event` v1. Requiere trust, envía el prompt por stdin, se cancela por stdin y escribe memoria y diario al terminar.

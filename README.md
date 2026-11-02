@@ -1065,6 +1065,11 @@ Atajos útiles: `Ctrl+P` abre la paleta, `Ctrl+Shift+F` busca archivos o conteni
 del proyecto, `Ctrl+Shift+O` muestra declaraciones del archivo actual,
 `Ctrl+Shift+T` abre una terminal y `Shift+PageUp/PageDown` recorre su historial.
 
+Inicio, Proyecto, Agentes, Procesos y Recursos se actualizan solos cada 10
+segundos mientras la ventana está activa. Las vistas que comparten el mismo
+estado se muestran al instante y se refrescan en segundo plano, y las consultas
+nunca bloquean las acciones.
+
 Studio vuelve a comprobar trust y uso de RAM antes de iniciar agentes. Las
 acciones que modifican archivos o configuración muestran una vista previa y
 piden confirmación. El menú **Ayuda** incluye una guía rápida y la búsqueda

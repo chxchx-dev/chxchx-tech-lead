@@ -723,22 +723,6 @@ void MainWindow::executePaletteCommand(QListWidgetItem *item)
     }
 }
 
-void MainWindow::refreshArea()
-{
-    if (m_bridgeClient->isRunning()) {
-        m_refreshQueued = true;
-        statusBar()->showMessage(QStringLiteral("Espera a que termine el comando actual."));
-        return;
-    }
-    const QStringList arguments = readCommandForArea(m_currentArea);
-    if (arguments.isEmpty()) {
-        appendOutput(QStringLiteral("Esta vista se integrará con el bridge compartido de ChxChx."));
-        return;
-    }
-    m_commandArea = m_currentArea;
-    runCommand(arguments);
-}
-
 void MainWindow::runCommand(const QStringList &arguments)
 {
     if (m_bridgeClient->isRunning()) {
@@ -809,96 +793,104 @@ QStringList MainWindow::readCommandForArea(const QString &area) const
     return {};
 }
 
+QString MainWindow::applyBridgePayload(const QJsonObject &payload, const QString &area,
+    QJsonObject *studioUpdatePayload)
+{
+    QString result;
+    const auto schema = payload.value(QStringLiteral("schema")).toString();
+    const auto version = payload.value(QStringLiteral("schema_version"));
+    if (!version.isDouble() || version.toInt(-1) != BridgeSchemas::Version) {
+        result = QStringLiteral("Contrato bridge incompatible: versión ausente o no compatible (%1).")
+            .arg(version.isDouble() ? QString::number(version.toInt()) : QStringLiteral("inválida"));
+    } else if (schema == BridgeSchemas::ResourcesOverview) {
+        showAreaDashboard(payload, area);
+        result = formatResourcesOverview(payload);
+    } else if (schema == BridgeSchemas::Mods) {
+        updateAreaTargets(payload, area);
+        updateAreaActionState();
+        showAreaDashboard(payload, area);
+        result = formatMods(payload);
+    } else if (schema == BridgeSchemas::CiStatus) {
+        updateAreaTargets(payload, area);
+        updateAreaActionState();
+        showAreaDashboard(payload, area);
+        result = formatBridgeStatus(payload, area);
+    } else if (schema == BridgeSchemas::DeployStatus) {
+        updateAreaTargets(payload, area);
+        updateAreaActionState();
+        showAreaDashboard(payload, area);
+        result = formatBridgeStatus(payload, area);
+    } else if (schema == BridgeSchemas::StudioUpdate) {
+        if (studioUpdatePayload != nullptr) *studioUpdatePayload = payload;
+        result = QStringLiteral("Studio %1 · disponible %2 (%3).")
+            .arg(payload.value(QStringLiteral("current_version")).toString(),
+                payload.value(QStringLiteral("latest_version")).toString(),
+                payload.value(QStringLiteral("platform")).toString());
+    } else if (schema == BridgeSchemas::ProjectStatus) {
+        const QJsonObject workspace = payload.value(QStringLiteral("workspace")).toObject();
+        m_projectTrusted = workspace.value(QStringLiteral("trusted")).toBool();
+        m_workspaceStatus = workspace.value(QStringLiteral("status")).toString();
+        updateAreaTargets(payload, area);
+        updateAreaActionState();
+        showAreaDashboard(payload, area);
+        result = formatBridgeStatus(payload, area);
+        if (m_openAgentAfterRefresh && area == QStringLiteral("overview")) {
+            const int preferred = m_homeAgentSelector->findText(m_prepareAndEnterAgentId);
+            if (preferred >= 0) {
+                m_homeAgentSelector->setCurrentIndex(preferred);
+            } else if (m_homeAgentSelector->count() > 0) {
+                m_homeAgentSelector->setCurrentIndex(0);
+            }
+            updateHomeActionState();
+            m_openAgentAfterRefresh = false;
+            QTimer::singleShot(0, this, [this] {
+                if (m_homeNewChatButton->isEnabled()) {
+                    openHomeSelectedAgent(true);
+                } else {
+                    QMessageBox::information(this, QStringLiteral("Proyecto preparado"),
+                        QStringLiteral("El proyecto quedó listo. Configura un agente para abrir una sesión nueva."));
+                }
+                m_prepareAndEnterAgentId.clear();
+            });
+        }
+    } else if (schema == BridgeSchemas::Handoff) {
+        showHandoff(payload);
+        result = payload.value(QStringLiteral("exists")).toBool()
+            ? QStringLiteral("Handoff cargado en modo lectura.")
+            : QStringLiteral("Este proyecto todavía no tiene handoff.");
+    } else if (schema == BridgeSchemas::Memory) {
+        showMemory(payload);
+        result = QStringLiteral("Memoria local actualizada: %1 nota(s).")
+            .arg(payload.value(QStringLiteral("notes")).toArray().size());
+    } else if (schema == BridgeSchemas::Conversations) {
+        showConversations(payload);
+        result = QStringLiteral("Conversaciones locales: %1.")
+            .arg(payload.value(QStringLiteral("conversations")).toArray().size());
+    } else if (schema == BridgeSchemas::Conversation) {
+        showConversation(payload);
+        result = QStringLiteral("Conversación cargada en solo lectura.");
+    } else if (schema == BridgeSchemas::Errors) {
+        showErrors(payload);
+        result = QStringLiteral("Errores locales: %1.")
+            .arg(payload.value(QStringLiteral("errors")).toArray().size());
+    } else if (schema == BridgeSchemas::Error) {
+        result = payload.value(QStringLiteral("error")).toString();
+    } else {
+        result = QStringLiteral("Contrato bridge desconocido: %1.").arg(schema.isEmpty()
+            ? QStringLiteral("falta el schema") : schema);
+    }
+    return result;
+}
+
 void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
 {
+    invalidateReadCache();
     QString output = QString::fromUtf8(m_bridgeClient->readStandardOutput()).trimmed();
     const QString error = QString::fromUtf8(m_bridgeClient->readStandardError()).trimmed();
     const auto json = QJsonDocument::fromJson(output.toUtf8());
     QJsonObject studioUpdatePayload;
     if (json.isObject()) {
-        const QJsonObject payload = json.object();
-        const auto schema = payload.value(QStringLiteral("schema")).toString();
-        const auto version = payload.value(QStringLiteral("schema_version"));
-        if (!version.isDouble() || version.toInt(-1) != BridgeSchemas::Version) {
-            output = QStringLiteral("Contrato bridge incompatible: versión ausente o no compatible (%1).")
-                .arg(version.isDouble() ? QString::number(version.toInt()) : QStringLiteral("inválida"));
-        } else if (schema == BridgeSchemas::ResourcesOverview) {
-            showAreaDashboard(payload, m_commandArea);
-            output = formatResourcesOverview(payload);
-        } else if (schema == BridgeSchemas::Mods) {
-            updateAreaTargets(payload, m_commandArea);
-            updateAreaActionState();
-            showAreaDashboard(payload, m_commandArea);
-            output = formatMods(payload);
-        } else if (schema == BridgeSchemas::CiStatus) {
-            updateAreaTargets(payload, m_commandArea);
-            updateAreaActionState();
-            showAreaDashboard(payload, m_commandArea);
-            output = formatBridgeStatus(payload, m_commandArea);
-        } else if (schema == BridgeSchemas::DeployStatus) {
-            updateAreaTargets(payload, m_commandArea);
-            updateAreaActionState();
-            showAreaDashboard(payload, m_commandArea);
-            output = formatBridgeStatus(payload, m_commandArea);
-        } else if (schema == BridgeSchemas::StudioUpdate) {
-            studioUpdatePayload = payload;
-            output = QStringLiteral("Studio %1 · disponible %2 (%3).")
-                .arg(payload.value(QStringLiteral("current_version")).toString(),
-                    payload.value(QStringLiteral("latest_version")).toString(),
-                    payload.value(QStringLiteral("platform")).toString());
-        } else if (schema == BridgeSchemas::ProjectStatus) {
-            const QJsonObject workspace = payload.value(QStringLiteral("workspace")).toObject();
-            m_projectTrusted = workspace.value(QStringLiteral("trusted")).toBool();
-            m_workspaceStatus = workspace.value(QStringLiteral("status")).toString();
-            updateAreaTargets(payload, m_commandArea);
-            updateAreaActionState();
-            showAreaDashboard(payload, m_commandArea);
-            output = formatBridgeStatus(payload, m_commandArea);
-            if (m_openAgentAfterRefresh && m_commandArea == QStringLiteral("overview")) {
-                const int preferred = m_homeAgentSelector->findText(m_prepareAndEnterAgentId);
-                if (preferred >= 0) {
-                    m_homeAgentSelector->setCurrentIndex(preferred);
-                } else if (m_homeAgentSelector->count() > 0) {
-                    m_homeAgentSelector->setCurrentIndex(0);
-                }
-                updateHomeActionState();
-                m_openAgentAfterRefresh = false;
-                QTimer::singleShot(0, this, [this] {
-                    if (m_homeNewChatButton->isEnabled()) {
-                        openHomeSelectedAgent(true);
-                    } else {
-                        QMessageBox::information(this, QStringLiteral("Proyecto preparado"),
-                            QStringLiteral("El proyecto quedó listo. Configura un agente para abrir una sesión nueva."));
-                    }
-                    m_prepareAndEnterAgentId.clear();
-                });
-            }
-        } else if (schema == BridgeSchemas::Handoff) {
-            showHandoff(payload);
-            output = payload.value(QStringLiteral("exists")).toBool()
-                ? QStringLiteral("Handoff cargado en modo lectura.")
-                : QStringLiteral("Este proyecto todavía no tiene handoff.");
-        } else if (schema == BridgeSchemas::Memory) {
-            showMemory(payload);
-            output = QStringLiteral("Memoria local actualizada: %1 nota(s).")
-                .arg(payload.value(QStringLiteral("notes")).toArray().size());
-        } else if (schema == BridgeSchemas::Conversations) {
-            showConversations(payload);
-            output = QStringLiteral("Conversaciones locales: %1.")
-                .arg(payload.value(QStringLiteral("conversations")).toArray().size());
-        } else if (schema == BridgeSchemas::Conversation) {
-            showConversation(payload);
-            output = QStringLiteral("Conversación cargada en solo lectura.");
-        } else if (schema == BridgeSchemas::Errors) {
-            showErrors(payload);
-            output = QStringLiteral("Errores locales: %1.")
-                .arg(payload.value(QStringLiteral("errors")).toArray().size());
-        } else if (schema == BridgeSchemas::Error) {
-            output = payload.value(QStringLiteral("error")).toString();
-        } else {
-            output = QStringLiteral("Contrato bridge desconocido: %1.").arg(schema.isEmpty()
-                ? QStringLiteral("falta el schema") : schema);
-        }
+        output = applyBridgePayload(json.object(), m_commandArea, &studioUpdatePayload);
     }
     appendOutput(output.isEmpty() ? error : output + (error.isEmpty() ? QString() : QStringLiteral("\n") + error));
     if (m_studioUpdateCheckPending) {
@@ -1173,6 +1165,8 @@ void MainWindow::setProjectRoot(const QString &path)
 {
     m_projectPath = QFileInfo(path).absoluteFilePath();
     m_bridgeClient->setWorkingDirectory(m_projectPath);
+    m_readClient->setWorkingDirectory(m_projectPath);
+    invalidateReadCache();
     m_fileModel->setRootPath(m_projectPath);
     m_projectTree->setRootIndex(m_fileModel->index(m_projectPath));
     setWindowTitle(QStringLiteral("ChxChx Studio — %1").arg(QFileInfo(m_projectPath).fileName()));

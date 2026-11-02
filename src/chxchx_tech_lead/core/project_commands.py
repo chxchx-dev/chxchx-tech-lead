@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -60,10 +61,7 @@ def suggested_processes(info: ProjectInfo) -> list[dict[str, Any]]:
             "auto_start": True,
         }]
 
-    projects = sorted(
-        path for path in root.rglob("*.csproj")
-        if not _ignored(path.relative_to(root))
-    )
+    projects = sorted(_csproj_files(root))
     if len(projects) == 1:
         return [{
             "id": "dotnet-watch",
@@ -113,5 +111,13 @@ def _node_command(manager: str, script: str) -> list[str]:
     return [manager, "run", script]
 
 
-def _ignored(relative_path: Path) -> bool:
-    return any(part in {".git", "node_modules", "bin", "obj", ".venv", "venv"} for part in relative_path.parts)
+_IGNORED_PARTS = {".git", "node_modules", "bin", "obj", ".venv", "venv"}
+
+
+def _csproj_files(root: Path) -> list[Path]:
+    """Find project files without descending into dependency folders."""
+    found: list[Path] = []
+    for current, dirs, files in os.walk(root):
+        dirs[:] = [directory for directory in dirs if directory not in _IGNORED_PARTS]
+        found.extend(Path(current, name) for name in files if name.casefold().endswith(".csproj"))
+    return found

@@ -2,6 +2,12 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Paso 4: fluidez de Studio — rama `feature/reliable-chat-memory`
+
+- Hecho: detector y `suggested_processes` sin recorrer carpetas de dependencias, más caché de 5 s; canal de lectura separado, caché por comando y refresco automático en Studio.
+- Validación: pytest `282 passed, 1 skipped`; CTest `7/7`; build sin warnings. Studio offscreen hace una sola lectura de `bridge status` al arrancar (traza del CLI). No se pudo probar a mano el cambio de vistas ni el refresco: no hay Xvfb y no se abrieron ventanas en el escritorio del usuario.
+- Pendiente: QA manual (cambio de vistas instantáneo, que el refresco no mueva selección ni scroll, acciones mientras se lee). Medir el primer frame y la RAM en repos grandes. El import del CLI (~165 ms, typer) puede cargarse en diferido si hace falta.
+
 ## Paso 3: chat visual Codex/Claude — rama `feature/reliable-chat-memory`
 
 - Hecho: adapter `integrations/agent_stream.py`, caso de uso `workspace/agent_chat.py`, CLI `agent chat`, `AgentChatModel`/`AgentChatWidget` en Studio y ADR 0009. Toolchain instalado en este Fedora: build en `build/native` con `-DCHXCHX_BUILD_TESTS=ON`.

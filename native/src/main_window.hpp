@@ -4,11 +4,14 @@
 #include <QProcess>
 #include <QString>
 #include <QStringList>
+#include <QDateTime>
 #include <QHash>
+#include <QJsonObject>
 #include <QPointer>
 
 class QJsonObject;
 class QAction;
+class QTimer;
 class BridgeClient;
 class ProjectFileIndex;
 class AgentChatWidget;
@@ -123,6 +126,12 @@ private:
     void showErrors(const QJsonObject &payload);
     void setProjectRoot(const QString &path);
     void runCommand(const QStringList &arguments);
+    QString applyBridgePayload(const QJsonObject &payload, const QString &area,
+        QJsonObject *studioUpdatePayload = nullptr);
+    void startRead(const QStringList &arguments, bool silent);
+    void finishRead(int exitCode, QProcess::ExitStatus status);
+    void autoRefreshTick();
+    void invalidateReadCache();
     bool runPreview(
         const QStringList &previewArguments,
         const QStringList &actionArguments,
@@ -217,6 +226,19 @@ private:
     QToolBar *m_quickToolbar = nullptr;
     QLabel *m_areaDescription = nullptr;
     BridgeClient *m_bridgeClient = nullptr;
+    // Read-only refreshes run on their own client so they never block actions.
+    BridgeClient *m_readClient = nullptr;
+    struct CachedRead {
+        QJsonObject payload;
+        QDateTime fetchedAt;
+    };
+    QHash<QString, CachedRead> m_readCache;
+    QStringList m_readArguments;
+    bool m_readSilent = false;
+    bool m_readQueued = false;
+    quint64 m_readGeneration = 0;
+    quint64 m_readStartedGeneration = 0;
+    QTimer *m_autoRefreshTimer = nullptr;
     ProjectFileIndex *m_fileIndex = nullptr;
     QStringList m_confirmedActionArguments;
     QHash<QString, AgentSessionWidget *> m_agentSessions;

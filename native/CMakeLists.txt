@@ -98,6 +98,7 @@ qt_add_executable(chxchx-studio
     src/main_window_area_controller.cpp
     src/main_window_actions.cpp
     src/main_window_agent_sessions.cpp
+    src/main_window_refresh.cpp
     src/main_window_data_pages.cpp
     src/main_window_dashboard.cpp
     src/main_window_layout.cpp

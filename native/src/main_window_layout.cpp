@@ -6,6 +6,7 @@
 
 #include <ScintillaEditBase.h>
 
+#include <QTimer>
 #include <QComboBox>
 #include <QAction>
 #include <QDir>
@@ -628,5 +629,14 @@ void MainWindow::buildLayout()
     m_bridgeClient = new BridgeClient(m_projectPath, this);
     connect(m_bridgeClient, &BridgeClient::finished, this, &MainWindow::finishCommand);
     connect(m_bridgeClient, &BridgeClient::failedToStart, this, &MainWindow::commandFailedToStart);
+    m_readClient = new BridgeClient(m_projectPath, this);
+    connect(m_readClient, &BridgeClient::finished, this, &MainWindow::finishRead);
+    connect(m_readClient, &BridgeClient::failedToStart, this, [this](const QString &reason) {
+        appendOutput(QStringLiteral("No se pudo iniciar chxchx-tech: %1").arg(reason));
+    });
+    m_autoRefreshTimer = new QTimer(this);
+    m_autoRefreshTimer->setInterval(10000);
+    connect(m_autoRefreshTimer, &QTimer::timeout, this, &MainWindow::autoRefreshTick);
+    m_autoRefreshTimer->start();
     selectArea(0);
 }
