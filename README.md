@@ -1079,7 +1079,10 @@ manual de actualizaciones.
 
 **Chat visual**, en Inicio o en `Herramientas → Chat visual con agente` (también
 desde la paleta), abre una pestaña de conversación nativa con el agente
-seleccionado. Antes pasa por el mismo control de trust y RAM que la terminal.
+seleccionado. Tiene el estilo de los chats de los IDE actuales: burbujas,
+avatar del agente, bloques de código con botón **Copiar**, herramientas como
+tarjetas que se despliegan, un indicador animado mientras el agente trabaja y
+sugerencias para empezar. Antes pasa por el mismo control de trust y RAM que la terminal.
 Las respuestas se muestran con formato. Los comandos y cambios de archivos
 aparecen como tarjetas con su estado y una vista previa de la salida. El primer
 mensaje incluye el contexto del proyecto (estado, handoff, memoria y últimas

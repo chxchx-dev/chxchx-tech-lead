@@ -1,18 +1,16 @@
 #include "agent_chat_settings.hpp"
 #include "bridge_schemas.hpp"
+#include "chat_pill_picker.hpp"
 
-#include <QComboBox>
 #include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QLabel>
 
 namespace {
 
 QString defaultLabel(const QString &value)
 {
-    return value.isEmpty() ? QStringLiteral("Por defecto")
-                           : QStringLiteral("Por defecto · %1").arg(value);
+    return value.isEmpty() ? QStringLiteral("Por defecto") : QStringLiteral("%1 · por defecto").arg(value);
 }
 
 } // namespace
@@ -23,21 +21,19 @@ AgentChatSettings::AgentChatSettings(QString projectPath, QString agentId, QStri
     , m_agentId(std::move(agentId))
     , m_cliProgram(std::move(cliProgram))
 {
+    setObjectName(QStringLiteral("chatSettings"));
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    m_model = new QComboBox(this);
-    m_model->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    layout->setSpacing(6);
+    m_model = new ChatPillPicker(this);
     m_model->setToolTip(QStringLiteral("Modelo para los próximos mensajes de este chat."));
-    m_effort = new QComboBox(this);
-    m_effort->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    m_effort = new ChatPillPicker(this);
     m_effort->setToolTip(QStringLiteral("Nivel de razonamiento: más alto piensa más, tarda más y gasta más."));
     m_model->addItem(defaultLabel({}), QString());
     m_effort->addItem(defaultLabel({}), QString());
-    layout->addWidget(new QLabel(QStringLiteral("Modelo:"), this));
     layout->addWidget(m_model);
-    layout->addWidget(new QLabel(QStringLiteral("Effort:"), this));
     layout->addWidget(m_effort);
-    connect(m_model, &QComboBox::currentIndexChanged, this, &AgentChatSettings::refreshEfforts);
+    connect(m_model, &ChatPillPicker::currentIndexChanged, this, &AgentChatSettings::refreshEfforts);
 
     m_process.setWorkingDirectory(m_projectPath);
     connect(&m_process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this] {
@@ -89,6 +85,8 @@ void AgentChatSettings::applyOptions(const QJsonObject &payload)
     }
     m_model->blockSignals(false);
     refreshEfforts();
+    emit providerChanged(payload.value(QStringLiteral("provider")).toString(),
+        payload.value(QStringLiteral("default_model")).toString());
     emit availabilityChanged(payload.value(QStringLiteral("available")).toBool(),
         payload.value(QStringLiteral("install_hint")).toString());
 }

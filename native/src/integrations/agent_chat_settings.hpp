@@ -4,7 +4,7 @@
 #include <QProcess>
 #include <QWidget>
 
-class QComboBox;
+class ChatPillPicker;
 
 // Model and effort pickers fed by `chxchx-tech bridge agent-options`, which
 // reads each agent's real catalog (Codex models cache, Claude aliases).
@@ -23,6 +23,8 @@ public:
 signals:
     // Emitted once options load; `installHint` explains how to get the CLI.
     void availabilityChanged(bool available, const QString &installHint);
+    // "Codex" or "Claude", plus the model the agent uses when none is chosen.
+    void providerChanged(const QString &provider, const QString &defaultModel);
 
 private:
     void load();
@@ -34,6 +36,6 @@ private:
     QProcess m_process;
     QJsonArray m_models;
     QString m_defaultEffort;
-    QComboBox *m_model = nullptr;
-    QComboBox *m_effort = nullptr;
+    ChatPillPicker *m_model = nullptr;
+    ChatPillPicker *m_effort = nullptr;
 };

@@ -12,14 +12,17 @@
 #include <QLabel>
 #include <QMimeData>
 #include <QPalette>
+#include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QStyle>
 #include <QToolButton>
 #include <QVBoxLayout>
 
 namespace {
 
 constexpr int MaxAttachments = 6;
+const QString IdleHint = QStringLiteral("Ctrl+Enter para enviar");
 
 bool isImageFile(const QString &path)
 {
@@ -29,45 +32,56 @@ bool isImageFile(const QString &path)
     return info.isFile() && suffixes.contains(info.suffix().toLower());
 }
 
+void repolish(QWidget *widget)
+{
+    widget->style()->unpolish(widget);
+    widget->style()->polish(widget);
+}
+
 } // namespace
 
 AgentChatComposer::AgentChatComposer(QWidget *parent)
-    : QWidget(parent)
+    : QFrame(parent)
 {
-    auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(4);
+    setObjectName(QStringLiteral("composer"));
+    auto *column = new QVBoxLayout(this);
+    column->setContentsMargins(12, 10, 10, 8);
+    column->setSpacing(6);
 
-    auto *attachments = new QHBoxLayout;
-    m_attachmentLabel = new QLabel(this);
-    m_attachmentLabel->setStyleSheet(QStringLiteral("color: #a8b3c4;"));
-    m_clearAttachments = new QToolButton(this);
-    m_clearAttachments->setText(QStringLiteral("✕"));
-    m_clearAttachments->setToolTip(QStringLiteral("Quitar imágenes adjuntas"));
-    attachments->addWidget(m_attachmentLabel, 1);
-    attachments->addWidget(m_clearAttachments);
-    layout->addLayout(attachments);
+    m_attachmentRow = new QHBoxLayout;
+    m_attachmentRow->setSpacing(6);
+    column->addLayout(m_attachmentRow);
 
-    auto *row = new QHBoxLayout;
-    m_attach = new QToolButton(this);
-    m_attach->setText(QStringLiteral("📎"));
-    m_attach->setToolTip(QStringLiteral("Adjuntar imágenes. También puedes pegarlas (Ctrl+V) o arrastrarlas aquí."));
-    m_attach->setMinimumSize(36, 36);
     m_input = new QPlainTextEdit(this);
-    m_input->setPlaceholderText(QStringLiteral("Mensaje para el agente… (Ctrl+Enter para enviar)"));
-    m_input->setMaximumHeight(110);
+    m_input->setObjectName(QStringLiteral("composerInput"));
+    m_input->setPlaceholderText(QStringLiteral("Pide un cambio, una explicación o una revisión…"));
+    m_input->setFixedHeight(64);
     m_input->setAcceptDrops(true);
     m_input->installEventFilter(this);
     // The chat uses its own dark surfaces, so hints must not follow a light system theme.
     QPalette hints = m_input->palette();
     hints.setColor(QPalette::PlaceholderText, QColor(0x8d, 0x96, 0xa8));
     m_input->setPalette(hints);
-    m_send = new QPushButton(QStringLiteral("Enviar"), this);
-    m_send->setMinimumHeight(36);
-    row->addWidget(m_attach, 0, Qt::AlignBottom);
-    row->addWidget(m_input, 1);
-    row->addWidget(m_send, 0, Qt::AlignBottom);
-    layout->addLayout(row);
+    column->addWidget(m_input);
+
+    m_toolbar = new QHBoxLayout;
+    m_toolbar->setSpacing(6);
+    m_attach = new QToolButton(this);
+    m_attach->setObjectName(QStringLiteral("composerIcon"));
+    m_attach->setText(QStringLiteral("📎"));
+    m_attach->setCursor(Qt::PointingHandCursor);
+    m_attach->setToolTip(QStringLiteral("Adjuntar imágenes. También puedes pegarlas (Ctrl+V) o arrastrarlas aquí."));
+    m_hint = new QLabel(IdleHint, this);
+    m_hint->setObjectName(QStringLiteral("composerHint"));
+    m_send = new QPushButton(QStringLiteral("↑"), this);
+    m_send->setObjectName(QStringLiteral("sendButton"));
+    m_send->setCursor(Qt::PointingHandCursor);
+    m_send->setToolTip(QStringLiteral("Enviar (Ctrl+Enter)"));
+    m_toolbar->addWidget(m_attach);
+    m_toolbar->addStretch(1);
+    m_toolbar->addWidget(m_hint);
+    m_toolbar->addWidget(m_send);
+    column->addLayout(m_toolbar);
 
     connect(m_send, &QPushButton::clicked, this, [this] {
         if (m_running) {
@@ -79,22 +93,27 @@ AgentChatComposer::AgentChatComposer(QWidget *parent)
         emit sendRequested(text.isEmpty() ? QStringLiteral("Revisa las imágenes adjuntas.") : text, m_attachments);
     });
     connect(m_attach, &QToolButton::clicked, this, [this] {
-        const QStringList files = QFileDialog::getOpenFileNames(this, QStringLiteral("Adjuntar imágenes"), {},
-            QStringLiteral("Imágenes (*.png *.jpg *.jpeg *.gif *.webp)"));
-        addAttachments(files);
+        addAttachments(QFileDialog::getOpenFileNames(this, QStringLiteral("Adjuntar imágenes"), {},
+            QStringLiteral("Imágenes (*.png *.jpg *.jpeg *.gif *.webp)")));
     });
-    connect(m_clearAttachments, &QToolButton::clicked, this, [this] {
-        m_attachments.clear();
-        updateAttachmentLabel();
-    });
-    updateAttachmentLabel();
+    updateAttachments();
+}
+
+void AgentChatComposer::addToolbarWidget(QWidget *widget)
+{
+    // Pills sit before the trailing stretch, hint and send button.
+    m_toolbar->insertWidget(m_toolbar->count() - 3, widget);
 }
 
 void AgentChatComposer::setRunning(bool running)
 {
     m_running = running;
-    m_send->setText(running ? QStringLiteral("Detener") : QStringLiteral("Enviar"));
+    m_send->setText(running ? QStringLiteral("■") : QStringLiteral("↑"));
+    m_send->setToolTip(running ? QStringLiteral("Detener al agente") : QStringLiteral("Enviar (Ctrl+Enter)"));
+    m_send->setProperty("running", running);
+    repolish(m_send);
     m_attach->setEnabled(!running && m_input->isEnabled());
+    m_hint->setText(running ? QStringLiteral("Puedes detenerlo con ■") : IdleHint);
 }
 
 void AgentChatComposer::setInputEnabled(bool enabled, const QString &reason)
@@ -103,6 +122,18 @@ void AgentChatComposer::setInputEnabled(bool enabled, const QString &reason)
     m_send->setEnabled(enabled);
     m_attach->setEnabled(enabled && !m_running);
     if (!reason.isEmpty()) m_input->setPlaceholderText(reason);
+}
+
+void AgentChatComposer::setText(const QString &text)
+{
+    m_input->setPlainText(text);
+    m_input->moveCursor(QTextCursor::End);
+    focusInput();
+}
+
+void AgentChatComposer::setHint(const QString &hint)
+{
+    m_hint->setText(hint.isEmpty() ? IdleHint : hint);
 }
 
 void AgentChatComposer::focusInput()
@@ -114,25 +145,29 @@ void AgentChatComposer::clear()
 {
     m_input->clear();
     m_attachments.clear();
-    updateAttachmentLabel();
+    updateAttachments();
 }
 
 int AgentChatComposer::addAttachments(const QStringList &paths)
 {
     int added = 0;
     for (const QString &path : paths) {
-        if (m_attachments.size() >= MaxAttachments || !isImageFile(path) || m_attachments.contains(path)) continue;
-        m_attachments << QFileInfo(path).absoluteFilePath();
+        const QString absolute = QFileInfo(path).absoluteFilePath();
+        if (m_attachments.size() >= MaxAttachments || !isImageFile(path) || m_attachments.contains(absolute)) continue;
+        m_attachments << absolute;
         ++added;
     }
-    updateAttachmentLabel();
+    updateAttachments();
     return added;
 }
 
 bool AgentChatComposer::eventFilter(QObject *watched, QEvent *event)
 {
-    if (watched != m_input) return QWidget::eventFilter(watched, event);
-    if (event->type() == QEvent::KeyPress) {
+    if (watched != m_input) return QFrame::eventFilter(watched, event);
+    switch (event->type()) {
+    case QEvent::FocusIn: setFocused(true); break;
+    case QEvent::FocusOut: setFocused(false); break;
+    case QEvent::KeyPress: {
         auto *key = static_cast<QKeyEvent *>(event);
         if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter)
             && key->modifiers().testFlag(Qt::ControlModifier)) {
@@ -140,13 +175,17 @@ bool AgentChatComposer::eventFilter(QObject *watched, QEvent *event)
             return true;
         }
         if (key->matches(QKeySequence::Paste) && pasteClipboardImage()) return true;
-    } else if (event->type() == QEvent::DragEnter) {
+        break;
+    }
+    case QEvent::DragEnter: {
         auto *drag = static_cast<QDragEnterEvent *>(event);
         if (drag->mimeData()->hasUrls()) {
             drag->acceptProposedAction();
             return true;
         }
-    } else if (event->type() == QEvent::Drop) {
+        break;
+    }
+    case QEvent::Drop: {
         auto *drop = static_cast<QDropEvent *>(event);
         QStringList files;
         for (const QUrl &url : drop->mimeData()->urls()) {
@@ -156,8 +195,11 @@ bool AgentChatComposer::eventFilter(QObject *watched, QEvent *event)
             drop->acceptProposedAction();
             return true;
         }
+        break;
     }
-    return QWidget::eventFilter(watched, event);
+    default: break;
+    }
+    return QFrame::eventFilter(watched, event);
 }
 
 bool AgentChatComposer::pasteClipboardImage()
@@ -171,13 +213,38 @@ bool AgentChatComposer::pasteClipboardImage()
     return addAttachments({path}) > 0;
 }
 
-void AgentChatComposer::updateAttachmentLabel()
+void AgentChatComposer::updateAttachments()
 {
-    const bool any = !m_attachments.isEmpty();
-    m_attachmentLabel->setVisible(any);
-    m_clearAttachments->setVisible(any);
-    if (!any) return;
-    QStringList names;
-    for (const QString &path : m_attachments) names << QFileInfo(path).fileName();
-    m_attachmentLabel->setText(QStringLiteral("🖼 %1 imagen(es): %2").arg(m_attachments.size()).arg(names.join(QStringLiteral(", "))));
+    while (QLayoutItem *item = m_attachmentRow->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    for (const QString &path : m_attachments) {
+        auto *chip = new QFrame(this);
+        chip->setObjectName(QStringLiteral("attachmentChip"));
+        auto *row = new QHBoxLayout(chip);
+        row->setContentsMargins(4, 2, 2, 2);
+        auto *thumb = new QLabel(chip);
+        thumb->setPixmap(QPixmap(path).scaled(28, 28, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+        auto *name = new QLabel(QFileInfo(path).fileName(), chip);
+        auto *remove = new QToolButton(chip);
+        remove->setObjectName(QStringLiteral("chatGhost"));
+        remove->setText(QStringLiteral("✕"));
+        remove->setToolTip(QStringLiteral("Quitar"));
+        connect(remove, &QToolButton::clicked, this, [this, path] {
+            m_attachments.removeAll(path);
+            updateAttachments();
+        });
+        row->addWidget(thumb);
+        row->addWidget(name);
+        row->addWidget(remove);
+        m_attachmentRow->addWidget(chip);
+    }
+    m_attachmentRow->addStretch(1);
+}
+
+void AgentChatComposer::setFocused(bool focused)
+{
+    setProperty("focused", focused);
+    repolish(this);
 }

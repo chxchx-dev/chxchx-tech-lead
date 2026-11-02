@@ -2,6 +2,13 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## Chat visual con estilo de IDE
+
+- El transcript dejó de ser HTML en `QTextBrowser`. `AgentChatView` (QScrollArea) sincroniza `ChatEntryCard`s nativas por revisión: burbuja del usuario a la derecha con miniaturas, respuestas con avatar por proveedor (Codex verde `</>`, Claude naranja `✳`), `ChatCodeBlock` con lenguaje y Copiar, `ChatToolCard` desplegable con spinner y borde según estado, razonamiento plegable y errores con el comando copiable.
+- Bienvenida con sugerencias, indicador animado de "trabajando", cabecera con identidad y `ChatUsageBar` (barras de contexto, 5 h y semana, más el gasto). El composer es redondeado con píldoras `ChatPillPicker` (modelo, effort, permisos) y botón circular enviar/detener.
+- El tema de Studio se movió a `studio_theme.{hpp,cpp}` (`applyStudioTheme`, `StudioColors`). El chat usa `agent_chat_style.hpp`, limitado por object names.
+- El modelo ya no genera HTML (`Entry::revision`). El markdown pasa por `agent_chat_markdown` (fences separados y HTML crudo desactivado).
+
 ## Chat visual: modelo, effort, uso e imágenes (QA manual)
 
 - Con un agente no instalado, `agent chat` y el panel avisan con el comando de instalación; ya no aparece `[Errno 2]`. El panel desactiva el envío.
@@ -42,12 +49,6 @@
 - Ubuntu y Fedora ahora requieren los mismos componentes Qt y el plugin xcb dentro del TGZ; el instalador común macOS/Linux añade con apt/dnf las bibliotecas gráficas del sistema. macOS conserva la app con frameworks desplegados en el DMG. El workflow comprueba los runtimes Qt para ambos paquetes Linux.
 - La TUI abre ChxChx Studio en segundo plano y ya no ofrece preparar un proyecto Sublime. `chxchx-tech studio open` abre Studio; proyectos nuevos lo configuran como editor. Sublime sigue disponible si un proyecto lo configura explícitamente.
 - Validación local: `python -m compileall -q src scripts`, `bash -n scripts/install-studio.sh scripts/install-studio-fedora.sh` y `git diff --check` pasan. No se ejecutó la suite. Este entorno no tiene PowerShell ni NSIS, así que el nuevo `Setup.exe` y el workflow todavía requieren build CI. No se probó instalación en equipos limpios; la publicación del preview sigue aplazada y el enlace de descarga aún no estará disponible hasta publicarla.
-
-## README: guía de inicio para Studio y TUI
-
-- El comienzo del README ahora ayuda a elegir Studio, la TUI o la CLI y ofrece pasos concretos para lanzar cada interfaz sobre un proyecto.
-- La guía de Studio explica instalación/launcher, **Preparar y entrar**, edición, búsqueda, terminal, agentes y memoria. La TUI documenta preparación con `init`, trust, áreas principales, teclas y salida de Zellij.
-- Se sustituyó el banner ASCII extenso y los bloques de uso de Studio/TUI se dividieron por recorrido y tema. Se mantienen las referencias técnicas y el catálogo de capacidades.
 
 ## Estado actual
 

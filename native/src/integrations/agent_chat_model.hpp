@@ -6,8 +6,8 @@
 #include <QStringList>
 
 // Transcript of a visual agent chat built from `chxchx.agent-event` v1 lines
-// emitted by `chxchx-tech agent chat`. It owns no process and no widgets so the
-// rendering can be tested headless.
+// emitted by `chxchx-tech agent chat`. It owns no process and no widgets so it
+// can be tested headless; AgentChatView renders it.
 class AgentChatModel final {
 public:
     enum class Kind { User, Assistant, Reasoning, Tool, Notice, Error };
@@ -20,7 +20,8 @@ public:
         QString status;
         QString output;
         QStringList images;
-        mutable QString cachedHtml;
+        // Bumped when a tool event updates the entry in place.
+        int revision = 0;
     };
 
     struct LimitWindow {
@@ -47,18 +48,18 @@ public:
     bool apply(const QJsonObject &event);
     void clear();
 
-    QString renderHtml() const;
     const QList<Entry> &entries() const { return m_entries; }
     QString sessionId() const { return m_sessionId; }
     void resetSession() { m_sessionId.clear(); }
     const Usage &usage() const { return m_usage; }
+    // Session spend, e.g. "40k de entrada · 1k de salida · US$ 0.12".
     QString usageSummary() const;
-    QString usageHtml() const;
 
 private:
-    QString entryHtml(const Entry &entry) const;
-
     QList<Entry> m_entries;
     QString m_sessionId;
     Usage m_usage;
 };
+
+// 1234 -> "1k", 1500000 -> "1.5M".
+QString compactTokens(qint64 tokens);

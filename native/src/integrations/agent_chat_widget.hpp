@@ -1,5 +1,6 @@
 #pragma once
 
+#include "agent_chat_cards.hpp"
 #include "agent_chat_model.hpp"
 
 #include <QByteArray>
@@ -9,11 +10,12 @@
 
 class AgentChatComposer;
 class AgentChatSettings;
-class QComboBox;
+class AgentChatView;
+class ChatUsageBar;
+class ChatPillPicker;
+class QHBoxLayout;
 class QLabel;
 class QPushButton;
-class QTextBrowser;
-class QTimer;
 
 // Visual chat with a Codex/Claude agent. Every message runs one
 // `chxchx-tech agent chat` turn that resumes the previous session; trust,
@@ -34,6 +36,8 @@ public:
     // Exposed for headless tests; Studio normally sends from the composer.
     void sendMessage(const QString &text, const QStringList &images = {});
     const AgentChatModel &model() const { return m_model; }
+    const AgentChatView *view() const { return m_view; }
+    const ChatUsageBar *usageBar() const { return m_usage; }
 
 signals:
     void runningStateChanged(bool running);
@@ -42,25 +46,28 @@ private:
     void stop();
     void startNewChat();
     void setAvailability(bool available, const QString &installHint);
+    void setProvider(const QString &provider, const QString &defaultModel);
     void readOutput();
     void finishTurn(int exitCode, QProcess::ExitStatus status);
-    void scheduleRender();
     void render();
     void setRunning(bool running);
 
     QString m_projectPath;
     QString m_agentId;
     QString m_cliProgram;
+    ChatIdentity m_identity;
     AgentChatModel m_model;
     QProcess m_process;
     QByteArray m_pending;
     bool m_available = true;
-    AgentChatSettings *m_settings = nullptr;
-    QComboBox *m_mode = nullptr;
+    QHBoxLayout *m_headerRow = nullptr;
+    QLabel *m_avatar = nullptr;
+    QLabel *m_title = nullptr;
+    QLabel *m_subtitle = nullptr;
+    ChatUsageBar *m_usage = nullptr;
     QPushButton *m_newChat = nullptr;
-    QLabel *m_usage = nullptr;
-    QTextBrowser *m_transcript = nullptr;
-    QLabel *m_status = nullptr;
+    AgentChatView *m_view = nullptr;
+    AgentChatSettings *m_settings = nullptr;
+    ChatPillPicker *m_mode = nullptr;
     AgentChatComposer *m_composer = nullptr;
-    QTimer *m_renderTimer = nullptr;
 };

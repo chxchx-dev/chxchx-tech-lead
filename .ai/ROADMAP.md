@@ -93,6 +93,7 @@ verde; la configuración del workflow no equivale a que haya pasado.
 - [x] Elegir modelo y effort en el chat visual, con las opciones reales de cada agente.
 - [x] Mostrar lo gastado y lo que queda: contexto usado/ventana, límites de 5 h y semanal (Codex), costo (Claude) y tokens de la sesión.
 - [x] Adjuntar imágenes en el chat visual (archivo y pegar desde el portapapeles).
+- [x] Interfaz del chat más vistosa, a la altura de otros IDE: tarjetas nativas, código copiable, píldoras de modelo, effort y permisos, y medidores de uso.
 
 ## Evolución posterior
 

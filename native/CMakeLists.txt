@@ -99,6 +99,8 @@ qt_add_executable(chxchx-studio
     src/main_window_actions.cpp
     src/main_window_agent_sessions.cpp
     src/main_window_refresh.cpp
+    src/studio_theme.cpp
+    src/studio_theme.hpp
     src/main_window_data_pages.cpp
     src/main_window_dashboard.cpp
     src/main_window_layout.cpp
@@ -124,6 +126,17 @@ qt_add_executable(chxchx-studio
     src/integrations/agent_chat_settings.hpp
     src/integrations/agent_chat_composer.cpp
     src/integrations/agent_chat_composer.hpp
+    src/integrations/agent_chat_markdown.cpp
+    src/integrations/agent_chat_markdown.hpp
+    src/integrations/agent_chat_cards.cpp
+    src/integrations/agent_chat_cards.hpp
+    src/integrations/agent_chat_view.cpp
+    src/integrations/agent_chat_view.hpp
+    src/integrations/agent_chat_usage.cpp
+    src/integrations/agent_chat_usage.hpp
+    src/integrations/agent_chat_style.hpp
+    src/integrations/chat_pill_picker.cpp
+    src/integrations/chat_pill_picker.hpp
     src/integrations/vt_terminal_widget.cpp
     src/integrations/vt_terminal_widget.hpp
     src/integrations/pty_session.cpp
@@ -245,7 +258,13 @@ if(CHXCHX_BUILD_TESTS)
         src/integrations/agent_chat_model.cpp src/integrations/agent_chat_model.hpp
         src/integrations/agent_chat_widget.cpp src/integrations/agent_chat_widget.hpp
         src/integrations/agent_chat_settings.cpp src/integrations/agent_chat_settings.hpp
-        src/integrations/agent_chat_composer.cpp src/integrations/agent_chat_composer.hpp)
+        src/integrations/agent_chat_composer.cpp src/integrations/agent_chat_composer.hpp
+        src/integrations/agent_chat_markdown.cpp src/integrations/agent_chat_markdown.hpp
+        src/integrations/agent_chat_cards.cpp src/integrations/agent_chat_cards.hpp
+        src/integrations/agent_chat_view.cpp src/integrations/agent_chat_view.hpp
+        src/integrations/agent_chat_usage.cpp src/integrations/agent_chat_usage.hpp
+        src/integrations/agent_chat_style.hpp
+        src/integrations/chat_pill_picker.cpp src/integrations/chat_pill_picker.hpp)
     target_link_libraries(chxchx-agent-chat-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
     add_test(NAME native-agent-chat-smoke COMMAND chxchx-agent-chat-smoke)
     set_tests_properties(native-agent-chat-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

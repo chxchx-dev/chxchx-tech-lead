@@ -1,4 +1,7 @@
+#include "../src/integrations/agent_chat_markdown.hpp"
 #include "../src/integrations/agent_chat_model.hpp"
+#include "../src/integrations/agent_chat_usage.hpp"
+#include "../src/integrations/agent_chat_view.hpp"
 #include "../src/integrations/agent_chat_widget.hpp"
 
 #include <QApplication>
@@ -103,9 +106,13 @@ int modelChecks()
     const auto &tool = model.entries().at(2);
     if (tool.status != QStringLiteral("completed") || tool.output != QStringLiteral("app.py") || tool.text != QStringLiteral("ls"))
         return 13;
-    const QString html = model.renderHtml();
-    if (!html.contains(QStringLiteral("listo")) || html.contains(QStringLiteral("<script>")) || !html.contains(QStringLiteral("✓")))
-        return 14;
+    if (model.entries().at(2).revision != 1) return 14;
+    const QString html = chatMarkdownToHtml(QStringLiteral("**listo** <script>alert(1)</script>"));
+    if (!html.contains(QStringLiteral("listo")) || html.contains(QStringLiteral("<script>"))) return 19;
+    const QList<ChatSegment> segments = splitFencedCode(
+        QStringLiteral("Mira:\n```python\nprint(1)\n```\nListo."));
+    if (segments.size() != 3 || !segments.at(1).code || segments.at(1).language != QStringLiteral("python")
+        || segments.at(1).text != QStringLiteral("print(1)") || segments.at(2).text != QStringLiteral("Listo.")) return 34;
     if (!model.usageSummary().contains(QStringLiteral("10"))) return 15;
     model.apply(event({{QStringLiteral("type"), QStringLiteral("usage")}, {QStringLiteral("input_tokens"), 5},
         {QStringLiteral("output_tokens"), 1}, {QStringLiteral("cost_usd"), 0.25}}));
@@ -113,9 +120,22 @@ int modelChecks()
         {QStringLiteral("context_window"), 200000}, {QStringLiteral("secondary"), QJsonObject{
             {QStringLiteral("used_percent"), 90.0}, {QStringLiteral("window_minutes"), 10080}}}}));
     if (model.usage().inputTokens != 15 || !model.usage().hasCost) return 17;
-    const QString usageHtml = model.usageHtml();
-    if (!usageHtml.contains(QStringLiteral("100k / 200k (50%)")) || !usageHtml.contains(QStringLiteral("Semanal"))
-        || !usageHtml.contains(QStringLiteral("0.2500"))) return 18;
+    ChatUsageBar usageBar;
+    usageBar.setUsage(model.usage(), model.usageSummary());
+    const QString usageText = usageBar.summary();
+    if (!usageText.contains(QStringLiteral("Contexto 50%")) || !usageText.contains(QStringLiteral("Semana 90%"))
+        || !usageText.contains(QStringLiteral("0.2500")) || usageText.contains(QStringLiteral("5 h"))) return 18;
+
+    AgentChatView view;
+    view.sync(model);
+    if (view.cardCount() != 3) return 35;
+    model.apply(event({{QStringLiteral("type"), QStringLiteral("tool")}, {QStringLiteral("id"), QStringLiteral("t1")},
+        {QStringLiteral("status"), QStringLiteral("failed")}}));
+    view.sync(model);
+    if (view.cardCount() != 3) return 36;
+    model.clear();
+    view.sync(model);
+    if (view.cardCount() != 0) return 37;
     if (!AgentChatWidget::supportsProgram(QStringLiteral("C:\\npm\\claude.cmd"))
         || AgentChatWidget::supportsProgram(QStringLiteral("opencode"))) return 16;
     return 0;

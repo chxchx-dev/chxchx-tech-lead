@@ -2,6 +2,12 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Chat visual con estilo de IDE
+
+- Hecho: rediseño completo de la vista del chat con widgets nativos y el tema de Studio; capturas offscreen revisadas (bienvenida, turno real de Codex con imagen y código, Claude no instalado).
+- Validación: CTest `7/7` (el smoke cubre segmentación de markdown, escape de HTML, medidores y sincronización de tarjetas); pytest `290 passed, 1 skipped`.
+- Pendiente: QA manual con mouse (menús de píldoras, desplegar herramientas, Copiar, arrastrar imágenes) y tema claro del sistema. `agent_chat_cards.cpp` tiene ~380 líneas; si crece, separar `ChatToolCard`/`ChatCodeBlock`.
+
 ## QA manual: chat visual (modelo, effort, uso, imágenes)
 
 - Hecho: los cuatro puntos de "Correcciones desde QA manual" en ROADMAP.
@@ -41,12 +47,6 @@
 - La TUI abre ChxChx Studio en segundo plano. `studio open` queda como comando explícito y Studio es el editor predeterminado de proyectos nuevos; Sublime queda como adapter opcional para configuraciones existentes.
 - La decisión durable quedó en `.ai/adr/0008-studio-first-editor.md`.
 - Validación local: compileall de `src`/`scripts`, sintaxis Bash y `git diff --check` pasan. No se ejecutaron pruebas. Falta el build CI de NSIS/paquetes y smoke de instalación en máquinas limpias. No hay PowerShell/NSIS disponibles en este entorno. La publicación del preview continúa aplazada, así que aún no se prueba una descarga desde el release.
-
-## README: uso de Studio y TUI
-
-- README abre con una elección entre Studio, TUI y CLI y comandos de primer uso para cada ruta. La guía de Studio cubre abrir el proyecto por ruta, `Preparar y entrar`, edición, terminal, agentes y memoria; la guía TUI cubre `init`, trust, áreas, atajos y regreso de Zellij.
-- Se acortó el banner inicial y se organizaron las secciones largas en pasos, tablas y temas. Se conservaron las referencias técnicas para desarrollo y operación.
-- Verificación: `git diff --check`. No se ejecutó una suite: el cambio es documentación.
 
 ## Último cambio
 
