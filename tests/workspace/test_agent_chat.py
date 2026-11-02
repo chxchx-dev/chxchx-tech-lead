@@ -14,7 +14,9 @@ from chxchx_tech_lead.workspace.service import WorkspaceOperationError
 
 FAKE_CODEX = r"""
 import json, sys, time
-prompt = sys.stdin.read()
+# Like the real CLIs, speak UTF-8 regardless of the Windows console code page.
+sys.stdout.reconfigure(encoding="utf-8")
+prompt = sys.stdin.buffer.read().decode("utf-8")
 print(json.dumps({"type": "thread.started", "thread_id": "t-fake"}), flush=True)
 if "dormir" in prompt:
     time.sleep(30)
@@ -25,7 +27,8 @@ print("ruido que no es JSON", flush=True)
 
 FAKE_CLAUDE = r"""
 import json, sys
-prompt = sys.stdin.read()
+sys.stdout.reconfigure(encoding="utf-8")
+prompt = sys.stdin.buffer.read().decode("utf-8")
 print(json.dumps({"type": "assistant", "message": {"content": [
     {"type": "text", "text": "eco: " + prompt.strip().splitlines()[-1]}]}}), flush=True)
 """
