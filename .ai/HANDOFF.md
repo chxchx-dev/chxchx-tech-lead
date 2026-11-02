@@ -1,5 +1,12 @@
 # Handoff
 
+## Fase 1 de mejora: memoria por chat — rama `feature/reliable-chat-memory`
+
+- Cambios: detector estricto, filtro de contexto inyectado y deduplicación entre chats en `integrations/explicit_memory.py`; carpeta Claude y validación de `cwd` en `integrations/chat_history.py`; comando `workspace memory-prune`.
+- Se corrigió `test_layouts.py`: esperaba que OpenCode no capturara memoria, cosa que `a9405bc` ya había cambiado y documentado (ADR 0002).
+- Validación: compileall OK; pytest `257 passed, 1 skipped`; `memory-prune --dry-run` sobre este repo no encontró nada que retirar. Falta comprobar en un proyecto real con capturas antiguas que el resultado sea el esperado. En Studio todavía no hay acción para `memory-prune`.
+- Siguiente orden acordado con el usuario: Fase 2, contexto liviano (dividir `CURRENT_STATE`/`HANDOFF` en estado vigente corto e historial archivado, y resumen automático al cerrar sesión). Después, integración visual de Codex/Claude en Studio (ver ROADMAP). Luego, la fluidez de Studio (caché del snapshot, lecturas paralelas, refresco automático) y QA en Fedora. Este equipo no tiene cmake, g++ ni qt6-qtbase-devel, así que Studio no se compiló aquí.
+
 ## Instalación completa y TUI centrada en Studio
 
 - El workflow produce un `Setup.exe` de usuario para Windows que contiene el instalador PowerShell y conserva el ZIP Qt para el actualizador. Linux Fedora recibe el mismo bundle Qt del SDK que Ubuntu; el script macOS/Linux instala las bibliotecas gráficas nativas con apt/dnf. El verificador exige QtCore, QtWidgets, Core5Compat y `libqxcb.so` en ambos TGZ.

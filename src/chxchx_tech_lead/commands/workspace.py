@@ -5,6 +5,7 @@ from pathlib import Path
 import typer
 
 from ..core.trust import trust_project
+from ..integrations.explicit_memory import prune_explicit_memories
 from ..ui.cli_output import (
     console,
     print_agent_statuses as _print_agent_statuses,
@@ -154,6 +155,30 @@ def workspace_terminal(
             except OSError:
                 pass
         raise typer.Exit(code=1)
+
+
+@workspace_app.command("memory-prune")
+def workspace_memory_prune(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Muestra las entradas a retirar sin modificar el archivo."),
+):
+    """Retira de PROJECT_MEMORY.md capturas automáticas que no eran peticiones de memoria."""
+    try:
+        result = prune_explicit_memories(path, dry_run=dry_run)
+    except OSError as exc:
+        console.print(f"[red]✗ No pude limpiar la memoria del proyecto: {exc}[/]")
+        raise typer.Exit(code=1)
+    if not result.removed:
+        console.print(f"[green]✓ La memoria explícita ya está limpia:[/] {result.path}")
+        return
+    prefix = "DRY RUN: se retirarían" if dry_run else "Retiradas"
+    console.print(f"[green]✓[/] {prefix} {len(result.removed)} entrada(s) de {result.path}")
+    for message in result.removed:
+        console.print(f"  - {message[:160] or '(entrada vacía)'}")
+    if result.backup is not None:
+        console.print(f"[bold]Backup:[/] {result.backup}")
+    if dry_run:
+        console.print("[yellow]No se realizaron cambios (--dry-run).[/]")
 
 
 @editor_app.command("open")
