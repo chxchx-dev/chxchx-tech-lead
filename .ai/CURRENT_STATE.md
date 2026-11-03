@@ -2,6 +2,30 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## Asistente de Git y rediseño del panel
+
+- Python: `agent chat --lean` (sin contexto/memoria/diario, solo lectura, sin sesión: `--ephemeral` Codex, `--no-session-persistence` Claude, borrado de la sesión en OpenCode) y `--prompt-file`; `ChatTurnPlan.lean`, `load_prompt`. 378 pruebas pasan.
+- Nativo (`native/src/git/`): `git_assistant_prompts` (redacción de secretos y archivos sensibles, prompts, bloques de conflicto, limpieza del mensaje), `git_guide` (siguiente paso por reglas), `git_assistant` (ejecuta `agent chat --lean` con el prompt en un archivo temporal, cancelable), `git_assistant_controller` (agente, consentimiento, contexto, estado fresco de la fusión), `git_assistant_bar` (tarjeta con tono + selector de agente), `git_advice_dialog`. Botón Sugerir, "Pedir consejo" en la tarjeta y en los avisos de error.
+- Diseño: iconos de Studio en pestañas, rama, sincronización, secciones, acciones de fila, diff y ramas (nuevos: list-add/remove, go-up/down, git-commit/merge/pull/push/stash, check-circle, studio-assistant, studio-advice); botón de commit primario con el acento; cajas redondeadas; estado vacío con icono; la caja del mensaje crece.
+- Pruebas: la lógica pura en `git_smoke` (redacción, prompts, guía, limpieza, parser de salida) y los flujos con un `chxchx-tech` falso en `git_ui_smoke` (sin agente, sugerir, consejo, error, cancelar, cambiar de agente, conflictos). 11 tests nativos pasan; 10+15 ejecuciones seguidas del UI sin fallos; 4 mutaciones de privacidad (archivo sensible enviado, secretos sin enmascarar, diff sin enmascarar, sin `--lean`) detectadas.
+- Bugs encontrados al probar: arranque con fallo de segmentación (el asistente se configuraba antes de crear el cliente del bridge) y una carrera (el consejo de conflictos no sabía si la fusión estaba a medias): corregidos.
+- Sin probar con Codex/Claude/OpenCode reales (flags efímeros, borrado de sesión) ni con el consentimiento en un escritorio.
+
+## Visor de Git en Studio (fase 2: enviar/recibir, stash y explorador)
+
+- Motor: `git_repository_remote.cpp` (`fetch`, `pull` ff-only o merge, `push`/publicar, `mergeInProgress`/`abortMerge`, stash), `GitProblem` (credenciales, rechazado, ramas separadas, sin upstream, sin remoto, identidad, cancelado), cancelación de operaciones lentas, procesos en sesión nueva sin terminal. `git_explorer` (estado por ruta) y `GitTreeDelegate` (color, letra y punto en carpetas). Panel: botón de sincronización con acción inteligente, confirmación de envío (`git/confirmPush`), diálogo al separarse las ramas y sección Apartados.
+- Pruebas: `git_smoke` crece con dos clones y un remoto bare (publicar, recibir, enviar, divergencia, rechazo, conflicto con abandono, sin remoto, cancelación, stash); `git_ui_smoke` cubre los flujos del panel. 11 tests nativos pasan; 20 ejecuciones seguidas sin fallos; 5 mutaciones (publicar sin `-u`, pull sin ff-only, push forzado, cancelar sin efecto, rechazo sin reconocer) detectadas.
+- Gancho de QA: `CHXCHX_STUDIO_SCREENSHOT_TOOL=git:files` muestra el explorador. Capturas: `studio-git-sync.png`, `studio-git-explorer.png`.
+- Sin probar contra un remoto real con autenticación (SSH/HTTPS), ni en Windows o macOS. Decisión: sin rebase ni envío forzado.
+
+## Visor de Git en Studio (fase 1)
+
+- `native/src/git/`: `git_types`, `git_parsers` (estado v2, ramas, log + carriles del grafo, diff unificado en filas lado a lado, name-status), `git_repository` (cola serializada asíncrona; stage/unstage/discard con copia en `.git/chxchx-backups`, commit por stdin, ramas, log, diffs), vistas `GitChangesView` (+`GitChangeDelegate` con acciones al pasar el cursor), `GitHistoryView` (+`GitGraphDelegate`), `GitBranchesView`, `GitDiffView` y `GitPanel`. Integración en `main_window_git.cpp`: pestaña Archivos|Git, `openGitDiff`, `Ctrl+Shift+G`.
+- Pruebas nativas: `native-git-smoke` (parsers + repo real) y `native-git-ui-smoke` (panel completo, diff, cierre con trabajo en vuelo); 11 tests nativos pasan; 24 ejecuciones seguidas sin fallos. Se corrigieron dos fallos de ciclo de vida (destructor del repositorio y callback de una pestaña de diff cerrada) y se comprobó con mutaciones que las pruebas los detectan. Sin ASan/valgrind en esta máquina.
+- Gancho de QA ampliado: `CHXCHX_STUDIO_SCREENSHOT_TOOL=git:changes|history|branches` y `git-diff:ruta|fuente`. Capturas del README en `assets/screenshots/studio-git-*.png` (repo de ejemplo).
+- Un commit de merge muestra lo que trajo respecto al primer padre (`-m --first-parent`).
+- No validado en Windows ni macOS; falta push/pull/fetch, stash, blame, conflictos con editor y estado de Git en el explorador (ver ADR 0011).
+
 ## Selector de agentes con OpenCode, README y capturas
 
 - Inicio: el selector añade la entrada `＋ Añadir OpenCode` (rol `AddAgentRole`) si el proyecto no tiene un agente `opencode`; el botón pasa a "Añadir OpenCode" y reutiliza `MainWindow::addAgentToProject` (dry-run + confirmación, igual que Agentes → Añadir agente). No se modifica ningún proyecto en silencio: cambiar la config invalida el trust.

@@ -57,11 +57,14 @@ def turn_command(
     model: str | None = None,
     effort: str | None = None,
     images: Sequence[str] = (),
+    ephemeral: bool = False,
 ) -> list[str]:
     """Build the structured-turn argv; the prompt is written to stdin.
 
     Claude receives images as paths inside the prompt (see `agent_chat`), so
-    only Codex and OpenCode take them as arguments.
+    only Codex and OpenCode take them as arguments. `ephemeral` asks the CLI not
+    to keep the session on disk, where it can (OpenCode has no such flag: the
+    caller deletes its session afterwards).
     """
     if mode not in MODES:
         raise ValueError(f"Modo no soportado: {mode}")
@@ -69,6 +72,8 @@ def turn_command(
     executable, configured = command[0], list(command[1:])
     if provider == "Codex":
         argv = [executable, "exec", *configured, "--json", "-s", _CODEX_SANDBOX[mode]]
+        if ephemeral:
+            argv.append("--ephemeral")
         if model:
             argv += ["-m", model]
         if effort:
@@ -81,6 +86,8 @@ def turn_command(
     if provider == "Claude":
         argv = [executable, *configured, "-p", "--output-format", "stream-json", "--verbose",
                 "--permission-mode", _CLAUDE_PERMISSION[mode]]
+        if ephemeral:
+            argv.append("--no-session-persistence")
         if model:
             argv += ["--model", model]
         if effort:

@@ -4,6 +4,10 @@
 #include "integrations/agent_session_widget.hpp"
 #include "integrations/bridge_client.hpp"
 #include "integrations/local_models_widget.hpp"
+#include "git/git_changes_view.hpp"
+#include "git/git_diff_view.hpp"
+#include "git/git_history_view.hpp"
+#include "git/git_panel.hpp"
 #include "integrations/workspace_terminal_widget.hpp"
 
 #include <QComboBox>
@@ -15,7 +19,10 @@
 #include <QMessageBox>
 #include <QStackedWidget>
 #include <QStatusBar>
+#include <QFileSystemModel>
+#include <QSortFilterProxyModel>
 #include <QTabWidget>
+#include <QTreeView>
 #include <QTimer>
 #include <QUuid>
 
@@ -233,6 +240,42 @@ void MainWindow::showTool(const QString &id, const QString &argument)
 {
     if (id == QStringLiteral("local-models")) {
         openLocalModels();
+    } else if (id == QStringLiteral("git")) {
+        // argument: changes | history | branches | files (the explorer with Git state)
+        showGitPanel();
+        if (argument == QStringLiteral("files")) {
+            m_sidebarTabs->setCurrentIndex(0);
+            QTimer::singleShot(1200, this, [this] {
+                m_projectTree->expandAll();
+                m_projectTree->collapse(m_projectProxy->mapFromSource(m_fileModel->index(m_projectPath + QStringLiteral("/.git"))));
+            });
+            return;
+        }
+        const int tab = argument == QStringLiteral("history") ? 1 : (argument == QStringLiteral("branches") ? 2 : 0);
+        m_gitPanel->showTab(tab);
+        if (tab == 1) QTimer::singleShot(1800, this, [this] { m_gitPanel->historyView()->selectCommit(0); });
+    } else if (id == QStringLiteral("git-suggest") || id == QStringLiteral("git-advice")) {
+        // QA: ask the Git assistant once the status is in (consent is skipped; a dialog would block the capture).
+        showGitPanel();
+        m_gitPanel->showTab(0);
+        m_gitPanel->assistant()->setConsentRequired(false);
+        const bool suggest = id == QStringLiteral("git-suggest");
+        QTimer::singleShot(2200, this, [this, suggest] {
+            if (suggest) m_gitPanel->changesView()->requestSuggestion();
+            else m_gitPanel->adviseNow(GitAdviceKind::WhatNext);
+        });
+    } else if (id == QStringLiteral("git-diff")) {
+        // argument: path|source (staged, unstaged, untracked, head)
+        showGitPanel();
+        QTimer::singleShot(1500, this, [this, argument] {
+            GitDiffRequest request;
+            request.path = argument.section(QLatin1Char('|'), 0, 0);
+            const QString source = argument.section(QLatin1Char('|'), 1);
+            request.source = source == QStringLiteral("staged") ? GitDiffRequest::Source::Staged
+                : (source == QStringLiteral("untracked") ? GitDiffRequest::Source::Untracked
+                : (source == QStringLiteral("head") ? GitDiffRequest::Source::Head : GitDiffRequest::Source::Unstaged));
+            openGitDiff(request);
+        });
     } else if (id == QStringLiteral("add-agent")) {
         // The selector fills after the first status read, so wait for it before choosing the entry.
         QTimer::singleShot(1500, this, [this] {

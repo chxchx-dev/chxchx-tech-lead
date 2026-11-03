@@ -6,7 +6,7 @@ Cuatro capas, de la más barata a la más real. Las tres primeras corren sin ins
 | --- | --- | --- | --- |
 | Unitarias | `tests/**/test_*.py` | Lógica pura (parsers, encaje de modelos, fusión de `opencode.json`) con stubs en memoria. | `uv run pytest` |
 | E2E con falsos | `tests/e2e/` | Flujos completos con **HTTP real** y **procesos reales**: un servidor falso de Ollama y ejecutables falsos de `ollama` y `opencode` en el PATH. Ejercitan stdin, argv, entorno, códigos de salida y JSONL tal como en producción. | `uv run pytest` |
-| Nativas | `native/tests/` | Studio (Qt): parseo, estados de la pestaña, chat. | `ctest` (ver abajo) |
+| Nativas | `native/tests/` | Studio (Qt): parseo, estados de la pestaña, chat y Git (`git_smoke` con parsers y un repo temporal real, `git_ui_smoke` con el panel completo y el asistente contra un `chxchx-tech` falso). | `ctest` (ver abajo) |
 | Live | `tests/live/` | Las herramientas **reales**. Confirman las suposiciones que los falsos solo imitan. | `uv run pytest -m live -v -s` |
 
 `uv run pytest` **excluye** `live` (`addopts = "-m 'not live'"`). Con `-m live` y sin las herramientas instaladas, todo se salta con el motivo.
@@ -79,7 +79,7 @@ CHXCHX_LOCAL_MODELS_SCREENSHOT=/tmp/modelos.png QT_QPA_PLATFORM=offscreen /tmp/c
 
 ## Capturas para el README
 
-Studio puede guardar una captura de su ventana y salir (ayuda de desarrollo): `CHXCHX_STUDIO_SCREENSHOT=ruta.png`, con `CHXCHX_STUDIO_SCREENSHOT_SIZE=1280x800`, `…_AREA=overview` para elegir sección, `…_DELAY_MS=5000` para esperar datos y `…_TOOL=` para abrir una herramienta: `local-models`, `add-agent` (selecciona la entrada de añadir OpenCode) o `chat:AGENTE|mensaje`.
+Studio puede guardar una captura de su ventana y salir (ayuda de desarrollo): `CHXCHX_STUDIO_SCREENSHOT=ruta.png`, con `CHXCHX_STUDIO_SCREENSHOT_SIZE=1280x800`, `…_AREA=overview` para elegir sección, `…_DELAY_MS=5000` para esperar datos y `…_TOOL=` para abrir una herramienta: `local-models`, `add-agent` (selecciona la entrada de añadir OpenCode), `chat:AGENTE|mensaje`, `git:changes|history|branches|files`, `git-suggest` / `git-advice` (preguntan al asistente sin pedir consentimiento; el diálogo de consejo se guarda aparte como `<captura>.dialog.png`) o `git-diff:ruta|unstaged|staged|untracked|head`. Con un `CHXCHX_TECH_CLI` de demostración que conteste a `agent chat --lean --prompt-file`, las capturas del asistente no necesitan un agente real.
 
 Las capturas de `assets/screenshots/` se hicieron con un proyecto de ejemplo y un `CHXCHX_TECH_CLI` de demostración (un script que devuelve datos inventados para `bridge local-models`, `bridge agent-options` y `agent chat`, y delega lo demás en el CLI real), así no aparecen rutas, equipo ni nombres reales. Revisa cada imagen antes de publicarla.
 

@@ -8,7 +8,7 @@ import typer
 from ..ui.cli_output import console, print_agent_statuses as _print_agent_statuses
 from ..cli_registry import agent_app, workspace_app
 from ..integrations.agent_stream import MODES
-from ..workspace.agent_chat import json_line_emitter, plan_chat_turn, run_chat_turn
+from ..workspace.agent_chat import json_line_emitter, load_prompt, plan_chat_turn, run_chat_turn
 from ..workspace.agent_setup import AgentSetupError, add_agent
 from ..workspace.handoff import update_handoff
 from ..workspace.project_context import workspace_service_for as _workspace_service
@@ -156,9 +156,13 @@ def agent_preflight(
 
 @agent_app.command("chat")
 def agent_chat(
-    agent_id: str = typer.Argument(..., help="ID del agente Codex o Claude configurado."),
+    agent_id: str = typer.Argument(..., help="ID del agente Codex, Claude u OpenCode configurado."),
     path: Path = typer.Option(Path.cwd(), "--path", exists=True, file_okay=False, resolve_path=True),
-    prompt: str = typer.Option(..., "--prompt", help="Mensaje del usuario para este turno."),
+    prompt: str = typer.Option("", "--prompt", help="Mensaje del usuario para este turno."),
+    prompt_file: Path | None = typer.Option(None, "--prompt-file", exists=True, dir_okay=False, resolve_path=True,
+        help="Lee el mensaje de un archivo (para mensajes largos, como un diff)."),
+    lean: bool = typer.Option(False, "--lean",
+        help="Consulta puntual: sin contexto del proyecto, memoria ni diario, sin guardar la sesión y siempre en solo lectura."),
     session: str = typer.Option("", "--session", help="Sesión a continuar; vacío inicia un chat con contexto."),
     mode: str = typer.Option("read-only", "--mode", help=f"Permisos del agente: {', '.join(MODES)}."),
     model: str = typer.Option("", "--model", help="Modelo; vacío usa el configurado en el agente."),
@@ -171,8 +175,9 @@ def agent_chat(
     """Ejecuta un turno de chat estructurado y emite eventos JSONL `chxchx.agent-event` v1."""
     emit = json_line_emitter()
     try:
+        text = load_prompt(prompt, prompt_file)
         plan = plan_chat_turn(_workspace_service(path), agent_id, mode=mode, session_id=session or None,
-                              model=model or None, effort=effort or None, images=tuple(images))
+                              model=model or None, effort=effort or None, images=tuple(images), lean=lean)
     except WorkspaceOperationError as exc:
         emit({"type": "error", "message": str(exc)})
         emit({"type": "done", "exit_code": 1, "cancelled": False, "session_id": session or None})
@@ -180,7 +185,7 @@ def agent_chat(
     if dry_run:
         emit({"type": "plan", "provider": plan.provider, "argv": plan.argv, "cwd": str(plan.cwd), "mode": plan.mode})
         return
-    exit_code = run_chat_turn(plan, prompt, emit, cancel_input=sys.stdin if cancel_on_stdin else None)
+    exit_code = run_chat_turn(plan, text, emit, cancel_input=sys.stdin if cancel_on_stdin else None)
     if exit_code != 0:
         raise typer.Exit(code=1)
 

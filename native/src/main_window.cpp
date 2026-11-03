@@ -3,6 +3,7 @@
 #include "integrations/bridge_client.hpp"
 #include "integrations/bridge_schemas.hpp"
 #include "integrations/local_models_widget.hpp"
+#include "git/git_panel.hpp"
 #include "integrations/terminal_launcher.hpp"
 #include "integrations/vt_terminal_widget.hpp"
 #include "editor_theme.hpp"
@@ -441,6 +442,7 @@ void MainWindow::saveFile()
         tabs->setTabText(tabs->indexOf(currentEditor()), editorTabTitle(currentFilePath(), false));
     }
     statusBar()->showMessage(QStringLiteral("Guardado: %1").arg(currentFilePath()), 3000);
+    if (m_gitPanel != nullptr) m_gitPanel->scheduleRefresh();
 }
 
 void MainWindow::saveFileAs()

@@ -143,7 +143,7 @@ void MainWindow::buildLayout()
     m_projectDock->setObjectName(QStringLiteral("projectDock"));
     m_projectDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable
         | QDockWidget::DockWidgetClosable);
-    m_projectDock->setWidget(projectContent);
+    buildGitPanel(projectContent);
     addDockWidget(Qt::LeftDockWidgetArea, m_projectDock);
     connect(m_projectSearch, &QLineEdit::textChanged, this,
         [this](const QString &text) { m_projectProxy->setFilterFixedString(text.trimmed()); });
@@ -603,7 +603,7 @@ void MainWindow::buildLayout()
     // Side panels keep readable labels on small screens; the editor flexes instead.
     m_projectDock->widget()->setMinimumWidth(200);
     control->setMinimumWidth(210);
-    resizeDocks({m_projectDock, m_controlDock}, {260, 250}, Qt::Horizontal);
+    resizeDocks({m_projectDock, m_controlDock}, {300, 250}, Qt::Horizontal);
 
     m_output = new QPlainTextEdit(this);
     m_output->setReadOnly(true);
@@ -646,6 +646,7 @@ void MainWindow::buildLayout()
     connect(clearActivity, &QPushButton::clicked, m_output, &QPlainTextEdit::clear);
 
     m_bridgeClient = new BridgeClient(m_projectPath, this);
+    configureGitAssistant();
     connect(m_bridgeClient, &BridgeClient::finished, this, &MainWindow::finishCommand);
     connect(m_bridgeClient, &BridgeClient::failedToStart, this, &MainWindow::commandFailedToStart);
     m_readClient = new BridgeClient(m_projectPath, this);

@@ -181,3 +181,50 @@ def test_opencode_turn_streams_events_and_applies_the_environment(tmp_path: Path
     assert [event["type"] for event in events] == ["start", "session", "message", "usage", "limits", "done"]
     assert events[2]["text"] == 'eco: hola {"edit": "deny"}'
     assert events[-1]["session_id"] == "ses_fake"
+
+
+FAKE_CODEX_REPORT = r"""
+import json, sys
+sys.stdout.reconfigure(encoding="utf-8")
+prompt = sys.stdin.buffer.read().decode("utf-8")
+print(json.dumps({"type": "thread.started", "thread_id": "t-lean"}), flush=True)
+print(json.dumps({"type": "item.completed", "item": {"id": "i0", "type": "agent_message",
+      "text": f"contexto={'AGENTS.md' in prompt} lineas={len(prompt.strip().splitlines())}"}}), flush=True)
+"""
+
+
+def test_load_prompt_prefers_the_file_and_rejects_empty_input(tmp_path: Path) -> None:
+    long_prompt = tmp_path / "prompt.txt"
+    long_prompt.write_text("diff largo\n" * 5000, encoding="utf-8")
+
+    assert agent_chat.load_prompt("ignorado", long_prompt).startswith("diff largo")
+    assert agent_chat.load_prompt("hola", None) == "hola"
+    with pytest.raises(WorkspaceOperationError, match="--prompt"):
+        agent_chat.load_prompt("  ", None)
+    with pytest.raises(WorkspaceOperationError, match="No pude leer"):
+        agent_chat.load_prompt("", tmp_path / "no-existe.txt")
+
+
+def test_a_lean_plan_is_always_read_only_and_ephemeral(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(agent_chat, "executable_available", lambda executable: True)
+
+    plan = agent_chat.plan_chat_turn(_service(tmp_path), "codex", mode="workspace-write", session_id=None, lean=True)
+
+    assert plan.lean and plan.mode == "read-only" and "--ephemeral" in plan.argv
+    assert agent_chat.plan_chat_turn(_service(tmp_path), "codex", mode="workspace-write", session_id=None).mode == "workspace-write"
+
+
+def test_a_lean_turn_sends_only_the_prompt_and_writes_nothing_to_the_project(tmp_path: Path, isolated_home) -> None:
+    script = tmp_path / "fake_report.py"
+    script.write_text(FAKE_CODEX_REPORT, encoding="utf-8")
+    base = dict(agent_id="codex", provider="Codex", project_root=tmp_path, cwd=tmp_path, argv=[sys.executable, str(script)],
+                mode="read-only", session_id=None)
+    normal: list[dict] = []
+    lean: list[dict] = []
+
+    agent_chat.run_chat_turn(agent_chat.ChatTurnPlan(**base), "una pregunta", normal.append)
+    agent_chat.run_chat_turn(agent_chat.ChatTurnPlan(**base, lean=True), "una pregunta", lean.append)
+
+    assert "contexto=True" in normal[2]["text"]                          # a normal new chat injects the project context
+    assert lean[2]["text"] == "contexto=False lineas=1"                  # a lean turn sends the question and nothing else
+    assert lean[-1]["type"] == "done" and lean[-1]["exit_code"] == 0

@@ -156,3 +156,12 @@ def test_opencode_ignores_unknown_or_malformed_records() -> None:
     assert normalize("OpenCode", {"type": "mystery"}) == []
     assert normalize("OpenCode", {"type": "text", "part": "no es un objeto"}) == []
     assert normalize("OpenCode", {"type": "step_finish"})[0]["input_tokens"] == 0
+
+
+def test_ephemeral_turns_ask_each_cli_not_to_keep_the_session() -> None:
+    assert "--ephemeral" in turn_command(["codex"], mode="read-only", session_id=None, ephemeral=True)
+    assert "--no-session-persistence" in turn_command(["claude"], mode="read-only", session_id=None, ephemeral=True)
+    # OpenCode has no such flag (its session is deleted afterwards), and normal turns keep their sessions.
+    assert turn_command(["opencode"], mode="read-only", session_id=None, ephemeral=True) == turn_command(["opencode"], mode="read-only", session_id=None)
+    assert "--ephemeral" not in turn_command(["codex"], mode="read-only", session_id=None)
+    assert "--no-session-persistence" not in turn_command(["claude"], mode="read-only", session_id=None)

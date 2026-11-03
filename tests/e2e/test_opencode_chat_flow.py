@@ -113,3 +113,17 @@ def test_options_list_the_models_the_cli_reports(tmp_path: Path) -> None:
 
     assert options["available"] is True
     assert [m["id"] for m in options["models"]] == ["anthropic/claude-sonnet-5-5", "ollama/qwen3-coder:30b-ctx32k"]
+
+
+def test_a_lean_turn_leaves_no_trace_in_opencode_or_in_the_project(tmp_path: Path, fake_bin) -> None:
+    plan = agent_chat.plan_chat_turn(_service(tmp_path), "opencode", mode="workspace-write", session_id=None, lean=True)
+    events: list[dict] = []
+
+    code = agent_chat.run_chat_turn(plan, "Resume estos cambios", events.append)
+
+    run = [call for call in fake_bin("opencode") if call["argv"][:1] == ["run"]][0]
+    assert code == 0 and plan.mode == "read-only" and run["permission"] == '{"edit": "deny", "bash": "deny"}'
+    assert run["stdin"].strip() == "Resume estos cambios"                      # no project context
+    assert [call["argv"] for call in fake_bin("opencode") if call["argv"][:2] == ["session", "delete"]] == [["session", "delete", "ses_fake1"]]
+    assert not (tmp_path / ".ai" / "history" / "SESSIONS.md").exists()          # no journal entry
+    assert not [call for call in fake_bin("opencode") if call["argv"][:2] == ["session", "list"]]  # and no memory capture

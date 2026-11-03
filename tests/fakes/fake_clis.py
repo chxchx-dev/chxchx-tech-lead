@@ -46,6 +46,8 @@ if log:
 now = int(time.time() * 1000)
 if args[:2] == ["session", "list"]:
     print(json.dumps([{"id": "ses_fake1", "directory": os.getcwd(), "time": {"updated": now}}]))
+elif args[:2] == ["session", "delete"]:
+    print("deleted")
 elif args[:1] == ["export"]:
     messages = [{"info": {"role": "user"}, "parts": [{"type": "text", "text": "Arregla la memoria por chat"}]},
                 {"info": {"role": "assistant"}, "parts": [{"type": "text", "text": "Listo: quedó arreglado."}]}]

@@ -103,7 +103,8 @@ La rama `dev` añade el Terminal Workspace. El PR pasó la matriz automatizada d
 - comandos CLI de workspace, procesos, agentes, editor y recursos;
 - dashboard con Textual y operación multiproyecto mediante sesiones recuperables;
 - Skill Registry local con búsqueda, consulta de instrucciones y recomendaciones por stack;
-- OpenCode como tercer agente y modelos locales con Ollama ([ver más abajo](#opencode-y-modelos-locales)).
+- OpenCode como tercer agente y modelos locales con Ollama ([ver más abajo](#opencode-y-modelos-locales));
+- visor de Git en Studio: cambios, diff lado a lado, historial con grafo y ramas ([ver más abajo](#git-en-studio)).
 
 El catálogo contiene 21 skills generales y para Python, TypeScript, React/Next.js,
 NestJS, .NET, React Native, PostgreSQL, Prisma, Redis, Docker, diseño UI/UX y
@@ -840,6 +841,7 @@ chxchx-tech agent start ID --path .    inicia un agente configurado
 chxchx-tech agent add opencode --path . añade OpenCode (acepta --dry-run)
 chxchx-tech agent add ollama-opencode --path . añade OpenCode con Ollama local
 chxchx-tech agent start ID --new-chat --path . inicia chat nuevo con contexto (Codex/Claude/OpenCode)
+chxchx-tech agent chat ID --prompt "…"  un turno de chat estructurado (JSONL); --lean para una consulta puntual, --prompt-file F para mensajes largos
 chxchx-tech local-models status        hardware, estado de Ollama y modelos locales que caben
 chxchx-tech local-models setup MODELO  descarga, amplía el contexto y configura OpenCode (--dry-run, --yes)
 chxchx-tech local-models remove MODELO borra el modelo de Ollama y de opencode.json
@@ -1159,6 +1161,37 @@ pestaña también. **Nuevo chat** empieza otra conversación.
 Por debajo, cada mensaje ejecuta `chxchx-tech agent chat AGENTE --path . --prompt
 "…"`, que emite eventos JSONL `chxchx.agent-event` v1 (ver ADR 0009). Funciona
 con agentes Codex, Claude Code y OpenCode (los lanzados con `ollama launch` usan la terminal integrada).
+
+### Git en Studio
+
+La pestaña **Git**, junto a **Archivos** en el panel izquierdo (`Ctrl+Shift+G`), muestra el repositorio del proyecto con los términos de Git entre paréntesis, para que se entienda sin saber Git y quien ya lo sabe reconozca todo. Si la carpeta no es un repositorio ofrece iniciarlo (`git init`).
+
+<img src="assets/screenshots/studio-git-diff.png" alt="Pestaña Git de Studio con los cambios a la izquierda y el diff lado a lado" width="760">
+
+- **Cambios**: *Conflictos*, *Listos para guardar (staged)* y *Cambios* (editados y archivos nuevos). Pasa el cursor sobre un archivo para **preparar** (`+`), **quitar** (`−`) o **descartar** (`↶`). Un clic abre su diff como pestaña del editor, con vista *lado a lado* o *en línea*, números de línea y salto entre bloques. Escribe el mensaje y pulsa **Guardar (commit)**; si no hay nada preparado el botón pasa a **Guardar todo (commit)**, que prepara todo y guarda. `Ctrl+Enter` guarda.
+- **Historial**: commits con el grafo de ramas (los merges se ven como nodo hueco), etiquetas de rama y tag, y el detalle de cada commit con sus archivos. Clic derecho: copiar el hash o crear una rama desde ese commit.
+- **Ramas**: cambiar (checkout), crear y borrar. Borrar una rama con commits sin integrar pide una segunda confirmación.
+- **Descartar es reversible**: antes de borrar nada se guarda una copia en `.git/chxchx-backups/` (un parche con tus cambios y los archivos nuevos); se recupera con `git apply`.
+- **Enviar y recibir**: un botón en la cabecera hace lo que toca y lo dice: **↓ Recibir 2**, **↑ Enviar 1**, **↑ Publicar rama** o **⟳ Traer novedades** (el menú ofrece cada acción por separado). Recibir solo avanza en línea recta; si tu rama y la del remoto se separaron, te lo explica y te ofrece fusionar (merge), y si hay conflictos puedes **Cancelar la fusión**. Un envío rechazado te dice que recibas primero: **nunca se fuerza**. Enviar pide confirmación (puedes desactivarla) y cualquier operación se puede cancelar.
+- **Credenciales**: Studio nunca pide ni guarda contraseñas. Usa tu gestor de credenciales o tu llave SSH; si hacen falta datos, falla enseguida y te dice cómo configurarlo.
+- **Apartados (stash)**: **Apartar** guarda tus cambios aparte y deja el proyecto limpio; en la lista puedes aplicarlos, aplicarlos y quitarlos, o eliminarlos (al eliminar te da el comando para recuperarlo).
+- **Explorador con estado de Git**: los archivos cambiados toman el color de su estado con una letra (`M`, `N`, `A`, `U`) y las carpetas que los contienen llevan un punto.
+- La pestaña se actualiza sola al guardar, al volver a Studio y cada 5 s mientras está visible. Los errores de Git (por ejemplo, falta tu nombre y correo) se muestran tal cual con qué hacer. Requiere Git 2.25 o posterior.
+
+<img src="assets/screenshots/studio-git-sync.png" alt="Pestaña Git con el botón Recibir 2, la tarjeta de guía y la sección Apartados" width="300"> <img src="assets/screenshots/studio-git-explorer.png" alt="Explorador de archivos con el estado de Git" width="300">
+
+#### Asistente de Git
+
+Una tarjeta en la parte superior de **Cambios** dice cuál es el siguiente paso (listo para guardar, ramas separadas, conflictos…) y lo explica en pasos cortos. Eso funciona sin ningún agente. Si hay uno conectado, el asistente además:
+
+- **Sugiere el mensaje del commit** (botón **Sugerir**): lee tus cambios y los commits recientes, imita su estilo y rellena el mensaje. Tú lo editas y decides; no guarda nada por su cuenta.
+- **Da consejo guiado** (botón **Pedir consejo**, también tras un error): explica qué pasó y qué hacer, con pasos numerados. Con conflictos de fusión revisa los bloques en conflicto y recomienda qué conservar. Solo aconseja: no ejecuta nada ni modifica archivos.
+
+<img src="assets/screenshots/studio-git-assistant.png" alt="Tarjeta de guía y mensaje de commit sugerido por el asistente" width="300"> <img src="assets/screenshots/studio-git-advice.png" alt="Consejo del asistente para ramas separadas" width="420">
+
+Responde el agente que ya usas: el del chat que tienes abierto, o el que elijas en la tarjeta (Codex, Claude Code u OpenCode). **Privacidad**: antes de la primera consulta con cada agente Studio avisa de qué se envía (el resumen y las diferencias de tus cambios). Nunca se envían archivos sensibles (`.env`, llaves, credenciales), se enmascaran valores que parezcan secretos y las diferencias largas se recortan. Cada consulta es de solo lectura, no guarda sesión ni memoria y requiere que el proyecto sea de confianza.
+
+Todavía no incluye `rebase`, blame, preparar por bloques ni resolver conflictos con un editor. Diseño en [ADR 0011](.ai/adr/0011-git-viewer-in-studio.md).
 
 ### Memoria entre sesiones
 

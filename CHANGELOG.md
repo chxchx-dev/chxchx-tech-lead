@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Git en Studio: asistente con los agentes del proyecto. Una tarjeta guía el siguiente paso por reglas (sin agente) y, con uno conectado, sugiere el mensaje del commit y da consejo guiado ante ramas separadas, envíos rechazados, credenciales y conflictos. Solo propone; no envía archivos sensibles, enmascara secretos y pide confirmación la primera vez. Nuevo `agent chat --lean` / `--prompt-file`. Rediseño del panel con los iconos de Studio.
+- Git en Studio, fase 2: botón de sincronización (recibir, enviar, publicar, traer novedades) con cancelación, avance en línea recta por defecto y fusión opcional con opción de cancelarla; nunca se fuerza un envío ni se piden credenciales. Apartados (stash) dentro de Cambios y estado de Git en el explorador de archivos (color, letra y punto en carpetas).
+- Studio añade la pestaña **Git** (`Ctrl+Shift+G`): cambios con preparar/quitar/descartar y commit en lenguaje claro, diff lado a lado o en línea como pestaña del editor, historial con grafo de ramas y detalle del commit, y ramas (cambiar, crear, borrar). Descartar guarda antes una copia en `.git/chxchx-backups/`. Motor nativo y asíncrono; ver ADR 0011.
 - El selector de agentes de Inicio ofrece **＋ Añadir OpenCode** cuando el proyecto no lo tiene (misma vista previa y confirmación que `agent add`). README con OpenCode y modelos locales, y capturas de ejemplo en `assets/screenshots/`.
 - Pruebas en capas (`tests/README.md`): servidor HTTP falso de Ollama y ejecutables falsos de `ollama`/`opencode` para flujos E2E, y pruebas `live` opt-in (`pytest -m live`) contra las herramientas reales. Los agentes se lanzan por ruta completa para que los shims `.cmd` de Windows funcionen.
 - Modelos locales: `local-models remove` (borra el modelo y sus variantes de Ollama y los quita de `opencode.json`), modelos cargados en memoria (`/api/ps`), botón Quitar en la pestaña de Studio y acceso desde Inicio.

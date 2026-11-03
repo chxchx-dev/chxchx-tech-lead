@@ -2,6 +2,22 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Asistente de Git (hecho; validar con agentes reales)
+
+- Probar con un agente real: sugerir mensaje con y sin cambios preparados, consejo ante ramas separadas / envío rechazado / conflictos, cancelar, cambiar de agente, y que el diálogo de consentimiento aparezca la primera vez. Comprobar que ninguna consulta deja sesión (Codex `--ephemeral`, Claude `--no-session-persistence`, OpenCode borra la suya) ni toca `.ai/`.
+- Revisar con un repo que tenga `.env` y secretos en el código que nada sensible sale (ver ADR 0012). Pendiente: resolver conflictos con ayuda del agente en el editor, sugerir cómo dividir un cambio en varios commits.
+
+## Visor de Git (fases 1 y 2 hechas; probar contra un remoto real)
+
+- Probar a mano con un remoto real (GitHub por HTTPS con gestor de credenciales y por SSH con llave): publicar, enviar, recibir, divergencia + fusión, conflicto + cancelar fusión, y que un remoto sin credenciales falle rápido con el mensaje de ayuda (sin colgar). Probar también cancelar una operación lenta, Apartar/aplicar/eliminar y el color del explorador en un repo grande.
+- Pendiente (fase 3): preparar por bloques, blame, historial por archivo, resolver conflictos con un editor, búsqueda en el historial. Decisión tomada: no ofrecer `rebase` ni envío forzado.
+
+## Visor de Git (fase 1 hecha; probar a mano)
+
+- Probar en Studio con un repo real: abrir la pestaña Git, preparar/quitar/descartar (revisar `.git/chxchx-backups/`), commit con y sin nada preparado, historial en un repo con muchas ramas, cambiar/crear/borrar ramas, un repo sin commits, una carpeta que no es repo, y un repo grande (rendimiento del estado y del historial).
+- Confirmar en el CI de Windows y macOS que `native-git-smoke` y `native-git-ui-smoke` pasan (rutas, `GIT_CONFIG_GLOBAL`, fin de línea).
+- Fase 2: `push`/`pull`/`fetch` con autenticación (sin pedir contraseñas en la interfaz), stash y estado de Git en el árbol de archivos. Fase 3: preparar por bloques, blame, historial por archivo, resolver conflictos y búsqueda en el historial.
+
 ## Selector con OpenCode y capturas (hecho; revisar a mano)
 
 - Probar en Studio: Inicio → selector → `＋ Añadir OpenCode` → Añadir OpenCode: ver la vista previa, confirmar, volver a dar trust y comprobar que `opencode` aparece como agente.
