@@ -102,7 +102,8 @@ La rama `dev` añade el Terminal Workspace. El PR pasó la matriz automatizada d
 - adapters para Zellij, fallback de subprocess, Sublime, agentes CLI y Git;
 - comandos CLI de workspace, procesos, agentes, editor y recursos;
 - dashboard con Textual y operación multiproyecto mediante sesiones recuperables;
-- Skill Registry local con búsqueda, consulta de instrucciones y recomendaciones por stack.
+- Skill Registry local con búsqueda, consulta de instrucciones y recomendaciones por stack;
+- OpenCode como tercer agente y modelos locales con Ollama ([ver más abajo](#opencode-y-modelos-locales)).
 
 El catálogo contiene 21 skills generales y para Python, TypeScript, React/Next.js,
 NestJS, .NET, React Native, PostgreSQL, Prisma, Redis, Docker, diseño UI/UX y
@@ -839,6 +840,9 @@ chxchx-tech agent start ID --path .    inicia un agente configurado
 chxchx-tech agent add opencode --path . añade OpenCode (acepta --dry-run)
 chxchx-tech agent add ollama-opencode --path . añade OpenCode con Ollama local
 chxchx-tech agent start ID --new-chat --path . inicia chat nuevo con contexto (Codex/Claude/OpenCode)
+chxchx-tech local-models status        hardware, estado de Ollama y modelos locales que caben
+chxchx-tech local-models setup MODELO  descarga, amplía el contexto y configura OpenCode (--dry-run, --yes)
+chxchx-tech local-models remove MODELO borra el modelo de Ollama y de opencode.json
 chxchx-tech agent start --all --path . inicia todos los agentes configurados
 chxchx-tech agent start --preset ID --path . inicia un preset de agentes
 chxchx-tech agent list --path .       muestra disponibilidad y panes de agentes
@@ -1071,7 +1075,7 @@ checkout, consulta [Compilar Studio desde el checkout](#compilar-studio-desde-el
    del proyecto.
 
 Si todavía no tienes un agente configurado, puedes preparar el proyecto desde
-**Configuración** y añadir OpenCode desde **Agentes**. Codex y Claude Code deben
+**Configuración** y añadir OpenCode desde **Agentes** o desde el selector de Inicio. Codex y Claude Code deben
 estar instalados por separado y configurados como agentes del proyecto.
 
 ### Navegar y trabajar
@@ -1122,7 +1126,7 @@ el tema. La terminal usa una paleta ANSI legible tanto en temas oscuros como en
 el claro. La barra de estado muestra la línea, la columna, el lenguaje y
 el tema.
 
-### Chat visual con Codex y Claude
+### Chat visual con Codex, Claude y OpenCode
 
 **Chat visual**, en Inicio o en `Herramientas → Chat visual con agente` (también
 desde la paleta), abre una pestaña de conversación nativa con el agente
@@ -1139,20 +1143,22 @@ pestaña también. **Nuevo chat** empieza otra conversación.
 
 - **Modelo y Effort** muestran las opciones reales de cada agente. En Codex
   salen de su catálogo local, con los niveles que admite cada modelo. En Claude
-  son los alias documentados (`sonnet`, `opus`, `haiku`…) y `--effort`. *Por
-  defecto* usa lo que tengas configurado en el agente.
+  son los alias documentados (`sonnet`, `opus`, `haiku`…) y `--effort`. En
+  OpenCode son los modelos `proveedor/modelo` de `opencode models`, sin niveles
+  de effort. *Por defecto* usa lo que tengas configurado en el agente.
 - La barra de uso muestra el contexto usado frente a la ventana del modelo, los
   límites de 5 h y semanal del plan de Codex con su hora de reinicio, y los
-  tokens de la sesión. En Claude también muestra el costo estimado.
+  tokens de la sesión. En Claude también muestra el costo estimado. OpenCode
+  informa tokens y costo, pero no la ventana de contexto.
 - 📎 adjunta imágenes; también puedes pegarlas con `Ctrl+V` o arrastrarlas al
   cuadro de texto. Se copian a `.ai/chat-attachments/`: Codex las recibe con
-  `--image` y Claude las lee desde esa ruta.
+  `--image`, OpenCode con `--file` y Claude las lee desde esa ruta.
 - Si el agente no está instalado, el chat lo indica y muestra el comando para
   instalarlo.
 
 Por debajo, cada mensaje ejecuta `chxchx-tech agent chat AGENTE --path . --prompt
 "…"`, que emite eventos JSONL `chxchx.agent-event` v1 (ver ADR 0009). Funciona
-con agentes Codex y Claude Code; para OpenCode usa la terminal integrada.
+con agentes Codex, Claude Code y OpenCode (los lanzados con `ollama launch` usan la terminal integrada).
 
 ### Memoria entre sesiones
 
@@ -1302,6 +1308,38 @@ opencode --version
 ```
 
 `chxchx-tech doctor` las clasifica como disponibles o ausentes. Una herramienta opcional ausente no invalida la instalación base. Si Zellij no está disponible, el workspace utiliza el fallback de subprocess con menos persistencia de sesión.
+
+## OpenCode y modelos locales
+
+OpenCode funciona como tercer agente junto a Codex y Claude. Los tres comparten `AGENTS.md`, `.ai/`, la memoria del proyecto y el diario de sesiones, así que puedes usar uno, dos o los tres sin perder contexto.
+
+**Añadirlo.** En Inicio, abre el selector de agentes y elige **＋ Añadir OpenCode** (o `chxchx-tech agent add opencode --path .`). Muestra una vista previa, respalda la configuración y pide volver a dar trust al proyecto.
+
+<img src="assets/screenshots/studio-home.png" alt="Inicio de Studio con la entrada Añadir OpenCode en el selector de agentes" width="760">
+
+**Chat visual.** Funciona como con Codex y Claude. *Solo lectura* usa el agente `plan` de OpenCode y niega edición y shell; *Editar workspace* usa `build`.
+
+<img src="assets/screenshots/studio-chat-opencode.png" alt="Chat visual de Studio con OpenCode usando un modelo local" width="760">
+
+### Modelos locales con Ollama
+
+Studio y el CLI detectan tu hardware (RAM, GPU, disco), estiman qué modelos caben y dejan OpenCode configurado en el proyecto. ChxChx **no instala Ollama**: te muestra el método oficial.
+
+<img src="assets/screenshots/studio-local-models.png" alt="Pestaña Modelos locales de Studio con el encaje de cada modelo" width="760">
+
+*Las capturas usan un proyecto y datos de ejemplo.* Se abre desde **Modelos locales** en Inicio o `Herramientas → Modelos locales…`.
+
+```bash
+chxchx-tech local-models status                           # equipo, Ollama y qué modelos caben (★ = recomendado)
+chxchx-tech local-models setup qwen3-coder:30b --dry-run  # pasos y opencode.json resultante, sin cambiar nada
+chxchx-tech local-models setup qwen3-coder:30b --set-default
+chxchx-tech local-models remove qwen3-coder:30b
+```
+
+- `setup` descarga el modelo si falta (pide confirmación, o `--yes`), crea una variante `-ctx32k` y la añade a `opencode.json`. La variante existe porque el contexto por defecto de Ollama, 4096 tokens, rompe las herramientas de OpenCode.
+- Solo toca `provider.ollama` (y `model` con `--set-default`) del `opencode.json` del proyecto; el archivo anterior se respalda en `~/.chxchx-tech-lead/backups-opencode/`.
+- El encaje es una estimación, no una promesa de velocidad. `remove` borra el modelo y sus variantes de Ollama y de `opencode.json`.
+- Diseño en [ADR 0010](.ai/adr/0010-local-models-for-opencode.md); cómo probarlo, con falsos y con las herramientas reales, en [tests/README.md](tests/README.md).
 
 ## Seguridad y rollback
 
