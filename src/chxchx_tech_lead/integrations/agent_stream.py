@@ -1,7 +1,8 @@
-"""Structured (non-TTY) turns for Codex and Claude Code, normalized for Studio.
+"""Structured (non-TTY) turns for Codex, Claude Code and OpenCode, normalized for Studio.
 
-Both CLIs offer an official machine-readable mode: `codex exec --json` and
-`claude -p --output-format stream-json`. Each user turn runs one process that
+Each CLI offers an official machine-readable mode: `codex exec --json`,
+`claude -p --output-format stream-json` and `opencode run --format json`.
+Each user turn runs one process that
 resumes the previous session, and the prompt goes through stdin so Windows
 `.cmd` shims never have to quote free text. Every provider event is mapped to
 the `chxchx.agent-event` v1 shapes below; unknown events are dropped.
@@ -20,15 +21,23 @@ the `chxchx.agent-event` v1 shapes below; unknown events are dropped.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-PROVIDERS = {"codex": "Codex", "claude": "Claude"}
+from .agent_stream_opencode import normalize_opencode
+
+PROVIDERS = {"codex": "Codex", "claude": "Claude", "opencode": "OpenCode"}
+# Providers that take attachments as CLI arguments; Claude reads them from the prompt.
+IMAGE_ARGUMENT_PROVIDERS = frozenset({"Codex", "OpenCode"})
 MODES = ("read-only", "workspace-write")
 _MAX_OUTPUT_CHARS = 4000
 _CODEX_SANDBOX = {"read-only": "read-only", "workspace-write": "workspace-write"}
 _CLAUDE_PERMISSION = {"read-only": "plan", "workspace-write": "acceptEdits"}
+_OPENCODE_AGENT = {"read-only": "plan", "workspace-write": "build"}
+# The built-in `plan` agent still allows bash, so read-only also denies it explicitly.
+_OPENCODE_READ_ONLY_PERMISSION = {"edit": "deny", "bash": "deny"}
 
 Event = dict[str, Any]
 
@@ -52,7 +61,7 @@ def turn_command(
     """Build the structured-turn argv; the prompt is written to stdin.
 
     Claude receives images as paths inside the prompt (see `agent_chat`), so
-    only Codex takes them as arguments.
+    only Codex and OpenCode take them as arguments.
     """
     if mode not in MODES:
         raise ValueError(f"Modo no soportado: {mode}")
@@ -77,12 +86,32 @@ def turn_command(
         if effort:
             argv += ["--effort", effort]
         return [*argv, "--resume", session_id] if session_id else argv
-    raise ValueError("El chat visual solo está disponible para Codex y Claude Code")
+    if provider == "OpenCode":
+        argv = [executable, "run", *configured, "--format", "json", "--agent", _OPENCODE_AGENT[mode]]
+        if session_id:
+            argv += ["--session", session_id]
+        if model:
+            argv += ["--model", model]
+        if effort:
+            argv += ["--variant", effort]
+        for image in images:
+            argv += ["--file", image]
+        return argv
+    raise ValueError("El chat visual solo está disponible para Codex, Claude Code y OpenCode")
+
+
+def turn_environment(command: Sequence[str], *, mode: str) -> dict[str, str]:
+    """Extra environment variables a turn needs on top of the inherited one."""
+    if provider_for(command) == "OpenCode" and mode == "read-only":
+        return {"OPENCODE_PERMISSION": json.dumps(_OPENCODE_READ_ONLY_PERMISSION)}
+    return {}
 
 
 def normalize(provider: str, record: Any) -> list[Event]:
     if not isinstance(record, dict):
         return []
+    if provider == "OpenCode":
+        return normalize_opencode(record)
     return _codex(record) if provider == "Codex" else _claude(record)
 
 

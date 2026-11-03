@@ -17,7 +17,7 @@ class QHBoxLayout;
 class QLabel;
 class QPushButton;
 
-// Visual chat with a Codex/Claude agent. Every message runs one
+// Visual chat with a Codex, Claude or OpenCode agent. Every message runs one
 // `chxchx-tech agent chat` turn that resumes the previous session; trust,
 // context, memory and the session journal stay in the Python CLI.
 class AgentChatWidget final : public QWidget {
@@ -26,7 +26,7 @@ public:
     AgentChatWidget(QString projectPath, QString agentId, QString cliProgram, QWidget *parent = nullptr);
     ~AgentChatWidget() override;
 
-    // Visual chat relies on the structured modes of Codex and Claude Code.
+    // Visual chat relies on the structured modes of Codex, Claude Code and OpenCode.
     static bool supportsProgram(const QString &program);
 
     QString agentId() const { return m_agentId; }

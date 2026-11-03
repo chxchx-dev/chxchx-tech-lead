@@ -104,3 +104,23 @@ def test_opening_skips_agents_instructions_injected_by_codex(tmp_path: Path, mon
     summary = session_journal.summarize_latest_session(tmp_path, provider="Codex", started_at=started)
 
     assert summary is not None and summary.opening == "Hola, dame un resumen del proyecto"
+
+
+def test_summarizes_the_latest_opencode_session(tmp_path: Path, monkeypatch) -> None:
+    started = datetime(2026, 11, 1, 12, tzinfo=timezone.utc)
+    seen: list[str | None] = []
+
+    def latest(root, *, executable=None):
+        seen.append(executable)
+        return _conversation(root, "ses_1", started + timedelta(minutes=2), "OpenCode")
+
+    monkeypatch.setattr(session_journal, "latest_opencode_conversation", latest)
+
+    summary = session_journal.summarize_latest_session(
+        tmp_path, provider="OpenCode", started_at=started, opencode_executable="/bin/opencode")
+
+    assert summary is not None and (summary.provider, summary.session_id) == ("OpenCode", "ses_1")
+    assert seen == ["/bin/opencode"]
+    monkeypatch.setattr(session_journal, "latest_opencode_conversation",
+                        lambda root, *, executable=None: _conversation(root, "ses_0", started - timedelta(hours=1), "OpenCode"))
+    assert session_journal.summarize_latest_session(tmp_path, provider="OpenCode", started_at=started) is None

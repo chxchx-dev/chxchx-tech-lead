@@ -7,7 +7,7 @@
 class ChatPillPicker;
 
 // Model and effort pickers fed by `chxchx-tech bridge agent-options`, which
-// reads each agent's real catalog (Codex models cache, Claude aliases).
+// reads each agent's real catalog (Codex models cache, Claude aliases, `opencode models`).
 class AgentChatSettings final : public QWidget {
     Q_OBJECT
 public:
@@ -23,7 +23,7 @@ public:
 signals:
     // Emitted once options load; `installHint` explains how to get the CLI.
     void availabilityChanged(bool available, const QString &installHint);
-    // "Codex" or "Claude", plus the model the agent uses when none is chosen.
+    // "Codex", "Claude" or "OpenCode", plus the model the agent uses when none is chosen.
     void providerChanged(const QString &provider, const QString &defaultModel);
 
 private:

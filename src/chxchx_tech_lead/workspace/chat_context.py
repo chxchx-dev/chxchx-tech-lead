@@ -56,7 +56,8 @@ def capture_after_session(
     if provider is None:
         return
     try:
-        summary = summarize_latest_session(project_root, provider=provider, started_at=started_at)
+        journal_options = {"opencode_executable": opencode_executable} if provider == "OpenCode" and opencode_executable else {}
+        summary = summarize_latest_session(project_root, provider=provider, started_at=started_at, **journal_options)
         if summary is not None:
             record_session(project_root, summary)
     except OSError as exc:

@@ -57,8 +57,8 @@ def test_plan_requires_trust_and_a_supported_agent(tmp_path: Path, monkeypatch) 
     monkeypatch.setattr(agent_chat, "executable_available", lambda executable: True)
     with pytest.raises(WorkspaceOperationError, match="confiable"):
         agent_chat.plan_chat_turn(_service(tmp_path, trusted=False), "codex", mode="read-only", session_id=None)
-    with pytest.raises(WorkspaceOperationError, match="Codex y Claude"):
-        agent_chat.plan_chat_turn(_service(tmp_path, command=["opencode"]), "codex", mode="read-only", session_id=None)
+    with pytest.raises(WorkspaceOperationError, match="Codex, Claude Code y OpenCode"):
+        agent_chat.plan_chat_turn(_service(tmp_path, command=["aider"]), "codex", mode="read-only", session_id=None)
     with pytest.raises(WorkspaceOperationError, match="No existe"):
         agent_chat.plan_chat_turn(_service(tmp_path), "claude", mode="read-only", session_id=None)
 
@@ -141,3 +141,43 @@ def test_claude_images_are_staged_in_the_project_and_listed_in_the_prompt(tmp_pa
     staged = list((tmp_path / ".ai" / "chat-attachments").iterdir())
     assert len(staged) == 1 and staged[0].read_bytes() == b"png"
     assert events[1]["text"].startswith("eco: - .ai/chat-attachments/")
+
+
+FAKE_OPENCODE = r"""
+import json, os, sys
+sys.stdout.reconfigure(encoding="utf-8")
+prompt = sys.stdin.buffer.read().decode("utf-8")
+print(json.dumps({"type": "step_start", "sessionID": "ses_fake", "part": {}}), flush=True)
+print(json.dumps({"type": "text", "sessionID": "ses_fake", "part": {"type": "text",
+      "text": "eco: " + prompt.strip().splitlines()[-1] + " " + os.environ.get("OPENCODE_PERMISSION", "-")}}), flush=True)
+print(json.dumps({"type": "step_finish", "sessionID": "ses_fake", "part": {"cost": 0,
+      "tokens": {"input": 5, "output": 2}}}), flush=True)
+"""
+
+
+def test_plan_accepts_opencode_and_carries_the_read_only_permissions(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(agent_chat, "executable_available", lambda executable: True)
+    image = tmp_path / "captura.png"
+    image.write_bytes(b"png")
+
+    plan = agent_chat.plan_chat_turn(_service(tmp_path, command=["opencode"]), "codex", mode="read-only",
+                                     session_id=None, images=(image,))
+
+    assert plan.provider == "OpenCode" and plan.argv[:3] == ["opencode", "run", "--format"]
+    assert plan.argv[-2:] == ["--file", str(image)]
+    assert json.loads(plan.env["OPENCODE_PERMISSION"]) == {"edit": "deny", "bash": "deny"}
+
+
+def test_opencode_turn_streams_events_and_applies_the_environment(tmp_path: Path, isolated_home) -> None:
+    script = tmp_path / "fake_opencode.py"
+    script.write_text(FAKE_OPENCODE, encoding="utf-8")
+    plan = agent_chat.ChatTurnPlan("opencode", "OpenCode", tmp_path, tmp_path, [sys.executable, str(script)],
+                                   "read-only", "ses_fake", ("opencode",), None, None, (),
+                                   {"OPENCODE_PERMISSION": '{"edit": "deny"}'})
+    events: list[dict] = []
+
+    assert agent_chat.run_chat_turn(plan, "hola", events.append) == 0
+
+    assert [event["type"] for event in events] == ["start", "session", "message", "usage", "limits", "done"]
+    assert events[2]["text"] == 'eco: hola {"edit": "deny"}'
+    assert events[-1]["session_id"] == "ses_fake"

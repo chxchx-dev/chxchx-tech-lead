@@ -246,6 +246,7 @@ ChatIdentity chatIdentityFor(const QString &provider, const QString &fallbackNam
 {
     if (provider == QStringLiteral("Codex")) return {QStringLiteral("Codex"), QStringLiteral("</>"), QStringLiteral("#10a37f")};
     if (provider == QStringLiteral("Claude")) return {QStringLiteral("Claude"), QStringLiteral("✳"), QStringLiteral("#d97757")};
+    if (provider == QStringLiteral("OpenCode")) return {QStringLiteral("OpenCode"), QStringLiteral("◇"), QStringLiteral("#6366f1")};
     return {fallbackName, QStringLiteral("◆"), ThemeManager::current().accent.name()};
 }
 

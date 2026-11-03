@@ -137,7 +137,8 @@ int modelChecks()
     view.sync(model);
     if (view.cardCount() != 0) return 37;
     if (!AgentChatWidget::supportsProgram(QStringLiteral("C:\\npm\\claude.cmd"))
-        || AgentChatWidget::supportsProgram(QStringLiteral("opencode"))) return 16;
+        || !AgentChatWidget::supportsProgram(QStringLiteral("opencode"))
+        || AgentChatWidget::supportsProgram(QStringLiteral("aider"))) return 16;
     return 0;
 }
 

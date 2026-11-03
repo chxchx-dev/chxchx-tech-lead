@@ -3,7 +3,9 @@
 Codex publishes its model catalog (with the effort levels each model accepts)
 in `~/.codex/models_cache.json` and its plan limits in the session rollouts.
 Claude Code documents model aliases and `--effort` levels; its cost and
-context usage arrive on the stream-json `result` message instead.
+context usage arrive on the stream-json `result` message instead. OpenCode
+lists `provider/model` ids with `opencode models` and reports tokens and cost
+on each `step_finish` event.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -20,6 +23,7 @@ from .agent_usage_common import positive_int, tail_lines
 INSTALL_HINTS = {
     "Codex": "npm install -g @openai/codex",
     "Claude": "curl -fsSL https://claude.ai/install.sh | bash",
+    "OpenCode": "npm install -g opencode-ai",
 }
 _CODEX_FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
 _CLAUDE_MODELS = ["sonnet", "opus", "haiku", "fable", "opusplan", "sonnet[1m]", "opus[1m]"]
@@ -30,6 +34,17 @@ def executable_available(executable: str) -> bool:
     if "/" in executable or "\\" in executable:
         return Path(executable).expanduser().exists()
     return shutil.which(executable) is not None
+
+
+def resolve_executable(executable: str) -> str:
+    """Full path of a bare command, so Windows `.cmd` shims (npm installs) can be launched.
+
+    `CreateProcess` only looks for `.exe` when given a bare name, while `shutil.which`
+    honours PATHEXT. Paths and unknown commands are returned unchanged.
+    """
+    if "/" in executable or "\\" in executable:
+        return executable
+    return shutil.which(executable) or executable
 
 
 def agent_options(provider: str, executable: str) -> dict[str, Any]:
@@ -46,6 +61,8 @@ def agent_options(provider: str, executable: str) -> dict[str, Any]:
         options.update(_codex_options())
     elif provider == "Claude":
         options.update(_claude_options())
+    elif provider == "OpenCode":
+        options.update(_opencode_options(executable))
     return options
 
 
@@ -128,6 +145,45 @@ def _claude_options() -> dict[str, Any]:
             for alias in _CLAUDE_MODELS
         ],
     }
+
+
+def _opencode_options(executable: str) -> dict[str, Any]:
+    """Default model from `opencode.json` plus the `provider/model` ids `opencode models` lists.
+
+    Reasoning variants (`--variant`) differ per model and the CLI does not
+    publish them, so no effort levels are offered: the model's own default applies.
+    """
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")).expanduser()
+    config: dict[str, Any] = {}
+    for name in ("opencode.json", "opencode.jsonc"):
+        try:
+            loaded = json.loads((config_home / "opencode" / name).read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if isinstance(loaded, dict):
+            config = loaded
+            break
+    return {
+        "default_model": str(config.get("model") or ""),
+        "default_effort": "",
+        "models": [
+            {"id": model, "label": model, "efforts": [], "default_effort": ""}
+            for model in _opencode_models(executable)
+        ],
+    }
+
+
+def _opencode_models(executable: str) -> list[str]:
+    if not executable_available(executable):
+        return []
+    try:
+        result = subprocess.run([resolve_executable(executable), "models"], capture_output=True, text=True, encoding="utf-8",
+                                errors="replace", timeout=8, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if "/" in line.strip() and " " not in line.strip()]
 
 
 def _window(raw: Any) -> dict[str, Any] | None:

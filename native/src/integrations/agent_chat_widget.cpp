@@ -29,6 +29,7 @@ QString providerGuess(const QString &agentId)
     const QString id = agentId.toLower();
     if (id.contains(QStringLiteral("claude"))) return QStringLiteral("Claude");
     if (id.contains(QStringLiteral("codex"))) return QStringLiteral("Codex");
+    if (id.contains(QStringLiteral("opencode"))) return QStringLiteral("OpenCode");
     return {};
 }
 
@@ -94,7 +95,7 @@ AgentChatWidget::AgentChatWidget(QString projectPath, QString agentId, QString c
     m_mode->addItem(QStringLiteral("✎ Editar workspace"), QStringLiteral("workspace-write"));
     m_mode->setToolTip(QStringLiteral(
         "Solo lectura: el agente puede leer y proponer, sin modificar archivos.\n"
-        "Editar workspace: puede modificar archivos del proyecto (sandbox de Codex / acceptEdits de Claude)."));
+        "Editar workspace: puede modificar archivos del proyecto (sandbox de Codex / acceptEdits de Claude / agente build de OpenCode)."));
     m_composer->addToolbarWidget(m_settings);
     m_composer->addToolbarWidget(m_mode);
     footerLayout->addWidget(m_composer);
@@ -127,7 +128,7 @@ bool AgentChatWidget::supportsProgram(const QString &program)
     for (const auto &suffix : {QStringLiteral(".exe"), QStringLiteral(".cmd"), QStringLiteral(".bat")}) {
         if (name.endsWith(suffix)) name.chop(suffix.size());
     }
-    return name == QStringLiteral("codex") || name == QStringLiteral("claude");
+    return name == QStringLiteral("codex") || name == QStringLiteral("claude") || name == QStringLiteral("opencode");
 }
 
 AgentChatWidget::~AgentChatWidget()
