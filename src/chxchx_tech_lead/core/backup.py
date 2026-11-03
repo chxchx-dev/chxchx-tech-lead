@@ -33,6 +33,21 @@ def backup_project(root: Path) -> Path | None:
     return target if copied else None
 
 
+def backup_file(root: Path, relative: str, area: str) -> Path | None:
+    """Copy one project file into its own backup area.
+
+    Kept apart from `backup_project`: `restore_backup` removes managed files
+    missing from the newest backup, so a partial backup must never live there.
+    """
+    source = root / relative
+    if not source.is_file():
+        return None
+    target = ensure_home() / area / _project_key(root) / datetime.now().strftime("%Y%m%d-%H%M%S-%f") / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    return target
+
+
 def latest_backup(root: Path) -> Path | None:
     base = home_dir() / "backups" / _project_key(root)
     if not base.exists():

@@ -1,4 +1,5 @@
 #include "main_window.hpp"
+#include "main_window_areas.hpp"
 #include "integrations/agent_chat_widget.hpp"
 #include "responsive_grid.hpp"
 
@@ -219,7 +220,9 @@ void MainWindow::updateHomeActionState()
         && !m_homeAgentSelector->itemData(index, Qt::UserRole + 1).toString().isEmpty()
         && !m_homeAgentSelector->itemData(index, Qt::UserRole + 2).toString().isEmpty()
         && !m_homeAgentSelector->itemData(index, Qt::UserRole + 4).toBool();
-    m_homeAgentButton->setEnabled(agentConfigured);
+    const bool addEntry = index >= 0 && !m_homeAgentSelector->itemData(index, AddAgentRole).toString().isEmpty();
+    m_homeAgentButton->setText(addEntry ? QStringLiteral("Añadir OpenCode") : QStringLiteral("Abrir agente"));
+    m_homeAgentButton->setEnabled(agentConfigured || addEntry);
     m_homeNewChatButton->setEnabled(agentConfigured
         && !m_homeAgentSelector->itemData(index, Qt::UserRole + 6).toString().isEmpty());
     m_homeVisualChatButton->setEnabled(agentConfigured

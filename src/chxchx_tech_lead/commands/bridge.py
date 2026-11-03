@@ -10,6 +10,7 @@ from ..workspace.agent_chat import agent_options_payload
 from ..workspace.bridge import project_status_payload
 from ..workspace.project_context import workspace_service_for
 from ..workspace.bridge_contracts import ERROR_SCHEMA, SCHEMA_VERSION
+from ..workspace.bridge_local_models import local_models_payload
 from ..workspace.bridge_resources import resources_overview_payload
 from ..integrations.ci_service import ci_status_payload
 from ..integrations.deploy_service import deployment_status_payload
@@ -124,6 +125,14 @@ def bridge_agent_options(
 ) -> None:
     """Lista modelos, niveles de effort y disponibilidad de un agente para el chat visual."""
     _emit_payload(lambda: agent_options_payload(workspace_service_for(path), agent))
+
+
+@bridge_app.command("local-models")
+def bridge_local_models(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+) -> None:
+    """Hardware, estado de Ollama y modelos locales recomendados para OpenCode."""
+    _emit_payload(local_models_payload, path)
 
 
 def _emit_payload(builder, *args) -> None:

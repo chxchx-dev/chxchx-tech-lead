@@ -127,6 +127,13 @@ qt_add_executable(chxchx-studio
     src/integrations/terminal_launcher.hpp
     src/integrations/bridge_client.cpp
     src/integrations/bridge_client.hpp
+    src/integrations/local_models_model.cpp
+    src/integrations/local_models_model.hpp
+    src/integrations/local_models_widget.cpp
+    src/integrations/local_models_widget_view.cpp
+    src/integrations/local_models_widget_setup.cpp
+    src/integrations/local_models_widget.hpp
+    src/integrations/local_models_widget_style.hpp
     src/integrations/bridge_schemas.hpp
     src/integrations/agent_session_widget.cpp
     src/integrations/agent_session_widget.hpp
@@ -281,6 +288,17 @@ if(CHXCHX_BUILD_TESTS)
         src/responsive_grid.cpp src/responsive_grid.hpp)
     target_link_libraries(chxchx-agent-chat-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
     add_test(NAME native-agent-chat-smoke COMMAND chxchx-agent-chat-smoke)
+
+    add_executable(chxchx-local-models-smoke tests/local_models_smoke.cpp
+        src/integrations/local_models_model.cpp src/integrations/local_models_model.hpp
+        src/integrations/local_models_widget.cpp src/integrations/local_models_widget_view.cpp
+        src/integrations/local_models_widget_setup.cpp src/integrations/local_models_widget.hpp
+        src/integrations/local_models_widget_style.hpp
+        src/studio_theme.cpp src/studio_themes.cpp src/studio_stylesheet.cpp src/studio_icons.cpp
+        src/responsive_grid.cpp src/responsive_grid.hpp)
+    target_link_libraries(chxchx-local-models-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+    add_test(NAME native-local-models-smoke COMMAND chxchx-local-models-smoke)
+    set_tests_properties(native-local-models-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     add_executable(chxchx-layout-smoke tests/layout_smoke.cpp
         src/responsive_grid.cpp src/responsive_grid.hpp src/file_icon_provider.cpp src/file_icon_provider.hpp

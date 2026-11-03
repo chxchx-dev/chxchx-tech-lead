@@ -171,6 +171,9 @@ void MainWindow::buildActions()
     addAction(toolsMenu, QStringLiteral("tools.agentChat"), QStringLiteral("Chat visual con agente"),
         QKeySequence(), [this] { openVisualChat(); }, QStringLiteral("dialog-messages"),
         QStyle::SP_MessageBoxQuestion, false);
+    addAction(toolsMenu, QStringLiteral("tools.localModels"), QStringLiteral("Modelos locales (Ollama + OpenCode)…"),
+        QKeySequence(), [this] { openLocalModels(); }, QStringLiteral("computer"),
+        QStyle::SP_ComputerIcon, false);
     addAction(toolsMenu, QStringLiteral("tools.gitDiff"), QStringLiteral("Diff Git del archivo actual"),
         QKeySequence(), [this] { showCurrentFileDiff(); }, QStringLiteral("vcs-diff"),
         QStyle::SP_FileDialogDetailedView, false);

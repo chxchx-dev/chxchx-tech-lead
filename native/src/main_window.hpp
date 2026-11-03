@@ -52,6 +52,8 @@ public:
     void openFiles(const QStringList &paths);
     // Selects a section by id ("overview", "agents"…); used for screenshots and QA.
     void showArea(const QString &id);
+    // Opens a tool tab for screenshots and QA: "local-models", "add-agent" (selects the add-OpenCode entry), or "chat" with `agentId|prompt`.
+    void showTool(const QString &id, const QString &argument = {});
 
 private slots:
     void openFile();
@@ -79,6 +81,8 @@ private slots:
     void openAllHomeAgentSessions();
     void openHomeVisualChat();
     void openVisualChat();
+    void openLocalModels();
+    void addAgentToProject(const QString &provider);
     void selectMemoryNote(QListWidgetItem *item);
     void selectChatConversation(QListWidgetItem *item);
     void openCommandPalette();
@@ -203,6 +207,7 @@ private:
     QPushButton *m_homeNewChatButton = nullptr;
     QPushButton *m_homeAllAgentsButton = nullptr;
     QPushButton *m_homeVisualChatButton = nullptr;
+    QPushButton *m_homeLocalModelsButton = nullptr;
     QWidget *m_sectionContainer = nullptr;
     QFrame *m_areaActionBar = nullptr;
     ResponsiveGrid *m_areaActions = nullptr;
