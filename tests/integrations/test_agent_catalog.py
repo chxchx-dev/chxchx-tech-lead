@@ -53,3 +53,27 @@ def test_codex_limits_read_the_latest_token_count_of_the_thread(tmp_path: Path, 
         "plan": "plus",
     }
     assert agent_catalog.codex_limits("otro-hilo") is None
+
+
+def test_opencode_options_use_its_config_and_the_models_it_lists(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    (tmp_path / "opencode").mkdir()
+    (tmp_path / "opencode" / "opencode.json").write_text('{"model": "anthropic/claude-sonnet-5-5"}', encoding="utf-8")
+    monkeypatch.setattr(agent_catalog, "executable_available", lambda executable: True)
+    monkeypatch.setattr(agent_catalog.subprocess, "run", lambda *args, **kwargs: type(
+        "Result", (), {"returncode": 0, "stdout": "anthropic/claude-sonnet-5-5\nopencode/big-pickle\nbanner con texto\n"})())
+
+    options = agent_catalog.agent_options("OpenCode", "opencode")
+
+    assert options["install_hint"] == "npm install -g opencode-ai"
+    assert options["default_model"] == "anthropic/claude-sonnet-5-5"
+    assert [model["id"] for model in options["models"]] == ["anthropic/claude-sonnet-5-5", "opencode/big-pickle"]
+    assert all(model["efforts"] == [] for model in options["models"])
+
+
+def test_opencode_options_survive_a_missing_cli(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    options = agent_catalog.agent_options("OpenCode", "definitely-missing-opencode")
+
+    assert options["available"] is False and options["models"] == [] and options["default_model"] == ""

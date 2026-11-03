@@ -21,6 +21,8 @@ class AgentChatWidget;
 class AgentSessionWidget;
 class WorkspaceTerminalWidget;
 class QDockWidget;
+class GitPanel;
+struct GitDiffRequest;
 class QCloseEvent;
 class QDialog;
 class QComboBox;
@@ -52,6 +54,8 @@ public:
     void openFiles(const QStringList &paths);
     // Selects a section by id ("overview", "agents"…); used for screenshots and QA.
     void showArea(const QString &id);
+    // Opens a tool tab for screenshots and QA: "local-models", "git" (changes|history|branches|files), "git-suggest" / "git-advice" (ask the assistant), "git-diff" (`path|source`), "add-agent" (selects the add-OpenCode entry), or "chat" with `agentId|prompt`.
+    void showTool(const QString &id, const QString &argument = {});
 
 private slots:
     void openFile();
@@ -79,12 +83,18 @@ private slots:
     void openAllHomeAgentSessions();
     void openHomeVisualChat();
     void openVisualChat();
+    void openLocalModels();
+    void addAgentToProject(const QString &provider);
     void selectMemoryNote(QListWidgetItem *item);
     void selectChatConversation(QListWidgetItem *item);
     void openCommandPalette();
     void searchProjectFiles();
     void showCurrentFileSymbols();
     void showCurrentFileDiff();
+    void showGitPanel();
+    void openGitDiff(const GitDiffRequest &request);
+    void buildGitPanel(QWidget *explorer);
+    void configureGitAssistant();
     void executePaletteCommand(QListWidgetItem *item);
     void showAreaDashboard(const QJsonObject &payload, const QString &area);
     void updateAgentDashboard();
@@ -203,6 +213,7 @@ private:
     QPushButton *m_homeNewChatButton = nullptr;
     QPushButton *m_homeAllAgentsButton = nullptr;
     QPushButton *m_homeVisualChatButton = nullptr;
+    QPushButton *m_homeLocalModelsButton = nullptr;
     QWidget *m_sectionContainer = nullptr;
     QFrame *m_areaActionBar = nullptr;
     ResponsiveGrid *m_areaActions = nullptr;
@@ -239,6 +250,8 @@ private:
     QPlainTextEdit *m_output = nullptr;
     QDockWidget *m_activityDock = nullptr;
     QDockWidget *m_projectDock = nullptr;
+    QTabWidget *m_sidebarTabs = nullptr;
+    GitPanel *m_gitPanel = nullptr;
     QDockWidget *m_controlDock = nullptr;
     QMenu *m_viewMenu = nullptr;
     QToolBar *m_quickToolbar = nullptr;

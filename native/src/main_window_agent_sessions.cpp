@@ -1,7 +1,13 @@
 #include "main_window.hpp"
+#include "main_window_areas.hpp"
 #include "integrations/agent_chat_widget.hpp"
 #include "integrations/agent_session_widget.hpp"
 #include "integrations/bridge_client.hpp"
+#include "integrations/local_models_widget.hpp"
+#include "git/git_changes_view.hpp"
+#include "git/git_diff_view.hpp"
+#include "git/git_history_view.hpp"
+#include "git/git_panel.hpp"
 #include "integrations/workspace_terminal_widget.hpp"
 
 #include <QComboBox>
@@ -13,7 +19,11 @@
 #include <QMessageBox>
 #include <QStackedWidget>
 #include <QStatusBar>
+#include <QFileSystemModel>
+#include <QSortFilterProxyModel>
 #include <QTabWidget>
+#include <QTreeView>
+#include <QTimer>
 #include <QUuid>
 
 namespace {
@@ -62,6 +72,10 @@ void MainWindow::openHomeSelectedAgent(bool newChat)
 void MainWindow::launchAgentFromSelector(QComboBox *selector, bool newChat)
 {
     if (selector == nullptr || selector->currentIndex() < 0) return;
+    if (const QString provider = selector->currentData(AddAgentRole).toString(); !provider.isEmpty()) {
+        addAgentToProject(provider);
+        return;
+    }
     const QString agentId = selector->currentText();
     QString program = selector->currentData(Qt::UserRole + 1).toString();
     const QString workingDirectory = selector->currentData(Qt::UserRole + 2).toString();
@@ -181,6 +195,10 @@ void MainWindow::launchVisualChatFromSelector(QComboBox *selector)
             QStringLiteral("Elige un agente en Inicio o en Agentes. Si la lista está vacía, actualiza la vista."));
         return;
     }
+    if (const QString provider = selector->currentData(AddAgentRole).toString(); !provider.isEmpty()) {
+        addAgentToProject(provider);
+        return;
+    }
     const QString agentId = selector->currentText();
     const QString program = selector->currentData(Qt::UserRole + 1).toString();
     if (!AgentChatWidget::supportsProgram(program) || selector->currentData(Qt::UserRole + 4).toBool()) {
@@ -206,6 +224,90 @@ void MainWindow::createAgentChatSession(const QString &agentId)
     tabs->setCurrentWidget(chat);
     chat->focusInput();
     statusBar()->showMessage(QStringLiteral("Chat visual con %1 listo.").arg(agentId), 5000);
+}
+
+void MainWindow::addAgentToProject(const QString &provider)
+{
+    // Same flow as the Agents area's "Añadir agente": preview first, then confirm.
+    const QStringList preview = {QStringLiteral("agent"), QStringLiteral("add"), provider,
+        QStringLiteral("--path"), m_projectPath, QStringLiteral("--dry-run")};
+    const QStringList action = {QStringLiteral("agent"), QStringLiteral("add"), provider,
+        QStringLiteral("--path"), m_projectPath};
+    runPreview(preview, action, {}, QStringLiteral("Añadir agente al proyecto"));
+}
+
+void MainWindow::showTool(const QString &id, const QString &argument)
+{
+    if (id == QStringLiteral("local-models")) {
+        openLocalModels();
+    } else if (id == QStringLiteral("git")) {
+        // argument: changes | history | branches | files (the explorer with Git state)
+        showGitPanel();
+        if (argument == QStringLiteral("files")) {
+            m_sidebarTabs->setCurrentIndex(0);
+            QTimer::singleShot(1200, this, [this] {
+                m_projectTree->expandAll();
+                m_projectTree->collapse(m_projectProxy->mapFromSource(m_fileModel->index(m_projectPath + QStringLiteral("/.git"))));
+            });
+            return;
+        }
+        const int tab = argument == QStringLiteral("history") ? 1 : (argument == QStringLiteral("branches") ? 2 : 0);
+        m_gitPanel->showTab(tab);
+        if (tab == 1) QTimer::singleShot(1800, this, [this] { m_gitPanel->historyView()->selectCommit(0); });
+    } else if (id == QStringLiteral("git-suggest") || id == QStringLiteral("git-advice")) {
+        // QA: ask the Git assistant once the status is in (consent is skipped; a dialog would block the capture).
+        showGitPanel();
+        m_gitPanel->showTab(0);
+        m_gitPanel->assistant()->setConsentRequired(false);
+        const bool suggest = id == QStringLiteral("git-suggest");
+        QTimer::singleShot(2200, this, [this, suggest] {
+            if (suggest) m_gitPanel->changesView()->requestSuggestion();
+            else m_gitPanel->adviseNow(GitAdviceKind::WhatNext);
+        });
+    } else if (id == QStringLiteral("git-diff")) {
+        // argument: path|source (staged, unstaged, untracked, head)
+        showGitPanel();
+        QTimer::singleShot(1500, this, [this, argument] {
+            GitDiffRequest request;
+            request.path = argument.section(QLatin1Char('|'), 0, 0);
+            const QString source = argument.section(QLatin1Char('|'), 1);
+            request.source = source == QStringLiteral("staged") ? GitDiffRequest::Source::Staged
+                : (source == QStringLiteral("untracked") ? GitDiffRequest::Source::Untracked
+                : (source == QStringLiteral("head") ? GitDiffRequest::Source::Head : GitDiffRequest::Source::Unstaged));
+            openGitDiff(request);
+        });
+    } else if (id == QStringLiteral("add-agent")) {
+        // The selector fills after the first status read, so wait for it before choosing the entry.
+        QTimer::singleShot(1500, this, [this] {
+            for (int index = 0; index < m_homeAgentSelector->count(); ++index) {
+                if (!m_homeAgentSelector->itemData(index, AddAgentRole).toString().isEmpty())
+                    m_homeAgentSelector->setCurrentIndex(index);
+            }
+        });
+    } else if (id == QStringLiteral("chat")) {
+        const QString agentId = argument.section(QLatin1Char('|'), 0, 0);
+        createAgentChatSession(agentId);
+        const QString prompt = argument.section(QLatin1Char('|'), 1);
+        if (auto *chat = qobject_cast<AgentChatWidget *>(activeEditorTabs()->currentWidget()); chat != nullptr && !prompt.isEmpty())
+            chat->sendMessage(prompt);
+    }
+}
+
+void MainWindow::openLocalModels()
+{
+    QTabWidget *tabs = activeEditorTabs();
+    for (int index = 0; index < tabs->count(); ++index) {
+        if (auto *existing = qobject_cast<LocalModelsWidget *>(tabs->widget(index))) {
+            tabs->setCurrentIndex(index);
+            existing->refresh();
+            return;
+        }
+    }
+    auto *page = new LocalModelsWidget(m_projectPath, m_bridgeClient->program(), tabs);
+    const int tab = tabs->addTab(page, QStringLiteral("Modelos locales"));
+    tabs->setTabToolTip(tab, QStringLiteral("Ollama + OpenCode\n%1").arg(m_projectPath));
+    tabs->setCurrentWidget(page);
+    statusBar()->showMessage(QStringLiteral("Modelos locales: revisando tu equipo…"), 5000);
 }
 
 int MainWindow::currentProjectEmbeddedAgentCount() const

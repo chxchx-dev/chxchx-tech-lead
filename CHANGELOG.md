@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Git en Studio: asistente con los agentes del proyecto. Una tarjeta guía el siguiente paso por reglas (sin agente) y, con uno conectado, sugiere el mensaje del commit y da consejo guiado ante ramas separadas, envíos rechazados, credenciales y conflictos. Solo propone; no envía archivos sensibles, enmascara secretos y pide confirmación la primera vez. Nuevo `agent chat --lean` / `--prompt-file`. Rediseño del panel con los iconos de Studio.
+- Git en Studio, fase 2: botón de sincronización (recibir, enviar, publicar, traer novedades) con cancelación, avance en línea recta por defecto y fusión opcional con opción de cancelarla; nunca se fuerza un envío ni se piden credenciales. Apartados (stash) dentro de Cambios y estado de Git en el explorador de archivos (color, letra y punto en carpetas).
+- Studio añade la pestaña **Git** (`Ctrl+Shift+G`): cambios con preparar/quitar/descartar y commit en lenguaje claro, diff lado a lado o en línea como pestaña del editor, historial con grafo de ramas y detalle del commit, y ramas (cambiar, crear, borrar). Descartar guarda antes una copia en `.git/chxchx-backups/`. Motor nativo y asíncrono; ver ADR 0011.
+- El selector de agentes de Inicio ofrece **＋ Añadir OpenCode** cuando el proyecto no lo tiene (misma vista previa y confirmación que `agent add`). README con OpenCode y modelos locales, y capturas de ejemplo en `assets/screenshots/`.
+- Pruebas en capas (`tests/README.md`): servidor HTTP falso de Ollama y ejecutables falsos de `ollama`/`opencode` para flujos E2E, y pruebas `live` opt-in (`pytest -m live`) contra las herramientas reales. Los agentes se lanzan por ruta completa para que los shims `.cmd` de Windows funcionen.
+- Modelos locales: `local-models remove` (borra el modelo y sus variantes de Ollama y los quita de `opencode.json`), modelos cargados en memoria (`/api/ps`), botón Quitar en la pestaña de Studio y acceso desde Inicio.
+- Studio añade la pestaña `Herramientas → Modelos locales (Ollama + OpenCode)…`: hardware, estado de Ollama, encaje de cada modelo, vista previa, descarga con confirmación y progreso, sobre `bridge local-models` y `local-models setup --json`.
+- Añade `local-models status|setup` y `bridge local-models`: detecta RAM, GPU y disco, estima qué modelos de Ollama caben, los descarga con confirmación, crea una variante de 32K de contexto y los conecta al `opencode.json` del proyecto con `--dry-run` y backup propio. ChxChx no instala Ollama.
+- Añade OpenCode como tercer agente del chat visual (`opencode run --format json`), con modos de solo lectura y edición, modelo, imágenes, uso y costo, y su sesión en el diario `.ai/history/SESSIONS.md`. Codex, Claude y OpenCode comparten `AGENTS.md`, `.ai/` y la memoria del proyecto, y cada uno funciona por separado.
 - Identifica el build de pruebas de Terminal Workspace como `0.5.0.dev0` y documenta cómo actualizar instalaciones existentes desde `dev`.
 - Escribe el estado persistente mediante archivo temporal y reemplazo atómico para tolerar interrupciones.
 - Rota los logs de procesos al superar 5 MiB y conserva hasta tres copias anteriores.

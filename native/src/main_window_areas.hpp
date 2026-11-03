@@ -1,5 +1,10 @@
 #pragma once
 
+#include <Qt>
+
+// Item data of an agent-selector entry that adds a provider to the project instead of opening an agent.
+inline constexpr int AddAgentRole = Qt::UserRole + 7;
+
 struct Area {
     const char *id;
     const char *label;

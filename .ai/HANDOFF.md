@@ -2,13 +2,61 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Asistente de Git (hecho; validar con agentes reales)
+
+- Probar con un agente real: sugerir mensaje con y sin cambios preparados, consejo ante ramas separadas / envío rechazado / conflictos, cancelar, cambiar de agente, y que el diálogo de consentimiento aparezca la primera vez. Comprobar que ninguna consulta deja sesión (Codex `--ephemeral`, Claude `--no-session-persistence`, OpenCode borra la suya) ni toca `.ai/`.
+- Revisar con un repo que tenga `.env` y secretos en el código que nada sensible sale (ver ADR 0012). Pendiente: resolver conflictos con ayuda del agente en el editor, sugerir cómo dividir un cambio en varios commits.
+
+## Visor de Git (fases 1 y 2 hechas; probar contra un remoto real)
+
+- Probar a mano con un remoto real (GitHub por HTTPS con gestor de credenciales y por SSH con llave): publicar, enviar, recibir, divergencia + fusión, conflicto + cancelar fusión, y que un remoto sin credenciales falle rápido con el mensaje de ayuda (sin colgar). Probar también cancelar una operación lenta, Apartar/aplicar/eliminar y el color del explorador en un repo grande.
+- Pendiente (fase 3): preparar por bloques, blame, historial por archivo, resolver conflictos con un editor, búsqueda en el historial. Decisión tomada: no ofrecer `rebase` ni envío forzado.
+
+## Visor de Git (fase 1 hecha; probar a mano)
+
+- Probar en Studio con un repo real: abrir la pestaña Git, preparar/quitar/descartar (revisar `.git/chxchx-backups/`), commit con y sin nada preparado, historial en un repo con muchas ramas, cambiar/crear/borrar ramas, un repo sin commits, una carpeta que no es repo, y un repo grande (rendimiento del estado y del historial).
+- Confirmar en el CI de Windows y macOS que `native-git-smoke` y `native-git-ui-smoke` pasan (rutas, `GIT_CONFIG_GLOBAL`, fin de línea).
+- Fase 2: `push`/`pull`/`fetch` con autenticación (sin pedir contraseñas en la interfaz), stash y estado de Git en el árbol de archivos. Fase 3: preparar por bloques, blame, historial por archivo, resolver conflictos y búsqueda en el historial.
+
+## Selector con OpenCode y capturas (hecho; revisar a mano)
+
+- Probar en Studio: Inicio → selector → `＋ Añadir OpenCode` → Añadir OpenCode: ver la vista previa, confirmar, volver a dar trust y comprobar que `opencode` aparece como agente.
+- Las capturas del README son de ejemplo; si cambia la UI, repetirlas con las variables de `tests/README.md` y revisar que no se cuele nada real.
+
+## Validación en vivo: lista de pruebas
+
+- Ejecutar `uv run pytest -m live -v -s` con OpenCode y Ollama instalados (pasos y variables en `tests/README.md`). Las pruebas dicen qué adaptador ajustar si fallan; la de solo lectura (`read_only_mode_really_blocks…`) es la de seguridad.
+- Revisar la salida de `an_ask_permission_without_a_terminal…` (caracterización) y guardar la salida cruda con `CHXCHX_LIVE_CAPTURE` para renovar fixtures.
+- Confirmar en CI de Windows que las E2E con ejecutables falsos (shims `.cmd`) pasan; si no, ajustar `tests/fakes/fake_clis.py`.
+
+## Modelos locales con Ollama (pestaña de Studio hecha; falta validar en vivo)
+
+- Hecho: backend, CLI y pestaña de Studio (ver `.ai/CURRENT_STATE.md` y ADR 0010).
+- Siguiente: probar en un escritorio con Ollama instalado: abrir la pestaña, ver los estados (sin Ollama, detenido, listo), vista previa, descarga real con progreso y cancelación, y que `ollama/<modelo>-ctx32k` aparezca en el chat visual de OpenCode.
+- Validar con Ollama real: `/api/pull`, `/api/tags`, `ollama create` con Modelfile y llamadas a herramientas de OpenCode. Comprobar las claves `limit.context`/`limit.output` del proveedor, tomadas de un resumen de la documentación.
+- Hecho: acceso desde Inicio, `local-models remove` y modelos cargados (`/api/ps`). Al validar en vivo, comprobar también el borrado real, que el botón de Inicio se vea bien y que `ollama.loaded` refleje los modelos en memoria.
+- Pendiente menor: acceso desde el área Agentes (requiere ampliar su barra de 4 acciones), descargar modelos fuera del catálogo y revisar el catálogo cuando cambie la biblioteca de Ollama.
+
+## OpenCode como tercer agente (pendiente de validar en vivo)
+
+- Hecho: chat visual, catálogo, diario de sesiones y Studio para OpenCode (detalle en `.ai/CURRENT_STATE.md` y ADR 0009).
+- Primer paso al retomar: instalar OpenCode (`npm install -g opencode-ai`), autenticar un proveedor y correr `chxchx-tech agent add opencode` + `chxchx-tech agent chat opencode --prompt hola`. Confirmar que (1) el prompt entra por stdin, (2) los campos de los eventos coinciden (`sessionID`, `part.text`, `part.state`, `part.tokens`), (3) `OPENCODE_PERMISSION` se respeta en solo lectura y (4) qué hace un permiso `ask` sin terminal. Si el prompt por stdin falla, pasarlo como argumento posicional.
+- Fuera de alcance por ahora: historial de conversaciones de Studio para OpenCode, ventana de contexto y niveles de effort, `ollama launch opencode` en el chat visual.
+- Sin commit: los cambios están en el árbol de trabajo de `dev`. Basic Memory no está disponible en las herramientas de esta sesión.
+
 ## README y merge de ramas
 
 - Se integró `main` en `dev` (`cd86d46`) y luego `feature/reliable-chat-memory` (`9ceb081`); los 10 commits de esa rama quedan conservados en `dev`.
 - Se actualizó la cabecera del README con el arte ASCII solicitado, badges de CI/Python/Qt/plataformas y navegación rápida. Se conservaron las guías, comandos y detalles que ya estaban documentados.
-- No se hizo push. `dev` está 15 commits por delante de `origin/dev`; `.vscode/` sin seguimiento se preservó. Se eliminó la rama local ya integrada; la referencia remota seguirá como respaldo hasta que se publique `dev`.
+- Se publicó `dev` en `origin` con el commit `5eae006`; las ramas local y remota `feature/reliable-chat-memory` se eliminaron después de integrar sus 10 commits.
 - Verificación: `git diff --check` sin errores. No se ejecutaron tests en esta ronda.
 - Basic Memory no está disponible en las herramientas de esta sesión; el checkpoint quedó en `.ai/CURRENT_STATE.md` y este archivo.
+
+## Instalación local de ChxChx Studio
+
+- El release oficial `studio-dev-preview` respondió 404 al `--dry-run`; no había paquete publicado para Fedora. Se compiló el código de `dev` (`5eae006`) y se instaló en `~/.local/opt/chxchx-studio/dev-5eae006`.
+- Se creó `~/.local/bin/chxchx-studio-dev` y el acceso de menú `~/.local/share/applications/chxchx-studio-dev.desktop`. El launcher configura los plugins Qt del sistema y usa el CLI del `.venv` de este checkout.
+- Arranque verificado con captura offscreen, `ldd` sin dependencias faltantes y `desktop-file-validate`. No se ejecutó CTest ni pytest. Esta instalación local depende de que se mantenga el checkout en su ruta actual.
 
 ## Responsivo y pendientes menores
 

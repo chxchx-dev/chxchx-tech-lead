@@ -143,7 +143,7 @@ void MainWindow::buildLayout()
     m_projectDock->setObjectName(QStringLiteral("projectDock"));
     m_projectDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable
         | QDockWidget::DockWidgetClosable);
-    m_projectDock->setWidget(projectContent);
+    buildGitPanel(projectContent);
     addDockWidget(Qt::LeftDockWidgetArea, m_projectDock);
     connect(m_projectSearch, &QLineEdit::textChanged, this,
         [this](const QString &text) { m_projectProxy->setFilterFixedString(text.trimmed()); });
@@ -260,7 +260,10 @@ void MainWindow::buildLayout()
     m_homeAllAgentsButton = new QPushButton(QStringLiteral("Abrir todos"), m_homeQuickActions);
     m_homeVisualChatButton = new QPushButton(QStringLiteral("Chat visual"), m_homeQuickActions);
     m_homeVisualChatButton->setToolTip(QStringLiteral(
-        "Conversa con Codex o Claude en un panel nativo: mensajes, comandos y cambios en vez de la terminal."));
+        "Conversa con Codex, Claude u OpenCode en un panel nativo: mensajes, comandos y cambios en vez de la terminal."));
+    m_homeLocalModelsButton = new QPushButton(QStringLiteral("Modelos locales"), m_homeQuickActions);
+    m_homeLocalModelsButton->setToolTip(QStringLiteral(
+        "Mira qué modelos de Ollama caben en tu equipo y déjalos listos para OpenCode."));
     m_homeTrustButton->setIcon(studioIcon(QStringLiteral("security-high"), QStyle::SP_DialogApplyButton));
     m_homeWorkspaceButton->setIcon(studioIcon(QStringLiteral("media-playback-start"), QStyle::SP_MediaPlay));
     m_homeSuspendButton->setIcon(studioIcon(QStringLiteral("media-playback-pause"), QStyle::SP_MediaPause));
@@ -273,10 +276,12 @@ void MainWindow::buildLayout()
     m_homeNewChatButton->setIcon(studioIcon(QStringLiteral("chat-message-new"), QStyle::SP_MessageBoxInformation));
     m_homeAllAgentsButton->setIcon(studioIcon(QStringLiteral("view-dual"), QStyle::SP_DesktopIcon));
     m_homeVisualChatButton->setIcon(studioIcon(QStringLiteral("dialog-messages"), QStyle::SP_MessageBoxQuestion));
+    m_homeLocalModelsButton->setIcon(studioIcon(QStringLiteral("computer"), QStyle::SP_ComputerIcon));
     for (QWidget *widget : std::initializer_list<QWidget *>{m_homeTrustButton, m_homeWorkspaceButton,
              m_homeSuspendButton, m_homeStopButton, m_homeTerminalButton, m_homePrepareButton,
              m_homeSyncSkillsButton, m_homeDoctorButton, m_homeAgentSelector, m_homeAgentButton,
-             m_homeNewChatButton, m_homeAllAgentsButton, m_homeVisualChatButton}) {
+             m_homeNewChatButton, m_homeAllAgentsButton, m_homeVisualChatButton,
+             m_homeLocalModelsButton}) {
         homeActionsGrid->addWidget(widget);
     }
     m_homeQuickActions->setVisible(m_currentArea == QStringLiteral("overview"));
@@ -455,7 +460,7 @@ void MainWindow::buildLayout()
                        "quieras levantar sus procesos; ChxChx volverá a revisar recursos."),
         QStringLiteral("Ir a Proyecto"));
     m_guideAgentsButton = addGuideStep(QStringLiteral("04"), QStringLiteral("Inicia con contexto"),
-        QStringLiteral("En Agentes, elige Codex o Claude y usa Nueva sesión de agente. La sesión nueva "
+        QStringLiteral("En Agentes, elige Codex, Claude u OpenCode y usa Nueva sesión de agente. La sesión nueva "
                        "lee AGENTS.md y .ai; Basic Memory requiere estar configurado."),
         QStringLiteral("Ir a Agentes"));
     auto *dailyUse = new QLabel(QStringLiteral(
@@ -586,6 +591,7 @@ void MainWindow::buildLayout()
     connect(m_homeNewChatButton, &QPushButton::clicked, this, [this] { openHomeSelectedAgent(true); });
     connect(m_homeAllAgentsButton, &QPushButton::clicked, this, &MainWindow::openAllHomeAgentSessions);
     connect(m_homeVisualChatButton, &QPushButton::clicked, this, &MainWindow::openHomeVisualChat);
+    connect(m_homeLocalModelsButton, &QPushButton::clicked, this, &MainWindow::openLocalModels);
     connect(m_homeAgentSelector, &QComboBox::currentTextChanged, this, &MainWindow::updateHomeActionState);
 
     m_controlDock = new QDockWidget(QStringLiteral("Secciones y acciones"), this);
@@ -597,7 +603,7 @@ void MainWindow::buildLayout()
     // Side panels keep readable labels on small screens; the editor flexes instead.
     m_projectDock->widget()->setMinimumWidth(200);
     control->setMinimumWidth(210);
-    resizeDocks({m_projectDock, m_controlDock}, {260, 250}, Qt::Horizontal);
+    resizeDocks({m_projectDock, m_controlDock}, {300, 250}, Qt::Horizontal);
 
     m_output = new QPlainTextEdit(this);
     m_output->setReadOnly(true);
@@ -640,6 +646,7 @@ void MainWindow::buildLayout()
     connect(clearActivity, &QPushButton::clicked, m_output, &QPlainTextEdit::clear);
 
     m_bridgeClient = new BridgeClient(m_projectPath, this);
+    configureGitAssistant();
     connect(m_bridgeClient, &BridgeClient::finished, this, &MainWindow::finishCommand);
     connect(m_bridgeClient, &BridgeClient::failedToStart, this, &MainWindow::commandFailedToStart);
     m_readClient = new BridgeClient(m_projectPath, this);

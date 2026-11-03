@@ -13,7 +13,7 @@ from pathlib import Path
 from ..integrations.agent_usage import usage_snapshot_path
 from .chat_context import capture_after_session, prepare_new_chat
 
-_JOURNAL_PROVIDERS = {"codex": "Codex", "claude": "Claude"}
+_JOURNAL_PROVIDERS = {"codex": "Codex", "claude": "Claude", "opencode": "OpenCode"}
 
 
 def banner(name: str, label: str = "CHXCHX TECH", logo: str = "") -> str:

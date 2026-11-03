@@ -1,4 +1,4 @@
-# ADR-0009: Chat visual con Codex y Claude mediante turnos estructurados
+# ADR-0009: Chat visual con Codex, Claude y OpenCode mediante turnos estructurados
 
 - Estado: Aceptada
 - Fecha: 2026-11-01
@@ -57,3 +57,28 @@ también ofrece un `app-server` JSON-RPC, todavía experimental.
   esas interfaces se estabilicen.
 - Codex se validó en Fedora con la versión 0.166. Claude se implementó según
   su formato `stream-json` documentado y falta validarlo con la CLI real.
+
+## Extensión: OpenCode
+
+OpenCode usa el mismo contrato `chxchx.agent-event` v1 mediante
+`opencode run --format json` (parser en `integrations/agent_stream_opencode.py`).
+
+- Permisos: "Solo lectura" usa `--agent plan` y añade `OPENCODE_PERMISSION` con
+  `edit` y `bash` en `deny`, porque `plan` por sí solo no restringe bash.
+  "Editar workspace" usa `--agent build`. No se pasa `--auto`: las denegaciones
+  y los permisos `ask` quedan bajo la configuración del usuario.
+- Modelo y effort: `--model proveedor/modelo` y `--variant`. El catálogo lista
+  `opencode models` y el modelo por defecto de `opencode.json`; no ofrece niveles
+  de effort porque las variantes dependen del modelo y la CLI no las publica.
+- Uso: cada `step_finish` emite `usage` (entrada + caché, salida, costo) y el
+  contexto usado; Studio suma los eventos. La ventana de contexto no se informa.
+- Imágenes: `--file`, ya copiadas a `.ai/chat-attachments/`.
+- Continuidad: sin importar el agente, todos leen `AGENTS.md`, `.ai/` y
+  `.ai/memory/PROJECT_MEMORY.md`. Al cerrar un turno o sesión de OpenCode, el
+  diario `.ai/history/SESSIONS.md` se alimenta de `opencode session list` y
+  `opencode export --sanitize` (solo la sesión más reciente del proyecto).
+- Pendiente de validar con la CLI real (no estaba instalada al implementarlo):
+  los nombres de campos de los eventos JSON, que el prompt se acepte por stdin
+  y el comportamiento de los permisos `ask` sin terminal.
+- Fuera de alcance: el historial de conversaciones de Studio solo lista Codex y
+  Claude; `ollama launch opencode` sigue usando solo la terminal.

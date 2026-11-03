@@ -31,7 +31,7 @@ def explicit_user_messages(
     count = min(max(limit, 0), _MAX_SESSIONS)
     if count == 0:
         return []
-    sessions = _run_json([binary, "session", "list", "--max-count", str(count), "--format", "json"], root)
+    sessions = run_json([binary, "session", "list", "--max-count", str(count), "--format", "json"], root)
     if not isinstance(sessions, list):
         return []
 
@@ -43,16 +43,16 @@ def explicit_user_messages(
         directory = session.get("directory")
         if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
             continue
-        if not isinstance(directory, str) or not _belongs_to_project(directory, root):
+        if not isinstance(directory, str) or not belongs_to_project(directory, root):
             continue
 
-        exported = _run_json([binary, "export", session_id, "--sanitize"], root)
+        exported = run_json([binary, "export", session_id, "--sanitize"], root)
         if not isinstance(exported, dict):
             continue
         info = exported.get("info")
         if isinstance(info, dict):
             exported_directory = info.get("directory")
-            if isinstance(exported_directory, str) and not _belongs_to_project(exported_directory, root):
+            if isinstance(exported_directory, str) and not belongs_to_project(exported_directory, root):
                 continue
         date = _session_date(session)
         for message in exported.get("messages", []):
@@ -73,7 +73,7 @@ def explicit_user_messages(
     return found
 
 
-def _run_json(command: list[str], cwd: Path) -> Any:
+def run_json(command: list[str], cwd: Path) -> Any:
     try:
         result = subprocess.run(
             command,
@@ -95,7 +95,7 @@ def _run_json(command: list[str], cwd: Path) -> Any:
         return None
 
 
-def _belongs_to_project(directory: str, project_root: Path) -> bool:
+def belongs_to_project(directory: str, project_root: Path) -> bool:
     try:
         return Path(directory).expanduser().resolve() == project_root
     except (OSError, RuntimeError):

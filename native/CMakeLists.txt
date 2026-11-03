@@ -127,6 +127,49 @@ qt_add_executable(chxchx-studio
     src/integrations/terminal_launcher.hpp
     src/integrations/bridge_client.cpp
     src/integrations/bridge_client.hpp
+    src/integrations/local_models_model.cpp
+    src/integrations/local_models_model.hpp
+    src/integrations/local_models_widget.cpp
+    src/integrations/local_models_widget_view.cpp
+    src/integrations/local_models_widget_setup.cpp
+    src/integrations/local_models_widget.hpp
+    src/integrations/local_models_widget_style.hpp
+    src/git/git_types.hpp
+    src/git/git_parsers.cpp
+    src/git/git_parsers.hpp
+    src/git/git_repository.cpp
+    src/git/git_repository_remote.cpp
+    src/git/git_assistant_prompts.cpp
+    src/git/git_assistant_prompts.hpp
+    src/git/git_guide.cpp
+    src/git/git_guide.hpp
+    src/git/git_assistant.cpp
+    src/git/git_assistant.hpp
+    src/git/git_assistant_controller.cpp
+    src/git/git_assistant_controller.hpp
+    src/git/git_assistant_bar.cpp
+    src/git/git_assistant_bar.hpp
+    src/git/git_advice_dialog.cpp
+    src/git/git_advice_dialog.hpp
+    src/git/git_explorer.cpp
+    src/git/git_explorer.hpp
+    src/git/git_tree_delegate.cpp
+    src/git/git_tree_delegate.hpp
+    src/git/git_repository.hpp
+    src/git/git_diff_view.cpp
+    src/git/git_diff_view.hpp
+    src/git/git_graph_delegate.cpp
+    src/git/git_graph_delegate.hpp
+    src/git/git_history_view.cpp
+    src/git/git_history_view.hpp
+    src/git/git_change_delegate.cpp
+    src/git/git_change_delegate.hpp
+    src/git/git_changes_view.cpp
+    src/git/git_changes_view.hpp
+    src/git/git_branches_view.cpp
+    src/git/git_branches_view.hpp
+    src/git/git_panel.cpp
+    src/git/git_panel.hpp
     src/integrations/bridge_schemas.hpp
     src/integrations/agent_session_widget.cpp
     src/integrations/agent_session_widget.hpp
@@ -281,6 +324,40 @@ if(CHXCHX_BUILD_TESTS)
         src/responsive_grid.cpp src/responsive_grid.hpp)
     target_link_libraries(chxchx-agent-chat-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
     add_test(NAME native-agent-chat-smoke COMMAND chxchx-agent-chat-smoke)
+
+    add_executable(chxchx-local-models-smoke tests/local_models_smoke.cpp
+        src/integrations/local_models_model.cpp src/integrations/local_models_model.hpp
+        src/integrations/local_models_widget.cpp src/integrations/local_models_widget_view.cpp
+        src/integrations/local_models_widget_setup.cpp src/integrations/local_models_widget.hpp
+        src/integrations/local_models_widget_style.hpp
+        src/studio_theme.cpp src/studio_themes.cpp src/studio_stylesheet.cpp src/studio_icons.cpp
+        src/responsive_grid.cpp src/responsive_grid.hpp)
+    target_link_libraries(chxchx-local-models-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+    add_test(NAME native-local-models-smoke COMMAND chxchx-local-models-smoke)
+    set_tests_properties(native-local-models-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    add_executable(chxchx-git-smoke tests/git_smoke.cpp
+        src/git/git_parsers.cpp src/git/git_parsers.hpp src/git/git_repository.cpp src/git/git_repository_remote.cpp src/git/git_repository.hpp
+        src/git/git_explorer.cpp src/git/git_explorer.hpp src/git/git_assistant_prompts.cpp src/git/git_assistant_prompts.hpp
+        src/git/git_guide.cpp src/git/git_guide.hpp src/git/git_assistant.cpp src/git/git_assistant.hpp src/git/git_types.hpp)
+    target_link_libraries(chxchx-git-smoke PRIVATE Qt6::Core)
+    add_test(NAME native-git-smoke COMMAND chxchx-git-smoke)
+
+    add_executable(chxchx-git-ui-smoke tests/git_ui_smoke.cpp
+        src/git/git_parsers.cpp src/git/git_repository.cpp src/git/git_repository_remote.cpp src/git/git_explorer.cpp
+        src/git/git_tree_delegate.cpp src/git/git_diff_view.cpp src/git/git_graph_delegate.cpp
+        src/git/git_assistant_prompts.cpp src/git/git_guide.cpp src/git/git_assistant.cpp src/git/git_assistant_controller.cpp
+        src/git/git_assistant_bar.cpp src/git/git_advice_dialog.cpp
+        src/git/git_history_view.cpp src/git/git_change_delegate.cpp src/git/git_changes_view.cpp
+        src/git/git_branches_view.cpp src/git/git_panel.cpp
+        src/git/git_types.hpp src/git/git_parsers.hpp src/git/git_repository.hpp src/git/git_diff_view.hpp
+        src/git/git_graph_delegate.hpp src/git/git_history_view.hpp src/git/git_change_delegate.hpp
+        src/git/git_changes_view.hpp src/git/git_branches_view.hpp src/git/git_panel.hpp
+        src/studio_theme.cpp src/studio_themes.cpp src/studio_stylesheet.cpp src/studio_icons.cpp
+        src/responsive_grid.cpp src/responsive_grid.hpp)
+    target_link_libraries(chxchx-git-ui-smoke PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+    add_test(NAME native-git-ui-smoke COMMAND chxchx-git-ui-smoke)
+    set_tests_properties(native-git-ui-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     add_executable(chxchx-layout-smoke tests/layout_smoke.cpp
         src/responsive_grid.cpp src/responsive_grid.hpp src/file_icon_provider.cpp src/file_icon_provider.hpp

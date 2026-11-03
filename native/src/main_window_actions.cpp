@@ -335,11 +335,7 @@ void MainWindow::performQuaternaryAreaAction()
         if (!accepted) return;
         const QString provider = selected == choices.at(0)
             ? QStringLiteral("opencode") : QStringLiteral("ollama-opencode");
-        const QStringList preview = {QStringLiteral("agent"), QStringLiteral("add"), provider,
-            QStringLiteral("--path"), m_projectPath, QStringLiteral("--dry-run")};
-        const QStringList action = {QStringLiteral("agent"), QStringLiteral("add"), provider,
-            QStringLiteral("--path"), m_projectPath};
-        runPreview(preview, action, {}, QStringLiteral("Añadir agente al proyecto"));
+        addAgentToProject(provider);
         return;
     }
     if (m_currentArea != QStringLiteral("project")) {

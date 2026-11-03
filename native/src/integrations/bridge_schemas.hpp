@@ -18,5 +18,7 @@ inline constexpr QLatin1StringView CiStatus{"chxchx.ci-status"};
 inline constexpr QLatin1StringView DeployStatus{"chxchx.deploy-status"};
 inline constexpr QLatin1StringView StudioUpdate{"chxchx.studio-update"};
 inline constexpr QLatin1StringView AgentOptions{"chxchx.agent-options"};
+inline constexpr QLatin1StringView LocalModels{"chxchx.local-models"};
+inline constexpr QLatin1StringView LocalModelsEvent{"chxchx.local-models-event"};
 
 } // namespace BridgeSchemas

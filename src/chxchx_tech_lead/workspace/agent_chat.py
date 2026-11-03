@@ -15,13 +15,13 @@ import sys
 import threading
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any
 
-from ..integrations.agent_catalog import INSTALL_HINTS, agent_options, codex_limits, executable_available
-from ..integrations.agent_stream import normalize, provider_for, turn_command
+from ..integrations.agent_catalog import INSTALL_HINTS, agent_options, codex_limits, executable_available, resolve_executable
+from ..integrations.agent_stream import IMAGE_ARGUMENT_PROVIDERS, normalize, provider_for, turn_command, turn_environment
 from .agent_commands import CHAT_PANEL_REQUEST_MARKER, new_chat_prompt
 from .bridge_contracts import AGENT_OPTIONS_SCHEMA, SCHEMA_VERSION as BRIDGE_SCHEMA_VERSION
 from .chat_context import capture_after_session, prepare_new_chat
@@ -51,6 +51,21 @@ class ChatTurnPlan:
     model: str | None = None
     effort: str | None = None
     images: tuple[Path, ...] = ()
+    env: dict[str, str] = field(default_factory=dict)
+    # A one-off question (the Git assistant): no project context, no journal, no saved session, read-only.
+    lean: bool = False
+
+
+def load_prompt(prompt: str, prompt_file: Path | None) -> str:
+    """The turn's prompt, from the option or from a file (a long prompt would not fit a command line)."""
+    if prompt_file is not None:
+        try:
+            return prompt_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise WorkspaceOperationError(f"No pude leer el archivo del prompt: {exc}") from exc
+    if not prompt.strip():
+        raise WorkspaceOperationError("Indica el mensaje con --prompt o --prompt-file")
+    return prompt
 
 
 def plan_chat_turn(
@@ -62,7 +77,10 @@ def plan_chat_turn(
     model: str | None = None,
     effort: str | None = None,
     images: tuple[Path, ...] = (),
+    lean: bool = False,
 ) -> ChatTurnPlan:
+    if lean:
+        mode = "read-only"  # advice only: a lean turn must never be able to change files
     inspection = service.inspect()
     if not inspection.trusted:
         raise WorkspaceOperationError(
@@ -77,7 +95,7 @@ def plan_chat_turn(
         raise WorkspaceOperationError(f"El agente `{agent_id}` debe usar un comando por argumentos")
     provider = provider_for(config.command)
     if provider is None:
-        raise WorkspaceOperationError("El chat visual solo está disponible para agentes Codex y Claude Code")
+        raise WorkspaceOperationError("El chat visual solo está disponible para agentes Codex, Claude Code y OpenCode")
     if not executable_available(config.command[0]):
         raise WorkspaceOperationError(
             f"{provider} no está instalado o `{config.command[0]}` no está en el PATH. "
@@ -86,12 +104,14 @@ def plan_chat_turn(
     images = tuple(_validated_image(path) for path in images)
     try:
         argv = turn_command(config.command, mode=mode, session_id=session_id, model=model, effort=effort,
-                            images=[str(path) for path in images] if provider == "Codex" else ())
+                            images=[str(path) for path in images] if provider in IMAGE_ARGUMENT_PROVIDERS else (),
+                            ephemeral=lean)
     except ValueError as exc:
         raise WorkspaceOperationError(str(exc)) from exc
+    argv[0] = resolve_executable(argv[0])
     root = service.project.root.resolve()
     return ChatTurnPlan(agent_id, provider, root, (root / config.cwd).resolve(), argv, mode, session_id,
-                        tuple(config.command), model, effort, images)
+                        tuple(config.command), model, effort, images, turn_environment(config.command, mode=mode), lean)
 
 
 def agent_options_payload(service: Any, agent_id: str) -> dict[str, Any]:
@@ -103,7 +123,7 @@ def agent_options_payload(service: Any, agent_id: str) -> dict[str, Any]:
         raise WorkspaceOperationError(f"No existe el agente configurado: {agent_id}")
     provider = provider_for(config.command)
     if provider is None:
-        raise WorkspaceOperationError("El chat visual solo está disponible para agentes Codex y Claude Code")
+        raise WorkspaceOperationError("El chat visual solo está disponible para agentes Codex, Claude Code y OpenCode")
     return {
         "schema": AGENT_OPTIONS_SCHEMA,
         "schema_version": BRIDGE_SCHEMA_VERSION,
@@ -122,13 +142,14 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     argv = plan.argv
     if plan.images:
         staged = _stage_images(plan.project_root, plan.images)
-        if plan.provider == "Codex":
+        if plan.provider in IMAGE_ARGUMENT_PROVIDERS:
             argv = turn_command(plan.command, mode=plan.mode, session_id=plan.session_id, model=plan.model,
-                                effort=plan.effort, images=[str(path) for path in staged])
+                                effort=plan.effort, images=[str(path) for path in staged], ephemeral=plan.lean)
+            argv[0] = resolve_executable(argv[0])
         else:
             listed = "\n".join(f"- {path.relative_to(plan.project_root).as_posix()}" for path in staged)
             prompt += f"\n\nImágenes adjuntas por el usuario (ábrelas con la herramienta Read antes de responder):\n{listed}"
-    if plan.session_id is None:
+    if plan.session_id is None and not plan.lean:
         context = new_chat_prompt(str(plan.project_root)) + prepare_new_chat(plan.project_root, notify)
         prompt = f"{context}\n\n{CHAT_PANEL_REQUEST_MARKER}\n{prompt}"
     started_at = datetime.now(timezone.utc)
@@ -143,6 +164,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
             encoding="utf-8",
             errors="replace",
             start_new_session=os.name != "nt",
+            env={**os.environ, **plan.env} if plan.env else None,
         )
     except OSError as exc:
         emit({"type": "error", "message": f"No pude iniciar {argv[0]}: {exc}"})
@@ -180,9 +202,23 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
         limits = codex_limits(session_id)
         if limits is not None:
             emit({"type": "limits", **limits})
-    capture_after_session(plan.project_root, notify, provider=plan.provider, started_at=started_at)
+    if plan.lean:
+        # Nothing of a one-off question belongs in the memory or the session journal.
+        if plan.provider == "OpenCode" and session_id and plan.command:
+            _delete_opencode_session(resolve_executable(plan.command[0]), session_id, plan.cwd)
+    else:
+        capture_after_session(plan.project_root, notify, provider=plan.provider, started_at=started_at,
+                              opencode_executable=resolve_executable(plan.command[0]) if plan.provider == "OpenCode" and plan.command else None)
     emit({"type": "done", "exit_code": exit_code, "cancelled": cancelled.is_set(), "session_id": session_id})
     return exit_code
+
+
+def _delete_opencode_session(executable: str, session_id: str, cwd: Path) -> None:
+    """OpenCode cannot skip saving a session, so a lean turn removes it afterwards (best effort)."""
+    try:
+        subprocess.run([executable, "session", "delete", session_id], cwd=cwd, capture_output=True, timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def _validated_image(path: Path) -> Path:

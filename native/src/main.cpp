@@ -31,9 +31,16 @@ int main(int argc, char *argv[])
         if (size.size() == 2) window.resize(size.at(0).toInt(), size.at(1).toInt());
         const QString area = qEnvironmentVariable("CHXCHX_STUDIO_SCREENSHOT_AREA");
         if (!area.isEmpty()) window.showArea(area);
+        const QString tool = qEnvironmentVariable("CHXCHX_STUDIO_SCREENSHOT_TOOL");
+        if (!tool.isEmpty()) window.showTool(tool.section(QLatin1Char(':'), 0, 0), tool.section(QLatin1Char(':'), 1));
         const int delay = qEnvironmentVariableIntValue("CHXCHX_STUDIO_SCREENSHOT_DELAY_MS");
         QTimer::singleShot(delay > 0 ? delay : 2500, &window, [&window, &application, screenshot] {
             window.grab().save(screenshot);
+            // A dialog on screen (the Git assistant's advice) gets its own capture next to the window's.
+            for (QWidget *widget : QApplication::topLevelWidgets()) {
+                if (widget->objectName() == QStringLiteral("gitAdviceDialog") && widget->isVisible())
+                    widget->grab().save(screenshot + QStringLiteral(".dialog.png"));
+            }
             application.quit();
         });
     }

@@ -2,6 +2,8 @@
 #include "main_window_areas.hpp"
 #include "integrations/bridge_client.hpp"
 #include "integrations/bridge_schemas.hpp"
+#include "integrations/local_models_widget.hpp"
+#include "git/git_panel.hpp"
 #include "integrations/terminal_launcher.hpp"
 #include "integrations/vt_terminal_widget.hpp"
 #include "editor_theme.hpp"
@@ -440,6 +442,7 @@ void MainWindow::saveFile()
         tabs->setTabText(tabs->indexOf(currentEditor()), editorTabTitle(currentFilePath(), false));
     }
     statusBar()->showMessage(QStringLiteral("Guardado: %1").arg(currentFilePath()), 3000);
+    if (m_gitPanel != nullptr) m_gitPanel->scheduleRefresh();
 }
 
 void MainWindow::saveFileAs()
@@ -502,6 +505,12 @@ void MainWindow::closeEditorTab(QTabWidget *tabs, int index)
         }
     }
     QWidget *page = tabs->widget(index);
+    if (auto *models = qobject_cast<LocalModelsWidget *>(page); models != nullptr && models->isBusy()) {
+        const auto answer = QMessageBox::question(this, QStringLiteral("Descarga en curso"),
+            QStringLiteral("Cerrar esta pestaña detiene la descarga o configuración. Lo ya descargado se conserva en Ollama."),
+            QMessageBox::Close | QMessageBox::Cancel, QMessageBox::Cancel);
+        if (answer != QMessageBox::Close) return;
+    }
     tabs->removeTab(index);
     page->deleteLater();
     if (tabs == m_secondaryEditorTabs && tabs->count() == 0) {

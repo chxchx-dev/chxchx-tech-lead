@@ -17,6 +17,7 @@ CI_STATUS_SCHEMA: Final[Literal["chxchx.ci-status"]] = "chxchx.ci-status"
 DEPLOY_STATUS_SCHEMA: Final[Literal["chxchx.deploy-status"]] = "chxchx.deploy-status"
 STUDIO_UPDATE_SCHEMA: Final[Literal["chxchx.studio-update"]] = "chxchx.studio-update"
 AGENT_OPTIONS_SCHEMA: Final[Literal["chxchx.agent-options"]] = "chxchx.agent-options"
+LOCAL_MODELS_SCHEMA: Final[Literal["chxchx.local-models"]] = "chxchx.local-models"
 ERROR_SCHEMA: Final[Literal["chxchx.error"]] = "chxchx.error"
 
 

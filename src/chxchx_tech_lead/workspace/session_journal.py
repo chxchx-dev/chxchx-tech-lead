@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..integrations.chat_history import Conversation, list_conversations
+from ..integrations.chat_history_opencode import latest_opencode_conversation
 from ..integrations.explicit_memory import contains_secret, user_visible_text
 from .agent_commands import CHAT_PANEL_REQUEST_MARKER, NEW_CHAT_PROMPT
 
@@ -37,9 +38,14 @@ class SessionSummary:
 
 
 def summarize_latest_session(
-    project_root: Path, *, provider: str, started_at: datetime
+    project_root: Path, *, provider: str, started_at: datetime, opencode_executable: str | None = None
 ) -> SessionSummary | None:
     """Summarize the provider's newest transcript if it was used after `started_at`."""
+    if provider == "OpenCode":
+        conversation = latest_opencode_conversation(project_root, executable=opencode_executable)
+        if conversation is None or conversation.modified_at.timestamp() < started_at.timestamp() - 5:
+            return None
+        return _summarize(conversation)
     for conversation in list_conversations(project_root, limit=10):
         if conversation.provider != provider:
             continue

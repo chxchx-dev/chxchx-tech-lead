@@ -191,6 +191,33 @@ const QHash<QString, Draw> &drawings()
                 path.cubicTo(21, 6.5, 17, 3, 12, 3); return path; }());
             d.dot(8, 10, 1.3); d.dot(12, 7, 1.3); d.dot(16, 9.5, 1.3);
         }},
+        {QStringLiteral("list-add"), [](Pen &d) { d.line(12, 5, 12, 19); d.line(5, 12, 19, 12); }},
+        {QStringLiteral("list-remove"), [](Pen &d) { d.line(5, 12, 19, 12); }},
+        {QStringLiteral("go-up"), [](Pen &d) { d.line(12, 19, 12, 6); d.poly({{6.5, 11.5}, {12, 6}, {17.5, 11.5}}); }},
+        {QStringLiteral("go-down"), [](Pen &d) { d.line(12, 5, 12, 18); d.poly({{6.5, 12.5}, {12, 18}, {17.5, 12.5}}); }},
+        {QStringLiteral("git-commit"), [](Pen &d) { d.circle(12, 12, 3.6); d.line(3, 12, 8.4, 12); d.line(15.6, 12, 21, 12); }},
+        {QStringLiteral("git-merge"), [](Pen &d) {
+            d.circle(6, 5.5, 2.3); d.circle(6, 18.5, 2.3); d.circle(18, 13, 2.3);
+            d.line(6, 7.8, 6, 16.2);
+            d.poly({{6, 8}, {6, 10.5}, {8.5, 13}, {15.7, 13}});
+        }},
+        {QStringLiteral("git-pull"), [](Pen &d) { d.line(12, 4, 12, 15); d.poly({{7, 10.5}, {12, 15.5}, {17, 10.5}}); d.line(5, 20, 19, 20); }},
+        {QStringLiteral("git-push"), [](Pen &d) { d.line(12, 20, 12, 9); d.poly({{7, 13.5}, {12, 8.5}, {17, 13.5}}); d.line(5, 4, 19, 4); }},
+        {QStringLiteral("git-stash"), [](Pen &d) {
+            d.rect(3, 4, 18, 5, 1.5);
+            d.poly({{5, 9}, {5, 19}, {6, 20}, {18, 20}, {19, 19}, {19, 9}});
+            d.line(10, 13, 14, 13);
+        }},
+        {QStringLiteral("check-circle"), [](Pen &d) { d.circle(12, 12, 9); d.poly({{8, 12.4}, {11, 15.4}, {16, 9.2}}); }},
+        {QStringLiteral("studio-assistant"), [](Pen &d) {
+            d.closed({{10, 5}, {11.8, 11.2}, {18, 13}, {11.8, 14.8}, {10, 21}, {8.2, 14.8}, {2, 13}, {8.2, 11.2}});
+            d.line(19, 2.5, 19, 7.5); d.line(16.5, 5, 21.5, 5);
+        }},
+        {QStringLiteral("studio-advice"), [](Pen &d) {
+            d.circle(12, 9.5, 5.5);
+            d.poly({{9.5, 14.2}, {9.5, 17}, {14.5, 17}, {14.5, 14.2}});
+            d.line(10, 20, 14, 20);
+        }},
         {QStringLiteral("studio-git"), [](Pen &d) { d.circle(6, 6, 2.3); d.circle(6, 18, 2.3); d.circle(18, 12, 2.3); d.line(6, 8.3, 6, 15.7); d.poly({{8.2, 6.5}, {13, 6.5}, {16.3, 10.3}}); }},
     };
     return icons;

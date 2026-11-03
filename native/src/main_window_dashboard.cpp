@@ -40,6 +40,7 @@ void MainWindow::showAreaDashboard(const QJsonObject &payload, const QString &ar
     m_homeQuickActions->setVisible(area == QStringLiteral("overview"));
     if (area == QStringLiteral("overview")) {
         m_homeAgentSelector->clear();
+        bool hasOpenCode = false;
         for (const auto &value : payload.value(QStringLiteral("agents")).toArray()) {
             const QJsonObject agent = value.toObject();
             const QString id = agent.value(QStringLiteral("id")).toString();
@@ -58,6 +59,13 @@ void MainWindow::showAreaDashboard(const QJsonObject &payload, const QString &ar
             m_homeAgentSelector->setItemData(index, QString::fromUtf8(
                 QJsonDocument(agent.value(QStringLiteral("studio_new_chat_command")).toArray())
                     .toJson(QJsonDocument::Compact)), Qt::UserRole + 6);
+            if (QFileInfo(agent.value(QStringLiteral("command")).toString()).completeBaseName().toLower()
+                    == QStringLiteral("opencode")) hasOpenCode = true;
+        }
+        // OpenCode is supported but opt-in per project: offer it where the agents are chosen.
+        if (!hasOpenCode) {
+            m_homeAgentSelector->addItem(QStringLiteral("＋ Añadir OpenCode"));
+            m_homeAgentSelector->setItemData(m_homeAgentSelector->count() - 1, QStringLiteral("opencode"), AddAgentRole);
         }
     }
     updateHomeActionState();

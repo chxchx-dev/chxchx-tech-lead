@@ -25,6 +25,10 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = [
+    "live: needs the real opencode/ollama installed (and a configured model); run with `pytest -m live`",
+]
 
 [dependency-groups]
 dev = ["pytest>=8.0,<9"]
