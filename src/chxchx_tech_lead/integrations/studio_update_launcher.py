@@ -87,6 +87,9 @@ def _write_posix(path: Path, marks: str, app_root: str, *, mac: bool) -> None:
         contents += 'exec "$APP_ROOT/Contents/MacOS/chxchx-studio" "$@"\n'
     else:
         contents += 'export CHXCHX_TECH_CLI="$APP_ROOT/.venv/bin/chxchx-tech"\n'
+        contents += 'for qt_lib in "$APP_ROOT/lib" "$APP_ROOT/lib64"; do\n'
+        contents += '  [ -d "$qt_lib" ] && LD_LIBRARY_PATH="$qt_lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\n'
+        contents += 'done\nexport LD_LIBRARY_PATH\n'
         contents += 'exec "$APP_ROOT/bin/chxchx-studio" "$@"\n'
     path.write_text(contents, encoding="utf-8")
     path.chmod(0o755)

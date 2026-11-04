@@ -446,6 +446,11 @@ ${LAUNCHER_MARKS}
 APP_ROOT=\"${APP_ROOT}\"
 export PATH=\"\$HOME/.local/bin:\$PATH\"
 export CHXCHX_TECH_CLI=\"\$APP_ROOT/.venv/bin/chxchx-tech\"
+# Qt viaja dentro del paquete: se busca su carpeta de bibliotecas aunque el binario no traiga RUNPATH.
+for qt_lib in \"\$APP_ROOT/lib\" \"\$APP_ROOT/lib64\"; do
+  [ -d \"\$qt_lib\" ] && LD_LIBRARY_PATH=\"\$qt_lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\"
+done
+export LD_LIBRARY_PATH
 exec \"\$APP_ROOT/bin/chxchx-studio\" \"\$@\""
   fi
 fi

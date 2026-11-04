@@ -248,6 +248,11 @@ else()
     target_compile_options(chxchx-studio PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(UNIX AND NOT APPLE)
+    # The Qt deploy step copies Qt into ../lib: let the binary find it without LD_LIBRARY_PATH.
+    set_target_properties(chxchx-studio PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
+endif()
+
 install(TARGETS chxchx-studio
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
