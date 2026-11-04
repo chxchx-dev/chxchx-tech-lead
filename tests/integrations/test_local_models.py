@@ -28,6 +28,7 @@ def _hardware(*, vram_gb: float = 0, ram_gb: float = 16, free_ram_gb: float | No
 # --- hardware ---------------------------------------------------------------
 
 def test_reads_nvidia_memory_from_nvidia_smi(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(local_hardware.sys, "platform", "linux")  # Apple Silicon reports unified memory
     monkeypatch.setattr(local_hardware.shutil, "which", lambda name: "/usr/bin/nvidia-smi")
     output = "NVIDIA GeForce RTX 4070, 12282\nNVIDIA GeForce RTX 3060, 12288\n"
     run = lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, output, "")
