@@ -137,6 +137,7 @@ GitChangesView::GitChangesView(GitRepository *repository, QWidget *parent)
     connect(m_bar, &GitAssistantBar::adviceRequested, this, &GitChangesView::adviceRequested);
     connect(m_bar, &GitAssistantBar::cancelRequested, this, &GitChangesView::assistantCancelRequested);
     connect(m_bar, &GitAssistantBar::agentChosen, this, &GitChangesView::assistantAgentChosen);
+    connect(m_bar, &GitAssistantBar::modelChosen, this, &GitChangesView::assistantModelChosen);
     auto *shortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Return")), m_message, nullptr, nullptr, Qt::WidgetShortcut);
     connect(shortcut, &QShortcut::activated, this, [this] { commitNow(); });
     connect(m_tree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem *item) {
@@ -571,3 +572,8 @@ void GitChangesView::setAssistantNote(const QString &note)
 bool GitChangesView::suggestEnabled() const { return m_suggest->isEnabled(); }
 QString GitChangesView::messageText() const { return m_message->toPlainText(); }
 QString GitChangesView::assistantNote() const { return m_note->isVisibleTo(this) ? m_note->text() : QString(); }
+
+void GitChangesView::setAssistantModels(const GitModelList &list, const QString &preference)
+{
+    m_bar->setModels(list, preference);
+}

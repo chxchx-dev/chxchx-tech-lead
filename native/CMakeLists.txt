@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(chxchx_studio VERSION 0.1.0 LANGUAGES C CXX)
+# Studio is released together with the CLI: the version lives in pyproject.toml.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../pyproject.toml" CHXCHX_PYPROJECT)
+if(NOT CHXCHX_PYPROJECT MATCHES "\nversion = \"([0-9]+\\.[0-9]+\\.[0-9]+)([^\"]*)\"")
+    message(FATAL_ERROR "No se encontró la versión del proyecto en pyproject.toml")
+endif()
+set(CHXCHX_STUDIO_VERSION_BASE "${CMAKE_MATCH_1}")
+set(CHXCHX_STUDIO_VERSION "${CMAKE_MATCH_1}${CMAKE_MATCH_2}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../pyproject.toml")
+
+project(chxchx_studio VERSION ${CHXCHX_STUDIO_VERSION_BASE} LANGUAGES C CXX)
 include(GNUInstallDirs)
 
 option(CHXCHX_BUILD_TESTS "Build native editor smoke tests" OFF)
@@ -145,6 +154,8 @@ qt_add_executable(chxchx-studio
     src/git/git_guide.hpp
     src/git/git_assistant.cpp
     src/git/git_assistant.hpp
+    src/git/git_assistant_models.cpp
+    src/git/git_assistant_models.hpp
     src/git/git_assistant_controller.cpp
     src/git/git_assistant_controller.hpp
     src/git/git_assistant_bar.cpp
@@ -200,10 +211,23 @@ qt_add_executable(chxchx-studio
     src/integrations/workspace_terminal_widget.hpp
 )
 
+target_compile_definitions(chxchx-studio PRIVATE CHXCHX_STUDIO_VERSION="${CHXCHX_STUDIO_VERSION}")
+
 if(WIN32)
     set_target_properties(chxchx-studio PROPERTIES WIN32_EXECUTABLE TRUE)
+    enable_language(RC)
+    target_sources(chxchx-studio PRIVATE packaging/chxchx-studio.rc)
 elseif(APPLE)
-    set_target_properties(chxchx-studio PROPERTIES MACOSX_BUNDLE TRUE)
+    set(CHXCHX_ICNS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/chxchx-studio.icns")
+    set_source_files_properties("${CHXCHX_ICNS}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+    target_sources(chxchx-studio PRIVATE "${CHXCHX_ICNS}")
+    set_target_properties(chxchx-studio PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_BUNDLE_NAME "ChxChx Studio"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "dev.chxchx.studio"
+        MACOSX_BUNDLE_ICON_FILE "chxchx-studio.icns"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${CHXCHX_STUDIO_VERSION_BASE}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${CHXCHX_STUDIO_VERSION}")
 endif()
 
 target_link_libraries(chxchx-studio PRIVATE Qt6::Core Qt6::Widgets Qt6::Core5Compat
@@ -229,6 +253,12 @@ install(TARGETS chxchx-studio
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+if(UNIX AND NOT APPLE)
+    # The user installer copies this icon next to the .desktop entry.
+    install(FILES packaging/chxchx-studio.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps)
+endif()
+
 install(FILES THIRD_PARTY.md
     DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/chxchx-studio)
 install(FILES "${scintilla_SOURCE_DIR}/License.txt"
@@ -247,10 +277,10 @@ install(SCRIPT ${deploy_script})
 
 set(CPACK_PACKAGE_NAME "chxchx-studio")
 set(CPACK_PACKAGE_VENDOR "ChxChx Tech Lead")
-set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_VERSION ${CHXCHX_STUDIO_VERSION})
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "ChxChx Studio desktop application")
 set(CPACK_PACKAGE_FILE_NAME
-    "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+    "${CPACK_PACKAGE_NAME}-${CHXCHX_STUDIO_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 set(CPACK_MONOLITHIC_INSTALL ON)
 if(WIN32)
     set(CPACK_GENERATOR ZIP)
@@ -339,14 +369,16 @@ if(CHXCHX_BUILD_TESTS)
     add_executable(chxchx-git-smoke tests/git_smoke.cpp
         src/git/git_parsers.cpp src/git/git_parsers.hpp src/git/git_repository.cpp src/git/git_repository_remote.cpp src/git/git_repository.hpp
         src/git/git_explorer.cpp src/git/git_explorer.hpp src/git/git_assistant_prompts.cpp src/git/git_assistant_prompts.hpp
-        src/git/git_guide.cpp src/git/git_guide.hpp src/git/git_assistant.cpp src/git/git_assistant.hpp src/git/git_types.hpp)
+        src/git/git_guide.cpp src/git/git_guide.hpp src/git/git_assistant.cpp src/git/git_assistant.hpp
+        src/git/git_assistant_models.cpp src/git/git_assistant_models.hpp src/git/git_types.hpp)
     target_link_libraries(chxchx-git-smoke PRIVATE Qt6::Core)
     add_test(NAME native-git-smoke COMMAND chxchx-git-smoke)
 
     add_executable(chxchx-git-ui-smoke tests/git_ui_smoke.cpp
         src/git/git_parsers.cpp src/git/git_repository.cpp src/git/git_repository_remote.cpp src/git/git_explorer.cpp
         src/git/git_tree_delegate.cpp src/git/git_diff_view.cpp src/git/git_graph_delegate.cpp
-        src/git/git_assistant_prompts.cpp src/git/git_guide.cpp src/git/git_assistant.cpp src/git/git_assistant_controller.cpp
+        src/git/git_assistant_prompts.cpp src/git/git_guide.cpp src/git/git_assistant.cpp src/git/git_assistant_models.cpp
+        src/git/git_assistant_controller.cpp
         src/git/git_assistant_bar.cpp src/git/git_advice_dialog.cpp
         src/git/git_history_view.cpp src/git/git_change_delegate.cpp src/git/git_changes_view.cpp
         src/git/git_branches_view.cpp src/git/git_panel.cpp

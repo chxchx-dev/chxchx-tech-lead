@@ -28,6 +28,7 @@ public:
     void setGuidance(const GitGuidance &guidance);
     void setAssistantAgents(const QList<GitAssistantAgent> &agents, const QString &currentId);
     void setAssistantBusy(bool busy, const QString &text);
+    void setAssistantModels(const GitModelList &list, const QString &preference);
     void setAssistantNote(const QString &note);
     GitAssistantBar *assistantBar() const { return m_bar; }
     bool suggestEnabled() const;
@@ -61,6 +62,7 @@ signals:
     void adviceRequested(GitAdviceKind kind);
     void assistantCancelRequested();
     void assistantAgentChosen(const QString &id);
+    void assistantModelChosen(const QString &preference);
 
 private:
     void rebuild();

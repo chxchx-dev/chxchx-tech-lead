@@ -6,13 +6,20 @@
 #include <QDir>
 #include <QFile>
 #include <QMessageBox>
+#include <QProcess>
 #include <QSettings>
+#include <QTimer>
 
 namespace {
 
 constexpr int MaxUntrackedFiles = 6;
 constexpr qint64 MaxConflictFileBytes = 300 * 1024;
 const char *AgentKey = "git/assistantAgent";
+
+QString modelKey(const QString &agentId)
+{
+    return QStringLiteral("git/assistantModel/%1").arg(agentId);
+}
 
 QString consentKey(const QString &agentId)
 {
@@ -30,6 +37,7 @@ GitAssistantController::GitAssistantController(GitRepository *repository, QStrin
 void GitAssistantController::configure(const QString &cliProgram, AgentProvider agents, PreferredProvider preferred)
 {
     m_assistant->setCliProgram(cliProgram);
+    m_cli = cliProgram;
     m_agents = std::move(agents);
     m_preferred = std::move(preferred);
     emit agentsChanged();
@@ -75,6 +83,66 @@ void GitAssistantController::chooseAgent(const QString &id)
     m_chosen = id;
     QSettings().setValue(QLatin1String(AgentKey), id);
     emit agentsChanged();
+}
+
+QString GitAssistantController::modelPreference(const QString &agentId) const
+{
+    return QSettings().value(modelKey(agentId)).toString();
+}
+
+void GitAssistantController::setModelPreference(const QString &preference)
+{
+    const QString agent = currentAgentId();
+    if (agent.isEmpty()) return;
+    if (preference.isEmpty()) QSettings().remove(modelKey(agent));
+    else QSettings().setValue(modelKey(agent), preference);
+    emit modelsChanged();
+}
+
+GitModelChoice GitAssistantController::currentChoice() const
+{
+    const QString agent = currentAgentId();
+    return chooseModel(m_models.value(agent), modelPreference(agent));
+}
+
+QString GitAssistantController::labelWithModel() const
+{
+    const GitModelChoice choice = currentChoice();
+    return choice.model.isEmpty() ? currentAgentLabel() : QStringLiteral("%1 · %2").arg(currentAgentLabel(), choice.model);
+}
+
+void GitAssistantController::refreshModels()
+{
+    const QString agent = currentAgentId();
+    if (!agent.isEmpty()) ensureModels(agent, [] {});
+}
+
+void GitAssistantController::ensureModels(const QString &agentId, const std::function<void()> &then)
+{
+    if (m_fetched.contains(agentId) || m_cli.isEmpty()) return then();
+    const bool alreadyFetching = m_waiting.contains(agentId);
+    m_waiting[agentId].append(then);
+    if (alreadyFetching) return;
+    // The agent lists its own models; if it cannot (not installed, no trust), the agent's default is used.
+    auto *process = new QProcess(this);
+    auto *timeout = new QTimer(process);
+    timeout->setSingleShot(true);
+    connect(timeout, &QTimer::timeout, process, [process] { process->kill(); });
+    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this, agentId, process](int code, QProcess::ExitStatus) {
+        GitModelList list;
+        if (code == 0) list = parseAgentOptions(process->readAllStandardOutput());
+        process->deleteLater();
+        m_models.insert(agentId, list);
+        m_fetched.insert(agentId);
+        const QList<std::function<void()>> waiting = m_waiting.take(agentId);
+        emit modelsChanged();
+        for (const auto &callback : waiting) callback();
+    });
+    connect(process, &QProcess::errorOccurred, process, [process](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) emit process->finished(-1, QProcess::CrashExit);
+    });
+    process->start(m_cli, {QStringLiteral("bridge"), QStringLiteral("agent-options"), m_projectPath, QStringLiteral("--agent"), agentId});
+    timeout->start(20000);
 }
 
 void GitAssistantController::setBusy(bool busy, const QString &text)
@@ -180,10 +248,15 @@ void GitAssistantController::suggestCommitMessage()
             if (result.cancelled) return emit failed(QStringLiteral("Cancelado."));
             const QString message = result.ok() ? cleanCommitMessage(result.text) : QString();
             if (message.isEmpty()) return emit failed(result.error.isEmpty() ? QStringLiteral("El asistente no devolvió un mensaje. Inténtalo otra vez.") : result.error);
-            emit commitMessageReady(message, currentAgentLabel());
+            emit commitMessageReady(message, labelWithModel());
         }, Qt::SingleShotConnection);
-        setBusy(true, QStringLiteral("%1 está redactando el mensaje…").arg(currentAgentLabel()));
-        m_assistant->ask(agent, buildCommitPrompt(context));
+        const QString prompt = buildCommitPrompt(context);
+        ensureModels(agent, [this, generation, agent, prompt] {
+            if (generation != m_generation) return;
+            const GitModelChoice choice = currentChoice();
+            setBusy(true, QStringLiteral("%1 está redactando el mensaje…").arg(labelWithModel()));
+            m_assistant->ask(agent, prompt, choice.model, choice.effort);
+        });
     });
 }
 
@@ -204,9 +277,15 @@ void GitAssistantController::advise(GitAdviceKind kind, const QString &lastError
             setBusy(false, QString());
             if (result.cancelled) return emit failed(QStringLiteral("Cancelado."));
             if (!result.ok()) return emit failed(result.error.isEmpty() ? QStringLiteral("El asistente no devolvió una respuesta.") : result.error);
-            emit adviceReady(kind, result.text, currentAgentLabel());
+            emit adviceReady(kind, result.text, labelWithModel());
         }, Qt::SingleShotConnection);
-        m_assistant->ask(currentAgentId(), buildAdvicePrompt(kind, context));
+        const QString prompt = buildAdvicePrompt(kind, context);
+        const QString agent = currentAgentId();
+        ensureModels(agent, [this, generation, agent, prompt] {
+            if (generation != m_generation) return;
+            const GitModelChoice choice = currentChoice();
+            m_assistant->ask(agent, prompt, choice.model, choice.effort);
+        });
     });
 }
 

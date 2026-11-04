@@ -1,6 +1,7 @@
 // The Git panel, its views and the diff view against a real temporary repository.
 #include "../src/git/git_branches_view.hpp"
 #include "../src/git/git_assistant_bar.hpp"
+#include "../src/git/git_assistant_models.hpp"
 #include "../src/git/git_changes_view.hpp"
 #include "../src/git/git_diff_view.hpp"
 #include "../src/git/git_explorer.hpp"
@@ -296,6 +297,15 @@ int main(int argc, char **argv)
         const QString log = tools.filePath("calls.log");
         write(script, QByteArray(R"SH(#!/bin/bash
 # Stands in for `chxchx-tech agent chat ... --lean --prompt-file F`: logs what it receives and answers like an agent.
+if [ "$1" = "bridge" ] && [ "$2" = "agent-options" ]; then
+  for ((i=1; i<=$#; i++)); do [ "${!i}" = "--agent" ] && j=$((i+1)) && who="${!j}"; done
+  case "$who" in
+    codex) echo '{"schema": "chxchx.agent-options", "schema_version": 1, "default_model": "gpt-grande", "models": [{"id": "gpt-grande", "efforts": ["low", "medium", "high"]}, {"id": "gpt-mini", "efforts": ["low", "medium"]}]}' ;;
+    claude) echo '{"schema": "chxchx.agent-options", "schema_version": 1, "default_model": "", "models": [{"id": "sonnet", "efforts": ["low", "high"]}, {"id": "haiku", "efforts": ["low", "high"]}]}' ;;
+    *) echo "no disponible" >&2; exit 1 ;;
+  esac
+  exit 0
+fi
 prompt_file=""; agent=""
 for ((i=1; i<=$#; i++)); do
   [ "${!i}" = "--prompt-file" ] && j=$((i+1)) && prompt_file="${!j}"
@@ -357,6 +367,7 @@ event done '"exit_code": 0'
         const QString calls = QString::fromUtf8(read(log));
         CHECK(170, calls.contains("agent=codex") && calls.contains("--lean") && calls.contains("--prompt-file") && calls.contains("--cancel-on-stdin"));
         CHECK(171, calls.contains("Redacta el mensaje de commit") && calls.contains("Commit inicial") && calls.contains("+    return 'hola de nuevo'"));
+        CHECK(1720, calls.contains("--model gpt-mini") && calls.contains("--effort low"));  // a short question gets the light model, not the biggest
         CHECK(172, !calls.contains("SECRETO_NO_ENVIAR") && calls.contains("Se omitieron por seguridad: .env") && !calls.contains("M  .env"));
 
         // The person edits the suggestion and saves it: nothing is committed behind their back.
@@ -406,6 +417,40 @@ event done '"exit_code": 0'
         CHECK(187, assist.assistant()->currentAgentId() == "claude");
         assist.assistant()->chooseAgent("");
         CHECK(188, assist.assistant()->currentAgentId() == "codex");
+
+        // Which model answers: automatic is a light one; the person can pick any, or the agent's own default.
+        const auto callCount = [&log] { return QString::fromUtf8(read(log)).count("== agent="); };
+        const auto ask = [&] {
+            const int before = callCount();
+            changes->setMessage("");
+            changes->requestSuggestion();
+            return waitFor([&] { return callCount() > before && !bar->busy(); });
+        };
+        assist.assistant()->chooseAgent("codex");
+        CHECK(2000, waitFor([&] { return bar->modelChoices().size() >= 4; }));
+        const QStringList choices = bar->modelChoices();
+        CHECK(2001, choices.value(0) == "Automático (ligero): gpt-mini" && choices.contains("El predeterminado del agente") && choices.contains("gpt-grande") && choices.contains("gpt-mini"));
+        CHECK(2002, bar->modelPreferenceText().startsWith("Automático"));
+        assist.assistant()->setModelPreference("gpt-grande");
+        CHECK(2003, waitFor([&] { return bar->modelPreferenceText() == "gpt-grande"; }));
+        CHECK(2004, ask() && lastCall().contains("--model gpt-grande") && lastCall().contains("--effort low"));
+        assist.assistant()->setModelPreference(GitAgentDefaultModel);
+        CHECK(2005, waitFor([&] { return bar->modelPreferenceText() == "El predeterminado del agente"; }));
+        CHECK(2006, ask() && !lastCall().contains("--model") && lastCall().contains("--effort low"));  // the agent's model, with its lowest effort
+        assist.assistant()->setModelPreference("luna-6");  // a model the list does not show: used as typed, with no effort guess
+        CHECK(2007, ask() && lastCall().contains("--model luna-6") && !lastCall().contains("--effort"));
+        assist.assistant()->setModelPreference("");
+        CHECK(2008, waitFor([&] { return bar->modelPreferenceText().startsWith("Automático"); }));
+        CHECK(2009, ask() && lastCall().contains("--model gpt-mini") && lastCall().contains("--effort low"));
+        agents = {{"codex", "codex"}, {"claude", "claude"}, {"opencode", "opencode"}};
+        assist.assistant()->chooseAgent("claude");
+        CHECK(2010, waitFor([&] { return bar->agentText() == "claude" && bar->modelChoices().contains("haiku"); }));
+        CHECK(2011, ask() && lastCall().contains("agent=claude") && lastCall().contains("--model haiku") && !lastCall().contains("--effort"));  // haiku takes no effort
+        assist.assistant()->chooseAgent("opencode");  // its model list cannot be read: the agent decides
+        CHECK(2012, waitFor([&] { return bar->agentText() == "opencode"; }));
+        CHECK(2013, ask() && lastCall().contains("agent=opencode") && !lastCall().contains("--model") && !lastCall().contains("--effort"));
+        assist.assistant()->chooseAgent("codex");
+        CHECK(2014, waitFor([&] { return bar->agentText() == "codex"; }));
 
         // Conflicts: the card changes, and the advice question carries the conflicting blocks.
         CHECK(190, git(repo, {"add", "-A"}) && git(repo, {"commit", "-q", "-m", "Guarda lo pendiente"}));

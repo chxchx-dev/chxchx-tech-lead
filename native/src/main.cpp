@@ -7,8 +7,37 @@
 #include <QStringList>
 #include <QTimer>
 
+#include <cstdio>
+#include <cstring>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+#ifndef CHXCHX_STUDIO_VERSION
+#define CHXCHX_STUDIO_VERSION "desconocida"
+#endif
+
 int main(int argc, char *argv[])
 {
+    // Answered before Qt starts so installers and scripts can check the binary without a display.
+    const bool wantsVersion = argc > 1 && std::strcmp(argv[1], "--version") == 0;
+    const bool wantsHelp = argc > 1 && (std::strcmp(argv[1], "--help") == 0 || std::strcmp(argv[1], "-h") == 0);
+#ifdef _WIN32
+    // A GUI-subsystem program has no console of its own: borrow the parent's unless output is redirected.
+    if ((wantsVersion || wantsHelp) && GetStdHandle(STD_OUTPUT_HANDLE) == nullptr && AttachConsole(ATTACH_PARENT_PROCESS)) {
+        std::freopen("CONOUT$", "w", stdout);
+        std::freopen("CONOUT$", "w", stderr);
+    }
+#endif
+    if (wantsVersion) {
+        std::printf("ChxChx Studio %s\n", CHXCHX_STUDIO_VERSION);
+        return 0;
+    }
+    if (wantsHelp) {
+        std::printf("Uso: chxchx-studio [carpeta-del-proyecto [archivos...]]\n       chxchx-studio --version\n");
+        return 0;
+    }
     QApplication application(argc, argv);
     application.setApplicationName(QStringLiteral("ChxChx Studio"));
     application.setOrganizationName(QStringLiteral("ChxChx"));

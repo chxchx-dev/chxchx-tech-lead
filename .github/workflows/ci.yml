@@ -8,6 +8,11 @@ jobs:
   native-build:
     name: Native Qt build · ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      # Signing is prepared but stays off until the certificates exist as repository secrets.
+      SIGN_WINDOWS: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' && secrets.WINDOWS_CERT_PASSWORD != '' }}
+      SIGN_MACOS: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.APPLE_APP_PASSWORD != '' }}
+      INSTALLER_CHANNEL: ${{ startsWith(github.ref, 'refs/tags/v') && 'stable' || 'dev' }}
     strategy:
       fail-fast: false
       matrix:
@@ -116,18 +121,39 @@ jobs:
           }
           if ($summary.Count -eq 2) { $summary.Add('LastTest.log had no failing-test detail.') }
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ($summary -join "`n") -Encoding utf8
-      - name: Validate PowerShell Studio installer syntax
+      - name: Validate PowerShell installer syntax
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $installer = Get-Content -LiteralPath 'scripts/install-studio.ps1' -Raw
-          [void][scriptblock]::Create($installer)
-      - name: Validate Bash Studio installer syntax
+          foreach ($script in 'install', 'install-studio', 'bootstrap', 'sign-windows') {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/$script.ps1", [ref]$null, [ref]$errors)
+            if ($errors) { $errors | ForEach-Object { Write-Output "::error file=scripts/$script.ps1,line=$($_.Extent.StartLineNumber)::$($_.Message)" }; throw "Sintaxis inválida en scripts/$script.ps1" }
+          }
+      - name: Validate Bash installer syntax
         if: runner.os != 'Windows'
         shell: bash
-        run: bash -n scripts/install-studio.sh scripts/install-studio-fedora.sh
+        run: bash -n scripts/install.sh scripts/install-studio.sh scripts/install-studio-fedora.sh scripts/bootstrap.sh scripts/sign-macos.sh
+      - name: Sign the Studio executable (Windows)
+        if: runner.os == 'Windows' && env.SIGN_WINDOWS == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: ./scripts/sign-windows.ps1 -Files build-native/Release/chxchx-studio.exe
       - name: Create native install package
         run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
+      - name: Sign and notarize the macOS package
+        if: runner.os == 'macOS' && env.SIGN_MACOS == 'true'
+        shell: bash
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: ./scripts/sign-macos.sh build-native/packages/*.dmg
       - name: Validate and stage macOS package
         if: runner.os == 'macOS'
         shell: bash
@@ -164,6 +190,9 @@ jobs:
       - name: Build Windows executable installer
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
           # Errors are echoed as annotations: job logs are not readable without signing in.
           function Report([string] $title, [string] $text) {
@@ -178,7 +207,7 @@ jobs:
             if (-not (Test-Path -LiteralPath $makensisPath -PathType Leaf)) {
               $makensisPath = (Get-Command makensis.exe -ErrorAction Stop).Source
             }
-            $output = & $makensisPath '/V3' '/INPUTCHARSET' 'UTF8' '/NOCD' 'scripts/windows-studio-setup.nsi' 2>&1 | Out-String
+            $output = & $makensisPath '/V3' '/INPUTCHARSET' 'UTF8' '/NOCD' "/DCHANNEL=$env:INSTALLER_CHANNEL" 'scripts/windows-studio-setup.nsi' 2>&1 | Out-String
             Write-Output $output
             if ($LASTEXITCODE -ne 0) {
               Report 'makensis' $output
@@ -186,6 +215,9 @@ jobs:
             }
             $setup = 'scripts/chxchx-studio-windows-x86_64-setup.exe'
             if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'NSIS no generó el instalador ejecutable.' }
+            if ($env:SIGN_WINDOWS -eq 'true') {
+              ./scripts/sign-windows.ps1 -Files $setup
+            }
             New-Item -ItemType Directory -Force -Path 'dist/native-package' | Out-Null
             Move-Item -LiteralPath $setup -Destination 'dist/native-package/chxchx-studio-windows-x86_64-setup.exe' -Force
           } catch {
@@ -247,18 +279,21 @@ jobs:
           path: dist/*.whl
           if-no-files-found: error
 
-  publish-studio-preview:
-    name: Publish cross-platform Studio dev preview
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+  check-release-tag:
+    name: Check the release tag matches the version
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/release_assets.py --channel stable --tag "$GITHUB_REF_NAME" --check-version
+
+  stage-release:
+    name: Stage release assets and manifest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v'))
     needs: [native-build, native-fedora, cli-wheel, test]
     runs-on: ubuntu-latest
-    concurrency:
-      group: chxchx-studio-dev-preview
-      cancel-in-progress: true
-    permissions:
-      contents: write
-      actions: read
     steps:
+      - uses: actions/checkout@v4
       - name: Download Ubuntu package
         uses: actions/download-artifact@v4
         with:
@@ -289,60 +324,101 @@ jobs:
         with:
           name: chxchx-tech-lead-wheel
           path: dist/downloads/cli-wheel
-      - name: Prepare public preview assets
-        env:
-          COMMIT_SHA: ${{ github.sha }}
+      - name: Write manifest and checksums
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            python scripts/release_assets.py --channel stable --tag "$GITHUB_REF_NAME" \
+              --commit "$GITHUB_SHA" --downloads dist/downloads --output dist/release
+          else
+            python scripts/release_assets.py --channel dev --tag studio-dev-preview \
+              --commit "$GITHUB_SHA" --downloads dist/downloads --output dist/release
+          fi
+          ls -l dist/release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/release/*
+          if-no-files-found: error
+          compression-level: 0
+
+  installer-smoke:
+    name: Installer smoke · ${{ matrix.os }}
+    needs: stage-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15, macos-15-intel, windows-latest]
+    env:
+      CHANNEL: ${{ startsWith(github.ref, 'refs/tags/v') && 'stable' || 'dev' }}
+      CHXCHX_TEST_BASE: http://127.0.0.1:8765
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist/release
+      - name: Serve the staged release from localhost
+        shell: bash
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 --directory dist/release >server.log 2>&1 &
+          sleep 2
+          curl --fail --silent http://127.0.0.1:8765/studio-manifest.txt | head -n 6
+      - name: Install, launch, update and uninstall (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist/release
-          publish_asset() {
-            platform="$1"
-            pattern="$2"
-            output="$3"
-            source="$(find "dist/downloads/$platform" -type f -name "$pattern" -print -quit)"
-            test -n "$source"
-            cp "$source" "dist/release/$output"
-          }
-          publish_asset linux-ubuntu-x86_64 '*.tar.gz' chxchx-studio-ubuntu-x86_64.tar.gz
-          publish_asset linux-fedora-x86_64 '*.tar.gz' chxchx-studio-fedora-x86_64.tar.gz
-          publish_asset windows-x86_64 '*.zip' chxchx-studio-windows-x86_64.zip
-          publish_asset windows-x86_64 '*-setup.exe' chxchx-studio-windows-x86_64-setup.exe
-          publish_asset macos-arm64 '*.dmg' chxchx-studio-macos-arm64.dmg
-          publish_asset macos-x86_64 '*.dmg' chxchx-studio-macos-x86_64.dmg
-          wheel="$(find dist/downloads/cli-wheel -type f -name 'chxchx_tech_lead-*-py3-none-any.whl' -print -quit)"
-          test -n "$wheel"
-          wheel_name="$(basename "$wheel")"
-          cp "$wheel" "dist/release/$wheel_name"
-          python - <<'PY'
-          import hashlib
-          import os
-          from pathlib import Path
-          import tomllib
+          export PATH="$HOME/.local/bin:$PATH"
+          launcher=chxchx-studio; [[ "$CHANNEL" == dev ]] && launcher=chxchx-studio-dev
+          bash dist/release/install.sh --channel "$CHANNEL" --dry-run
+          test ! -e "$HOME/.local/bin/$launcher"
+          bash dist/release/install.sh --channel "$CHANNEL"
+          "$launcher" --version
+          chxchx-tech --help >/dev/null
+          bash dist/release/install.sh --channel "$CHANNEL" --update
+          "$launcher" --version
+          bash dist/release/install.sh --uninstall --dry-run
+          bash dist/release/install.sh --uninstall
+          test ! -e "$HOME/.local/bin/$launcher"
+          test ! -e "$HOME/.local/bin/chxchx-tech"
+      - name: Install, launch, update and uninstall (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $channel = $env:CHANNEL
+          $launcher = if ($channel -eq 'dev') { 'chxchx-studio-dev' } else { 'chxchx-studio' }
+          $shims = Join-Path $env:LOCALAPPDATA 'Programs\ChxChxStudio\shims'
+          & ./dist/release/install.ps1 -Channel $channel -DryRun
+          if (Test-Path (Join-Path $shims "$launcher.cmd")) { throw 'DryRun escribió el launcher.' }
+          & ./dist/release/install.ps1 -Channel $channel
+          $exe = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Programs\ChxChxStudio') -Recurse -Filter chxchx-studio.exe | Select-Object -First 1
+          $version = & $exe.FullName --version | Out-String
+          Write-Output $version
+          if ($version -notmatch 'ChxChx Studio') { throw 'chxchx-studio.exe --version no respondió.' }
+          & (Join-Path $shims 'chxchx-tech.cmd') --help | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'chxchx-tech no arranca.' }
+          & ./dist/release/install.ps1 -Channel $channel -Update
+          & ./dist/release/install.ps1 -Uninstall
+          if (Test-Path (Join-Path $shims "$launcher.cmd")) { throw 'La desinstalación dejó el launcher.' }
 
-          release = Path("dist/release")
-          files = {
-              "linux-ubuntu-x86_64": "chxchx-studio-ubuntu-x86_64.tar.gz",
-              "linux-fedora-x86_64": "chxchx-studio-fedora-x86_64.tar.gz",
-              "windows-x86_64": "chxchx-studio-windows-x86_64.zip",
-              "windows-setup": "chxchx-studio-windows-x86_64-setup.exe",
-              "macos-arm64": "chxchx-studio-macos-arm64.dmg",
-              "macos-x86_64": "chxchx-studio-macos-x86_64.dmg",
-          }
-          wheel_candidates = list(release.glob("chxchx_tech_lead-*-py3-none-any.whl"))
-          if len(wheel_candidates) != 1:
-              raise SystemExit("Expected exactly one valid chxchx-tech-lead universal wheel")
-          files["cli-wheel"] = wheel_candidates[0].name
-          def sha256(name):
-              return hashlib.sha256((release / name).read_bytes()).hexdigest()
-          lines = [
-              "schema_version=1",
-              f"commit={os.environ['COMMIT_SHA']}",
-              f"version={tomllib.loads(Path('pyproject.toml').read_text())['project']['version']}",
-          ]
-          for key, filename in files.items():
-              lines.extend((f"asset.{key}={filename}", f"sha256.{key}={sha256(filename)}"))
-          (release / "studio-preview.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-          PY
+  publish-studio-preview:
+    name: Publish cross-platform Studio dev preview
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: [stage-release, installer-smoke]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: chxchx-studio-dev-preview
+      cancel-in-progress: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist/release
       - name: Replace the rolling preview tag
         env:
           GH_TOKEN: ${{ github.token }}
@@ -361,12 +437,35 @@ jobs:
           body: |
             Rolling preview built from commit `${{ github.sha }}` on `dev`.
 
-            Install without cloning the repository: see the Studio section in README.md.
-            Supported preview assets: Ubuntu x86_64, Fedora x86_64, Windows x86_64,
-            macOS Apple Silicon and Intel. This is not a stable or signed release.
+            Install without cloning the repository: see the Studio section in README.md
+            (`install.sh --channel dev` / `install.ps1 -Channel dev`).
+            Assets: Ubuntu x86_64, Fedora x86_64, Windows x86_64, macOS Apple Silicon and Intel.
+            This is a preview, not a stable release.
           prerelease: true
           make_latest: false
           overwrite_files: true
+          files: dist/release/*
+
+  publish-studio-stable:
+    name: Publish stable Studio release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [check-release-tag, stage-release, installer-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist/release
+      - name: Publish stable release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ChxChx ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: false
+          make_latest: true
           files: dist/release/*
 
   test:

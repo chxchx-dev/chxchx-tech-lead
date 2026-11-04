@@ -2,6 +2,19 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## Instaladores y canales de release (ADR 0013)
+
+- `scripts/install.sh` (Linux/macOS) e `scripts/install.ps1` (Windows): canal stable/dev, `--version`, `--update`, `--cli-only`, `--uninstall`, `--dry-run`, verificación SHA-256 con el manifiesto, nada ajeno se sobrescribe. `scripts/release_assets.py` genera manifiesto + `SHA256SUMS`. Wrappers: `install-studio.*`, `install-studio-fedora.sh`, `bootstrap.*`. `windows-studio-setup.nsi` empaqueta `install.ps1` (`-DCHANNEL`).
+- CMake lee la versión de `pyproject.toml`; Studio responde `--version`/`--help` antes de Qt; iconos en `native/packaging/` (png/ico/icns, `.rc` en Windows). Updater Python (`studio_channels.py`, `studio_update_launcher.py`) sigue el canal instalado; corregido que `parse_manifest` rechazaba `schema_version`.
+- CI: `stage-release` → `installer-smoke` (ubuntu, macOS x2, Windows, servidor localhost + `CHXCHX_TEST_BASE`) → `publish-studio-preview` / `publish-studio-stable` (tag `v*`, con `check-release-tag`). Firma condicionada a secretos (`WINDOWS_CERT_*`, `MACOS_*`, `APPLE_*`).
+- Verificado en Linux: `tests/installers` (37) y `tests/integrations/test_studio_channels.py` (8), build local de Studio con `--version`. **No verificado**: `install.ps1`, NSIS, flujo DMG, `installer-smoke` y publicación real, firma (sin pwsh/macOS/certificados aquí).
+
+## Asistente de Git: modelo ligero por defecto
+
+- `git_assistant_models` (puro): `parseAgentOptions`, `looksLight` (por nombre o por tamaño ≤14b), `lowEffort`, `chooseModel` (automático / `__agent__` / un modelo concreto), `describeChoice`. El controlador lee la lista de modelos del agente (`bridge agent-options`) una vez y pasa `--model`/`--effort` a `agent chat --lean`; la tarjeta tiene el submenú Modelo (se reconstruye solo si algo cambió, para no cerrarse mientras se usa).
+- Pruebas: elección pura en `git_smoke` (nombres, tamaños, esfuerzo, Haiku sin esfuerzo, modelo desconocido) y los argumentos reales de cada consulta en `git_ui_smoke`; 2 mutaciones detectadas; 12 ejecuciones del UI sin fallos.
+- Sin probar con los modelos reales de cada CLI (¿Claude acepta `--effort low` con un modelo concreto?, ¿qué modelos ligeros publica Codex?).
+
 ## Asistente de Git y rediseño del panel
 
 - Python: `agent chat --lean` (sin contexto/memoria/diario, solo lectura, sin sesión: `--ephemeral` Codex, `--no-session-persistence` Claude, borrado de la sesión en OpenCode) y `--prompt-file`; `ChatTurnPlan.lean`, `load_prompt`. 378 pruebas pasan.

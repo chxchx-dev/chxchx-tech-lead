@@ -16,30 +16,34 @@ from .studio_update_feed import (
     download_asset,
     fetch_release,
     installed_app_root,
+    installed_channel,
     installed_cli_path,
     installed_commit,
 )
+from .studio_channels import CHANNELS, root_name
+from .studio_update_launcher import switch_launcher
 
 
 def update_status() -> dict[str, object]:
     current = installed_commit()
-    latest = fetch_release()
+    latest = fetch_release(installed_channel())
     return _payload(current, latest)
 
 
 def apply_update() -> dict[str, object]:
     current = installed_commit()
-    release = fetch_release()
+    release = fetch_release(installed_channel())
     result = _payload(current, release)
     if release.commit.startswith(current):
         return result
+    base = CHANNELS[release.channel].base
     try:
         with tempfile.TemporaryDirectory(prefix="chxchx-studio-update-") as temporary:
             work = Path(temporary)
             package = work / release.package
             wheel = work / release.wheel
-            download_asset(release.package, release.package_sha256, package)
-            download_asset(release.wheel, release.wheel_sha256, wheel)
+            download_asset(release.package, release.package_sha256, package, base=base)
+            download_asset(release.wheel, release.wheel_sha256, wheel, base=base)
             _install_package(release, package, wheel)
     except Exception as exc:
         if isinstance(exc, ValueError):
@@ -82,18 +86,18 @@ def _install_package(release: StudioRelease, package: Path, wheel: Path) -> None
     if not current_cli.is_file() or not (current_root / ".chxchx-managed").is_file():
         raise ValueError("La instalación actual de Studio ya no está completa o administrada.")
 
+    channel = CHANNELS[release.channel]
+    name = root_name(channel, release.version, release.commit, mac=system == "Darwin")
     if system == "Windows":
         parent = Path(os.environ["LOCALAPPDATA"]) / "Programs" / "ChxChxStudio"
-        destination = parent / f"dev-{release.commit[:12]}"
-        launcher = parent / "chxchx-studio-dev.cmd"
+        launcher = parent / "shims" / f"{channel.launcher}.cmd"
     elif system == "Darwin":
         parent = Path.home() / "Applications"
-        destination = parent / f"ChxChx Studio Dev-{release.commit[:12]}.app"
-        launcher = Path.home() / ".local" / "bin" / "chxchx-studio-dev"
+        launcher = Path.home() / ".local" / "bin" / channel.launcher
     else:
         parent = Path.home() / ".local" / "opt" / "chxchx-studio"
-        destination = parent / f"dev-{release.commit[:12]}"
-        launcher = Path.home() / ".local" / "bin" / "chxchx-studio-dev"
+        launcher = Path.home() / ".local" / "bin" / channel.launcher
+    destination = parent / name
     parent.mkdir(parents=True, exist_ok=True)
     mac_bundle = system == "Darwin"
     cli_root = destination / "Contents" if mac_bundle else destination
@@ -126,7 +130,7 @@ def _install_package(release: StudioRelease, package: Path, wheel: Path) -> None
                 shutil.rmtree(staging, ignore_errors=True)
 
     _install_cli(cli_root, wheel)
-    _switch_launcher(system, destination, launcher)
+    switch_launcher(system, destination, launcher, channel, cli_root)
 
 
 def _extract_zip(package: Path, destination: Path) -> None:
@@ -211,72 +215,3 @@ def _install_cli(cli_root: Path, wheel: Path) -> None:
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         raise ValueError("El bridge CLI nuevo no pudo iniciarse; la versión activa sigue intacta.") from exc
-
-
-def _switch_launcher(system: str, destination: Path, launcher: Path) -> None:
-    launcher.parent.mkdir(parents=True, exist_ok=True)
-    if launcher.is_symlink():
-        raise ValueError(f"El launcher {launcher} es un enlace ajeno; no se reemplazó.")
-    if launcher.exists():
-        if not launcher.is_file():
-            raise ValueError(f"La ruta {launcher} no es un archivo de launcher; no se reemplazó.")
-        content = launcher.read_text(encoding="utf-8", errors="replace")
-        if "CHXCHX_STUDIO_DEV_LAUNCHER" not in content:
-            raise ValueError(f"Ya existe un launcher ajeno en {launcher}; no se reemplazó.")
-
-    link = Path.home() / "Applications" / "ChxChx Studio Dev.app" if system == "Darwin" else None
-    previous_link: str | None = None
-    if link is not None and (link.exists() or link.is_symlink()):
-        if not link.is_symlink():
-            raise ValueError(f"Ya existe una app ajena en {link}; no se reemplazó.")
-        previous_link = os.readlink(link)
-        old_target = Path(previous_link)
-        if not old_target.is_absolute():
-            old_target = link.parent / old_target
-        old_target = old_target.resolve()
-        if old_target.parent != destination.parent or not (old_target / ".chxchx-managed").is_file():
-            raise ValueError(f"El enlace {link} apunta a una app ajena; no se reemplazó.")
-
-    temporary = launcher.with_name(launcher.name + f".tmp-{os.getpid()}")
-    link_tmp = link.with_name(link.name + f".tmp-{os.getpid()}") if link is not None else None
-    try:
-        if system == "Windows":
-            app_root = f"%LOCALAPPDATA%\\Programs\\ChxChxStudio\\{destination.name}"
-            temporary.write_text(
-                "@echo off\r\nrem CHXCHX_STUDIO_DEV_LAUNCHER\r\n"
-                f'set "APP_ROOT={app_root}"\r\n'
-                'set "CHXCHX_TECH_CLI=%APP_ROOT%\\.venv\\Scripts\\chxchx-tech.exe"\r\n'
-                '"%APP_ROOT%\\bin\\chxchx-studio.exe" %*\r\n',
-                encoding="ascii",
-            )
-        else:
-            app_root = ("$HOME/Applications/ChxChx Studio Dev.app" if system == "Darwin"
-                        else f"$HOME/.local/opt/chxchx-studio/{destination.name}")
-            contents = "#!/usr/bin/env bash\n# CHXCHX_STUDIO_DEV_LAUNCHER\n"
-            contents += f'APP_ROOT="{app_root}"\nexport PATH="$HOME/.local/bin:$PATH"\n'
-            if system == "Darwin":
-                contents += 'export CHXCHX_TECH_CLI="$APP_ROOT/Contents/.venv/bin/chxchx-tech"\n'
-                contents += 'exec "$APP_ROOT/Contents/MacOS/chxchx-studio" "$@"\n'
-            else:
-                contents += 'export CHXCHX_TECH_CLI="$APP_ROOT/.venv/bin/chxchx-tech"\n'
-                contents += 'exec "$APP_ROOT/bin/chxchx-studio" "$@"\n'
-            temporary.write_text(contents, encoding="utf-8")
-            temporary.chmod(0o755)
-
-        if link is not None and link_tmp is not None:
-            link_tmp.unlink(missing_ok=True)
-            link_tmp.symlink_to(destination)
-            os.replace(link_tmp, link)
-        os.replace(temporary, launcher)
-    except OSError:
-        if link is not None and previous_link is not None and link_tmp is not None:
-            link_tmp.unlink(missing_ok=True)
-            link_tmp.symlink_to(previous_link)
-            os.replace(link_tmp, link)
-        elif link is not None and previous_link is None:
-            link.unlink(missing_ok=True)
-        raise
-    finally:
-        temporary.unlink(missing_ok=True)
-        if link_tmp is not None:
-            link_tmp.unlink(missing_ok=True)

@@ -1,12 +1,13 @@
 # Pruebas
 
-Cuatro capas, de la más barata a la más real. Las tres primeras corren sin instalar nada y en CI.
+Cinco capas, de la más barata a la más real. Las cuatro primeras corren sin instalar nada y en CI.
 
 | Capa | Dónde | Qué prueba | Cómo se corre |
 | --- | --- | --- | --- |
 | Unitarias | `tests/**/test_*.py` | Lógica pura (parsers, encaje de modelos, fusión de `opencode.json`) con stubs en memoria. | `uv run pytest` |
 | E2E con falsos | `tests/e2e/` | Flujos completos con **HTTP real** y **procesos reales**: un servidor falso de Ollama y ejecutables falsos de `ollama` y `opencode` en el PATH. Ejercitan stdin, argv, entorno, códigos de salida y JSONL tal como en producción. | `uv run pytest` |
 | Nativas | `native/tests/` | Studio (Qt): parseo, estados de la pestaña, chat y Git (`git_smoke` con parsers y un repo temporal real, `git_ui_smoke` con el panel completo y el asistente contra un `chxchx-tech` falso). | `ctest` (ver abajo) |
+| Instaladores | `tests/installers/` | `install.sh` y `release_assets.py` de verdad, con un release falso (construido con el generador real), un servidor HTTP local (`CHXCHX_TEST_BASE`), `HOME` aislado y un `uv` falso: dry-run, idempotencia, canales, checksum alterado, archivos ajenos, desinstalación. Solo en Linux; Windows/macOS los cubre `installer-smoke` en CI. | `uv run pytest tests/installers` |
 | Live | `tests/live/` | Las herramientas **reales**. Confirman las suposiciones que los falsos solo imitan. | `uv run pytest -m live -v -s` |
 
 `uv run pytest` **excluye** `live` (`addopts = "-m 'not live'"`). Con `-m live` y sin las herramientas instaladas, todo se salta con el motivo.

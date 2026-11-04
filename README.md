@@ -33,7 +33,7 @@ externas y administra un workspace desde la terminal. ChxChx Studio es el
 editor integrado, una aplicación nativa C++20/Qt 6 para Windows, macOS y Linux.
 Git, Zellij y los agentes conservan sus propias herramientas y se conectan
 mediante adapters; Sublime sigue disponible como editor externo opcional.
-Puedes [instalar el preview de Studio sin clonar el repositorio](#instalar-chxchx-studio-sin-clonar-el-repositorio):
+Puedes [instalar el preview de Studio sin clonar el repositorio](#instalar-chxchx-studio-y-el-comando-chxchx-tech):
 el instalador descarga el paquete correspondiente y su bridge CLI aislado.
 
 ## Empieza aquí: Studio o TUI
@@ -47,19 +47,16 @@ servicios. Elige la interfaz según tu forma de trabajar:
 
 ### Primera vez en Studio
 
-1. [Instala Studio](#instalar-chxchx-studio-sin-clonar-el-repositorio) o
+1. [Instala Studio](#instalar-chxchx-studio-y-el-comando-chxchx-tech) o
    [compílalo desde el checkout](#compilar-studio-desde-el-checkout).
 2. Abre tu proyecto pasando su ruta al launcher:
 
    ```bash
-   chxchx-studio-dev /ruta/al/proyecto
+   chxchx-studio /ruta/al/proyecto
    ```
 
-   En Windows PowerShell:
-
-   ```powershell
-   & "$env:LOCALAPPDATA\Programs\ChxChxStudio\chxchx-studio-dev.cmd" "C:\ruta\al\proyecto"
-   ```
+   En Windows basta con `chxchx-studio C:\ruta\al\proyecto` en una terminal nueva
+   (o el menú Inicio). Con el canal `dev`, el comando es `chxchx-studio-dev`.
 
 3. En **Inicio**, pulsa **Preparar y entrar**. Revisa la vista previa y confirma
    para preparar el contexto del proyecto, sincronizar las skills recomendadas,
@@ -193,141 +190,71 @@ Para usar todas las funciones del workspace, instala también según necesidad:
 
 ChxChx instala únicamente las herramientas gestionadas por él: Basic Memory y Serena. Los clientes de escritorio, Zellij y agentes mantienen su instalación oficial separada.
 
-### Instalador reducido
+### Instalar ChxChx Studio y el comando `chxchx-tech`
 
-En Linux/macOS puedes instalarlo sin clonar el repositorio:
+Un solo comando por sistema, sin clonar el repositorio. Descarga únicamente los
+paquetes de tu sistema, comprueba su SHA-256 contra el manifiesto del release e
+instala en tu usuario (sin administrador). Para mirar antes de instalar, añade
+`--dry-run` (`-DryRun` en PowerShell): descarga y verifica, pero no cambia nada.
+
+**Linux y macOS**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/main/scripts/bootstrap.sh | sh
+curl -fsSL https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.sh | bash
 ```
 
-En Windows PowerShell:
+**Windows 10/11 (PowerShell)**
 
 ```powershell
-irm https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/main/scripts/bootstrap.ps1 | iex
+& ([scriptblock]::Create((irm https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.ps1)))
 ```
 
-Estos instaladores solo dejan `chxchx-tech` como herramienta global; la configuración de cada proyecto se crea aparte.
-
-### Instalar ChxChx Studio sin clonar el repositorio
-
-Cuando se publique el preview, podrás instalar la aplicación de escritorio y su
-bridge CLI desde sus paquetes. El instalador detecta el sistema y la arquitectura,
-descarga solo esos archivos, comprueba sus SHA-256 y configura una carpeta
-aislada por versión. No descarga ni clona el código fuente del repositorio.
-
-| Sistema | Paquete disponible | Instalación |
+| Sistema | Qué instala | Dónde |
 | --- | --- | --- |
-| Ubuntu 22.04 o posterior, x86_64 | TGZ con runtime Qt | Bash; `sudo` instala bibliotecas gráficas del sistema |
-| Fedora x86_64 | TGZ con Qt y sus plugins gráficos | Bash; `sudo` instala bibliotecas gráficas del sistema |
-| macOS Apple Silicon e Intel | DMG con app `.app` | Bash; primera apertura puede requerir confirmar la app sin firma |
-| Windows 10/11 x86_64 | `Setup.exe` más paquete Qt y bridge CLI | Instalador gráfico; instala solo en el perfil del usuario |
+| Ubuntu 22.04+ / Debian y derivadas, x86_64 | Studio (TGZ con Qt), `chxchx-tech`, entrada en el menú de aplicaciones | `~/.local/opt/chxchx-studio/` |
+| Fedora / RHEL y derivadas, x86_64 | Igual | `~/.local/opt/chxchx-studio/` |
+| macOS Apple Silicon e Intel | `ChxChx Studio.app` (DMG) y `chxchx-tech` | `~/Applications/` |
+| Windows 10/11 x86_64 | Studio (ZIP), `chxchx-tech`, acceso en el menú Inicio y entrada en *Aplicaciones instaladas* | `%LOCALAPPDATA%\Programs\ChxChxStudio\` |
 
-Estos comandos instalan el **preview de desarrollo** más reciente de la rama
-`dev`, no una versión estable. CI construye los instaladores después de validar
-los builds. La publicación del preview permanece aplazada; los comandos estarán
-disponibles cuando se publique el tag
-[studio-dev-preview](https://github.com/chxchx-dev/chxchx-tech-lead/releases/tag/studio-dev-preview).
-
-#### Linux y macOS
-
-Primero puedes descargar y verificar el paquete sin instalarlo. El modo
-`--dry-run` descarga a una carpeta temporal, valida los checksums y no modifica
-el sistema ni tu instalación de Studio.
+En Linux el instalador pide `sudo` solo para las bibliotecas gráficas que Qt necesita
+(`--no-deps` lo omite). `chxchx-tech` se instala en un entorno propio gestionado con
+`uv`; no reemplaza un `chxchx-tech` que ya tengas. Abre un proyecto con:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio.sh | bash -s -- --dry-run
+chxchx-studio /ruta/a/tu/proyecto      # chxchx-studio-dev en el canal dev
 ```
 
-Cuando quieras instalar:
+**Canales y opciones**
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio.sh | bash
-```
+| Quiero | Linux/macOS | Windows |
+| --- | --- | --- |
+| Última versión estable (por defecto) | `install.sh` | `install.ps1` |
+| Una versión concreta | `--version 0.5.0` | `-Version 0.5.0` |
+| Preview de la rama `dev` | `--channel dev` | `-Channel dev` |
+| Actualizar una instalación existente | `--update` | `-Update` |
+| Solo el comando `chxchx-tech` | `--cli-only` | `-CliOnly` |
+| Desinstalar | `--uninstall` | `-Uninstall` |
 
-El mismo comando vuelve a instalar la versión publicada más reciente cuando
-Studio ya está instalado. También puedes indicar `--update` para exigir una
-instalación previa; combínalo con `--dry-run` para revisar la descarga antes de
-aplicarla:
+Con curl, las opciones van después de `bash -s --`, por ejemplo
+`curl -fsSL …/install.sh | bash -s -- --channel dev --dry-run`. El canal `dev` es
+un preview que se reconstruye con cada cambio de la rama `dev`; conviven con el
+estable en carpetas separadas. Se conservan la versión nueva y la anterior para
+poder volver atrás. Studio también ofrece **Ayuda → Buscar actualizaciones…**
+dentro de su canal.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio.sh | bash -s -- --dry-run --update
-curl -fsSL https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio.sh | bash -s -- --update
-```
+**Desinstalar** quita solo lo que instaló ChxChx (carpetas con marcador
+`.chxchx-managed`, launchers, accesos y la entrada de Windows). No toca tus datos
+(`~/.chxchx-tech-lead`), la carpeta `.ai/` de tus proyectos, `uv` ni las bibliotecas
+del sistema. Una ruta existente que no sea de ChxChx nunca se sobrescribe.
 
-En Ubuntu y Fedora el paquete incluye Qt y sus plugins; el instalador solicita
-`sudo` para instalar las bibliotecas gráficas del sistema que Qt necesita para
-abrir una ventana. Studio queda en `~/.local/opt/chxchx-studio/`
-y el comando `chxchx-studio-dev` en `~/.local/bin/`. Abre un proyecto así:
+**Firma.** Los instaladores todavía no están firmados: Windows puede mostrar
+SmartScreen (*Más información → Ejecutar de todas formas*) y macOS puede bloquear la
+primera apertura (clic derecho → *Abrir*). La verificación SHA-256 del manifiesto
+protege la descarga, no sustituye a la firma. CI ya tiene preparados los pasos de
+firma y notarización, que se activan cuando existan los certificados.
 
-```bash
-chxchx-studio-dev /ruta/a/tu/proyecto
-```
-
-En macOS puedes abrirlo también desde `~/Applications`. Al ser un preview sin
-firma de desarrollador, macOS puede bloquear la primera apertura; desde Finder,
-usa **clic derecho → Abrir** y confirma una sola vez. El preview no requiere
-Homebrew ni clonar el repositorio.
-
-En Linux/macOS, si el comando no aparece en una terminal nueva, agrega
-`~/.local/bin` a `PATH`; en macOS también puedes abrir la app desde Finder.
-
-#### Windows 10/11
-
-Descarga y ejecuta el instalador gráfico. No necesita permisos de administrador;
-descarga Studio, valida los checksums e instala el bridge CLI en el perfil actual.
-
-```powershell
-$installer = Join-Path $env:TEMP 'chxchx-studio-setup.exe'
-Invoke-WebRequest 'https://github.com/chxchx-dev/chxchx-tech-lead/releases/download/studio-dev-preview/chxchx-studio-windows-x86_64-setup.exe' -OutFile $installer
-Start-Process -FilePath $installer -Wait
-Remove-Item $installer
-```
-
-Si quieres revisar antes de instalar, también puedes usar el script PowerShell
-con `-DryRun`:
-
-```powershell
-$installer = Join-Path $env:TEMP 'install-chxchx-studio.ps1'
-Invoke-WebRequest 'https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio.ps1' -OutFile $installer
-powershell -ExecutionPolicy Bypass -File $installer -DryRun
-powershell -ExecutionPolicy Bypass -File $installer
-Remove-Item $installer
-```
-
-Para actualizar una instalación existente, usa el mismo archivo con `-Update`;
-`-DryRun` revisa primero las descargas y posibles conflictos:
-
-```powershell
-$installer = Join-Path $env:TEMP 'install-chxchx-studio.ps1'
-Invoke-WebRequest 'https://raw.githubusercontent.com/chxchx-dev/chxchx-tech-lead/dev/scripts/install-studio.ps1' -OutFile $installer
-powershell -ExecutionPolicy Bypass -File $installer -DryRun -Update
-powershell -ExecutionPolicy Bypass -File $installer -Update
-Remove-Item $installer
-```
-
-Puedes volver a ejecutar `Setup.exe` para actualizar. Studio queda instalado en
-`%LOCALAPPDATA%\Programs\ChxChxStudio\`; también aparece un acceso **ChxChx
-Studio Dev** en el menú Inicio. El bridge CLI queda en un entorno virtual propio
-de esa versión y no reemplaza otro `chxchx-tech`.
-
-#### Actualizar y desinstalar
-
-Vuelve a ejecutar el instalador o usa `--update` (PowerShell: `-Update`) para
-obtener el último commit publicado. Studio también ofrece **Ayuda → Buscar
-actualizaciones…**: muestra la versión disponible y pide confirmación antes de
-descargarla. Tras instalarla, cierra y vuelve a abrir Studio. Cada commit queda
-en una carpeta propia y la versión anterior se conserva como rollback; el
-launcher y el acceso de macOS apuntan a la nueva versión. En Linux/macOS, quita `~/.local/bin/chxchx-studio-dev`
-y las carpetas `~/.local/opt/chxchx-studio/dev-*`. En macOS, quita además el
-enlace `~/Applications/ChxChx Studio Dev.app` y las apps
-`~/Applications/ChxChx Studio Dev-*.app`. En Windows elimina la carpeta
-`%LOCALAPPDATA%\Programs\ChxChxStudio\` y el acceso del menú Inicio. Las
-bibliotecas de Ubuntu/Fedora y `uv` se instalan en el usuario/sistema y se
-administran aparte; no las elimines si las usan otras herramientas.
-
-Las rutas ya existentes sin el marcador `.chxchx-managed` no se sobrescriben.
-Las descargas se comprueban contra el manifiesto del release antes de instalar.
+`install-studio.sh`, `install-studio.ps1` y `bootstrap.*` se conservan como atajos
+hacia el instalador unificado (preview y solo CLI, respectivamente).
 
 ## Instalación desde un clon
 
@@ -336,7 +263,7 @@ Las descargas se comprueban contra el manifiesto del release antes de instalar.
 Desde la raíz de este repositorio:
 
 ```bash
-sh scripts/install.sh
+sh scripts/install-from-checkout.sh
 ```
 
 El script:
@@ -353,7 +280,7 @@ Si el comando todavía no aparece, abre una terminal nueva o ejecuta `uv tool up
 Desde la raíz del repositorio:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\install-from-checkout.ps1
 ```
 
 Después abre una nueva PowerShell y verifica:
@@ -1042,21 +969,17 @@ La configuración de CD es independiente de la CI y puedes dejarla desactivada.
 
 Studio es la aplicación de escritorio para editar archivos y operar el workspace
 en una ventana. La instalación y actualización están explicadas en
-[Instalar ChxChx Studio sin clonar el repositorio](#instalar-chxchx-studio-sin-clonar-el-repositorio).
+[Instalar ChxChx Studio sin clonar el repositorio](#instalar-chxchx-studio-y-el-comando-chxchx-tech).
 
 ### Abrir un proyecto
 
 Pasa la ruta del proyecto al launcher para abrirlo directamente:
 
 ```bash
-chxchx-studio-dev /ruta/al/proyecto
+chxchx-studio /ruta/al/proyecto      # chxchx-studio-dev si instalaste el canal dev
 ```
 
-En Windows PowerShell:
-
-```powershell
-& "$env:LOCALAPPDATA\Programs\ChxChxStudio\chxchx-studio-dev.cmd" "C:\ruta\al\proyecto"
-```
+En Windows PowerShell, el mismo comando: `chxchx-studio C:\ruta\al\proyecto`.
 
 También puedes abrir la app desde Finder o el menú Inicio. Si la abres sin una
 ruta, Studio usa el directorio de trabajo actual; **Proyectos** permite cambiar
@@ -1189,7 +1112,7 @@ Una tarjeta en la parte superior de **Cambios** dice cuál es el siguiente paso 
 
 <img src="assets/screenshots/studio-git-assistant.png" alt="Tarjeta de guía y mensaje de commit sugerido por el asistente" width="300"> <img src="assets/screenshots/studio-git-advice.png" alt="Consejo del asistente para ramas separadas" width="420">
 
-Responde el agente que ya usas: el del chat que tienes abierto, o el que elijas en la tarjeta (Codex, Claude Code u OpenCode). **Privacidad**: antes de la primera consulta con cada agente Studio avisa de qué se envía (el resumen y las diferencias de tus cambios). Nunca se envían archivos sensibles (`.env`, llaves, credenciales), se enmascaran valores que parezcan secretos y las diferencias largas se recortan. Cada consulta es de solo lectura, no guarda sesión ni memoria y requiere que el proyecto sea de confianza.
+Responde el agente que ya usas: el del chat que tienes abierto, o el que elijas en la tarjeta (Codex, Claude Code u OpenCode). **Modelo**: para preguntas cortas no gasta el modelo grande del agente. Por defecto usa uno ligero con esfuerzo bajo, elegido de la lista que publica el propio agente (nombres como `mini`, `nano`, `haiku`, `flash`, o un modelo local pequeño); en el menú del agente → **Modelo** puedes elegir cualquier otro de la lista o el predeterminado del agente. **Privacidad**: antes de la primera consulta con cada agente Studio avisa de qué se envía (el resumen y las diferencias de tus cambios). Nunca se envían archivos sensibles (`.env`, llaves, credenciales), se enmascaran valores que parezcan secretos y las diferencias largas se recortan. Cada consulta es de solo lectura, no guarda sesión ni memoria y requiere que el proyecto sea de confianza.
 
 Todavía no incluye `rebase`, blame, preparar por bloques ni resolver conflictos con un editor. Diseño en [ADR 0011](.ai/adr/0011-git-viewer-in-studio.md).
 
