@@ -197,16 +197,20 @@ paquetes de tu sistema, comprueba su SHA-256 contra el manifiesto del release e
 instala en tu usuario (sin administrador). Para mirar antes de instalar, añade
 `--dry-run` (`-DryRun` en PowerShell): descarga y verifica, pero no cambia nada.
 
+> Aún no hay una versión estable publicada: hoy se instala el **preview** (`dev`).
+> Cuando exista, quita `--channel dev` / `-Channel dev` y cambia `download/studio-dev-preview`
+> por `latest/download` para instalar la estable.
+
 **Linux y macOS**
 
 ```bash
-curl -fsSL https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/chxchx-dev/chxchx-tech-lead/releases/download/studio-dev-preview/install.sh | bash -s -- --channel dev
 ```
 
 **Windows 10/11 (PowerShell)**
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.ps1)))
+& ([scriptblock]::Create((irm https://github.com/chxchx-dev/chxchx-tech-lead/releases/download/studio-dev-preview/install.ps1))) -Channel dev
 ```
 
 | Sistema | Qué instala | Dónde |
