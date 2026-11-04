@@ -2,7 +2,16 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Instaladores y releases (hecho en Linux; validar el resto en CI)
+
+- Empujar a `dev` y revisar que pasen `installer-smoke` (sobre todo Windows `install.ps1`, que nunca se ejecutó, y macOS DMG), `native-build` con el `.rc`/`.icns` nuevos y NSIS con `/DCHANNEL`. Arreglar lo que aparezca antes de anunciar los comandos.
+- Primer release estable: subir `pyproject.toml` a `X.Y.Z` (sin `.dev0`), mantener `uv.lock` al día, empujar el tag `vX.Y.Z`. Comprobar que `releases/latest/download/install.sh` y `.ps1` responden.
+- Cuando haya certificados: crear los secretos (`WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD`, `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`) y probar `sign-windows.ps1`/`sign-macos.sh` (nunca ejecutados). La firma de macOS recrea el DMG, así que revisa su aspecto.
+- Pendiente menor: `install.sh` no copia el icono si el paquete es anterior al `.png` nuevo; el updater de Studio no actualiza el icono/`.desktop`; Arch/openSUSE no tienen paquete.
+
 ## Asistente de Git (hecho; validar con agentes reales)
+
+- Comprobar qué modelo elige el modo automático con cada CLI real (`opencode models`, catálogo de Codex, alias de Claude) y que `--model`/`--effort low` no den error; si el "ligero" elegido no convence, ajustar los patrones de `looksLight` o fijar el modelo desde el menú.
 
 - Probar con un agente real: sugerir mensaje con y sin cambios preparados, consejo ante ramas separadas / envío rechazado / conflictos, cancelar, cambiar de agente, y que el diálogo de consentimiento aparezca la primera vez. Comprobar que ninguna consulta deja sesión (Codex `--ephemeral`, Claude `--no-session-persistence`, OpenCode borra la suya) ni toca `.ai/`.
 - Revisar con un repo que tenga `.env` y secretos en el código que nada sensible sale (ver ADR 0012). Pendiente: resolver conflictos con ayuda del agente en el editor, sugerir cómo dividir un cambio en varios commits.
