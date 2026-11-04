@@ -363,7 +363,11 @@ jobs:
         shell: bash
         run: |
           python -m http.server 8765 --bind 127.0.0.1 --directory dist/release >server.log 2>&1 &
-          sleep 2
+          for attempt in $(seq 1 30); do
+            curl --fail --silent --output /dev/null http://127.0.0.1:8765/studio-manifest.txt && break
+            if [ "$attempt" -eq 30 ]; then cat server.log; echo "::error title=Servidor local::no respondió en 30 intentos"; exit 1; fi
+            sleep 1
+          done
           curl --fail --silent http://127.0.0.1:8765/studio-manifest.txt | head -n 6
       - name: Install, launch, update and uninstall (Linux/macOS)
         if: runner.os != 'Windows'
@@ -375,7 +379,10 @@ jobs:
           bash dist/release/install.sh --channel "$CHANNEL" --dry-run
           test ! -e "$HOME/.local/bin/$launcher"
           bash dist/release/install.sh --channel "$CHANNEL"
-          "$launcher" --version
+          if ! "$launcher" --version; then
+            echo "::error title=Studio no arranca::$(ldd "$(ls -d "$HOME"/.local/opt/chxchx-studio/*/bin/chxchx-studio | head -1)" 2>&1 | grep 'not found' | tr '\n' ' ')"
+            exit 1
+          fi
           chxchx-tech --help >/dev/null
           bash dist/release/install.sh --channel "$CHANNEL" --update
           "$launcher" --version
@@ -388,6 +395,11 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          trap {
+            $text = ($_ | Out-String) + $_.ScriptStackTrace
+            Write-Output ("::error title=Windows installer::" + $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A'))
+            exit 1
+          }
           $channel = $env:CHANNEL
           $launcher = if ($channel -eq 'dev') { 'chxchx-studio-dev' } else { 'chxchx-studio' }
           $shims = Join-Path $env:LOCALAPPDATA 'Programs\ChxChxStudio\shims'

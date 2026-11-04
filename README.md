@@ -197,21 +197,20 @@ paquetes de tu sistema, comprueba su SHA-256 contra el manifiesto del release e
 instala en tu usuario (sin administrador). Para mirar antes de instalar, añade
 `--dry-run` (`-DryRun` en PowerShell): descarga y verifica, pero no cambia nada.
 
-> Aún no hay una versión estable publicada: hoy se instala el **preview** (`dev`).
-> Cuando exista, quita `--channel dev` / `-Channel dev` y cambia `download/studio-dev-preview`
-> por `latest/download` para instalar la estable.
-
 **Linux y macOS**
 
 ```bash
-curl -fsSL https://github.com/chxchx-dev/chxchx-tech-lead/releases/download/studio-dev-preview/install.sh | bash -s -- --channel dev
+curl -fsSL https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.sh | bash
 ```
 
 **Windows 10/11 (PowerShell)**
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/chxchx-dev/chxchx-tech-lead/releases/download/studio-dev-preview/install.ps1))) -Channel dev
+& ([scriptblock]::Create((irm https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.ps1)))
 ```
+
+Para probar el preview de la rama `dev` en lugar de la versión estable, usa el mismo
+instalador desde `releases/download/studio-dev-preview/` con `--channel dev` (`-Channel dev`).
 
 | Sistema | Qué instala | Dónde |
 | --- | --- | --- |
@@ -318,7 +317,7 @@ La instalación desde Git no incluye herramientas externas como Zellij, Sublime 
 
 ### Actualizar una instalación existente para probar `dev`
 
-El build actual de la rama `dev` se identifica como `0.5.0.dev0`. No es una
+El build de la rama `dev` se identifica como `0.5.0` (o la versión `.dev` siguiente). No es una
 release estable; úsalo para evaluar Terminal Workspace y registra los
 resultados localmente. La carpeta `docs/` contiene notas de trabajo locales y
 no forma parte del repositorio publicado.
@@ -340,7 +339,7 @@ chxchx-tech doctor .
 chxchx-tech workspace status .
 ```
 
-`version` debe mostrar `chxchx-tech-lead 0.5.0.dev0`. Si suspendiste el workspace,
+`version` debe mostrar `chxchx-tech-lead 0.5.0`. Si suspendiste el workspace,
 reanúdalo y continúa la prueba:
 
 ```bash

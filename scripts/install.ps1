@@ -210,7 +210,7 @@ try {
     }
     $Manifest = @{}
     foreach ($Line in Get-Content -LiteralPath $ManifestPath) {
-        if ($Line -match '^([a-z0-9.-]+)=(.*)$') {
+        if ($Line -match '^([a-z0-9_.-]+)=(.*)$') {
             if ($Manifest.ContainsKey($Matches[1])) { throw "Clave repetida en el manifiesto: $($Matches[1])" }
             $Manifest[$Matches[1]] = $Matches[2]
         }
@@ -349,6 +349,8 @@ try {
 
     # ---- Comando chxchx-tech (entorno aislado con uv) ------------------------------------------------------------------------------------
     if ($NeedsCliInstall) {
+        # Windows PowerShell 5.1 convierte en error cualquier salida por stderr de un programa nativo (uv la usa para el progreso).
+        $ErrorActionPreference = 'Continue'
         $Uv = Get-Command uv -ErrorAction SilentlyContinue
         if ($null -eq $Uv) {
             $UvPath = Join-Path $HOME '.local\bin\uv.exe'
@@ -369,6 +371,7 @@ try {
         if (-not (Test-Path -LiteralPath $CliBinary -PathType Leaf)) { throw 'El wheel no dejó el comando chxchx-tech esperado.' }
         & $CliBinary --help | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'El bridge CLI instalado no puede iniciarse.' }
+        $ErrorActionPreference = 'Stop'
     }
 
     # ---- Launcher, comando en el PATH y acceso del menú Inicio --------------------------------------------------------------------------
