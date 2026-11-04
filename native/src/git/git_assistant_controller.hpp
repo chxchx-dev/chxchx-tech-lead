@@ -1,9 +1,12 @@
 #pragma once
 
 #include "git_assistant.hpp"
+#include "git_assistant_models.hpp"
 #include "git_assistant_prompts.hpp"
 
+#include <QHash>
 #include <QObject>
+#include <QSet>
 
 #include <functional>
 
@@ -31,6 +34,13 @@ public:
     QString currentAgentId() const;
     QString currentAgentLabel() const;
     void chooseAgent(const QString &id);
+    // Which model answers: automatic (a light one), the agent's own default, or one the person picked.
+    GitModelList modelList(const QString &agentId) const { return m_models.value(agentId); }
+    QString modelPreference(const QString &agentId) const;
+    void setModelPreference(const QString &preference);
+    GitModelChoice currentChoice() const;
+    // Reads the current agent's model list once (it comes from the agent itself).
+    void refreshModels();
     void suggestCommitMessage();
     void advise(GitAdviceKind kind, const QString &lastError = QString());
     void cancel();
@@ -44,11 +54,14 @@ signals:
     void adviceReady(GitAdviceKind kind, const QString &markdown, const QString &agentLabel);
     void failed(const QString &message);
     void agentsChanged();
+    void modelsChanged();
 
 private:
     bool begin(const QString &what, const QString &consentText);
     void gather(bool wantDiff, bool wantConflicts, int recentCount, const std::function<void(const GitAssistContext &)> &done);
     void setBusy(bool busy, const QString &text);
+    void ensureModels(const QString &agentId, const std::function<void()> &then);
+    QString labelWithModel() const;
 
     GitRepository *m_repository;
     QString m_projectPath;
@@ -59,6 +72,10 @@ private:
     bool m_mergeInProgress = false;
     int m_stashCount = 0;
     QString m_chosen;
+    QString m_cli;
+    QHash<QString, GitModelList> m_models;
+    QSet<QString> m_fetched;
+    QHash<QString, QList<std::function<void()>>> m_waiting;
     bool m_busy = false;
     bool m_consentRequired = true;
     int m_generation = 0;

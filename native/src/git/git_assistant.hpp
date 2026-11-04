@@ -26,7 +26,8 @@ public:
 
     void setCliProgram(const QString &program) { m_cli = program; }
     bool isBusy() const { return m_process.state() != QProcess::NotRunning; }
-    void ask(const QString &agentId, const QString &prompt);
+    // `model` and `effort` are optional: empty means the agent's own configuration.
+    void ask(const QString &agentId, const QString &prompt, const QString &model = QString(), const QString &effort = QString());
     void cancel();
     // The assistant's text and error from the agent-event lines the CLI printed.
     static GitAssistantResult parseOutput(const QByteArray &standardOutput, int exitCode, const QString &standardError);

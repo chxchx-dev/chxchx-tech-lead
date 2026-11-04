@@ -46,7 +46,7 @@ void GitAssistant::fail(const QString &message)
     emit finished(result);
 }
 
-void GitAssistant::ask(const QString &agentId, const QString &prompt)
+void GitAssistant::ask(const QString &agentId, const QString &prompt, const QString &model, const QString &effort)
 {
     if (isBusy()) return;
     if (m_cli.isEmpty()) {
@@ -61,9 +61,12 @@ void GitAssistant::ask(const QString &agentId, const QString &prompt)
     m_cancelled = false;
     m_timedOut = false;
     // `--cancel-on-stdin` keeps stdin open: writing "cancel" stops the agent cleanly, and closing it would too.
-    m_process.start(m_cli, {QStringLiteral("agent"), QStringLiteral("chat"), agentId, QStringLiteral("--path"), m_projectPath,
-                            QStringLiteral("--lean"), QStringLiteral("--prompt-file"), m_promptFile->fileName(),
-                            QStringLiteral("--cancel-on-stdin")});
+    QStringList arguments = {QStringLiteral("agent"), QStringLiteral("chat"), agentId, QStringLiteral("--path"), m_projectPath,
+                             QStringLiteral("--lean"), QStringLiteral("--prompt-file"), m_promptFile->fileName(),
+                             QStringLiteral("--cancel-on-stdin")};
+    if (!model.isEmpty()) arguments << QStringLiteral("--model") << model;
+    if (!effort.isEmpty()) arguments << QStringLiteral("--effort") << effort;
+    m_process.start(m_cli, arguments);
     m_timeout.start(TimeoutMs);
 }
 

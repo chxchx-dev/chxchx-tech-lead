@@ -1,5 +1,6 @@
 // Parsers from literal text, then GitRepository against a real temporary repository.
 #include "../src/git/git_assistant.hpp"
+#include "../src/git/git_assistant_models.hpp"
 #include "../src/git/git_assistant_prompts.hpp"
 #include "../src/git/git_explorer.hpp"
 #include "../src/git/git_guide.hpp"
@@ -161,6 +162,34 @@ int assistantChecks()
     facts.stashCount = 2;
     CHECK(338, guidanceFor(unpublished, facts).steps.last().contains("2 apartado"));
     CHECK(339, guidanceFor(parseStatusV2(nul({"# branch.oid (initial)", "# branch.head main"})), facts).title.contains("Todavía no hay commits"));
+
+    // Light models: by name or by size; large ones and unknown names are not light.
+    for (const char *id : {"gpt-5-mini", "gpt-nano", "haiku", "gemini-flash", "model-lite", "ollama/qwen2.5-coder:7b-ctx32k", "llama3:8b", "phi:1.5b", "anthropic/claude-3-5-haiku"}) {
+        if (!looksLight(id)) return fail(340, id);
+    }
+    for (const char *id : {"gpt-5", "gpt-5-codex", "opus", "sonnet", "ollama/qwen3-coder:30b-ctx32k", "gpt-oss:120b", "gpt-oss:20b", "luna-6", "devstral:24b"}) {
+        if (looksLight(id)) return fail(341, id);
+    }
+    CHECK(342, lowEffort({"medium", "low", "high"}) == "low" && lowEffort({"minimal", "high"}) == "minimal" && lowEffort({"high"}).isEmpty() && lowEffort({}).isEmpty());
+    const GitModelList codex = parseAgentOptions(R"({"schema": "chxchx.agent-options", "default_model": "gpt-grande", "models": [
+        {"id": "gpt-grande", "efforts": ["low", "medium", "high"]}, {"id": "gpt-mini", "efforts": ["medium", "low"]}]})");
+    CHECK(343, codex.loaded && codex.models.size() == 2 && codex.defaultModel == "gpt-grande" && codex.models[1].efforts == QStringList({"medium", "low"}));
+    CHECK(344, !parseAgentOptions("{}").loaded && !parseAgentOptions("no es json").loaded && parseAgentOptions("{}").models.isEmpty());
+    GitModelChoice choice = chooseModel(codex, "");
+    CHECK(345, choice.model == "gpt-mini" && choice.effort == "low" && choice.light);
+    choice = chooseModel(codex, GitAgentDefaultModel);
+    CHECK(346, choice.model.isEmpty() && choice.effort == "low" && !choice.light);  // the agent's model, with the lowest effort it takes
+    choice = chooseModel(codex, "gpt-grande");
+    CHECK(347, choice.model == "gpt-grande" && choice.effort == "low" && !choice.light);
+    choice = chooseModel(codex, "luna-6");  // a model the person typed or picked that the list does not know
+    CHECK(348, choice.model == "luna-6" && choice.effort.isEmpty());
+    const GitModelList plain = parseAgentOptions(R"({"schema": "chxchx.agent-options", "default_model": "", "models": [{"id": "opus", "efforts": ["low", "high"]}, {"id": "sonnet", "efforts": ["low"]}]})");
+    choice = chooseModel(plain, "");
+    CHECK(349, choice.model.isEmpty() && choice.effort.isEmpty() && !choice.light);  // nothing light: the agent decides
+    const GitModelList claude = parseAgentOptions(R"({"schema": "chxchx.agent-options", "default_model": "", "models": [{"id": "sonnet", "efforts": ["low"]}, {"id": "haiku", "efforts": ["low", "high"]}]})");
+    choice = chooseModel(claude, "");
+    CHECK(350, choice.model == "haiku" && choice.effort.isEmpty() && choice.light);  // haiku takes no effort setting
+    CHECK(351, describeChoice(chooseModel(codex, "")) == "gpt-mini · esfuerzo bajo" && describeChoice(chooseModel(plain, "")) == "modelo del agente");
     return 0;
 }
 

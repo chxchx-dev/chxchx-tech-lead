@@ -164,6 +164,7 @@ GitPanel::GitPanel(QString projectPath, QWidget *parent)
     connect(m_branchButton->menu(), &QMenu::aboutToShow, this, [this] { rebuildBranchMenu(); });
     m_assistant = new GitAssistantController(m_repository, m_projectPath, this);
     connect(m_assistant, &GitAssistantController::agentsChanged, this, [this] { updateGuidance(); });
+    connect(m_assistant, &GitAssistantController::modelsChanged, this, [this] { updateGuidance(); });
     connect(m_assistant, &GitAssistantController::busyChanged, this, [this](bool busy, const QString &text) { m_changes->setAssistantBusy(busy, text); });
     connect(m_assistant, &GitAssistantController::failed, this, [this](const QString &message) { showToast(message, true, GitProblem::Other, false); });
     connect(m_assistant, &GitAssistantController::commitMessageReady, this, [this](const QString &message, const QString &agent) {
@@ -182,6 +183,7 @@ GitPanel::GitPanel(QString projectPath, QWidget *parent)
     connect(m_changes, &GitChangesView::adviceRequested, this, [this](GitAdviceKind kind) { adviseNow(kind); });
     connect(m_changes, &GitChangesView::assistantCancelRequested, m_assistant, &GitAssistantController::cancel);
     connect(m_changes, &GitChangesView::assistantAgentChosen, m_assistant, &GitAssistantController::chooseAgent);
+    connect(m_changes, &GitChangesView::assistantModelChosen, m_assistant, &GitAssistantController::setModelPreference);
     m_poll.start();
     showNotRepository(false);
     m_notRepository->setText(QStringLiteral("Buscando el repositorio…"));
@@ -537,6 +539,9 @@ void GitPanel::updateGuidance()
     m_assistant->setSnapshot(m_status, m_mergeInProgress, m_stashCount);
     m_changes->setGuidance(guidanceFor(m_status, facts));
     m_changes->setAssistantAgents(m_assistant->agents(), m_assistant->currentAgentId());
+    const QString agent = m_assistant->currentAgentId();
+    m_changes->setAssistantModels(m_assistant->modelList(agent), m_assistant->modelPreference(agent));
+    m_assistant->refreshModels();
 }
 
 void GitPanel::configureAssistant(const QString &cliProgram, GitAssistantController::AgentProvider agents, GitAssistantController::PreferredProvider preferred)

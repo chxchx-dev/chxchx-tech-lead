@@ -63,7 +63,9 @@ GitAssistantBar::GitAssistantBar(QWidget *parent) : QFrame(parent)
 
     connect(m_advice, &QPushButton::clicked, this, [this] { requestAdvice(); });
     connect(m_cancel, &QPushButton::clicked, this, &GitAssistantBar::cancelRequested);
-    connect(m_agentMenu, &QMenu::triggered, this, [this](QAction *action) { emit agentChosen(action->data().toString()); });
+    connect(m_agentMenu, &QMenu::triggered, this, [this](QAction *action) {
+        if (!action->data().isNull() && action->data().toString().startsWith(QLatin1String("agent:"))) emit agentChosen(action->data().toString().mid(6));
+    });
     connect(ThemeManager::instance(), &ThemeManager::themeChanged, this, [this] { refreshColors(); });
     setAgents({}, QString());
     applyTone();
@@ -86,15 +88,30 @@ void GitAssistantBar::setGuidance(const GitGuidance &guidance)
 
 void GitAssistantBar::setAgents(const QList<GitAssistantAgent> &agents, const QString &currentId)
 {
+    // The panel refreshes every few seconds: rebuilding an unchanged menu would close it under the person's cursor.
+    QStringList ids;
+    for (const GitAssistantAgent &agent : agents) ids << agent.id + QLatin1Char('=') + agent.label;
+    const QString key = ids.join(QLatin1Char(',')) + QLatin1Char('|') + currentId + QLatin1Char('|') + (m_busy ? QLatin1Char('b') : QLatin1Char('i'));
+    if (key == m_agentKey && m_agentMenu->actions().size() > 0) return;
+    m_agentKey = key;
+    m_modelKey.clear();
     m_hasAgents = !agents.isEmpty();
+    if (m_modelMenu != nullptr) m_modelMenu->deleteLater();
     m_agentMenu->clear();
     QString label = QStringLiteral("Sin agente");
     for (const GitAssistantAgent &agent : agents) {
         QAction *action = m_agentMenu->addAction(agent.label);
-        action->setData(agent.id);
+        action->setData(QStringLiteral("agent:") + agent.id);
         action->setCheckable(true);
         action->setChecked(agent.id == currentId);
         if (agent.id == currentId) label = agent.label;
+    }
+    m_modelMenu = nullptr;
+    if (m_hasAgents) {
+        m_agentMenu->addSeparator();
+        m_modelMenu = m_agentMenu->addMenu(QStringLiteral("Modelo"));
+        connect(m_modelMenu, &QMenu::triggered, this, [this](QAction *action) { emit modelChosen(action->data().toString()); });
+        setModels(GitModelList(), m_modelPreference);
     }
     m_agent->setText(label);
     m_agent->setEnabled(m_hasAgents && !m_busy);
@@ -149,3 +166,48 @@ QString GitAssistantBar::stepsText() const { return m_steps->text(); }
 QString GitAssistantBar::agentText() const { return m_agent->text(); }
 QString GitAssistantBar::hintText() const { return m_hint->isVisibleTo(this) ? m_hint->text() : QString(); }
 bool GitAssistantBar::adviceEnabled() const { return m_advice->isEnabled() && m_advice->isVisibleTo(this); }
+
+void GitAssistantBar::setModels(const GitModelList &list, const QString &preference)
+{
+    m_modelPreference = preference;
+    if (m_modelMenu == nullptr) return;
+    QStringList ids;
+    for (const GitAssistantModel &model : list.models) ids << model.id;
+    const QString key = ids.join(QLatin1Char(',')) + QLatin1Char('|') + preference + QLatin1Char('|') + list.defaultModel + (list.loaded ? QLatin1String("|1") : QLatin1String("|0"));
+    if (key == m_modelKey) return;
+    m_modelKey = key;
+    m_modelMenu->clear();
+    const GitModelChoice automatic = chooseModel(list, QString());
+    const auto add = [this, &preference](const QString &text, const QString &value, bool checked) {
+        QAction *action = m_modelMenu->addAction(text);
+        action->setData(value);
+        action->setCheckable(true);
+        action->setChecked(checked);
+    };
+    // Automatic is the default: it spends the agent's small model, not its biggest one, on short questions.
+    add(QStringLiteral("Automático (ligero): %1").arg(automatic.model.isEmpty() ? QStringLiteral("el del agente") : automatic.model), QString(), preference.isEmpty());
+    add(QStringLiteral("El predeterminado del agente"), QString::fromLatin1(GitAgentDefaultModel), preference == QLatin1String(GitAgentDefaultModel));
+    if (!list.models.isEmpty()) m_modelMenu->addSeparator();
+    for (const GitAssistantModel &model : list.models) add(model.id, model.id, preference == model.id);
+    if (!list.loaded) {
+        QAction *loading = m_modelMenu->addAction(QStringLiteral("(la lista de modelos del agente aún no está disponible)"));
+        loading->setEnabled(false);
+    }
+    const GitModelChoice chosen = chooseModel(list, preference);
+    m_agent->setToolTip(QStringLiteral("Agente que responde. Modelo: %1.").arg(describeChoice(chosen)));
+}
+
+QStringList GitAssistantBar::modelChoices() const
+{
+    QStringList texts;
+    if (m_modelMenu == nullptr) return texts;
+    for (const QAction *action : m_modelMenu->actions()) if (!action->isSeparator()) texts << action->text();
+    return texts;
+}
+
+QString GitAssistantBar::modelPreferenceText() const
+{
+    if (m_modelMenu == nullptr) return {};
+    for (const QAction *action : m_modelMenu->actions()) if (action->isChecked()) return action->text();
+    return {};
+}
