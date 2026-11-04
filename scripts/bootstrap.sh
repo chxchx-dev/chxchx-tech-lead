@@ -1,13 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-REPO="git+https://github.com/chxchx-dev/chxchx-tech-lead.git"
-
-if ! command -v uv >/dev/null 2>&1; then
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-fi
-
-export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-uv tool install --force "$REPO"
-chxchx-tech install
-chxchx-tech doctor
+# Instala solo el comando chxchx-tech (canal estable). No configura nada más:
+# cuando quieras preparar tus agentes, ejecuta `chxchx-tech install --dry-run` y luego sin --dry-run.
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+  https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.sh \
+  | bash -s -- --cli-only "$@"

@@ -12,10 +12,8 @@ import sys
 import urllib.request
 
 
-OWNER = "chxchx-dev"
-REPOSITORY = "chxchx-tech-lead"
-RELEASE_TAG = "studio-dev-preview"
-RELEASE_BASE = f"https://github.com/{OWNER}/{REPOSITORY}/releases/download/{RELEASE_TAG}"
+from .studio_channels import DEV, Channel, channel_of_root
+
 MANIFEST_SCHEMA = 1
 PLATFORMS = {
     ("Linux", "x86_64", "ubuntu"): ("linux-ubuntu-x86_64", "chxchx-studio-ubuntu-x86_64.tar.gz"),
@@ -35,6 +33,7 @@ class StudioRelease:
     package_sha256: str
     wheel: str
     wheel_sha256: str
+    channel: str = "dev"
 
 
 def platform_asset(system: str | None = None, machine: str | None = None) -> tuple[str, str]:
@@ -58,22 +57,28 @@ def platform_asset(system: str | None = None, machine: str | None = None) -> tup
 
 
 def _linux_id() -> str:
+    """`ubuntu` or `fedora` for the package family; derivatives map through ID_LIKE."""
     try:
-        for line in Path("/etc/os-release").read_text(encoding="utf-8").splitlines():
-            if line.startswith("ID="):
-                return line.partition("=")[2].strip().strip('"').casefold()
+        text = Path("/etc/os-release").read_text(encoding="utf-8")
     except OSError:
-        pass
+        return ""
+    fields = {key: value.strip().strip('"').casefold() for key, _, value in (line.partition("=") for line in text.splitlines())}
+    words = f"{fields.get('ID', '')} {fields.get('ID_LIKE', '')}".split()
+    for family, names in (("ubuntu", {"ubuntu", "debian"}), ("fedora", {"fedora", "rhel", "centos"})):
+        if names & set(words):
+            return family
     return ""
 
 
-def parse_manifest(text: str, *, system: str | None = None, machine: str | None = None) -> StudioRelease:
+def parse_manifest(
+    text: str, *, system: str | None = None, machine: str | None = None, channel: str = "dev"
+) -> StudioRelease:
     values: dict[str, str] = {}
     for line in text.splitlines():
         if not line or line.startswith("#"):
             continue
         key, separator, value = line.partition("=")
-        if not separator or not re.fullmatch(r"[a-z0-9.-]+", key) or key in values:
+        if not separator or not re.fullmatch(r"[a-z0-9_.-]+", key) or key in values:
             raise ValueError("El manifiesto de Studio contiene una línea inválida o una clave repetida.")
         values[key] = value
 
@@ -86,6 +91,10 @@ def parse_manifest(text: str, *, system: str | None = None, machine: str | None 
         raise ValueError("El manifiesto de Studio contiene un commit inválido.")
     if not re.fullmatch(r"[0-9A-Za-z.+-]+", values["version"]):
         raise ValueError("El manifiesto de Studio contiene una versión inválida.")
+    if values.get("channel", channel) != channel:
+        raise ValueError(f"El manifiesto es del canal {values['channel']}, no de {channel}.")
+    if channel == "stable" and not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", values["version"]):
+        raise ValueError("La versión estable debe tener la forma X.Y.Z.")
     wheel = values["asset.cli-wheel"]
     if not re.fullmatch(r"chxchx_tech_lead-[A-Za-z0-9.+!_-]+-py3-none-any\.whl", wheel):
         raise ValueError("El manifiesto de Studio contiene un wheel inválido.")
@@ -105,26 +114,36 @@ def parse_manifest(text: str, *, system: str | None = None, machine: str | None 
         package_sha256=package_sha,
         wheel=wheel,
         wheel_sha256=values["sha256.cli-wheel"],
+        channel=channel,
     )
 
 
-def fetch_release(*, timeout: float = 20.0) -> StudioRelease:
-    request = urllib.request.Request(
-        f"{RELEASE_BASE}/studio-preview.txt",
-        headers={"Cache-Control": "no-cache", "User-Agent": "ChxChx-Studio-Updater"},
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        content = response.read(64 * 1024 + 1)
-    if len(content) > 64 * 1024:
-        raise ValueError("El manifiesto de Studio supera el tamaño permitido.")
-    return parse_manifest(content.decode("utf-8"))
+def fetch_release(channel: Channel = DEV, *, timeout: float = 20.0) -> StudioRelease:
+    last_error: Exception | None = None
+    for name in channel.manifests:
+        request = urllib.request.Request(
+            f"{channel.base}/{name}",
+            headers={"Cache-Control": "no-cache", "User-Agent": "ChxChx-Studio-Updater"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                content = response.read(64 * 1024 + 1)
+        except OSError as exc:  # el preview anterior solo publicaba studio-preview.txt
+            last_error = exc
+            continue
+        if len(content) > 64 * 1024:
+            raise ValueError("El manifiesto de Studio supera el tamaño permitido.")
+        return parse_manifest(content.decode("utf-8"), channel=channel.name)
+    raise ValueError(f"No se pudo leer el manifiesto del canal {channel.name}: {last_error}")
 
 
-def download_asset(name: str, expected_sha256: str, destination: Path, *, timeout: float = 90.0) -> None:
+def download_asset(
+    name: str, expected_sha256: str, destination: Path, *, base: str | None = None, timeout: float = 90.0
+) -> None:
     if "/" in name or "\\" in name or name in {"", ".", ".."}:
         raise ValueError("Nombre de asset inválido.")
     request = urllib.request.Request(
-        f"{RELEASE_BASE}/{name}", headers={"User-Agent": "ChxChx-Studio-Updater"}
+        f"{base or DEV.base}/{name}", headers={"User-Agent": "ChxChx-Studio-Updater"}
     )
     digest = hashlib.sha256()
     with urllib.request.urlopen(request, timeout=timeout) as response, destination.open("wb") as output:
@@ -134,6 +153,13 @@ def download_asset(name: str, expected_sha256: str, destination: Path, *, timeou
     if digest.hexdigest() != expected_sha256:
         destination.unlink(missing_ok=True)
         raise ValueError(f"El SHA-256 de {name} no coincide; la descarga se descartó.")
+
+
+def installed_channel() -> Channel:
+    channel = channel_of_root(installed_app_root())
+    if channel is None:
+        raise ValueError("No se reconoció el canal de la instalación de Studio.")
+    return channel
 
 
 def installed_app_root() -> Path:
@@ -169,20 +195,18 @@ def installed_cli_path() -> Path:
 
 
 def _is_expected_install_root(root: Path) -> bool:
+    channel = channel_of_root(root)
+    if channel is None:
+        return False
     system = platform.system()
     if system == "Windows":
         local_app_data = os.environ.get("LOCALAPPDATA")
-        if not local_app_data:
-            return False
-        base = Path(local_app_data) / "Programs" / "ChxChxStudio"
-        return root.parent == base and re.fullmatch(r"dev-[0-9a-f]{12}", root.name) is not None
+        base = Path(local_app_data) / "Programs" / "ChxChxStudio" if local_app_data else None
+        return root.parent == base and re.fullmatch(channel.root_pattern, root.name) is not None
     if system == "Darwin":
-        base = Path.home() / "Applications"
-        return root.parent == base and re.fullmatch(
-            r"ChxChx Studio Dev-[0-9a-f]{12}\.app", root.name, re.IGNORECASE
-        ) is not None
+        return root.parent == Path.home() / "Applications" and re.fullmatch(channel.app_pattern, root.name, re.IGNORECASE) is not None
     base = Path.home() / ".local" / "opt" / "chxchx-studio"
-    return root.parent == base and re.fullmatch(r"dev-[0-9a-f]{12}", root.name) is not None
+    return root.parent == base and re.fullmatch(channel.root_pattern, root.name) is not None
 
 
 def installed_commit() -> str:
