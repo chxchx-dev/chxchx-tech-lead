@@ -60,6 +60,7 @@ def test_stable_requires_a_plain_version():
 
 
 def test_fetch_falls_back_to_the_old_preview_manifest(monkeypatch):
+    monkeypatch.setattr(feed, "platform_asset", lambda *a: ("linux-ubuntu-x86_64", "chxchx-studio-ubuntu-x86_64.tar.gz"))
     served = {"/studio-preview.txt": manifest()}
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -91,7 +92,7 @@ def test_linux_family_follows_id_like(tmp_path, monkeypatch):
     real_read = Path.read_text
 
     def fake(self, *a, **k):
-        return release.read_text() if str(self) == "/etc/os-release" else real_read(self, *a, **k)
+        return release.read_text() if self.as_posix() == "/etc/os-release" else real_read(self, *a, **k)
 
     monkeypatch.setattr(Path, "read_text", fake)
     for text, expected in (('ID=linuxmint\nID_LIKE="ubuntu debian"\n', "ubuntu"), ("ID=nobara\nID_LIKE=fedora\n", "fedora"),
