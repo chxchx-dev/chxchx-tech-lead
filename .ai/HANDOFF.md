@@ -2,7 +2,9 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
-## Instaladores y releases (hecho en Linux; validar el resto en CI)
+## Instaladores y releases (publicados: 0.5.0 estable y preview dev)
+
+- Windows: x64 nativo; ARM64 usa el paquete x64 (emulación) salvo que el manifiesto traiga `asset.windows-arm64`; x86 de 32 bits cae a solo CLI. El job `native-windows-arm64` (experimental, compilación cruzada, nunca ejecutado) sube un artefacto que NO va al release: probarlo en un ARM64 real y luego conectarlo a `stage-release` (el instalador y `release_assets.py` ya lo soportan). La `0.5.1` estable debe llevar el arreglo de arquitectura de `install.ps1`.
 
 - Empujar a `dev` y revisar que pasen `installer-smoke` (sobre todo Windows `install.ps1`, que nunca se ejecutó, y macOS DMG), `native-build` con el `.rc`/`.icns` nuevos y NSIS con `/DCHANNEL`. Arreglar lo que aparezca antes de anunciar los comandos.
 - Primer release estable: subir `pyproject.toml` a `X.Y.Z` (sin `.dev0`), mantener `uv.lock` al día, empujar el tag `vX.Y.Z`. Comprobar que `releases/latest/download/install.sh` y `.ps1` responden.

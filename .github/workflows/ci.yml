@@ -279,6 +279,52 @@ jobs:
           path: dist/*.whl
           if-no-files-found: error
 
+  native-windows-arm64:
+    # Experimental: cross-compiled on x64 and never executed in CI (there is no ARM64 runner step that
+    # launches it yet). Its artifact is NOT part of any release; Windows ARM64 users get the x64 package
+    # under emulation until this build is verified on real hardware and wired into stage-release.
+    name: Native Qt build (experimental) · Windows ARM64
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt 6 host tools (x64)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qt5compat
+          dir: ${{ runner.temp }}/qt-host
+          set-env: false
+          cache: true
+      - name: Install Qt 6 for ARM64
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          target: desktop
+          arch: win64_msvc2022_arm64
+          modules: qt5compat
+          dir: ${{ runner.temp }}/qt-arm64
+          set-env: false
+          cache: true
+      - name: Configure and build for ARM64
+        shell: pwsh
+        run: |
+          cmake -S native -B build-arm64 -A ARM64 `
+            -DCMAKE_PREFIX_PATH="${{ runner.temp }}/qt-arm64/Qt/6.8.3/msvc2022_arm64" `
+            -DQT_HOST_PATH="${{ runner.temp }}/qt-host/Qt/6.8.3/msvc2022_64"
+          cmake --build build-arm64 --config Release --parallel 2
+      - name: Create ARM64 install package
+        shell: pwsh
+        run: cpack --config build-arm64/CPackConfig.cmake -C Release -B build-arm64/packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chxchx-studio-windows-arm64-experimental
+          path: build-arm64/packages/*.zip
+          if-no-files-found: warn
+          compression-level: 0
+
   check-release-tag:
     name: Check the release tag matches the version
     if: startsWith(github.ref, 'refs/tags/v')

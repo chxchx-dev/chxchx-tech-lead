@@ -109,3 +109,13 @@ def test_command_line_check_version(tmp_path: Path, capsys) -> None:
     assert release_assets.main(["--root", str(root), "--channel", "stable", "--tag", "v0.5.0", "--check-version"]) == 0
     assert release_assets.main(["--root", str(root), "--channel", "stable", "--tag", "v9.9.9", "--check-version"]) == 1
     assert "no coincide" in capsys.readouterr().err
+
+
+def test_native_arm64_package_is_optional(tmp_path: Path) -> None:
+    root = make_root(tmp_path)
+    without = release_assets.stage(root=root, downloads=make_downloads(tmp_path / "a", skip="windows-arm64"), output=tmp_path / "out-a",
+                                   channel="dev", tag=release_assets.DEV_TAG, commit=COMMIT)
+    assert "asset.windows-arm64" not in manifest_values(without)
+    with_arm = release_assets.stage(root=root, downloads=make_downloads(tmp_path / "b"), output=tmp_path / "out-b",
+                                    channel="dev", tag=release_assets.DEV_TAG, commit=COMMIT)
+    assert manifest_values(with_arm)["asset.windows-arm64"] == "chxchx-studio-windows-arm64.zip"

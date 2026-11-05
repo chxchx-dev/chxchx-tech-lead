@@ -135,7 +135,10 @@ def test_foreign_shim_is_left_alone(tmp_path, monkeypatch):
     assert "CHXCHX_STUDIO_DEV_LAUNCHER" in launcher.read_text()
 
 
-def test_windows_arm64_uses_the_x64_package():
-    assert feed.platform_asset("Windows", "ARM64") == feed.platform_asset("Windows", "AMD64")
+def test_windows_arm64_prefers_a_native_package_and_falls_back_to_x64():
+    with_native = manifest(extra=f"\nasset.windows-arm64=chxchx-studio-windows-arm64.zip\nsha256.windows-arm64={SHA}\nasset.windows-x86_64=chxchx-studio-windows-x86_64.zip\nsha256.windows-x86_64={SHA}")
+    assert feed.parse_manifest(with_native, system="Windows", machine="ARM64").platform == "windows-arm64"
+    x64_only = manifest(extra=f"\nasset.windows-x86_64=chxchx-studio-windows-x86_64.zip\nsha256.windows-x86_64={SHA}")
+    assert feed.parse_manifest(x64_only, system="Windows", machine="ARM64").platform == "windows-x86_64"
     with pytest.raises(ValueError):
         feed.platform_asset("Windows", "x86")

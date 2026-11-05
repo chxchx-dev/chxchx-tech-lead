@@ -219,7 +219,7 @@ instalador desde `releases/download/studio-dev-preview/` con `--channel dev` (`-
 | macOS Apple Silicon e Intel | `ChxChx Studio.app` (DMG) y `chxchx-tech` | `~/Applications/` |
 | Windows 10/11 x64 (en ARM64 se ejecuta con emulación x64) | Studio (ZIP), `chxchx-tech`, acceso en el menú Inicio y entrada en *Aplicaciones instaladas* | `%LOCALAPPDATA%\Programs\ChxChxStudio\` |
 
-Windows de 32 bits no puede ejecutar Studio (Qt 6 no lo ofrece): instala solo el comando con `-CliOnly`. Linux ARM tampoco tiene paquete de Studio todavía.
+En Windows de 32 bits el instalador deja solo el comando `chxchx-tech` (Qt 6 no ofrece Studio para 32 bits). En ARM64 usa Studio x64 con la emulación de Windows 11; hay un build nativo ARM64 en pruebas que aún no se publica. Linux ARM tampoco tiene paquete de Studio todavía.
 
 En Linux el instalador pide `sudo` solo para las bibliotecas gráficas que Qt necesita
 (`--no-deps` lo omite). `chxchx-tech` se instala en un entorno propio gestionado con

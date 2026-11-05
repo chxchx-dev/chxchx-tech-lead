@@ -176,16 +176,10 @@ if ($Uninstall) { Invoke-Uninstall; return }
 # ---- Origen de las descargas -------------------------------------------------------------------------------------------------------
 # La arquitectura del sistema, no la del proceso: un PowerShell de 32 bits en Windows de 64 bits ve "x86".
 $WindowsArchitecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
-if (-not $CliOnly) {
-    switch ($WindowsArchitecture) {
-        'AMD64' { }
-        'ARM64' {
-            Write-Warn 'Windows ARM64: se instalará Studio para x64, que Windows 11 ejecuta con emulación (en Windows 10 ARM puede no abrir). El comando chxchx-tech sí es nativo.'
-        }
-        default {
-            throw "Studio solo existe para Windows de 64 bits (x64, o ARM64 con emulación); este sistema es '$WindowsArchitecture'. Usa -CliOnly para instalar solo el comando chxchx-tech."
-        }
-    }
+if (-not $CliOnly -and $WindowsArchitecture -notin @('AMD64', 'ARM64')) {
+    # Qt 6 no ofrece una versión de 32 bits: el comando sí funciona, la aplicación de escritorio no.
+    Write-Warn "Este Windows es de 32 bits ('$WindowsArchitecture'): ChxChx Studio necesita 64 bits. Se instalará solo el comando chxchx-tech."
+    $CliOnly = [System.Management.Automation.SwitchParameter]::new($true)
 }
 $TestBase = $env:CHXCHX_TEST_BASE
 if ($TestBase) {
@@ -205,6 +199,7 @@ if ($TestBase) {
 
 $Platform = 'windows-x86_64'
 $ExpectedPackage = 'chxchx-studio-windows-x86_64.zip'
+$NativeArm64Package = 'chxchx-studio-windows-arm64.zip'
 $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "chxchx-studio-$PID"
 $Stage = $null
 New-Item -ItemType Directory -Path $TempRoot | Out-Null
@@ -233,6 +228,13 @@ try {
     $WheelName = $Manifest['asset.cli-wheel']
     if ($WheelName -notmatch '^chxchx_tech_lead-[A-Za-z0-9.+!_-]+-py3-none-any\.whl$') { throw 'El manifiesto apunta a un wheel inesperado.' }
     $Keys = @('sha256.cli-wheel')
+    if (-not $CliOnly -and $WindowsArchitecture -eq 'ARM64') {
+        if ($Manifest['asset.windows-arm64'] -eq $NativeArm64Package) {
+            $Platform = 'windows-arm64'; $ExpectedPackage = $NativeArm64Package
+        } else {
+            Write-Warn 'Windows ARM64: este release solo trae Studio para x64; se ejecutará con la emulación de Windows 11 (en Windows 10 ARM puede no abrir). El comando chxchx-tech sí es nativo.'
+        }
+    }
     if (-not $CliOnly) {
         if ($Manifest["asset.$Platform"] -ne $ExpectedPackage) { throw 'El manifiesto apunta a un paquete inesperado.' }
         $Keys += "sha256.$Platform"
