@@ -21,6 +21,7 @@ PLATFORMS = {
     ("Darwin", "arm64", ""): ("macos-arm64", "chxchx-studio-macos-arm64.dmg"),
     ("Darwin", "x86_64", ""): ("macos-x86_64", "chxchx-studio-macos-x86_64.dmg"),
     ("Windows", "AMD64", ""): ("windows-x86_64", "chxchx-studio-windows-x86_64.zip"),
+    ("Windows", "ARM64", ""): ("windows-arm64", "chxchx-studio-windows-arm64.zip"),
 }
 
 
@@ -43,7 +44,7 @@ def platform_asset(system: str | None = None, machine: str | None = None) -> tup
     if architecture in {"amd64", "x64"}:
         architecture = "x86_64"
     if system == "Windows":
-        architecture = "AMD64" if architecture == "x86_64" else machine
+        architecture = "AMD64" if architecture == "x86_64" else "ARM64" if architecture in {"arm64", "aarch64"} else machine
     os_id = ""
     if system == "Linux":
         os_id = _linux_id()
@@ -102,6 +103,9 @@ def parse_manifest(
         raise ValueError("El manifiesto de Studio contiene un checksum inválido.")
 
     platform_key, expected_package = platform_asset(system, machine)
+    if platform_key == "windows-arm64" and f"asset.{platform_key}" not in values:
+        # No native ARM64 build in this release: Windows 11 runs the x64 one under emulation.
+        platform_key, expected_package = platform_asset("Windows", "AMD64")
     package = values.get(f"asset.{platform_key}", "")
     package_sha = values.get(f"sha256.{platform_key}", "")
     if package != expected_package or not re.fullmatch(r"[0-9a-f]{64}", package_sha):

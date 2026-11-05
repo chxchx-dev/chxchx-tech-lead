@@ -2,7 +2,9 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
-## Instaladores y releases (hecho en Linux; validar el resto en CI)
+## Instaladores y releases (publicados: 0.5.0 estable y preview dev)
+
+- Windows: x64 nativo; ARM64 usa el paquete x64 (emulación) salvo que el manifiesto traiga `asset.windows-arm64`; x86 de 32 bits cae a solo CLI. El job `native-windows-arm64` (experimental, compilación cruzada, nunca ejecutado) sube un artefacto que NO va al release: probarlo en un ARM64 real y luego conectarlo a `stage-release` (el instalador y `release_assets.py` ya lo soportan). La `0.5.1` estable debe llevar el arreglo de arquitectura de `install.ps1`.
 
 - Empujar a `dev` y revisar que pasen `installer-smoke` (sobre todo Windows `install.ps1`, que nunca se ejecutó, y macOS DMG), `native-build` con el `.rc`/`.icns` nuevos y NSIS con `/DCHANNEL`. Arreglar lo que aparezca antes de anunciar los comandos.
 - Primer release estable: subir `pyproject.toml` a `X.Y.Z` (sin `.dev0`), mantener `uv.lock` al día, empujar el tag `vX.Y.Z`. Comprobar que `releases/latest/download/install.sh` y `.ps1` responden.
@@ -61,11 +63,10 @@
 - Verificación: `git diff --check` sin errores. No se ejecutaron tests en esta ronda.
 - Basic Memory no está disponible en las herramientas de esta sesión; el checkpoint quedó en `.ai/CURRENT_STATE.md` y este archivo.
 
-## Instalación local de ChxChx Studio
+## Instalaciones locales de ChxChx Studio
 
-- El release oficial `studio-dev-preview` respondió 404 al `--dry-run`; no había paquete publicado para Fedora. Se compiló el código de `dev` (`5eae006`) y se instaló en `~/.local/opt/chxchx-studio/dev-5eae006`.
-- Se creó `~/.local/bin/chxchx-studio-dev` y el acceso de menú `~/.local/share/applications/chxchx-studio-dev.desktop`. El launcher configura los plugins Qt del sistema y usa el CLI del `.venv` de este checkout.
-- Arranque verificado con captura offscreen, `ldd` sin dependencias faltantes y `desktop-file-validate`. No se ejecutó CTest ni pytest. Esta instalación local depende de que se mantenga el checkout en su ruta actual.
+- Históricamente, `studio-dev-preview` respondió 404 al `--dry-run` y se compiló `dev` (`5eae006`) en `~/.local/opt/chxchx-studio/dev-5eae006`. Se creó `chxchx-studio-dev` con entrada de menú, plugins Qt del sistema y el CLI de este checkout; su arranque se verificó con captura offscreen y `ldd`. Esa instalación y sus dos accesos se retiraron el 2026-11-04 a petición del usuario.
+- 2026-11-04: stable `0.5.0` instalado desde el release oficial en `~/.local/opt/chxchx-studio/stable-0.5.0` usando el instalador publicado por `curl`. La invocación exacta sin opciones llegó al paso `sudo dnf` y falló porque no había terminal para contraseña; como Qt ya estaba presente, se completó con el mismo instalador y `--no-deps`. El `--dry-run` y la instalación verificaron manifiesto y SHA-256. `chxchx-studio --version` y `chxchx-tech version` informan `0.5.0`; launcher, `PATH` y menú están listos. No se abrió la ventana gráfica. Basic Memory no está disponible en las herramientas de esta sesión; este checkpoint queda aquí y en `.ai/CURRENT_STATE.md`.
 
 ## Responsivo y pendientes menores
 

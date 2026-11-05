@@ -9,6 +9,12 @@
 - CI: `stage-release` → `installer-smoke` (ubuntu, macOS x2, Windows, servidor localhost + `CHXCHX_TEST_BASE`) → `publish-studio-preview` / `publish-studio-stable` (tag `v*`, con `check-release-tag`). Firma condicionada a secretos (`WINDOWS_CERT_*`, `MACOS_*`, `APPLE_*`).
 - Verificado en Linux: `tests/installers` (37) y `tests/integrations/test_studio_channels.py` (8), build local de Studio con `--version`. **No verificado**: `install.ps1`, NSIS, flujo DMG, `installer-smoke` y publicación real, firma (sin pwsh/macOS/certificados aquí).
 
+## Instalación local stable (2026-11-04)
+
+- ChxChx Studio `0.5.0` instalado desde el release oficial stable en Fedora x86_64 usando `curl -fsSL https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.sh | bash -s -- --no-deps`. El primer intento sin `--no-deps` se detuvo porque `sudo` requería una terminal; las bibliotecas de Qt ya estaban instaladas. `--dry-run` y la instalación verificaron el manifiesto y los SHA-256.
+- Studio informa `ChxChx Studio 0.5.0`; el bridge informa `chxchx-tech-lead 0.5.0`. Launcher y entrada de menú presentes; `~/.local/bin` ya está en `PATH`. El instalador configuró `uv` y Python 3.11 para el entorno aislado.
+- La instalación anterior `dev-5eae006`, su launcher y su entrada de menú se retiraron tras confirmar sus marcadores de ChxChx. No se abrió la ventana gráfica; el arranque visual y la instalación en equipos limpios siguen sin comprobarse.
+
 ## Asistente de Git: modelo ligero por defecto
 
 - `git_assistant_models` (puro): `parseAgentOptions`, `looksLight` (por nombre o por tamaño ≤14b), `lowEffort`, `chooseModel` (automático / `__agent__` / un modelo concreto), `describeChoice`. El controlador lee la lista de modelos del agente (`bridge agent-options`) una vez y pasa `--model`/`--effort` a `agent chat --lean`; la tarjeta tiene el submenú Modelo (se reconstruye solo si algo cambió, para no cerrarse mientras se usa).
@@ -157,10 +163,10 @@
 - Studio cubre todas las áreas de la TUI (inventario en `.ai/EDITOR-PARITY.md`). Toda escritura pasa por `--dry-run`, preview y confirmación. Inicio ofrece `Preparar y entrar`. Incluye terminal PTY/ConPTY + libvterm (scrollback de 5000 líneas), pestañas de agentes Codex/Claude/OpenCode (+Ollama), búsqueda de rutas y contenido, archivos recientes y grupos divididos, diff Git por archivo, símbolos básicos, atajos configurables y paleta `Ctrl+P`.
 - Catálogo: 21 skills, 13 Tech Packs y 9 Mods de Claude Code en `.claude/skills`. RAM Governor: `max_agents` 2, aviso RAM 70 %, crítico 85 % y aviso swap 40 %; trust local obligatorio antes de ejecutar procesos.
 - CI/CD de proyectos del usuario: CI opt-in para Python/Node/CMake y CD opt-in a VPS con Docker Compose (ADR 0007), ambos en CLI/TUI/Studio.
-- Distribución: CPack genera ZIP/DMG/TGZ y un `Setup.exe` NSIS. El workflow está preparado para el release rodante `studio-dev-preview`; el instalador oficial respondió 404 al comprobarlo. El run #87 de CI validó los paquetes en todos los runners. Nunca se ha probado la instalación en máquinas limpias.
+- Distribución: CPack genera ZIP/DMG/TGZ y un `Setup.exe` NSIS. Stable `0.5.0` se instaló y verificó por versión en Fedora x86_64; no se lanzó la ventana. No se ha probado la instalación en equipos limpios ni en Windows/macOS.
 - Memoria: `.ai/memory/PROJECT_MEMORY.md` guarda las peticiones explícitas, y Basic Memory se usa limitado al `memory_project` del proyecto. Al cerrar cada sesión de Codex/Claude se escribe un resumen en `.ai/history/SESSIONS.md`, que se inyecta en el siguiente chat nuevo. `CURRENT_STATE`/`HANDOFF` se compactan solos hacia `.ai/history/`.
 - Lo que bloquea el uso diario: QA interactivo de Studio en Fedora con un proyecto real. El orden de trabajo está en `.ai/ROADMAP.md` (plan de noviembre 2026).
-- Equipo actual: Fedora 44 con CMake 4.3, GCC 16, Qt 6.11 y Ninja. Studio se compiló e instaló desde `dev` (`5eae006`) en `~/.local/opt/chxchx-studio/dev-5eae006`; el launcher está en `~/.local/bin/chxchx-studio-dev` y hay entrada de menú. El launcher usa el bridge CLI del `.venv` de este checkout y los plugins Qt del sistema. El estado anterior completo está en `.ai/history/CURRENT_STATE.md`.
+- Equipo actual: Fedora 44 con CMake 4.3, GCC 16, Qt 6.11 y Ninja. Studio stable `0.5.0` está en `~/.local/opt/chxchx-studio/stable-0.5.0`; el launcher `~/.local/bin/chxchx-studio` y la entrada de menú están instalados. La antigua instalación compilada de `dev` (`5eae006`) y sus accesos se retiraron el 2026-11-04. El estado anterior completo está en `.ai/history/CURRENT_STATE.md`.
 
 ## En progreso
 

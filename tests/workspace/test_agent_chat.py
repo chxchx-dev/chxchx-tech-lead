@@ -163,7 +163,7 @@ def test_plan_accepts_opencode_and_carries_the_read_only_permissions(tmp_path: P
     plan = agent_chat.plan_chat_turn(_service(tmp_path, command=["opencode"]), "codex", mode="read-only",
                                      session_id=None, images=(image,))
 
-    assert plan.provider == "OpenCode" and plan.argv[:3] == ["opencode", "run", "--format"]
+    assert plan.provider == "OpenCode" and Path(plan.argv[0]).stem == "opencode" and plan.argv[1:3] == ["run", "--format"]
     assert plan.argv[-2:] == ["--file", str(image)]
     assert json.loads(plan.env["OPENCODE_PERMISSION"]) == {"edit": "deny", "bash": "deny"}
 

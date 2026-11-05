@@ -33,9 +33,12 @@ PACKAGES = {
     "linux-fedora-x86_64": ("linux-fedora-x86_64", "*.tar.gz", "chxchx-studio-fedora-x86_64.tar.gz"),
     "windows-x86_64": ("windows-x86_64", "*.zip", "chxchx-studio-windows-x86_64.zip"),
     "windows-setup": ("windows-x86_64", "*-setup.exe", "chxchx-studio-windows-x86_64-setup.exe"),
+    "windows-arm64": ("windows-arm64", "*.zip", "chxchx-studio-windows-arm64.zip"),
     "macos-arm64": ("macos-arm64", "*.dmg", "chxchx-studio-macos-arm64.dmg"),
     "macos-x86_64": ("macos-x86_64", "*.dmg", "chxchx-studio-macos-x86_64.dmg"),
 }
+# Included only when its artifact was downloaded: the native ARM64 build is not required for a release.
+OPTIONAL_PACKAGES = {"windows-arm64"}
 INSTALLERS = {"install-sh": "install.sh", "install-ps1": "install.ps1"}
 STABLE_TAG = re.compile(r"v(\d+)\.(\d+)\.(\d+)")
 STABLE_VERSION = re.compile(r"\d+\.\d+\.\d+")
@@ -104,7 +107,7 @@ def stage(
     wanted = require if require is not None else set(PACKAGES)
     for key, (directory, pattern, name) in PACKAGES.items():
         folder = downloads / directory
-        if key not in wanted and not folder.exists():
+        if (key in OPTIONAL_PACKAGES or key not in wanted) and not folder.exists():
             continue
         source = _single(folder, pattern, f"paquete {key}")
         shutil.copy2(source, output / name)
