@@ -174,8 +174,18 @@ function Invoke-Uninstall {
 if ($Uninstall) { Invoke-Uninstall; return }
 
 # ---- Origen de las descargas -------------------------------------------------------------------------------------------------------
-if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -ne [System.Runtime.InteropServices.Architecture]::X64 -and -not $CliOnly) {
-    throw 'El paquete de escritorio requiere Windows x86_64. Usa -CliOnly para instalar solo el comando chxchx-tech.'
+# La arquitectura del sistema, no la del proceso: un PowerShell de 32 bits en Windows de 64 bits ve "x86".
+$WindowsArchitecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+if (-not $CliOnly) {
+    switch ($WindowsArchitecture) {
+        'AMD64' { }
+        'ARM64' {
+            Write-Warn 'Windows ARM64: se instalará Studio para x64, que Windows 11 ejecuta con emulación (en Windows 10 ARM puede no abrir). El comando chxchx-tech sí es nativo.'
+        }
+        default {
+            throw "Studio solo existe para Windows de 64 bits (x64, o ARM64 con emulación); este sistema es '$WindowsArchitecture'. Usa -CliOnly para instalar solo el comando chxchx-tech."
+        }
+    }
 }
 $TestBase = $env:CHXCHX_TEST_BASE
 if ($TestBase) {

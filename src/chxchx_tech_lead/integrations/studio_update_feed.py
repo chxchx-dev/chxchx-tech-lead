@@ -43,7 +43,8 @@ def platform_asset(system: str | None = None, machine: str | None = None) -> tup
     if architecture in {"amd64", "x64"}:
         architecture = "x86_64"
     if system == "Windows":
-        architecture = "AMD64" if architecture == "x86_64" else machine
+        # ARM64 runs the x64 package under emulation until there is a native build.
+        architecture = "AMD64" if architecture in {"x86_64", "arm64", "aarch64"} else machine
     os_id = ""
     if system == "Linux":
         os_id = _linux_id()

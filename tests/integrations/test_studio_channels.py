@@ -133,3 +133,9 @@ def test_foreign_shim_is_left_alone(tmp_path, monkeypatch):
     switch_launcher("Linux", tmp_path / "dev-aaaaaaaaaaaa", launcher, DEV, tmp_path)
     assert "echo uv" in (launcher.parent / "chxchx-tech").read_text()
     assert "CHXCHX_STUDIO_DEV_LAUNCHER" in launcher.read_text()
+
+
+def test_windows_arm64_uses_the_x64_package():
+    assert feed.platform_asset("Windows", "ARM64") == feed.platform_asset("Windows", "AMD64")
+    with pytest.raises(ValueError):
+        feed.platform_asset("Windows", "x86")
