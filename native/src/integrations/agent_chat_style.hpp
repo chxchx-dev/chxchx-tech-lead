@@ -64,6 +64,15 @@ inline QString agentChatStyleSheet(const StudioTheme &theme)
 
         #permissionCard { background-color: @surface@; border: 1px solid @border@; border-left: 3px solid @warning@;
             border-radius: 8px; }
+        #questionCard { background-color: @surface@; border: 1px solid @border@; border-left: 3px solid @accent@;
+            border-radius: 8px; }
+        #questionOption { background-color: transparent; color: @text@; border: 1px solid @borderStrong@;
+            border-radius: 10px; padding: 6px 12px; text-align: left; }
+        #questionOption:hover { border-color: @accent@; }
+        #questionOption:checked { border-color: @accent@; background-color: @accentSoft@; }
+        #questionFree { background-color: @surfaceRaised@; color: @text@; border: 1px solid @borderStrong@;
+            border-radius: 10px; padding: 5px 10px; }
+        #questionFree:focus { border-color: @accent@; }
         #permissionButtons { background: transparent; }
         #permissionTitle { color: @text@; font-weight: 700; background: transparent; }
         #permissionSummary { color: @text@; background: transparent; }

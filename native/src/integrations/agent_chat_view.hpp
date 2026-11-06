@@ -2,6 +2,7 @@
 
 #include "agent_chat_cards.hpp"
 
+#include <QJsonObject>
 #include <QList>
 #include <QScrollArea>
 
@@ -28,6 +29,8 @@ signals:
     void suggestionChosen(const QString &text);
     // The person answered a permission card; `choice` -1 means "not now".
     void permissionAnswered(int entryIndex, int choice);
+    // The person answered a question card; empty `answers` means "not now".
+    void questionAnswered(int entryIndex, const QJsonObject &answers);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;

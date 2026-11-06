@@ -98,3 +98,17 @@ def codex_block(item: dict[str, Any]) -> list[Event]:
     return [_event(str(item.get("id") or command), "command", f"Un comando pudo bloquearlo el sandbox: {command}", output.strip()[-200:],
                    False, [_choice("Permitir la red en este chat", network=True, persist=True),
                            _choice("Acceso total solo para reintentar", mode="full-access")])]
+
+
+def claude_live_permission(identifier: str, name: str, data: dict[str, Any]) -> Event:
+    """A request Claude is waiting on right now: allow (once or for the chat) or deny."""
+    event = _claude_event(identifier, name, data)
+    if name == "ExitPlanMode" and isinstance(data.get("plan"), str):
+        event["summary"], event["detail"] = "Aprobar el plan y empezar a trabajar", data["plan"][:_MAX_DETAIL]
+    # Granting now answers this very request, so every choice is an "allow"; the persisted ones are also
+    # remembered by Studio for the following turns.
+    event["choices"] = [_choice("Permitir esta vez", allow=(), persist=False)] + [
+        _choice(choice["label"], allow=tuple(choice["allow"]), network=choice["network"], persist=True)
+        for choice in event["choices"] if choice["persist"]
+    ]
+    return event

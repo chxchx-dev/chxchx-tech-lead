@@ -1,6 +1,7 @@
 #include "../src/integrations/agent_chat_markdown.hpp"
 #include "../src/integrations/agent_chat_model.hpp"
 #include "../src/integrations/agent_chat_permission.hpp"
+#include "../src/integrations/agent_chat_question.hpp"
 #include "../src/integrations/agent_chat_usage.hpp"
 #include "../src/integrations/agent_chat_view.hpp"
 #include "../src/integrations/agent_chat_widget.hpp"
@@ -59,6 +60,36 @@ int fakeCli(const QStringList &arguments)
         emitLine({{QStringLiteral("type"), QStringLiteral("done")}, {QStringLiteral("cancelled"), true}});
         return 0;
     }
+    if (prompt == QStringLiteral("pedir") || prompt == QStringLiteral("preguntar")) {
+        // A live request: the turn pauses until Studio writes the answer on stdin, like Claude does.
+        const bool permission = prompt == QStringLiteral("pedir");
+        const QJsonObject choicePersist{{QStringLiteral("label"), QStringLiteral("Siempre")}, {QStringLiteral("allow"), QJsonArray{QStringLiteral("Bash(ls:*)")}},
+            {QStringLiteral("network"), false}, {QStringLiteral("persist"), true}};
+        const QJsonObject choiceOnce{{QStringLiteral("label"), QStringLiteral("Esta vez")}, {QStringLiteral("allow"), QJsonArray()},
+            {QStringLiteral("network"), false}, {QStringLiteral("persist"), false}};
+        if (permission) {
+            emitLine({{QStringLiteral("type"), QStringLiteral("permission")}, {QStringLiteral("live"), true}, {QStringLiteral("request_id"), QStringLiteral("r1")},
+                {QStringLiteral("id"), QStringLiteral("t1")}, {QStringLiteral("tool"), QStringLiteral("Bash")}, {QStringLiteral("summary"), QStringLiteral("Ejecutar un comando: ls")},
+                {QStringLiteral("detail"), QString()}, {QStringLiteral("certain"), true}, {QStringLiteral("choices"), QJsonArray{choiceOnce, choicePersist}}});
+        } else {
+            emitLine({{QStringLiteral("type"), QStringLiteral("question")}, {QStringLiteral("request_id"), QStringLiteral("r1")}, {QStringLiteral("id"), QStringLiteral("t1")},
+                {QStringLiteral("questions"), QJsonArray{QJsonObject{{QStringLiteral("question"), QStringLiteral("Color?")}, {QStringLiteral("header"), QStringLiteral("Color")},
+                    {QStringLiteral("multiSelect"), false}, {QStringLiteral("options"), QJsonArray{QJsonObject{{QStringLiteral("label"), QStringLiteral("Rojo")}},
+                        QJsonObject{{QStringLiteral("label"), QStringLiteral("Azul")}}}}}}}});
+        }
+        std::string line;
+        QJsonObject answer;
+        while (std::getline(std::cin, line)) {
+            const QJsonObject parsed = QJsonDocument::fromJson(QByteArray::fromStdString(line)).object();
+            if (parsed.value(QStringLiteral("type")).toString() == QStringLiteral("answer")) { answer = parsed; break; }
+            if (line == "cancel") return 0;
+        }
+        const QString text = permission ? QStringLiteral("respuesta: ") + answer.value(QStringLiteral("behavior")).toString()
+            : QStringLiteral("respondió: ") + QString::fromUtf8(QJsonDocument(answer.value(QStringLiteral("answers")).toObject()).toJson(QJsonDocument::Compact));
+        emitLine({{QStringLiteral("type"), QStringLiteral("message")}, {QStringLiteral("role"), QStringLiteral("assistant")}, {QStringLiteral("text"), text}});
+        emitLine({{QStringLiteral("type"), QStringLiteral("done")}, {QStringLiteral("exit_code"), 0}, {QStringLiteral("session_id"), QStringLiteral("fake-1")}});
+        return 0;
+    }
     if (prompt == QStringLiteral("bloquear")) {
         const auto choice = [](const QString &label, const QStringList &allow, bool network, const QString &mode, bool persist) {
             return QJsonObject{{QStringLiteral("label"), label}, {QStringLiteral("allow"), QJsonArray::fromStringList(allow)},
@@ -78,6 +109,7 @@ int fakeCli(const QStringList &arguments)
         // Echo the access the widget asked for, so the test can read it back.
         QStringList access;
         for (qsizetype index = arguments.indexOf(QStringLiteral("--cancel-on-stdin")) + 1; index < arguments.size(); ++index) {
+            if (arguments.at(index) == QStringLiteral("--live")) continue; // always sent, not part of the access
             if (arguments.at(index) == QStringLiteral("--session") || arguments.at(index) == QStringLiteral("--model")
                 || arguments.at(index) == QStringLiteral("--effort")) { ++index; continue; }
             access << arguments.at(index);
@@ -114,6 +146,17 @@ bool waitIdle(const AgentChatWidget &chat, int timeoutMs = 15000)
     }
     QCoreApplication::processEvents();
     return !chat.isRunning();
+}
+
+bool waitAwaiting(const AgentChatWidget &chat, int timeoutMs = 15000)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (!chat.model().awaitingAnswer() && chat.isRunning() && timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        QThread::msleep(10);
+    }
+    return chat.model().awaitingAnswer();
 }
 
 int modelChecks()
@@ -191,6 +234,40 @@ int modelChecks()
     if (!permissionCard->isDecided() || asks.entries().constFirst().revision != 1) return 63;
     permissionCard->choose(-1); // an answered card cannot be answered again
     if (answeredChoice != 0) return 64;
+    // Questions: options become buttons; one single-choice question answers on click.
+    AgentChatModel questions;
+    questions.apply(event({{QStringLiteral("type"), QStringLiteral("question")}, {QStringLiteral("request_id"), QStringLiteral("q1")},
+        {QStringLiteral("questions"), QJsonArray{QJsonObject{{QStringLiteral("question"), QStringLiteral("Color?")}, {QStringLiteral("multiSelect"), false},
+            {QStringLiteral("options"), QJsonArray{QJsonObject{{QStringLiteral("label"), QStringLiteral("Rojo")}}, QJsonObject{{QStringLiteral("label"), QStringLiteral("Azul")}}}}},
+            QJsonObject{{QStringLiteral("question"), QStringLiteral("Cuáles?")}, {QStringLiteral("multiSelect"), true},
+            {QStringLiteral("options"), QJsonArray{QJsonObject{{QStringLiteral("label"), QStringLiteral("A")}}, QJsonObject{{QStringLiteral("label"), QStringLiteral("B")}}}}}}}}));
+    if (questions.entries().size() != 1 || questions.entries().constFirst().kind != AgentChatModel::Kind::Question || !questions.awaitingAnswer()) return 65;
+    AgentChatView questionView;
+    questionView.sync(questions);
+    auto *questionCard = qobject_cast<ChatQuestionCard *>(questionView.card(0));
+    if (questionCard == nullptr) return 66;
+    QJsonObject given;
+    QObject::connect(questionCard, &ChatQuestionCard::answered, [&](const QJsonObject &answers) { given = answers; });
+    questionCard->select(0, QStringLiteral("Azul"));
+    questionCard->submit();
+    if (!given.isEmpty()) return 67; // the second question is still unanswered
+    questionCard->select(1, QStringLiteral("A"));
+    questionCard->select(1, QStringLiteral("B"));
+    questionCard->submit();
+    if (given.value(QStringLiteral("Color?")).toString() != QStringLiteral("Azul") || given.value(QStringLiteral("Cuáles?")).toString() != QStringLiteral("A, B")) return 68;
+    questions.expireLiveRequests();
+    if (questions.awaitingAnswer() || questions.entries().constFirst().decision.isEmpty()) return 69;
+    AgentChatModel single;
+    single.apply(event({{QStringLiteral("type"), QStringLiteral("question")}, {QStringLiteral("request_id"), QStringLiteral("q2")},
+        {QStringLiteral("questions"), QJsonArray{QJsonObject{{QStringLiteral("question"), QStringLiteral("Color?")},
+            {QStringLiteral("options"), QJsonArray{QJsonObject{{QStringLiteral("label"), QStringLiteral("Rojo")}}}}}}}}));
+    AgentChatView singleView;
+    singleView.sync(single);
+    auto *singleCard = qobject_cast<ChatQuestionCard *>(singleView.card(0));
+    QJsonObject instant;
+    QObject::connect(singleCard, &ChatQuestionCard::answered, [&](const QJsonObject &answers) { instant = answers; });
+    singleCard->select(0, QStringLiteral("Rojo"));
+    if (instant.value(QStringLiteral("Color?")).toString() != QStringLiteral("Rojo")) return 70;
     if (!AgentChatWidget::supportsProgram(QStringLiteral("C:\\npm\\claude.cmd"))
         || !AgentChatWidget::supportsProgram(QStringLiteral("opencode"))
         || AgentChatWidget::supportsProgram(QStringLiteral("aider"))) return 16;
@@ -293,6 +370,27 @@ int main(int argc, char **argv)
     chat->sendMessage(QStringLiteral("acceso"));
     if (!waitIdle(*chat) || !lastText().startsWith(QStringLiteral("acceso: --mode workspace-write --network"))) return 56;
     chat->answerPermission(int(card), -1);
+
+    // Live requests: the agent is paused until Studio answers, with no follow-up message.
+    chat->sendMessage(QStringLiteral("pedir"));
+    if (!waitAwaiting(*chat)) return 71;
+    card = chat->model().entries().size() - 1;
+    if (chat->model().entries().at(card).requestId != QStringLiteral("r1") || !chat->isRunning()) return 72;
+    chat->answerPermission(int(card), 1); // allow for this chat: answers the request and remembers the rule
+    if (!waitIdle(*chat) || lastText() != QStringLiteral("respuesta: allow")) return 73;
+    if (chat->approvedRules() != QStringList{QStringLiteral("Bash(ls:*)")}) return 74;
+    chat->sendMessage(QStringLiteral("pedir"));
+    if (!waitAwaiting(*chat)) return 75;
+    card = chat->model().entries().size() - 1;
+    chat->answerPermission(int(card), -1); // "not now" denies
+    if (!waitIdle(*chat) || lastText() != QStringLiteral("respuesta: deny")) return 76;
+    chat->sendMessage(QStringLiteral("preguntar"));
+    if (!waitAwaiting(*chat)) return 77;
+    card = chat->model().entries().size() - 1;
+    chat->answerQuestion(int(card), QJsonObject{{QStringLiteral("Color?"), QStringLiteral("Azul")}});
+    if (!waitIdle(*chat) || lastText() != QStringLiteral("respondió: {\"Color?\":\"Azul\"}")) return 78;
+    chat->answerQuestion(int(card), QJsonObject{{QStringLiteral("Color?"), QStringLiteral("Rojo")}}); // already answered, nothing runs
+    if (chat->isRunning()) return 79;
 
     chat->sendMessage(QStringLiteral("dormir"));
     QCoreApplication::processEvents();

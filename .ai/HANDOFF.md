@@ -2,10 +2,11 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
-## Chat visual: aprobaciones en vivo (fase 2, pendiente)
+## Chat visual: aprobaciones en vivo (Claude hecho; Codex y OpenCode pendientes)
 
-- Hoy la aprobación ocurre entre mensajes (tarjeta → reintento). Siguiente: pausa en vivo con Claude (`--input-format stream-json` + `control_request`/`can_use_tool`, que también habilita preguntas con opciones), luego Codex `app-server` y OpenCode `serve`. Probar a mano en Studio: bloqueo real de un comando en Claude/OpenCode, «una vez» vs «en este chat», acceso total y que Codex solo marque bloqueos del sandbox como posibles.
-- Pendiente menor: carpetas adicionales (`--add-dir`), permitir sobre archivos fuera del proyecto, y que el mensaje automático de reintento no borre el borrador del cuadro de texto.
+- Hecho con Claude (ADR 0014): permisos y `AskUserQuestion` en vivo. Probar a mano en Studio con el Claude real: aprobar, «en este chat», denegar, preguntas con varias opciones/selección múltiple, detener mientras espera, y cerrar la pestaña con una solicitud abierta.
+- Observado: al empezar un chat nuevo Claude pide permiso para leer los archivos de contexto con un bucle de shell; conviene que el contexto se inyecte sin pedir permisos o que esos comandos se aprueben por regla (decidirlo).
+- Pendiente: Codex `app-server` y OpenCode `serve` en vivo; carpetas adicionales (`--add-dir`); que el reintento automático de la fase 1 no borre el borrador del cuadro de texto.
 
 ## Instaladores y releases (publicados: 0.5.0 estable y preview dev)
 

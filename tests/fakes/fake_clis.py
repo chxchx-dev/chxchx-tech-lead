@@ -70,6 +70,48 @@ elif args[:1] == ["run"]:
 '''
 
 
+# A `claude -p --input-format stream-json` that asks the host before it acts, like the real CLI.
+CLAUDE = r'''
+import json, os, sys
+args = sys.argv[1:]
+live = "--input-format" in args
+log = os.environ.get("FAKE_CLI_LOG")
+def note(**fields):
+    if log:
+        with open(log, "a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"tool": "claude", **fields}) + "\n")
+def emit(record):
+    print(json.dumps(record), flush=True)
+first = sys.stdin.readline()
+prompt = json.loads(first)["message"]["content"] if live else first + sys.stdin.read()
+note(argv=args, prompt=prompt)
+emit({"type": "system", "subtype": "init", "session_id": "claude-live-1"})
+def ask(request_id, tool, data):
+    emit({"type": "control_request", "request_id": request_id,
+          "request": {"subtype": "can_use_tool", "tool_name": tool, "input": data, "tool_use_id": "tu-" + request_id}})
+    line = sys.stdin.readline()
+    if not line:
+        sys.exit(3)
+    response = json.loads(line)["response"]
+    note(response=response["response"])
+    return response["response"]
+def say(text):
+    emit({"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}})
+if "PERMISO" in prompt:
+    decision = ask("r1", "Bash", {"command": "python3 -V", "description": "version"})
+    say("hecho" if decision["behavior"] == "allow" else "denegado: " + decision.get("message", ""))
+elif "PREGUNTA" in prompt:
+    decision = ask("r2", "AskUserQuestion", {"questions": [{"question": "Color?", "header": "Color", "multiSelect": False,
+                   "options": [{"label": "Rojo", "description": ""}, {"label": "Azul", "description": ""}]}]})
+    say("respuesta: " + json.dumps(decision.get("updatedInput", {}).get("answers", decision), ensure_ascii=False))
+else:
+    say("eco: " + prompt.strip())
+emit({"type": "result", "subtype": "success", "is_error": False, "usage": {"input_tokens": 10, "output_tokens": 2}, "permission_denials": []})
+if live:
+    sys.stdin.read()  # like the real CLI, wait for the next message until the host closes stdin
+'''
+
+
 def install(directory: Path, name: str, source: str) -> Path:
     """Write an executable `name` into `directory` (plus a .cmd shim on Windows)."""
     directory.mkdir(parents=True, exist_ok=True)

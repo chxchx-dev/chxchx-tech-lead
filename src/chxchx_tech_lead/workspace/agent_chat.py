@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any
 
+from ..integrations.agent_live import LiveClaude, user_message
 from ..integrations.agent_catalog import INSTALL_HINTS, agent_options, codex_limits, executable_available, resolve_executable
 from ..integrations.agent_stream import IMAGE_ARGUMENT_PROVIDERS, normalize, provider_for, turn_command, turn_environment
 from .agent_commands import CHAT_PANEL_REQUEST_MARKER, new_chat_prompt
@@ -51,6 +52,8 @@ class ChatTurnPlan:
     env: dict[str, str] = field(default_factory=dict)
     network: bool = False
     allow: tuple[str, ...] = ()
+    # Claude only: ask the host while the turn runs (approvals and questions) instead of denying.
+    live: bool = False
     # A one-off question (the Git assistant): no project context, no journal, no saved session, read-only.
     lean: bool = False
 
@@ -79,6 +82,7 @@ def plan_chat_turn(
     lean: bool = False,
     network: bool = False,
     allow: tuple[str, ...] = (),
+    live: bool = False,
 ) -> ChatTurnPlan:
     if lean:
         mode = "read-only"  # advice only: a lean turn must never be able to change files
@@ -106,14 +110,16 @@ def plan_chat_turn(
     try:
         argv = turn_command(config.command, mode=mode, session_id=session_id, model=model, effort=effort,
                             images=[str(path) for path in images] if provider in IMAGE_ARGUMENT_PROVIDERS else (),
-                            ephemeral=lean, network=network, allow=allow)
+                            ephemeral=lean, network=network, allow=allow,
+                            live=live and not lean and provider == "Claude")
     except ValueError as exc:
         raise WorkspaceOperationError(str(exc)) from exc
     argv[0] = resolve_executable(argv[0])
     root = service.project.root.resolve()
     return ChatTurnPlan(agent_id, provider, root, (root / config.cwd).resolve(), argv, mode, session_id,
                         tuple(config.command), model, effort, images,
-                        turn_environment(config.command, mode=mode, network=network, allow=allow), network, allow, lean)
+                        turn_environment(config.command, mode=mode, network=network, allow=allow), network, allow,
+                        live and not lean and provider == "Claude", lean)
 
 
 def agent_options_payload(service: Any, agent_id: str) -> dict[str, Any]:
@@ -147,7 +153,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
         if plan.provider in IMAGE_ARGUMENT_PROVIDERS:
             argv = turn_command(plan.command, mode=plan.mode, session_id=plan.session_id, model=plan.model,
                                 effort=plan.effort, images=[str(path) for path in staged], ephemeral=plan.lean,
-                                network=plan.network, allow=plan.allow)
+                                network=plan.network, allow=plan.allow, live=plan.live)
             argv[0] = resolve_executable(argv[0])
         else:
             listed = "\n".join(f"- {path.relative_to(plan.project_root).as_posix()}" for path in staged)
@@ -176,13 +182,18 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
 
     stderr_tail: deque[str] = deque(maxlen=20)
     cancelled = threading.Event()
+    assert process.stdin is not None
+    live = LiveClaude(process.stdin) if plan.live else None
     threading.Thread(target=_drain, args=(process.stderr, stderr_tail), daemon=True).start()
     if cancel_input is not None:
-        threading.Thread(target=_watch_cancel, args=(cancel_input, process, cancelled), daemon=True).start()
+        threading.Thread(target=_watch_cancel, args=(cancel_input, process, cancelled, live), daemon=True).start()
     try:
-        assert process.stdin is not None
-        process.stdin.write(prompt)
-        process.stdin.close()
+        if live is not None:
+            process.stdin.write(user_message(prompt))
+            process.stdin.flush()  # stays open: the answers to Claude's questions go through it
+        else:
+            process.stdin.write(prompt)
+            process.stdin.close()
     except OSError:
         pass
 
@@ -193,6 +204,14 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
             record = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if live is not None:
+            controls = live.handle(record)
+            if controls is not None:
+                for event in controls:
+                    emit(event)
+                continue
+            if record.get("type") == "result":
+                live.finish()  # the turn is over: let Claude exit
         for event in normalize(plan.provider, record):
             if event["type"] == "session":
                 session_id = event["session_id"]
@@ -241,10 +260,19 @@ def _drain(stream: IO[str] | None, tail: deque[str]) -> None:
             tail.append(line.rstrip())
 
 
-def _watch_cancel(source: IO[str], process: subprocess.Popen[str], cancelled: threading.Event) -> None:
+def _watch_cancel(source: IO[str], process: subprocess.Popen[str], cancelled: threading.Event,
+                  live: LiveClaude | None = None) -> None:
     for line in source:
-        if line.strip() == "cancel":
+        text = line.strip()
+        if text == "cancel":
             break
+        if live is not None and text.startswith("{"):
+            try:
+                message = json.loads(text)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(message, dict) and message.get("type") == "answer":
+                live.answer(message)
     # EOF also lands here: the caller went away, so never leave the agent running.
     if process.poll() is not None:
         return

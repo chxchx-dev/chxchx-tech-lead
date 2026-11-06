@@ -11,7 +11,7 @@
 // can be tested headless; AgentChatView renders it.
 class AgentChatModel final {
 public:
-    enum class Kind { User, Assistant, Reasoning, Tool, Notice, Error, Permission };
+    enum class Kind { User, Assistant, Reasoning, Tool, Notice, Error, Permission, Question };
 
     struct Entry {
         Kind kind = Kind::Notice;
@@ -25,6 +25,10 @@ public:
         QJsonArray choices;
         bool certain = true;
         QString decision;
+        // Live requests (Claude): the agent is paused until Studio answers this id. Empty for after-the-fact cards.
+        QString requestId;
+        // Question cards: [{question, header, multiSelect, options: [{label, description}]}].
+        QJsonArray questions;
         // Bumped when a tool event updates the entry in place.
         int revision = 0;
     };
@@ -54,6 +58,10 @@ public:
     void clear();
     // Records what the person answered to a permission card (an empty label means "not now").
     void decidePermission(qsizetype index, const QString &label);
+    // True while a live request is waiting for an answer.
+    bool awaitingAnswer() const;
+    // The turn ended: live requests nobody answered can no longer be answered.
+    void expireLiveRequests();
 
     const QList<Entry> &entries() const { return m_entries; }
     QString sessionId() const { return m_sessionId; }

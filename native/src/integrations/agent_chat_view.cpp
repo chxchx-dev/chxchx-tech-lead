@@ -1,5 +1,6 @@
 #include "agent_chat_view.hpp"
 #include "agent_chat_permission.hpp"
+#include "agent_chat_question.hpp"
 #include "../responsive_grid.hpp"
 #include "../studio_theme.hpp"
 
@@ -97,6 +98,10 @@ void AgentChatView::sync(const AgentChatModel &model)
         if (auto *permission = qobject_cast<ChatPermissionCard *>(card)) {
             connect(permission, &ChatPermissionCard::choiceChosen, this,
                 [this, index](int choice) { emit permissionAnswered(int(index), choice); });
+        }
+        if (auto *question = qobject_cast<ChatQuestionCard *>(card)) {
+            connect(question, &ChatQuestionCard::answered, this,
+                [this, index](const QJsonObject &answers) { emit questionAnswered(int(index), answers); });
         }
         // Cards go above the typing indicator and the trailing stretch.
         m_layout->insertWidget(m_layout->indexOf(m_typing), card);

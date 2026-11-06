@@ -57,6 +57,7 @@ def turn_command(
     ephemeral: bool = False,
     network: bool = False,
     allow: Sequence[str] = (),
+    live: bool = False,
 ) -> list[str]:
     """Build the structured-turn argv; the prompt is written to stdin.
 
@@ -84,6 +85,9 @@ def turn_command(
     if provider == "Claude":
         argv = [executable, *configured, "-p", "--output-format", "stream-json", "--verbose",
                 *claude_arguments(access)]
+        if live:
+            # Claude asks the host (Studio) instead of denying; see agent_live.
+            argv += ["--input-format", "stream-json", "--permission-prompt-tool", "stdio"]
         if ephemeral:
             argv.append("--no-session-persistence")
         if model:

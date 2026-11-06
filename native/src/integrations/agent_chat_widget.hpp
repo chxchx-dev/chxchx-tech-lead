@@ -4,6 +4,7 @@
 #include "agent_chat_model.hpp"
 
 #include <QByteArray>
+#include <QJsonObject>
 #include <QProcess>
 #include <QStringList>
 #include <QWidget>
@@ -48,6 +49,8 @@ public:
     const QStringList &approvedRules() const { return m_approved; }
     // Answers a permission card (choice -1: not now). Public for tests; Studio calls it from the card's buttons.
     void answerPermission(int entryIndex, int choice);
+    // Answers a live question card (empty answers: not now). Public for tests.
+    void answerQuestion(int entryIndex, const QJsonObject &answers);
     // Full access asks before it is enabled; tests replace the question.
     void setFullAccessConfirmation(std::function<bool()> confirm) { m_confirmFullAccess = std::move(confirm); }
 
@@ -65,6 +68,8 @@ private:
     void setRunning(bool running);
     QStringList accessArguments();
     bool confirmFullAccess();
+    void writeAnswer(const QJsonObject &answer);
+    void awaitingAnswerChanged();
 
     QString m_projectPath;
     QString m_agentId;

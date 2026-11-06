@@ -135,6 +135,7 @@ AgentChatWidget::AgentChatWidget(QString projectPath, QString agentId, QString c
     connect(m_composer, &AgentChatComposer::stopRequested, this, &AgentChatWidget::stop);
     connect(m_view, &AgentChatView::suggestionChosen, m_composer, &AgentChatComposer::setText);
     connect(m_view, &AgentChatView::permissionAnswered, this, &AgentChatWidget::answerPermission);
+    connect(m_view, &AgentChatView::questionAnswered, this, &AgentChatWidget::answerQuestion);
     connect(m_newChat, &QPushButton::clicked, this, &AgentChatWidget::startNewChat);
     connect(m_settings, &AgentChatSettings::availabilityChanged, this, &AgentChatWidget::setAvailability);
     connect(m_settings, &AgentChatSettings::providerChanged, this, &AgentChatWidget::setProvider);
@@ -202,7 +203,7 @@ void AgentChatWidget::sendMessage(const QString &text, const QStringList &images
     m_composer->clear();
     QStringList arguments = {QStringLiteral("agent"), QStringLiteral("chat"), m_agentId,
         QStringLiteral("--path"), m_projectPath, QStringLiteral("--prompt"), message,
-        QStringLiteral("--cancel-on-stdin")};
+        QStringLiteral("--cancel-on-stdin"), QStringLiteral("--live")};
     arguments << accessArguments();
     if (!firstTurn) arguments << QStringLiteral("--session") << m_model.sessionId();
     if (!m_settings->model().isEmpty()) arguments << QStringLiteral("--model") << m_settings->model();
@@ -275,7 +276,26 @@ void AgentChatWidget::readOutput()
         const auto document = QJsonDocument::fromJson(line);
         if (document.isObject()) changed = m_model.apply(document.object()) || changed;
     }
-    if (changed) render();
+    if (changed) {
+        render();
+        awaitingAnswerChanged();
+    }
+}
+
+// While Claude waits for an answer the typing indicator says so, instead of pretending it is working.
+void AgentChatWidget::awaitingAnswerChanged()
+{
+    if (!isRunning()) return;
+    m_view->setBusy(true, m_model.awaitingAnswer() ? QStringLiteral("%1 espera tu respuesta").arg(m_identity.name)
+                                                   : QStringLiteral("%1 está trabajando").arg(m_identity.name));
+}
+
+void AgentChatWidget::writeAnswer(const QJsonObject &answer)
+{
+    if (!isRunning()) return;
+    QJsonObject line = answer;
+    line.insert(QStringLiteral("type"), QStringLiteral("answer"));
+    m_process.write(QJsonDocument(line).toJson(QJsonDocument::Compact) + '\n');
 }
 
 void AgentChatWidget::finishTurn(int exitCode, QProcess::ExitStatus status)
@@ -286,6 +306,7 @@ void AgentChatWidget::finishTurn(int exitCode, QProcess::ExitStatus status)
         && m_model.entries().constLast().kind == AgentChatModel::Kind::Error;
     if ((status != QProcess::NormalExit || exitCode != 0) && !reported && !stderrText.isEmpty())
         m_model.apply(localEvent(QStringLiteral("error"), stderrText.right(2000)));
+    m_model.expireLiveRequests();
     setRunning(false);
     render();
     focusInput();
@@ -359,9 +380,13 @@ void AgentChatWidget::answerPermission(int entryIndex, int choice)
     if (entryIndex < 0 || entryIndex >= entries.size()) return;
     const auto &entry = entries.at(entryIndex);
     if (entry.kind != AgentChatModel::Kind::Permission || !entry.decision.isEmpty()) return;
+    const bool live = !entry.requestId.isEmpty();
+    if (live && !isRunning()) return; // the agent is no longer waiting
     if (choice < 0 || choice >= entry.choices.size()) {
+        if (live) writeAnswer({{QStringLiteral("request_id"), entry.requestId}, {QStringLiteral("behavior"), QStringLiteral("deny")}});
         m_model.decidePermission(entryIndex, QString());
         render();
+        if (live) awaitingAnswerChanged();
         return;
     }
     const QJsonObject picked = entry.choices.at(choice).toObject();
@@ -382,6 +407,27 @@ void AgentChatWidget::answerPermission(int entryIndex, int choice)
         if (!mode.isEmpty()) m_onceMode = mode;
     }
     m_model.decidePermission(entryIndex, picked.value(QStringLiteral("label")).toString());
+    if (live) {
+        // The agent is paused on this very request: answer it, no new message needed.
+        writeAnswer({{QStringLiteral("request_id"), entry.requestId}, {QStringLiteral("behavior"), QStringLiteral("allow")}});
+        render();
+        awaitingAnswerChanged();
+        return;
+    }
     render();
     sendMessage(QStringLiteral("Ya tienes el permiso que faltaba. Vuelve a intentar lo que quedó bloqueado."));
+}
+
+void AgentChatWidget::answerQuestion(int entryIndex, const QJsonObject &answers)
+{
+    const auto &entries = m_model.entries();
+    if (entryIndex < 0 || entryIndex >= entries.size() || !isRunning()) return;
+    const auto &entry = entries.at(entryIndex);
+    if (entry.kind != AgentChatModel::Kind::Question || !entry.decision.isEmpty() || entry.requestId.isEmpty()) return;
+    QStringList summary;
+    for (auto it = answers.begin(); it != answers.end(); ++it) summary << it.value().toString();
+    writeAnswer({{QStringLiteral("request_id"), entry.requestId}, {QStringLiteral("answers"), answers}});
+    m_model.decidePermission(entryIndex, summary.join(QStringLiteral(" · ")));
+    render();
+    awaitingAnswerChanged();
 }
