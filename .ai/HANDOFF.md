@@ -5,7 +5,7 @@
 ## Chat visual: aprobaciones en vivo (Claude hecho; Codex y OpenCode pendientes)
 
 - Hecho con Claude (ADR 0014): permisos y `AskUserQuestion` en vivo. Probar a mano en Studio con el Claude real: aprobar, «en este chat», denegar, preguntas con varias opciones/selección múltiple, detener mientras espera, y cerrar la pestaña con una solicitud abierta.
-- Observado: al empezar un chat nuevo Claude pide permiso para leer los archivos de contexto con un bucle de shell; conviene que el contexto se inyecte sin pedir permisos o que esos comandos se aprueben por regla (decidirlo).
+- Resuelto: el contexto del chat nuevo se inyecta en el prompt (`inline_project_context`), así que ya no hay permiso para leerlo. Los archivos grandes se recortan (12 KB c/u, 36 KB en total).
 - Pendiente: Codex `app-server` y OpenCode `serve` en vivo; carpetas adicionales (`--add-dir`); que el reintento automático de la fase 1 no borre el borrador del cuadro de texto.
 
 ## Instaladores y releases (publicados: 0.5.0 estable y preview dev)

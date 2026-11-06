@@ -103,3 +103,16 @@ def test_without_live_the_prompt_is_plain_text_and_nothing_is_asked(tmp_path: Pa
 def test_lean_turns_are_never_live(tmp_path: Path) -> None:
     plan = agent_chat.plan_chat_turn(_service(tmp_path), "claude", mode="read-only", session_id=None, live=True, lean=True)
     assert not plan.live
+
+
+def test_a_new_chat_carries_the_context_files_and_a_resumed_one_does_not(tmp_path: Path, fake_bin) -> None:
+    (tmp_path / ".ai").mkdir()
+    (tmp_path / ".ai" / "CURRENT_STATE.md").write_text("Estado: migrando a Qt\n", encoding="utf-8")
+    _turn(tmp_path, "hola", lambda e: None)
+    resumed = agent_chat.plan_chat_turn(_service(tmp_path), "claude", mode="workspace-write", session_id="claude-live-1")
+    agent_chat.run_chat_turn(resumed, "otra cosa", lambda e: None)
+
+    first, second = [row["prompt"] for row in fake_bin("claude") if "prompt" in row]
+    assert '<archivo-de-contexto ruta=".ai/CURRENT_STATE.md">' in first and "migrando a Qt" in first
+    assert first.rstrip().endswith("hola") and "No ejecutes comandos" in first
+    assert "archivo-de-contexto" not in second and second.strip() == "otra cosa"

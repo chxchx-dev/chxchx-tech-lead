@@ -25,7 +25,7 @@ from ..integrations.agent_stream import IMAGE_ARGUMENT_PROVIDERS, normalize, pro
 from .agent_commands import CHAT_PANEL_REQUEST_MARKER, new_chat_prompt
 from .bridge_contracts import AGENT_OPTIONS_SCHEMA, SCHEMA_VERSION as BRIDGE_SCHEMA_VERSION
 from .chat_attachments import stage_images, validated_image
-from .chat_context import capture_after_session, prepare_new_chat
+from .chat_context import capture_after_session, inline_project_context, prepare_new_chat
 from .process_runtime import terminate_posix_process_group, terminate_windows_process_tree
 from .service import WorkspaceOperationError
 
@@ -159,7 +159,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
             listed = "\n".join(f"- {path.relative_to(plan.project_root).as_posix()}" for path in staged)
             prompt += f"\n\nImágenes adjuntas por el usuario (ábrelas con la herramienta Read antes de responder):\n{listed}"
     if plan.session_id is None and not plan.lean:
-        context = new_chat_prompt(str(plan.project_root)) + prepare_new_chat(plan.project_root, notify)
+        recovered = prepare_new_chat(plan.project_root, notify)  # compacts the context files first
+        context = new_chat_prompt(str(plan.project_root)) + inline_project_context(plan.project_root, provider=plan.provider) + recovered
         prompt = f"{context}\n\n{CHAT_PANEL_REQUEST_MARKER}\n{prompt}"
     started_at = datetime.now(timezone.utc)
     try:
