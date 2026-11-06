@@ -37,6 +37,10 @@ if args[:1] == ["create"]:
 OPENCODE = r'''
 import json, os, sys, time
 args = sys.argv[1:]
+if args[:1] == ["serve"]:
+    import runpy
+    runpy.run_path(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "opencode-serve-fake.py"), run_name="__main__")
+    sys.exit(0)
 stdin_text = "" if sys.stdin.isatty() else sys.stdin.buffer.read().decode("utf-8")
 log = os.environ.get("FAKE_CLI_LOG")
 if log:
@@ -67,6 +71,107 @@ elif args[:1] == ["run"]:
     emit("text", {"type": "text", "text": "eco: " + stdin_text.strip().splitlines()[-1]})
     emit("step_finish", {"type": "step-finish", "reason": "stop", "cost": 0.002,
                          "tokens": {"input": 100, "output": 7, "reasoning": 0, "cache": {"read": 50, "write": 0}}})
+'''
+
+
+# A `opencode serve` (HTTP + server-sent events) that asks the host before it acts, like the real one.
+OPENCODE_SERVE = r'''
+import base64, http.server, json, os, queue, sys, threading, time
+log = os.environ.get("FAKE_CLI_LOG")
+password = os.environ.get("OPENCODE_SERVER_PASSWORD", "")
+def note(**fields):
+    if log:
+        with open(log, "a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"tool": "opencode-serve", **fields}) + "\n")
+note(argv=sys.argv[1:], permission=os.environ.get("OPENCODE_PERMISSION"), has_password=bool(password))
+listeners, lock = [], threading.Lock()
+replies = {}
+def publish(kind, **props):
+    with lock:
+        for q in listeners:
+            q.put({"type": kind, "properties": props})
+def wait_reply(request_id):
+    for _ in range(300):
+        if request_id in replies:
+            return replies[request_id]
+        time.sleep(0.05)
+    return None
+def scenario(session, text):
+    base = {"sessionID": session}
+    publish("session.status", **base, status={"type": "busy"})
+    publish("message.updated", **base, info={"id": "msg_u", "role": "user"})
+    publish("message.updated", **base, info={"id": "msg_a", "role": "assistant"})
+    reply = None
+    if "PERMISO" in text:
+        publish("permission.asked", id="per_1", sessionID=session, permission="bash", patterns=["python3 -V"],
+                metadata={"command": "python3 -V"}, always=["python3 *"], tool={"messageID": "msg_a", "callID": "call_1"})
+        reply = wait_reply("per_1")
+        part = {"id": "prt_t", "messageID": "msg_a", "sessionID": session, "type": "tool", "tool": "bash", "callID": "call_1",
+                "state": {"status": "completed" if reply == "once" else "error", "input": {"command": "python3 -V"}, "output": "Python 3.11",
+                          "error": "The user rejected permission to use this specific tool call."}}
+        publish("message.part.updated", **base, part=part)
+        answer = "decision: " + json.dumps(reply)
+    elif "PREGUNTA" in text:
+        publish("question.asked", id="que_1", sessionID=session, questions=[
+            {"question": "Color?", "header": "Color", "options": [{"label": "Rojo", "description": ""}, {"label": "Azul", "description": ""}], "multiple": False}])
+        reply = wait_reply("que_1")
+        answer = "respuesta: " + json.dumps(reply, ensure_ascii=False)
+    else:
+        answer = "eco: " + text.strip().splitlines()[-1]
+    publish("message.part.updated", **base, part={"id": "prt_x", "messageID": "msg_a", "sessionID": session, "type": "text", "text": answer, "time": {"start": 1, "end": 2}})
+    publish("message.part.updated", **base, part={"id": "prt_s", "messageID": "msg_a", "sessionID": session, "type": "step-finish",
+            "cost": 0.001, "tokens": {"input": 100, "output": 7, "reasoning": 0, "cache": {"read": 50, "write": 0}}})
+    publish("session.status", **base, status={"type": "idle"})
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def authorized(self):
+        expected = "Basic " + base64.b64encode(("opencode:" + password).encode()).decode()
+        if password and self.headers.get("Authorization") != expected:
+            self.send_response(401); self.end_headers(); return False
+        return True
+    def body(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        return json.loads(self.rfile.read(n) or b"null") if n else None
+    def send_json(self, obj, code=200):
+        raw = json.dumps(obj).encode()
+        self.send_response(code); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.write(raw)
+    def do_GET(self):
+        if not self.authorized(): return
+        if self.path == "/event":
+            q = queue.Queue()
+            with lock: listeners.append(q)
+            self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
+            self.wfile.write(b'data: {"type":"server.connected","properties":{}}\n\n'); self.wfile.flush()
+            try:
+                while True:
+                    self.wfile.write(("data: " + json.dumps(q.get()) + "\n\n").encode()); self.wfile.flush()
+            except OSError:
+                return
+        if self.path.startswith("/session/"):
+            if self.path.endswith("ses_gone"): return self.send_json({"error": "not found"}, 404)
+            return self.send_json({"id": self.path.rsplit("/", 1)[1]})
+        self.send_json({"healthy": True})
+    def do_POST(self):
+        if not self.authorized(): return
+        body = self.body()
+        if self.path == "/session":
+            return self.send_json({"id": "ses_fake_live"})
+        if self.path.endswith("/prompt_async"):
+            session = self.path.split("/")[2]
+            note(prompt=body)
+            text = body["parts"][0]["text"]
+            threading.Thread(target=scenario, args=(session, text), daemon=True).start()
+            self.send_response(204); self.end_headers(); return
+        if self.path.startswith("/permission/") or self.path.startswith("/question/"):
+            request_id = self.path.split("/")[2]
+            kind = self.path.rsplit("/", 1)[1]
+            note(reply_to=request_id, action=kind, body=body)
+            replies[request_id] = (body or {}).get("reply") if request_id.startswith("per_") else ((body or {}).get("answers") if kind == "reply" else "rejected")
+            return self.send_json(True)
+        self.send_json({})
+server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+print("opencode server listening on http://127.0.0.1:%d" % server.server_port, flush=True)
+server.serve_forever()
 '''
 
 

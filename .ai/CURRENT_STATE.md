@@ -7,6 +7,7 @@
 - `agent_access.py` (niveles → banderas por CLI), `agent_permissions.py` (evento `permission`), `agent chat --network/--allow`. Studio: selector de 4 niveles, botón 🌐 Red, `ChatPermissionCard`, confirmación de acceso total, concesiones «una vez» / «en este chat» (`AgentChatWidget::answerPermission`).
 - Fase 2 (Claude en vivo): `agent_live.py` (`LiveClaude`: control_request ↔ control_response), `agent chat --live`, `ChatQuestionCard`, `answerPermission`/`answerQuestion` escriben JSON por stdin. Probado con un `claude` falso que espera al host (`tests/e2e/test_claude_live_flow.py`, 3 mutaciones) y con Claude real.
 - Codex en vivo: `agent_codex_live.py` (`LiveCodex`, cliente JSON-RPC de `codex app-server`), `codex_server_settings` (nivel → sandbox/aprobación), `answer` con `scope`. Probado con un `codex app-server` falso (`tests/e2e/test_codex_live_flow.py`, 4 mutaciones) y con Codex real (aprobar fuera del sandbox, denegar).
+- OpenCode en vivo: `agent_opencode_live.py` (`LiveOpenCode`: `opencode serve` + SSE + replies HTTP, con contraseña por turno), `agent_chat._json_lines/_live_driver`. Probado con un `opencode serve` falso (`tests/e2e/test_opencode_live_flow.py`, 5 mutaciones) y con OpenCode real (permiso permitido y denegado, pregunta; sin procesos huérfanos).
 - Pruebas: `tests/integrations/test_agent_access.py`, e2e de OpenCode, `agent_chat_smoke` (3 mutaciones detectadas). Verificado con claude/opencode/codex reales salvo `bypassPermissions` y `danger-full-access`.
 
 ## Instaladores y canales de release (ADR 0013)

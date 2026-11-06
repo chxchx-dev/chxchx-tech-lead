@@ -58,6 +58,9 @@ def test_opencode_permissions_per_level() -> None:
     assert env("workspace-write") == {"bash": "ask", "webfetch": "ask"}
     assert env("workspace-commands", network=True) == {"bash": "allow", "webfetch": "allow"}
     assert env("workspace-write", allow=["bash"])["bash"] == "allow"
+    # A rule with a pattern only opens what matches it; the last matching rule wins, so the default goes first.
+    assert env("workspace-write", allow=["bash:git *", "bash:ls *"])["bash"] == {"*": "ask", "git *": "allow", "ls *": "allow"}
+    assert env("workspace-commands", allow=["bash:git *"])["bash"] == {"*": "allow", "git *": "allow"}
     assert env("full-access")["external_directory"] == "allow"
     assert turn_command(["opencode"], mode="full-access", session_id=None)[5] == "build"
 

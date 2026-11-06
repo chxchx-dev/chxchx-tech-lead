@@ -9,19 +9,21 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import subprocess
 import sys
 import threading
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any
 
-from ..integrations.agent_access import Access
+from ..integrations.agent_access import Access, opencode_agent
 from ..integrations.agent_codex_live import LiveCodex, configured_model
 from ..integrations.agent_live import LiveClaude
+from ..integrations.agent_opencode_live import LiveOpenCode
 from ..integrations.agent_catalog import INSTALL_HINTS, agent_options, codex_limits, executable_available, resolve_executable
 from ..integrations.agent_stream import IMAGE_ARGUMENT_PROVIDERS, normalize, provider_for, turn_command, turn_environment
 from .agent_commands import CHAT_PANEL_REQUEST_MARKER, new_chat_prompt
@@ -35,8 +37,9 @@ SCHEMA = "chxchx.agent-event"
 SCHEMA_VERSION = 1
 
 Emit = Callable[[dict[str, Any]], None]
-# Providers that can pause a turn to ask the person (Claude: stream-json control requests, Codex: app-server).
-LIVE_PROVIDERS = ("Claude", "Codex")
+# Providers that can pause a turn to ask the person (Claude: stream-json control requests, Codex: app-server,
+# OpenCode: `opencode serve`).
+LIVE_PROVIDERS = ("Claude", "Codex", "OpenCode")
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,10 +122,12 @@ def plan_chat_turn(
         raise WorkspaceOperationError(str(exc)) from exc
     argv[0] = resolve_executable(argv[0])
     root = service.project.root.resolve()
+    live = live and not lean and provider in LIVE_PROVIDERS
+    env = turn_environment(config.command, mode=mode, network=network, allow=allow)
+    if live and provider == "OpenCode":
+        env["OPENCODE_SERVER_PASSWORD"] = secrets.token_urlsafe(24)  # only this chat's host may drive the server
     return ChatTurnPlan(agent_id, provider, root, (root / config.cwd).resolve(), argv, mode, session_id,
-                        tuple(config.command), model, effort, images,
-                        turn_environment(config.command, mode=mode, network=network, allow=allow), network, allow,
-                        live and not lean and provider in LIVE_PROVIDERS, lean)
+                        tuple(config.command), model, effort, images, env, network, allow, live, lean)
 
 
 def agent_options_payload(service: Any, agent_id: str) -> dict[str, Any]:
@@ -188,7 +193,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     stderr_tail: deque[str] = deque(maxlen=20)
     cancelled = threading.Event()
     assert process.stdin is not None
-    live = _live_driver(plan, process.stdin, staged)
+    live = _live_driver(plan, process, staged)
     threading.Thread(target=drain, args=(process.stderr, stderr_tail), daemon=True).start()
     if cancel_input is not None:
         threading.Thread(target=watch_cancel, args=(cancel_input, process, cancelled, live), daemon=True).start()
@@ -203,11 +208,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
 
     session_id = plan.session_id
     assert process.stdout is not None
-    for line in process.stdout:
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    records = live.records(process.stdout) if isinstance(live, LiveOpenCode) else _json_lines(process.stdout)
+    for record in records:
         if live is not None:
             controls = live.handle(record)
             if live.done:
@@ -223,6 +225,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
                 session_id = event["session_id"]
             emit(event)
     exit_code = process.wait()
+    if isinstance(live, LiveOpenCode) and live.stopped_by_us:
+        exit_code = 0  # the server only ends because we stopped it after the turn
     if exit_code != 0 and not cancelled.is_set():
         detail = "\n".join(stderr_tail).strip()
         emit({"type": "error", "message": detail or f"{plan.provider} terminó con código {exit_code}"})
@@ -241,9 +245,25 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     return exit_code
 
 
-def _live_driver(plan: ChatTurnPlan, stdin: IO[str], images: list[Path]) -> LiveClaude | LiveCodex | None:
+def _json_lines(stream: IO[str]) -> Iterator[dict[str, Any]]:
+    for line in stream:
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            yield record
+
+
+def _live_driver(plan: ChatTurnPlan, process: subprocess.Popen[str], images: list[Path]) -> LiveClaude | LiveCodex | LiveOpenCode | None:
     if not plan.live:
         return None
+    stdin = process.stdin
+    assert stdin is not None
+    if plan.provider == "OpenCode":
+        return LiveOpenCode(process, password=plan.env["OPENCODE_SERVER_PASSWORD"], cwd=plan.cwd, session_id=plan.session_id,
+                            agent=opencode_agent(Access(plan.mode, plan.network, plan.allow)), model=plan.model, effort=plan.effort,
+                            images=images)
     if plan.provider == "Codex":
         return LiveCodex(stdin, cwd=plan.cwd, access=Access(plan.mode, plan.network, plan.allow), session_id=plan.session_id,
                          model=plan.model or configured_model(plan.command), effort=plan.effort, images=images)

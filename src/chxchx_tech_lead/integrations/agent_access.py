@@ -97,11 +97,19 @@ def opencode_environment(access: Access) -> dict[str, str]:
         return {"OPENCODE_PERMISSION": json.dumps(_OPENCODE_READ_ONLY)}
     if access.mode == "full-access":
         return {"OPENCODE_PERMISSION": json.dumps(_OPENCODE_FULL)}
-    # `ask` has nobody to answer in a headless run: OpenCode rejects it and says so, which becomes a card.
-    permission = {
+    # `ask` has nobody to answer in a headless run: OpenCode rejects it and says so, which becomes a card
+    # (in live mode the server asks instead and Studio answers).
+    permission: dict[str, object] = {
         "bash": "allow" if access.mode == "workspace-commands" else "ask",
         "webfetch": "allow" if access.network else "ask",
     }
-    for name in access.allow:
-        permission[name] = "allow"
+    for rule in access.allow:
+        name, _, pattern = rule.partition(":")  # "bash" allows the tool; "bash:git *" only matching commands
+        if not pattern:
+            permission[name] = "allow"
+        else:
+            current = permission.get(name, "ask")
+            rules = dict(current) if isinstance(current, dict) else {"*": current}
+            rules[pattern] = "allow"  # the last matching rule wins
+            permission[name] = rules
     return {"OPENCODE_PERMISSION": json.dumps(permission)}

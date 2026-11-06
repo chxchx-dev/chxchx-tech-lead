@@ -29,8 +29,9 @@ def test_codex_skips_agents_md_because_it_loads_it_itself(tmp_path: Path) -> Non
     assert "AGENTS.md" not in inline_project_context(project(tmp_path), provider="Codex")
 
 
-def test_nothing_to_include_adds_nothing(tmp_path: Path) -> None:
-    assert inline_project_context(tmp_path, provider="Claude") == ""
+def test_a_project_without_context_says_so_instead_of_sending_the_agent_looking(tmp_path: Path) -> None:
+    text = inline_project_context(tmp_path, provider="Claude")
+    assert "archivo-de-contexto" not in text and "no los busques" in text
 
 
 def test_long_files_are_clipped_with_a_note_and_the_total_is_bounded(tmp_path: Path) -> None:

@@ -98,6 +98,8 @@ def turn_command(
         if effort:
             argv += ["--effort", effort]
         return [*argv, "--resume", session_id] if session_id else argv
+    if provider == "OpenCode" and live:
+        return [executable, "serve", "--port", "0", "--hostname", "127.0.0.1"]  # see agent_opencode_live
     if provider == "OpenCode":
         argv = [executable, "run", *configured, "--format", "json", "--agent", opencode_agent(access)]
         if session_id:

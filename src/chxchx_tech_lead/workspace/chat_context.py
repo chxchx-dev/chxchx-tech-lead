@@ -74,7 +74,8 @@ def inline_project_context(project_root: Path, *, provider: str | None = None) -
         budget -= min(len(text), limit)
         parts.append(f'<archivo-de-contexto ruta="{name}">\n{clipped}\n</archivo-de-contexto>')
     if not parts:
-        return ""
+        return ("\n\nEste proyecto aún no tiene archivos de contexto (AGENTS.md ni .ai/): no los busques ni ejecutes "
+                "comandos para encontrarlos; empieza directamente con la solicitud.")
     return (
         "\n\nStudio ya leyó por ti los archivos de contexto de arriba y los incluye aquí. No ejecutes comandos "
         "para leerlos de nuevo; el chat no puede pedirte permiso para eso.\n" + "\n".join(parts)
