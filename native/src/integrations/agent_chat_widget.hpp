@@ -8,6 +8,8 @@
 #include <QStringList>
 #include <QWidget>
 
+#include <functional>
+
 class AgentChatComposer;
 class AgentChatSettings;
 class AgentChatView;
@@ -16,6 +18,7 @@ class ChatPillPicker;
 class QHBoxLayout;
 class QLabel;
 class QPushButton;
+class QToolButton;
 
 // Visual chat with a Codex, Claude or OpenCode agent. Every message runs one
 // `chxchx-tech agent chat` turn that resumes the previous session; trust,
@@ -38,6 +41,15 @@ public:
     const AgentChatModel &model() const { return m_model; }
     const AgentChatView *view() const { return m_view; }
     const ChatUsageBar *usageBar() const { return m_usage; }
+    // Security and access of the next messages. The level ids are the `--mode` values of `agent chat`.
+    QString accessMode() const;
+    void setAccessMode(const QString &mode);
+    bool networkAllowed() const;
+    const QStringList &approvedRules() const { return m_approved; }
+    // Answers a permission card (choice -1: not now). Public for tests; Studio calls it from the card's buttons.
+    void answerPermission(int entryIndex, int choice);
+    // Full access asks before it is enabled; tests replace the question.
+    void setFullAccessConfirmation(std::function<bool()> confirm) { m_confirmFullAccess = std::move(confirm); }
 
 signals:
     void runningStateChanged(bool running);
@@ -51,6 +63,8 @@ private:
     void finishTurn(int exitCode, QProcess::ExitStatus status);
     void render();
     void setRunning(bool running);
+    QStringList accessArguments();
+    bool confirmFullAccess();
 
     QString m_projectPath;
     QString m_agentId;
@@ -69,5 +83,13 @@ private:
     AgentChatView *m_view = nullptr;
     AgentChatSettings *m_settings = nullptr;
     ChatPillPicker *m_mode = nullptr;
+    QToolButton *m_network = nullptr;
+    // Rules the person approved for the rest of this chat, and what applies to the next message only.
+    QStringList m_approved;
+    QStringList m_onceAllow;
+    QString m_onceMode;
+    bool m_onceNetwork = false;
+    int m_lastMode = 0;
+    std::function<bool()> m_confirmFullAccess;
     AgentChatComposer *m_composer = nullptr;
 };

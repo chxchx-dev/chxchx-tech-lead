@@ -62,6 +62,21 @@ inline QString agentChatStyleSheet(const StudioTheme &theme)
         #toolTitle { color: @text@; background: transparent; }
         #toolMeta { color: @textFaint@; font-size: 11px; background: transparent; }
 
+        #permissionCard { background-color: @surface@; border: 1px solid @border@; border-left: 3px solid @warning@;
+            border-radius: 8px; }
+        #permissionButtons { background: transparent; }
+        #permissionTitle { color: @text@; font-weight: 700; background: transparent; }
+        #permissionSummary { color: @text@; background: transparent; }
+        #permissionDetail, #permissionDecision { color: @textMuted@; background: transparent; }
+        #permissionPrimary { background-color: @accent@; color: @onAccent@; border: 0; border-radius: 12px;
+            padding: 5px 12px; font-weight: 600; }
+        #permissionPrimary:hover { background-color: @accentStrong@; }
+        #permissionOption { background-color: transparent; color: @text@; border: 1px solid @borderStrong@;
+            border-radius: 12px; padding: 5px 12px; }
+        #permissionOption:hover { border-color: @accent@; }
+        #permissionSkip { background-color: transparent; color: @textMuted@; border: 0; padding: 5px 8px; }
+        #permissionSkip:hover { color: @text@; }
+
         #chatGhost { background-color: transparent; border: 0; color: @textMuted@; padding: 2px 6px; }
         #chatGhost:hover { color: @selectedText@; background-color: @surfaceHover@; border-radius: 6px; }
 
@@ -83,6 +98,11 @@ inline QString agentChatStyleSheet(const StudioTheme &theme)
         #pillPicker { background-color: @surfaceRaised@; border: 1px solid @borderStrong@; border-radius: 12px;
             padding: 4px 11px; color: @text@; font-size: 12px; }
         #pillPicker:hover { border-color: @accent@; color: @selectedText@; }
+        #pillToggle { background-color: @surfaceRaised@; border: 1px solid @borderStrong@; border-radius: 12px;
+            color: @textMuted@; padding: 3px 10px; }
+        #pillToggle:hover { border-color: @accent@; color: @selectedText@; }
+        #pillToggle:checked { border-color: @warning@; color: @text@; }
+        #pillPicker[level="full-access"] { border-color: @danger@; color: @danger@; }
         #pillPicker::menu-indicator { image: none; width: 0; }
         #pillMenu { background-color: @surfaceRaised@; color: @text@; border: 1px solid @borderStrong@; border-radius: 8px;
             padding: 4px; }

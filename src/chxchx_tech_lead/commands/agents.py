@@ -168,6 +168,8 @@ def agent_chat(
     model: str = typer.Option("", "--model", help="Modelo; vacío usa el configurado en el agente."),
     effort: str = typer.Option("", "--effort", help="Nivel de razonamiento; vacío usa el configurado."),
     images: list[Path] = typer.Option([], "--image", help="Imagen adjunta (repetible)."),
+    network: bool = typer.Option(False, "--network", help="Permite al agente usar la red / la web en este turno."),
+    allow: list[str] = typer.Option([], "--allow", help="Permiso ya aprobado, tal como lo propone un evento `permission` (repetible)."),
     cancel_on_stdin: bool = typer.Option(False, "--cancel-on-stdin",
         help="Detiene el agente al leer `cancel` o EOF por stdin (uso de Studio)."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Muestra el comando del turno sin ejecutarlo."),
@@ -177,7 +179,8 @@ def agent_chat(
     try:
         text = load_prompt(prompt, prompt_file)
         plan = plan_chat_turn(_workspace_service(path), agent_id, mode=mode, session_id=session or None,
-                              model=model or None, effort=effort or None, images=tuple(images), lean=lean)
+                              model=model or None, effort=effort or None, images=tuple(images), lean=lean,
+                              network=network, allow=tuple(allow))
     except WorkspaceOperationError as exc:
         emit({"type": "error", "message": str(exc)})
         emit({"type": "done", "exit_code": 1, "cancelled": False, "session_id": session or None})

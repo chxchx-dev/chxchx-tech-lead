@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
 #include <QString>
@@ -10,7 +11,7 @@
 // can be tested headless; AgentChatView renders it.
 class AgentChatModel final {
 public:
-    enum class Kind { User, Assistant, Reasoning, Tool, Notice, Error };
+    enum class Kind { User, Assistant, Reasoning, Tool, Notice, Error, Permission };
 
     struct Entry {
         Kind kind = Kind::Notice;
@@ -20,6 +21,10 @@ public:
         QString status;
         QString output;
         QStringList images;
+        // Permission cards: what the agent was not allowed to do, how sure we are and what the person picked.
+        QJsonArray choices;
+        bool certain = true;
+        QString decision;
         // Bumped when a tool event updates the entry in place.
         int revision = 0;
     };
@@ -47,6 +52,8 @@ public:
     // Applies one decoded event; returns false for unknown or foreign schemas.
     bool apply(const QJsonObject &event);
     void clear();
+    // Records what the person answered to a permission card (an empty label means "not now").
+    void decidePermission(qsizetype index, const QString &label);
 
     const QList<Entry> &entries() const { return m_entries; }
     QString sessionId() const { return m_sessionId; }

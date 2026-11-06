@@ -1,5 +1,6 @@
 #include "../src/integrations/agent_chat_markdown.hpp"
 #include "../src/integrations/agent_chat_model.hpp"
+#include "../src/integrations/agent_chat_permission.hpp"
 #include "../src/integrations/agent_chat_usage.hpp"
 #include "../src/integrations/agent_chat_view.hpp"
 #include "../src/integrations/agent_chat_widget.hpp"
@@ -9,6 +10,7 @@
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QTemporaryDir>
 #include <QThread>
 
@@ -55,6 +57,34 @@ int fakeCli(const QStringList &arguments)
         std::string line;
         while (std::getline(std::cin, line) && line != "cancel") {}
         emitLine({{QStringLiteral("type"), QStringLiteral("done")}, {QStringLiteral("cancelled"), true}});
+        return 0;
+    }
+    if (prompt == QStringLiteral("bloquear")) {
+        const auto choice = [](const QString &label, const QStringList &allow, bool network, const QString &mode, bool persist) {
+            return QJsonObject{{QStringLiteral("label"), label}, {QStringLiteral("allow"), QJsonArray::fromStringList(allow)},
+                {QStringLiteral("network"), network}, {QStringLiteral("mode"), mode.isEmpty() ? QJsonValue() : QJsonValue(mode)},
+                {QStringLiteral("persist"), persist}};
+        };
+        emitLine({{QStringLiteral("type"), QStringLiteral("permission")}, {QStringLiteral("id"), QStringLiteral("p1")},
+            {QStringLiteral("tool"), QStringLiteral("Bash")}, {QStringLiteral("summary"), QStringLiteral("Ejecutar un comando: ls")},
+            {QStringLiteral("detail"), QString()}, {QStringLiteral("certain"), true},
+            {QStringLiteral("choices"), QJsonArray{choice(QStringLiteral("Una vez"), {QStringLiteral("Bash(ls)")}, false, {}, false),
+                choice(QStringLiteral("Siempre"), {QStringLiteral("Bash(ls:*)")}, true, {}, true),
+                choice(QStringLiteral("Total"), {}, false, QStringLiteral("full-access"), false)}}});
+        emitLine({{QStringLiteral("type"), QStringLiteral("done")}, {QStringLiteral("exit_code"), 0}, {QStringLiteral("session_id"), QStringLiteral("fake-1")}});
+        return 0;
+    }
+    if (prompt.startsWith(QStringLiteral("acceso")) || prompt.startsWith(QStringLiteral("Ya tienes"))) {
+        // Echo the access the widget asked for, so the test can read it back.
+        QStringList access;
+        for (qsizetype index = arguments.indexOf(QStringLiteral("--cancel-on-stdin")) + 1; index < arguments.size(); ++index) {
+            if (arguments.at(index) == QStringLiteral("--session") || arguments.at(index) == QStringLiteral("--model")
+                || arguments.at(index) == QStringLiteral("--effort")) { ++index; continue; }
+            access << arguments.at(index);
+        }
+        emitLine({{QStringLiteral("type"), QStringLiteral("message")}, {QStringLiteral("role"), QStringLiteral("assistant")},
+            {QStringLiteral("text"), QStringLiteral("acceso: ") + access.join(QLatin1Char(' '))}});
+        emitLine({{QStringLiteral("type"), QStringLiteral("done")}, {QStringLiteral("exit_code"), 0}, {QStringLiteral("session_id"), QStringLiteral("fake-1")}});
         return 0;
     }
     const QString extras = QStringLiteral(" [%1 img, modelo=%2]").arg(arguments.count(QStringLiteral("--image")))
@@ -136,6 +166,31 @@ int modelChecks()
     model.clear();
     view.sync(model);
     if (view.cardCount() != 0) return 37;
+    // Permission cards: asked once, answered once, shown as a card with one button per choice.
+    AgentChatModel asks;
+    const QJsonObject request = event({{QStringLiteral("type"), QStringLiteral("permission")}, {QStringLiteral("id"), QStringLiteral("p9")},
+        {QStringLiteral("summary"), QStringLiteral("Ejecutar un comando: ls")}, {QStringLiteral("certain"), false},
+        {QStringLiteral("choices"), QJsonArray{QJsonObject{{QStringLiteral("label"), QStringLiteral("Una vez")}}}}});
+    asks.apply(request);
+    asks.apply(request); // the same request in the same turn is not asked twice
+    if (asks.entries().size() != 1 || asks.entries().constFirst().kind != AgentChatModel::Kind::Permission
+        || asks.entries().constFirst().certain || asks.entries().constFirst().choices.size() != 1) return 60;
+    AgentChatView asksView;
+    asksView.sync(asks);
+    auto *permissionCard = qobject_cast<ChatPermissionCard *>(asksView.card(0));
+    if (permissionCard == nullptr || permissionCard->isDecided()) return 61;
+    int answeredIndex = -2, answeredChoice = -2;
+    QObject::connect(&asksView, &AgentChatView::permissionAnswered, [&](int index, int choice) {
+        answeredIndex = index;
+        answeredChoice = choice;
+    });
+    permissionCard->choose(0);
+    if (answeredIndex != 0 || answeredChoice != 0) return 62;
+    asks.decidePermission(0, QStringLiteral("Una vez"));
+    asksView.sync(asks);
+    if (!permissionCard->isDecided() || asks.entries().constFirst().revision != 1) return 63;
+    permissionCard->choose(-1); // an answered card cannot be answered again
+    if (answeredChoice != 0) return 64;
     if (!AgentChatWidget::supportsProgram(QStringLiteral("C:\\npm\\claude.cmd"))
         || !AgentChatWidget::supportsProgram(QStringLiteral("opencode"))
         || AgentChatWidget::supportsProgram(QStringLiteral("aider"))) return 16;
@@ -190,6 +245,54 @@ int main(int argc, char **argv)
     missing->sendMessage(QStringLiteral("hola"));
     if (missing->isRunning() || missing->model().entries().size() != 1) return 33;
     delete missing;
+
+    // Security and access: the level and the approvals reach the CLI, one-off grants are spent once.
+    const auto lastText = [&] { return chat->model().entries().constLast().text; };
+    if (chat->accessMode() != QStringLiteral("workspace-write") || chat->networkAllowed()) return 40;
+    chat->sendMessage(QStringLiteral("acceso"));
+    if (!waitIdle(*chat) || lastText() != QStringLiteral("acceso: --mode workspace-write")) return 41;
+    bool asked = false;
+    chat->setFullAccessConfirmation([&] { asked = true; return false; });
+    chat->setAccessMode(QStringLiteral("full-access"));
+    if (!asked || chat->accessMode() != QStringLiteral("workspace-write")) return 42; // declined: nothing changes
+    chat->setFullAccessConfirmation([&] { return true; });
+    chat->setAccessMode(QStringLiteral("workspace-commands"));
+    chat->sendMessage(QStringLiteral("acceso"));
+    if (!waitIdle(*chat) || lastText() != QStringLiteral("acceso: --mode workspace-commands")) return 43;
+    chat->setAccessMode(QStringLiteral("workspace-write"));
+
+    chat->sendMessage(QStringLiteral("bloquear"));
+    if (!waitIdle(*chat)) return 44;
+    qsizetype card = chat->model().entries().size() - 1;
+    if (chat->model().entries().at(card).kind != AgentChatModel::Kind::Permission) return 45;
+    chat->answerPermission(int(card), 0); // allow once: sends the follow-up with the rule
+    if (!waitIdle(*chat) || lastText() != QStringLiteral("acceso: --mode workspace-write --allow Bash(ls)")) return 46;
+    if (!chat->approvedRules().isEmpty() || chat->model().entries().at(card).decision != QStringLiteral("Una vez")) return 47;
+    chat->sendMessage(QStringLiteral("acceso"));
+    if (!waitIdle(*chat) || lastText() != QStringLiteral("acceso: --mode workspace-write")) return 48; // spent
+
+    chat->sendMessage(QStringLiteral("bloquear"));
+    if (!waitIdle(*chat)) return 49;
+    card = chat->model().entries().size() - 1;
+    chat->answerPermission(int(card), 1); // allow for this chat, with the network
+    if (!waitIdle(*chat) || chat->approvedRules() != QStringList{QStringLiteral("Bash(ls:*)")} || !chat->networkAllowed()) return 50;
+    if (lastText() != QStringLiteral("acceso: --mode workspace-write --network --allow Bash(ls:*)")) return 51;
+    chat->answerPermission(int(card), 0); // already answered: ignored
+    if (chat->isRunning()) return 52;
+
+    chat->sendMessage(QStringLiteral("bloquear"));
+    if (!waitIdle(*chat)) return 53;
+    card = chat->model().entries().size() - 1;
+    asked = false;
+    chat->setFullAccessConfirmation([&] { asked = true; return false; });
+    chat->answerPermission(int(card), 2);
+    if (!asked || chat->isRunning() || !chat->model().entries().at(card).decision.isEmpty()) return 54; // still waiting
+    chat->setFullAccessConfirmation([] { return true; });
+    chat->answerPermission(int(card), 2); // full access for the retry only
+    if (!waitIdle(*chat) || !lastText().startsWith(QStringLiteral("acceso: --mode full-access"))) return 55;
+    chat->sendMessage(QStringLiteral("acceso"));
+    if (!waitIdle(*chat) || !lastText().startsWith(QStringLiteral("acceso: --mode workspace-write --network"))) return 56;
+    chat->answerPermission(int(card), -1);
 
     chat->sendMessage(QStringLiteral("dormir"));
     QCoreApplication::processEvents();

@@ -1067,9 +1067,28 @@ sugerencias para empezar. Antes pasa por el mismo control de trust y RAM que la 
 Las respuestas se muestran con formato. Los comandos y cambios de archivos
 aparecen como tarjetas con su estado y una vista previa de la salida. El primer
 mensaje incluye el contexto del proyecto (estado, handoff, memoria y últimas
-sesiones), y los siguientes continúan la misma sesión. **Permisos** elige entre
-*Solo lectura* y *Editar workspace*. **Detener** corta el turno, y cerrar la
-pestaña también. **Nuevo chat** empieza otra conversación.
+sesiones), y los siguientes continúan la misma sesión. **Detener** corta el turno,
+y cerrar la pestaña también. **Nuevo chat** empieza otra conversación.
+
+**Seguridad y acceso.** Dos controles junto al cuadro de texto deciden qué puede hacer
+el agente en el siguiente mensaje:
+
+| Nivel | Qué puede hacer |
+| --- | --- |
+| 🔒 Solo lectura | Lee y propone; no modifica nada. |
+| ✎ Editar archivos (por defecto) | Modifica el proyecto. Ejecutar comandos o usar la web le pide permiso. |
+| ⚡ Editar y ejecutar | Además ejecuta comandos sin preguntar (Codex los corre dentro de su sandbox). |
+| ⚠ Acceso total | Sin restricciones ni sandbox. Pide confirmación cada vez que lo eliges. |
+
+**🌐 Red** permite el acceso a internet; apagado, lo que lo necesite pide permiso.
+Cuando el agente queda bloqueado, el turno termina con una **tarjeta de permiso**: dice
+qué intentó y ofrece *permitir una vez*, *permitir en este chat* (comando, herramienta
+o red) o *Ahora no*. Al elegir, Studio le pide que reintente. Una concesión «una vez» se
+gasta en ese reintento; las de «este chat» duran hasta **Nuevo chat**. Claude y OpenCode
+avisan con certeza de lo que rechazaron; Codex no pregunta en este modo y solo se
+señala como *posible* bloqueo del sandbox cuando el error lo delata (sin red, sistema
+de archivos de solo lectura). La aprobación ocurre **entre mensajes**, no en vivo: el
+agente no se pausa a esperarte.
 
 - **Modelo y Effort** muestran las opciones reales de cada agente. En Codex
   salen de su catálogo local, con los niveles que admite cada modelo. En Claude

@@ -26,6 +26,8 @@ public:
 
 signals:
     void suggestionChosen(const QString &text);
+    // The person answered a permission card; `choice` -1 means "not now".
+    void permissionAnswered(int entryIndex, int choice);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;

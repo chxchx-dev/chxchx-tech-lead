@@ -2,6 +2,11 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Chat visual: aprobaciones en vivo (fase 2, pendiente)
+
+- Hoy la aprobación ocurre entre mensajes (tarjeta → reintento). Siguiente: pausa en vivo con Claude (`--input-format stream-json` + `control_request`/`can_use_tool`, que también habilita preguntas con opciones), luego Codex `app-server` y OpenCode `serve`. Probar a mano en Studio: bloqueo real de un comando en Claude/OpenCode, «una vez» vs «en este chat», acceso total y que Codex solo marque bloqueos del sandbox como posibles.
+- Pendiente menor: carpetas adicionales (`--add-dir`), permitir sobre archivos fuera del proyecto, y que el mensaje automático de reintento no borre el borrador del cuadro de texto.
+
 ## Instaladores y releases (publicados: 0.5.0 estable y preview dev)
 
 - Windows: x64 nativo; ARM64 usa el paquete x64 (emulación) salvo que el manifiesto traiga `asset.windows-arm64`; x86 de 32 bits cae a solo CLI. El job `native-windows-arm64` (experimental, compilación cruzada, nunca ejecutado) sube un artefacto que NO va al release: probarlo en un ARM64 real y luego conectarlo a `stage-release` (el instalador y `release_assets.py` ya lo soportan). La `0.5.1` estable debe llevar el arreglo de arquitectura de `install.ps1`.

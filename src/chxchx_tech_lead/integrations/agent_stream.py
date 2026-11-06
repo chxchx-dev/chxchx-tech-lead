@@ -26,18 +26,15 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from .agent_access import LEVELS, Access, claude_arguments, codex_arguments, opencode_agent, opencode_environment
+from .agent_permissions import claude_denials, codex_block
 from .agent_stream_opencode import normalize_opencode
 
 PROVIDERS = {"codex": "Codex", "claude": "Claude", "opencode": "OpenCode"}
 # Providers that take attachments as CLI arguments; Claude reads them from the prompt.
 IMAGE_ARGUMENT_PROVIDERS = frozenset({"Codex", "OpenCode"})
-MODES = ("read-only", "workspace-write")
+MODES = LEVELS
 _MAX_OUTPUT_CHARS = 4000
-_CODEX_SANDBOX = {"read-only": "read-only", "workspace-write": "workspace-write"}
-_CLAUDE_PERMISSION = {"read-only": "plan", "workspace-write": "acceptEdits"}
-_OPENCODE_AGENT = {"read-only": "plan", "workspace-write": "build"}
-# The built-in `plan` agent still allows bash, so read-only also denies it explicitly.
-_OPENCODE_READ_ONLY_PERMISSION = {"edit": "deny", "bash": "deny"}
 
 Event = dict[str, Any]
 
@@ -58,6 +55,8 @@ def turn_command(
     effort: str | None = None,
     images: Sequence[str] = (),
     ephemeral: bool = False,
+    network: bool = False,
+    allow: Sequence[str] = (),
 ) -> list[str]:
     """Build the structured-turn argv; the prompt is written to stdin.
 
@@ -66,12 +65,11 @@ def turn_command(
     to keep the session on disk, where it can (OpenCode has no such flag: the
     caller deletes its session afterwards).
     """
-    if mode not in MODES:
-        raise ValueError(f"Modo no soportado: {mode}")
+    access = Access(mode, network, tuple(allow))  # validates the mode
     provider = provider_for(command)
     executable, configured = command[0], list(command[1:])
     if provider == "Codex":
-        argv = [executable, "exec", *configured, "--json", "-s", _CODEX_SANDBOX[mode]]
+        argv = [executable, "exec", *configured, "--json", *codex_arguments(access)]
         if ephemeral:
             argv.append("--ephemeral")
         if model:
@@ -85,7 +83,7 @@ def turn_command(
         return [*argv, "resume", session_id, "-"] if session_id else [*argv, "-"]
     if provider == "Claude":
         argv = [executable, *configured, "-p", "--output-format", "stream-json", "--verbose",
-                "--permission-mode", _CLAUDE_PERMISSION[mode]]
+                *claude_arguments(access)]
         if ephemeral:
             argv.append("--no-session-persistence")
         if model:
@@ -94,7 +92,7 @@ def turn_command(
             argv += ["--effort", effort]
         return [*argv, "--resume", session_id] if session_id else argv
     if provider == "OpenCode":
-        argv = [executable, "run", *configured, "--format", "json", "--agent", _OPENCODE_AGENT[mode]]
+        argv = [executable, "run", *configured, "--format", "json", "--agent", opencode_agent(access)]
         if session_id:
             argv += ["--session", session_id]
         if model:
@@ -107,10 +105,10 @@ def turn_command(
     raise ValueError("El chat visual solo está disponible para Codex, Claude Code y OpenCode")
 
 
-def turn_environment(command: Sequence[str], *, mode: str) -> dict[str, str]:
+def turn_environment(command: Sequence[str], *, mode: str, network: bool = False, allow: Sequence[str] = ()) -> dict[str, str]:
     """Extra environment variables a turn needs on top of the inherited one."""
-    if provider_for(command) == "OpenCode" and mode == "read-only":
-        return {"OPENCODE_PERMISSION": json.dumps(_OPENCODE_READ_ONLY_PERMISSION)}
+    if provider_for(command) == "OpenCode":
+        return opencode_environment(Access(mode, network, tuple(allow)))
     return {}
 
 
@@ -144,7 +142,8 @@ def _codex(record: dict[str, Any]) -> list[Event]:
     if item_type == "error":
         return [{"type": "error", "message": str(item.get("message", ""))}]
     tool = _codex_tool(item)
-    return [tool] if tool else []
+    events = [tool] if tool else []
+    return events + codex_block(item) if kind == "item.completed" else events
 
 
 def _codex_tool(item: dict[str, Any]) -> Event | None:
@@ -196,7 +195,7 @@ def _claude(record: dict[str, Any]) -> list[Event]:
                            "primary": None, "secondary": None, "plan": None})
         if record.get("is_error"):
             events.append({"type": "error", "message": str(record.get("result") or record.get("subtype") or "Error")})
-        return events
+        return events + claude_denials(record)
     message = record.get("message")
     content = message.get("content") if isinstance(message, dict) else None
     if kind not in {"assistant", "user"} or not isinstance(content, list) or record.get("isSidechain"):

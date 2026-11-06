@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import threading
@@ -24,6 +23,7 @@ from ..integrations.agent_catalog import INSTALL_HINTS, agent_options, codex_lim
 from ..integrations.agent_stream import IMAGE_ARGUMENT_PROVIDERS, normalize, provider_for, turn_command, turn_environment
 from .agent_commands import CHAT_PANEL_REQUEST_MARKER, new_chat_prompt
 from .bridge_contracts import AGENT_OPTIONS_SCHEMA, SCHEMA_VERSION as BRIDGE_SCHEMA_VERSION
+from .chat_attachments import stage_images, validated_image
 from .chat_context import capture_after_session, prepare_new_chat
 from .process_runtime import terminate_posix_process_group, terminate_windows_process_tree
 from .service import WorkspaceOperationError
@@ -31,9 +31,6 @@ from .service import WorkspaceOperationError
 SCHEMA = "chxchx.agent-event"
 SCHEMA_VERSION = 1
 _STOP_TIMEOUT_SECONDS = 3.0
-_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-_MAX_IMAGE_BYTES = 20 * 1024 * 1024
-ATTACHMENTS_DIR = Path(".ai") / "chat-attachments"
 
 Emit = Callable[[dict[str, Any]], None]
 
@@ -52,6 +49,8 @@ class ChatTurnPlan:
     effort: str | None = None
     images: tuple[Path, ...] = ()
     env: dict[str, str] = field(default_factory=dict)
+    network: bool = False
+    allow: tuple[str, ...] = ()
     # A one-off question (the Git assistant): no project context, no journal, no saved session, read-only.
     lean: bool = False
 
@@ -78,6 +77,8 @@ def plan_chat_turn(
     effort: str | None = None,
     images: tuple[Path, ...] = (),
     lean: bool = False,
+    network: bool = False,
+    allow: tuple[str, ...] = (),
 ) -> ChatTurnPlan:
     if lean:
         mode = "read-only"  # advice only: a lean turn must never be able to change files
@@ -101,17 +102,18 @@ def plan_chat_turn(
             f"{provider} no está instalado o `{config.command[0]}` no está en el PATH. "
             f"Instálalo con: {INSTALL_HINTS[provider]}"
         )
-    images = tuple(_validated_image(path) for path in images)
+    images = tuple(validated_image(path) for path in images)
     try:
         argv = turn_command(config.command, mode=mode, session_id=session_id, model=model, effort=effort,
                             images=[str(path) for path in images] if provider in IMAGE_ARGUMENT_PROVIDERS else (),
-                            ephemeral=lean)
+                            ephemeral=lean, network=network, allow=allow)
     except ValueError as exc:
         raise WorkspaceOperationError(str(exc)) from exc
     argv[0] = resolve_executable(argv[0])
     root = service.project.root.resolve()
     return ChatTurnPlan(agent_id, provider, root, (root / config.cwd).resolve(), argv, mode, session_id,
-                        tuple(config.command), model, effort, images, turn_environment(config.command, mode=mode), lean)
+                        tuple(config.command), model, effort, images,
+                        turn_environment(config.command, mode=mode, network=network, allow=allow), network, allow, lean)
 
 
 def agent_options_payload(service: Any, agent_id: str) -> dict[str, Any]:
@@ -141,10 +143,11 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
 
     argv = plan.argv
     if plan.images:
-        staged = _stage_images(plan.project_root, plan.images)
+        staged = stage_images(plan.project_root, plan.images)
         if plan.provider in IMAGE_ARGUMENT_PROVIDERS:
             argv = turn_command(plan.command, mode=plan.mode, session_id=plan.session_id, model=plan.model,
-                                effort=plan.effort, images=[str(path) for path in staged], ephemeral=plan.lean)
+                                effort=plan.effort, images=[str(path) for path in staged], ephemeral=plan.lean,
+                                network=plan.network, allow=plan.allow)
             argv[0] = resolve_executable(argv[0])
         else:
             listed = "\n".join(f"- {path.relative_to(plan.project_root).as_posix()}" for path in staged)
@@ -219,32 +222,6 @@ def _delete_opencode_session(executable: str, session_id: str, cwd: Path) -> Non
         subprocess.run([executable, "session", "delete", session_id], cwd=cwd, capture_output=True, timeout=20, check=False)
     except (OSError, subprocess.TimeoutExpired):
         pass
-
-
-def _validated_image(path: Path) -> Path:
-    resolved = path.expanduser().resolve()
-    if resolved.suffix.casefold() not in _IMAGE_SUFFIXES:
-        raise WorkspaceOperationError(f"Formato de imagen no soportado: {resolved.name}")
-    try:
-        size = resolved.stat().st_size
-    except OSError as exc:
-        raise WorkspaceOperationError(f"No encuentro la imagen: {resolved}") from exc
-    if size > _MAX_IMAGE_BYTES:
-        raise WorkspaceOperationError(f"La imagen supera 20 MB: {resolved.name}")
-    return resolved
-
-
-def _stage_images(project_root: Path, images: tuple[Path, ...]) -> list[Path]:
-    """Copy attachments inside the project so every agent mode may read them."""
-    folder = project_root / ATTACHMENTS_DIR
-    folder.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    staged = []
-    for index, source in enumerate(images):
-        target = folder / f"{stamp}-{index}-{source.name}"
-        shutil.copy2(source, target)
-        staged.append(target)
-    return staged
 
 
 def json_line_emitter(stream: IO[str] = sys.stdout) -> Emit:
