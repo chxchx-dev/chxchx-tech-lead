@@ -58,6 +58,23 @@ def codex_arguments(access: Access) -> list[str]:
     return argv
 
 
+def codex_server_settings(access: Access) -> dict[str, object]:
+    """Sandbox and approval policy for Codex's app-server (live mode).
+
+    Only *Editar archivos* leaves approvals to the person (`on-request`: the model asks when it needs to leave
+    the sandbox); the other levels never ask, so nothing waits for an answer nobody can give.
+    """
+    if access.mode == "full-access":
+        return {"sandbox": "danger-full-access", "approvalPolicy": "never", "sandboxPolicy": {"type": "dangerFullAccess"}}
+    if access.mode == "read-only":
+        return {"sandbox": "read-only", "approvalPolicy": "never", "sandboxPolicy": {"type": "readOnly", "networkAccess": False}}
+    return {
+        "sandbox": "workspace-write",
+        "approvalPolicy": "on-request" if access.mode == "workspace-write" else "never",
+        "sandboxPolicy": {"type": "workspaceWrite", "networkAccess": access.network},
+    }
+
+
 def claude_arguments(access: Access) -> list[str]:
     argv = ["--permission-mode", _CLAUDE_PERMISSION[access.mode]]
     if access.mode in {"workspace-write", "workspace-commands"}:

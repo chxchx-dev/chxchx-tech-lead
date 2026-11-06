@@ -66,7 +66,7 @@ int fakeCli(const QStringList &arguments)
         const QJsonObject choicePersist{{QStringLiteral("label"), QStringLiteral("Siempre")}, {QStringLiteral("allow"), QJsonArray{QStringLiteral("Bash(ls:*)")}},
             {QStringLiteral("network"), false}, {QStringLiteral("persist"), true}};
         const QJsonObject choiceOnce{{QStringLiteral("label"), QStringLiteral("Esta vez")}, {QStringLiteral("allow"), QJsonArray()},
-            {QStringLiteral("network"), false}, {QStringLiteral("persist"), false}};
+            {QStringLiteral("network"), false}, {QStringLiteral("persist"), false}, {QStringLiteral("scope"), QStringLiteral("session")}};
         if (permission) {
             emitLine({{QStringLiteral("type"), QStringLiteral("permission")}, {QStringLiteral("live"), true}, {QStringLiteral("request_id"), QStringLiteral("r1")},
                 {QStringLiteral("id"), QStringLiteral("t1")}, {QStringLiteral("tool"), QStringLiteral("Bash")}, {QStringLiteral("summary"), QStringLiteral("Ejecutar un comando: ls")},
@@ -85,6 +85,7 @@ int fakeCli(const QStringList &arguments)
             if (line == "cancel") return 0;
         }
         const QString text = permission ? QStringLiteral("respuesta: ") + answer.value(QStringLiteral("behavior")).toString()
+                + (answer.contains(QStringLiteral("scope")) ? QStringLiteral(" ") + answer.value(QStringLiteral("scope")).toString() : QString())
             : QStringLiteral("respondió: ") + QString::fromUtf8(QJsonDocument(answer.value(QStringLiteral("answers")).toObject()).toJson(QJsonDocument::Compact));
         emitLine({{QStringLiteral("type"), QStringLiteral("message")}, {QStringLiteral("role"), QStringLiteral("assistant")}, {QStringLiteral("text"), text}});
         emitLine({{QStringLiteral("type"), QStringLiteral("done")}, {QStringLiteral("exit_code"), 0}, {QStringLiteral("session_id"), QStringLiteral("fake-1")}});
@@ -384,6 +385,11 @@ int main(int argc, char **argv)
     card = chat->model().entries().size() - 1;
     chat->answerPermission(int(card), -1); // "not now" denies
     if (!waitIdle(*chat) || lastText() != QStringLiteral("respuesta: deny")) return 76;
+    chat->sendMessage(QStringLiteral("pedir"));
+    if (!waitAwaiting(*chat)) return 80;
+    card = chat->model().entries().size() - 1;
+    chat->answerPermission(int(card), 0); // "for this turn" carries its scope to the agent
+    if (!waitIdle(*chat) || lastText() != QStringLiteral("respuesta: allow session")) return 81;
     chat->sendMessage(QStringLiteral("preguntar"));
     if (!waitAwaiting(*chat)) return 77;
     card = chat->model().entries().size() - 1;

@@ -41,6 +41,10 @@ class LiveClaude:
         self._stdin = stdin
         self._lock = threading.Lock()
         self._pending: dict[str, dict[str, Any]] = {}
+        self.done = False  # set when the turn's result arrived: the caller then closes stdin
+
+    def start(self, prompt: str) -> None:
+        self._write(user_message(prompt))
 
     def handle(self, record: dict[str, Any]) -> list[Event] | None:
         """Events for a control record, or None when the record is not one of ours."""
@@ -48,6 +52,8 @@ class LiveClaude:
         if kind == "control_cancel_request":
             self._pending.pop(str(record.get("request_id")), None)
             return []
+        if kind == "result":
+            self.done = True
         if kind != "control_request":
             return None
         request = record.get("request") if isinstance(record.get("request"), dict) else {}
@@ -95,6 +101,9 @@ class LiveClaude:
     def _respond(self, request_id: str, payload: dict[str, Any], *, ok: bool = True) -> None:
         body = {"subtype": "success", "request_id": request_id, "response": payload} if ok else {**payload, "request_id": request_id}
         line = json.dumps({"type": "control_response", "response": body}, ensure_ascii=False) + "\n"
+        self._write(line)
+
+    def _write(self, line: str) -> None:
         with self._lock:
             try:
                 self._stdin.write(line)

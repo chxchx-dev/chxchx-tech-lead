@@ -1087,11 +1087,14 @@ o red) o *Ahora no*. Al elegir, Studio le pide que reintente. Una concesión «u
 gasta en ese reintento; las de «este chat» duran hasta **Nuevo chat**. Claude y OpenCode
 avisan con certeza de lo que rechazaron; Codex no pregunta en este modo y solo se
 señala como *posible* bloqueo del sandbox cuando el error lo delata (sin red, sistema
-de archivos de solo lectura). Con Claude la aprobación es **en vivo**: el agente se
+de archivos de solo lectura). Con Claude y Codex la aprobación es **en vivo**: el agente se
 pausa, la tarjeta aparece al momento y, al elegir, sigue en el mismo turno (también
 cuando te hace una **pregunta con opciones**, que se muestra como botones con un
-campo para otra respuesta; «Ahora no» la deniega). Con Codex y OpenCode la aprobación
-ocurre **entre mensajes**: el turno termina y Studio reintenta al elegir.
+campo para otra respuesta; «Ahora no» la deniega). En Codex las preguntas de aprobación
+solo aparecen en *Editar archivos* (en los demás niveles Codex no pregunta, y en *Solo lectura*
+tampoco puede salir del sandbox) y «permitir» dura ese turno; Codex usa su `app-server`, que
+su autor marca como experimental. Con OpenCode la aprobación ocurre **entre mensajes**:
+el turno termina y Studio reintenta al elegir.
 
 - **Modelo y Effort** muestran las opciones reales de cada agente. En Codex
   salen de su catálogo local, con los niveles que admite cada modelo. En Claude

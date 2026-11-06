@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from .agent_access import LEVELS, Access, claude_arguments, codex_arguments, opencode_agent, opencode_environment
+from .agent_codex_live import server_command
 from .agent_permissions import claude_denials, codex_block
 from .agent_stream_opencode import normalize_opencode
 
@@ -69,6 +70,8 @@ def turn_command(
     access = Access(mode, network, tuple(allow))  # validates the mode
     provider = provider_for(command)
     executable, configured = command[0], list(command[1:])
+    if provider == "Codex" and live:
+        return server_command(command)  # sandbox, model and prompt travel as JSON-RPC (see agent_codex_live)
     if provider == "Codex":
         argv = [executable, "exec", *configured, "--json", *codex_arguments(access)]
         if ephemeral:

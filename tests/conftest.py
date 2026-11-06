@@ -36,6 +36,7 @@ def fake_bin(tmp_path: Path, monkeypatch):
     fake_clis.install(directory, "ollama", fake_clis.OLLAMA)
     fake_clis.install(directory, "opencode", fake_clis.OPENCODE)
     fake_clis.install(directory, "claude", fake_clis.CLAUDE)
+    fake_clis.install(directory, "codex", fake_clis.CODEX)
     log = tmp_path / "fake-cli.jsonl"
     monkeypatch.setenv("PATH", f"{directory}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_CLI_LOG", str(log))

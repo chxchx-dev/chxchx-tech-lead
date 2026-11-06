@@ -112,6 +112,80 @@ if live:
 '''
 
 
+# A `codex app-server` (JSON-RPC over stdio) that asks the host before it acts, like the real one.
+CODEX = r'''
+import json, os, sys
+args = sys.argv[1:]
+log = os.environ.get("FAKE_CLI_LOG")
+def note(**fields):
+    if log:
+        with open(log, "a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"tool": "codex", **fields}) + "\n")
+def send(obj):
+    print(json.dumps(obj), flush=True)
+def read():
+    line = sys.stdin.readline()
+    return json.loads(line) if line else None
+note(argv=args)
+if args[:1] != ["app-server"]:
+    sys.exit(2)
+def item(kind, identifier, **fields):
+    return {"type": kind, "id": identifier, **fields}
+next_server_id = [0]
+def ask(method, params):
+    request_id = next_server_id[0]; next_server_id[0] += 1
+    send({"id": request_id, "method": method, "params": params})
+    while True:
+        message = read()
+        if message is None:
+            sys.exit(3)
+        if "id" in message and "method" not in message:
+            note(response=message["result"])
+            return message["result"]
+thread = "thread-fake-1"
+while True:
+    message = read()
+    if message is None:
+        break
+    method = message.get("method")
+    if method == "initialize":
+        note(initialize=message["params"])
+        send({"id": message["id"], "result": {"userAgent": "fake"}})
+    elif method in ("thread/start", "thread/resume"):
+        note(thread=method, params=message["params"])
+        send({"id": message["id"], "result": {"thread": {"id": message["params"].get("threadId", thread)}}})
+    elif method == "turn/start":
+        params = message["params"]
+        note(turn=params)
+        prompt = params["input"][0]["text"]
+        send({"id": message["id"], "result": {"turn": {"id": "turn-1", "status": "inProgress"}}})
+        send({"method": "turn/started", "params": {"threadId": thread, "turn": {"id": "turn-1"}}})
+        text = "eco: " + prompt.strip().splitlines()[-1]
+        base = {"threadId": thread, "turnId": "turn-1"}
+        if "PERMISO" in prompt:
+            result = ask("item/commandExecution/requestApproval", {**base, "itemId": "c1", "command": "/bin/bash -lc 'python3 -V'",
+                         "reason": "version", "startedAtMs": 1})
+            send({"method": "item/completed", "params": {**base, "item": item("commandExecution", "c1", command="/bin/bash -lc 'python3 -V'",
+                  status="completed" if result["decision"] != "decline" else "declined", aggregatedOutput="Python 3.11\n", exitCode=0)}})
+            text = "decision: " + json.dumps(result["decision"])
+        elif "ARCHIVO" in prompt:
+            result = ask("item/fileChange/requestApproval", {**base, "itemId": "f1", "reason": "fuera del proyecto", "startedAtMs": 1})
+            text = "decision: " + json.dumps(result["decision"])
+        elif "RED" in prompt:
+            result = ask("item/permissions/requestApproval", {**base, "itemId": "p1", "cwd": "/x", "startedAtMs": 1,
+                         "permissions": {"network": {"enabled": True}}})
+            text = "permisos: " + json.dumps(result)
+        elif "PREGUNTA" in prompt:
+            result = ask("item/tool/requestUserInput", {**base, "itemId": "q1", "isBlocking": True, "questions": [
+                {"id": "color", "header": "Color", "question": "Color?", "options": [{"label": "Rojo", "description": "r"}, {"label": "Azul", "description": "a"}]}]})
+            text = "respuesta: " + json.dumps(result["answers"], ensure_ascii=False)
+        send({"method": "item/completed", "params": {**base, "item": item("agentMessage", "m1", text=text, phase="final_answer")}})
+        usage = {"inputTokens": 120, "outputTokens": 8, "cachedInputTokens": 0, "totalTokens": 128, "reasoningOutputTokens": 0, "cacheWriteInputTokens": 0}
+        send({"method": "thread/tokenUsage/updated", "params": {**base, "tokenUsage": {"total": {**usage, "inputTokens": 1120}, "last": usage, "modelContextWindow": 200000}}})
+        send({"method": "turn/completed", "params": {"threadId": thread, "turn": {"id": "turn-1", "status": "completed", "error": None}}})
+'''
+
+
 def install(directory: Path, name: str, source: str) -> Path:
     """Write an executable `name` into `directory` (plus a .cmd shim on Windows)."""
     directory.mkdir(parents=True, exist_ok=True)

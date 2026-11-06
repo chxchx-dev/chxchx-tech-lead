@@ -409,7 +409,10 @@ void AgentChatWidget::answerPermission(int entryIndex, int choice)
     m_model.decidePermission(entryIndex, picked.value(QStringLiteral("label")).toString());
     if (live) {
         // The agent is paused on this very request: answer it, no new message needed.
-        writeAnswer({{QStringLiteral("request_id"), entry.requestId}, {QStringLiteral("behavior"), QStringLiteral("allow")}});
+        QJsonObject answer{{QStringLiteral("request_id"), entry.requestId}, {QStringLiteral("behavior"), QStringLiteral("allow")}};
+        // Codex can approve for the rest of the turn; the choice says so.
+        if (picked.contains(QStringLiteral("scope"))) answer.insert(QStringLiteral("scope"), picked.value(QStringLiteral("scope")));
+        writeAnswer(answer);
         render();
         awaitingAnswerChanged();
         return;
