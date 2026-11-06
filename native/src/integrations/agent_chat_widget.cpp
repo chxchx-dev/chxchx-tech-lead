@@ -418,7 +418,12 @@ void AgentChatWidget::answerPermission(int entryIndex, int choice)
         return;
     }
     render();
+    // The automatic retry is not something the person typed: whatever they were drafting stays in the composer.
+    const QString draft = m_composer->text();
+    const QStringList draftImages = m_composer->attachments();
     sendMessage(QStringLiteral("Ya tienes el permiso que faltaba. Vuelve a intentar lo que quedó bloqueado."));
+    if (!draft.isEmpty()) m_composer->setText(draft);
+    if (!draftImages.isEmpty()) m_composer->addAttachments(draftImages);
 }
 
 void AgentChatWidget::answerQuestion(int entryIndex, const QJsonObject &answers)

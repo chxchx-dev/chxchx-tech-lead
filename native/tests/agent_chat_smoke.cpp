@@ -1,5 +1,6 @@
 #include "../src/integrations/agent_chat_markdown.hpp"
 #include "../src/integrations/agent_chat_model.hpp"
+#include "../src/integrations/agent_chat_composer.hpp"
 #include "../src/integrations/agent_chat_permission.hpp"
 #include "../src/integrations/agent_chat_question.hpp"
 #include "../src/integrations/agent_chat_usage.hpp"
@@ -277,6 +278,11 @@ int modelChecks()
 
 } // namespace
 
+static AgentChatComposer *composerOf(AgentChatWidget &chat)
+{
+    return chat.findChild<AgentChatComposer *>();
+}
+
 int main(int argc, char **argv)
 {
     // Read argv before QApplication: Qt consumes options such as --session.
@@ -343,7 +349,10 @@ int main(int argc, char **argv)
     if (!waitIdle(*chat)) return 44;
     qsizetype card = chat->model().entries().size() - 1;
     if (chat->model().entries().at(card).kind != AgentChatModel::Kind::Permission) return 45;
+    composerOf(*chat)->setText(QStringLiteral("borrador a medias"));
     chat->answerPermission(int(card), 0); // allow once: sends the follow-up with the rule
+    if (composerOf(*chat)->text() != QStringLiteral("borrador a medias")) return 90; // the retry keeps the draft
+    composerOf(*chat)->clear();
     if (!waitIdle(*chat) || lastText() != QStringLiteral("acceso: --mode workspace-write --allow Bash(ls)")) return 46;
     if (!chat->approvedRules().isEmpty() || chat->model().entries().at(card).decision != QStringLiteral("Una vez")) return 47;
     chat->sendMessage(QStringLiteral("acceso"));
