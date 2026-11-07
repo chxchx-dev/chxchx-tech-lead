@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from .agent_usage_common import positive_int, tail_lines
+from .executable_search import find_executable, with_search_path
 
 INSTALL_HINTS = {
     "Codex": "npm install -g @openai/codex",
@@ -33,7 +34,7 @@ _CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max", "ultracode"]
 def executable_available(executable: str) -> bool:
     if "/" in executable or "\\" in executable:
         return Path(executable).expanduser().exists()
-    return shutil.which(executable) is not None
+    return find_executable(executable) is not None
 
 
 def resolve_executable(executable: str) -> str:
@@ -44,7 +45,7 @@ def resolve_executable(executable: str) -> str:
     """
     if "/" in executable or "\\" in executable:
         return executable
-    return shutil.which(executable) or executable
+    return find_executable(executable) or executable
 
 
 def agent_options(provider: str, executable: str) -> dict[str, Any]:
@@ -178,7 +179,7 @@ def _opencode_models(executable: str) -> list[str]:
         return []
     try:
         result = subprocess.run([resolve_executable(executable), "models"], capture_output=True, text=True, encoding="utf-8",
-                                errors="replace", timeout=8, check=False)
+                                errors="replace", timeout=8, check=False, env=with_search_path())
     except (OSError, subprocess.TimeoutExpired):
         return []
     if result.returncode != 0:

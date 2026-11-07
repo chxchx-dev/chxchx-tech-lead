@@ -145,6 +145,13 @@ añade de una vez la unión de los packs compatibles, sin escribir sus nombres;
 selección sin volver a nombrar las skills. Son instrucciones Markdown para los
 agentes, no paquetes ejecutables ni utilidades instaladas individualmente.
 
+### Contexto automático en el chat visual
+
+Cuando el contexto de un agente llega al 90 %, Studio lo libera solo: el agente escribe un traspaso de la
+conversación, la siguiente sesión arranca con él y con los archivos de contexto del proyecto, y el chat sigue sin
+cambios para quien lo usa. Evita el consumo y la lentitud de un contexto lleno sin perder el hilo. El traspaso se
+guarda en `.ai/chat-handoffs/` y se borra al usarse; `chxchx-tech agent chat --no-auto-release` lo desactiva.
+
 ### Mods locales (Claude Code, Codex y OpenCode)
 
 El catálogo incluye 22 Mods de instrucciones de proyecto. Generales: asesor de modelo,

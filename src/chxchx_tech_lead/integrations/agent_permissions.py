@@ -26,8 +26,9 @@ _SANDBOX_FAILURES = re.compile(
     r"read-only file system|operation not permitted|sandbox",
     re.IGNORECASE,
 )
-_OPENCODE_REJECTED = "rejected permission"
-_OPENCODE_TOOLS = {"write": "edit", "patch": "edit", "multiedit": "edit", "apply_patch": "edit"}
+# What a tool error says when OpenCode 1.x / 2.x rejected the request because nobody could answer it.
+_OPENCODE_REJECTED = ("rejected permission", "cannot ask the user for permission")
+_OPENCODE_TOOLS = {"write": "edit", "patch": "edit", "multiedit": "edit", "apply_patch": "edit", "shell": "bash"}
 
 
 def _choice(label: str, *, allow: tuple[str, ...] = (), network: bool = False, mode: str | None = None,
@@ -76,7 +77,8 @@ def _claude_event(identifier: str, name: str, data: dict[str, Any]) -> Event:
 
 def opencode_denial(part: dict[str, Any], title: str) -> list[Event]:
     state = part.get("state") if isinstance(part.get("state"), dict) else {}
-    if _OPENCODE_REJECTED not in str(state.get("error") or "").casefold():
+    error = str(state.get("error") or state.get("output") or "").casefold()
+    if not any(marker in error for marker in _OPENCODE_REJECTED):
         return []
     name = str(part.get("tool") or "tool")
     permission = _OPENCODE_TOOLS.get(name.casefold(), name.casefold())

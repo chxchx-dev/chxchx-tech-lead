@@ -15,19 +15,22 @@ import sys
 import threading
 from collections import deque
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any
 
-from ..integrations.agent_access import Access, opencode_agent
-from ..integrations.agent_codex_live import LiveCodex, configured_model
-from ..integrations.agent_live import LiveClaude
 from ..integrations.agent_opencode_live import LiveOpenCode
+from ..integrations.agent_opencode_turn import opencode_major, supports_live
+from ..integrations.executable_search import with_search_path
 from ..integrations.agent_catalog import INSTALL_HINTS, agent_options, codex_limits, executable_available, resolve_executable
 from ..integrations.agent_stream import IMAGE_ARGUMENT_PROVIDERS, normalize, provider_for, turn_command, turn_environment
 from .agent_commands import CHAT_PANEL_REQUEST_MARKER, new_chat_prompt
 from .bridge_contracts import AGENT_OPTIONS_SCHEMA, SCHEMA_VERSION as BRIDGE_SCHEMA_VERSION
+from .chat_compaction import (HANDOFF_PROMPT, UsageWatch, consume_handoff, handoff_block, load_handoff, needs_release,
+                              save_handoff)
+from .chat_drivers import json_lines, live_driver
+from .chat_options import agent_options_payload  # noqa: F401  (public name kept)
 from .chat_attachments import stage_images, validated_image
 from .chat_process import delete_opencode_session, drain, watch_cancel
 from .chat_context import capture_after_session, inline_project_context, prepare_new_chat
@@ -62,6 +65,13 @@ class ChatTurnPlan:
     live: bool = False
     # A one-off question (the Git assistant): no project context, no journal, no saved session, read-only.
     lean: bool = False
+    # The context was freed after the last turn: the first message of the new session carries the hand-off.
+    handoff: str = ""
+    continued_from: str | None = None
+    # Free the context automatically when it passes 90%.
+    auto_release: bool = True
+    # OpenCode 2 has another local API and permission format (see agent_opencode_turn); None when unknown or not OpenCode.
+    opencode_major: int | None = None
 
 
 def load_prompt(prompt: str, prompt_file: Path | None) -> str:
@@ -89,6 +99,7 @@ def plan_chat_turn(
     network: bool = False,
     allow: tuple[str, ...] = (),
     live: bool = False,
+    auto_release: bool = True,
 ) -> ChatTurnPlan:
     if lean:
         mode = "read-only"  # advice only: a lean turn must never be able to change files
@@ -113,44 +124,36 @@ def plan_chat_turn(
             f"Instálalo con: {INSTALL_HINTS[provider]}"
         )
     images = tuple(validated_image(path) for path in images)
+    root = service.project.root.resolve()
+    handoff = "" if lean else load_handoff(root, provider, session_id)
+    major = opencode_major(resolve_executable(config.command[0])) if provider == "OpenCode" else None
+    can_live = live and not lean and provider in LIVE_PROVIDERS and (provider != "OpenCode" or supports_live(major))
+    continued_from, session_id = (session_id, None) if handoff else (None, session_id)
     try:
         argv = turn_command(config.command, mode=mode, session_id=session_id, model=model, effort=effort,
                             images=[str(path) for path in images] if provider in IMAGE_ARGUMENT_PROVIDERS else (),
-                            ephemeral=lean, network=network, allow=allow,
-                            live=live and not lean and provider in LIVE_PROVIDERS)
+                            ephemeral=lean, network=network, allow=allow, live=can_live, opencode_major=major)
     except ValueError as exc:
         raise WorkspaceOperationError(str(exc)) from exc
     argv[0] = resolve_executable(argv[0])
-    root = service.project.root.resolve()
-    live = live and not lean and provider in LIVE_PROVIDERS
-    env = turn_environment(config.command, mode=mode, network=network, allow=allow)
+    live = can_live
+    env = turn_environment(config.command, mode=mode, network=network, allow=allow, opencode_major=major)
     if live and provider == "OpenCode":
         env["OPENCODE_SERVER_PASSWORD"] = secrets.token_urlsafe(24)  # only this chat's host may drive the server
     return ChatTurnPlan(agent_id, provider, root, (root / config.cwd).resolve(), argv, mode, session_id,
-                        tuple(config.command), model, effort, images, env, network, allow, live, lean)
+                        tuple(config.command), model, effort, images, env, network, allow, live, lean, handoff, continued_from,
+                        auto_release, major)
 
 
-def agent_options_payload(service: Any, agent_id: str) -> dict[str, Any]:
-    """Read-only options for the chat panel; works before trust is granted."""
-    inspection = service.inspect()
-    agents = inspection.config.agents if inspection.config is not None else []
-    config = next((item for item in agents if item.id == agent_id), None)
-    if config is None or not isinstance(config.command, list) or not config.command:
-        raise WorkspaceOperationError(f"No existe el agente configurado: {agent_id}")
-    provider = provider_for(config.command)
-    if provider is None:
-        raise WorkspaceOperationError("El chat visual solo está disponible para agentes Codex, Claude Code y OpenCode")
-    return {
-        "schema": AGENT_OPTIONS_SCHEMA,
-        "schema_version": BRIDGE_SCHEMA_VERSION,
-        "agent": agent_id,
-        **agent_options(provider, config.command[0]),
-    }
+def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: IO[str] | None = None,
+                  housekeeping: bool = False) -> int:
+    """Run the turn; a "cancel" line or EOF on `cancel_input` stops the agent.
 
-
-def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: IO[str] | None = None) -> int:
-    """Run the turn; a "cancel" line or EOF on `cancel_input` stops the agent."""
-    emit({"type": "start", "agent": plan.agent_id, "provider": plan.provider, "mode": plan.mode})
+    `housekeeping` is an internal turn (the hand-off): no start/done events, no context, journal or memory.
+    """
+    if not housekeeping:
+        emit({"type": "start", "agent": plan.agent_id, "provider": plan.provider, "mode": plan.mode})
+    watch = UsageWatch(plan.provider, plan.model)
 
     def notify(message: str, is_error: bool) -> None:
         emit({"type": "notice", "message": message, "error": is_error})
@@ -162,14 +165,16 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
         if plan.provider in IMAGE_ARGUMENT_PROVIDERS:
             argv = turn_command(plan.command, mode=plan.mode, session_id=plan.session_id, model=plan.model,
                                 effort=plan.effort, images=[str(path) for path in staged], ephemeral=plan.lean,
-                                network=plan.network, allow=plan.allow, live=plan.live)
+                                network=plan.network, allow=plan.allow, live=plan.live, opencode_major=plan.opencode_major)
             argv[0] = resolve_executable(argv[0])
         else:
             listed = "\n".join(f"- {path.relative_to(plan.project_root).as_posix()}" for path in staged)
             prompt += f"\n\nImágenes adjuntas por el usuario (ábrelas con la herramienta Read antes de responder):\n{listed}"
-    if plan.session_id is None and not plan.lean:
+    if plan.session_id is None and not plan.lean and not housekeeping:
         recovered = prepare_new_chat(plan.project_root, notify)  # compacts the context files first
         context = new_chat_prompt(str(plan.project_root)) + inline_project_context(plan.project_root, provider=plan.provider) + recovered
+        if plan.handoff:
+            context += handoff_block(plan.handoff)
         prompt = f"{context}\n\n{CHAT_PANEL_REQUEST_MARKER}\n{prompt}"
     started_at = datetime.now(timezone.utc)
     try:
@@ -183,7 +188,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
             encoding="utf-8",
             errors="replace",
             start_new_session=os.name != "nt",
-            env={**os.environ, **plan.env} if plan.env else None,
+            env=with_search_path({**os.environ, **plan.env}),
         )
     except OSError as exc:
         emit({"type": "error", "message": f"No pude iniciar {argv[0]}: {exc}"})
@@ -193,7 +198,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     stderr_tail: deque[str] = deque(maxlen=20)
     cancelled = threading.Event()
     assert process.stdin is not None
-    live = _live_driver(plan, process, staged)
+    live = live_driver(plan, process, staged)
     threading.Thread(target=drain, args=(process.stderr, stderr_tail), daemon=True).start()
     if cancel_input is not None:
         threading.Thread(target=watch_cancel, args=(cancel_input, process, cancelled, live), daemon=True).start()
@@ -208,7 +213,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
 
     session_id = plan.session_id
     assert process.stdout is not None
-    records = live.records(process.stdout) if isinstance(live, LiveOpenCode) else _json_lines(process.stdout)
+    records = live.records(process.stdout) if isinstance(live, LiveOpenCode) else json_lines(process.stdout)
     for record in records:
         if live is not None:
             controls = live.handle(record)
@@ -219,22 +224,28 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
                     if event["type"] == "session":
                         session_id = event["session_id"]
                     if not (cancelled.is_set() and event["type"] == "error"):  # stopping it is not a failure
-                        emit(event)
+                        emit(watch.observe(event, getattr(live, "model_seen", None)))
                 continue
         for event in normalize(plan.provider, record):
             if event["type"] == "session":
                 session_id = event["session_id"]
-            emit(event)
+            emit(watch.observe(event, getattr(live, "model_seen", None)))
     exit_code = process.wait()
     if isinstance(live, LiveOpenCode) and live.stopped_by_us:
         exit_code = 0  # the server only ends because we stopped it after the turn
     if exit_code != 0 and not cancelled.is_set():
         detail = "\n".join(stderr_tail).strip()
         emit({"type": "error", "message": detail or f"{plan.provider} terminó con código {exit_code}"})
+    if housekeeping:
+        return exit_code
     if plan.provider == "Codex" and session_id:
         limits = codex_limits(session_id)
         if limits is not None:
-            emit({"type": "limits", **limits})
+            emit(watch.observe({"type": "limits", **limits}))
+    if plan.handoff and exit_code == 0 and session_id and session_id != plan.continued_from:
+        consume_handoff(plan.project_root, plan.provider, plan.continued_from)  # the new session has it now
+    if plan.auto_release and not plan.lean and exit_code == 0 and not cancelled.is_set() and session_id and needs_release(*watch.usage):
+        _release_context(plan, session_id, emit)
     if plan.lean:
         # Nothing of a one-off question belongs in the memory or the session journal.
         if plan.provider == "OpenCode" and session_id and plan.command:
@@ -246,29 +257,25 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     return exit_code
 
 
-def _json_lines(stream: IO[str]) -> Iterator[dict[str, Any]]:
-    for line in stream:
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(record, dict):
-            yield record
-
-
-def _live_driver(plan: ChatTurnPlan, process: subprocess.Popen[str], images: list[Path]) -> LiveClaude | LiveCodex | LiveOpenCode | None:
-    if not plan.live:
-        return None
-    stdin = process.stdin
-    assert stdin is not None
-    if plan.provider == "OpenCode":
-        return LiveOpenCode(process, password=plan.env["OPENCODE_SERVER_PASSWORD"], cwd=plan.cwd, session_id=plan.session_id,
-                            agent=opencode_agent(Access(plan.mode, plan.network, plan.allow)), model=plan.model, effort=plan.effort,
-                            images=images)
-    if plan.provider == "Codex":
-        return LiveCodex(stdin, cwd=plan.cwd, access=Access(plan.mode, plan.network, plan.allow), session_id=plan.session_id,
-                         model=plan.model or configured_model(plan.command), effort=plan.effort, images=images)
-    return LiveClaude(stdin)
+def _release_context(plan: ChatTurnPlan, session_id: str, emit: Emit) -> None:
+    """The context is nearly full: the agent writes a hand-off now; the next message starts a clean session with it."""
+    try:
+        argv = turn_command(plan.command, mode="read-only", session_id=session_id, model=plan.model, effort=plan.effort,
+                            images=(), ephemeral=False, network=False, allow=(), live=False, opencode_major=plan.opencode_major)
+    except ValueError:
+        return
+    argv[0] = resolve_executable(argv[0])
+    quiet = replace(plan, argv=argv, mode="read-only", session_id=session_id, images=(), network=False, allow=(), live=False,
+                    handoff="", env=turn_environment(plan.command, mode="read-only", network=False, allow=(), opencode_major=plan.opencode_major))
+    written: list[str] = []
+    code = run_chat_turn(quiet, HANDOFF_PROMPT, lambda event: written.append(event["text"]) if event["type"] == "message" else None,
+                         housekeeping=True)
+    summary = "\n\n".join(written).strip()
+    if code != 0 or not summary:
+        emit({"type": "notice", "message": "No pude liberar el contexto; sigo con la conversación actual.", "error": False})
+        return
+    save_handoff(plan.project_root, plan.provider, session_id, summary)
+    emit({"type": "notice", "message": "Contexto liberado automáticamente: la conversación sigue con todo lo anterior.", "error": False})
 
 
 def json_line_emitter(stream: IO[str] = sys.stdout) -> Emit:

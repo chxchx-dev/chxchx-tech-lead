@@ -166,6 +166,10 @@ bool PtySession::start(const QString &program, const QStringList &arguments,
         if (!cwd.isEmpty() && chdir(cwd.toLocal8Bit().constData()) != 0) _exit(126);
         setenv("TERM", "xterm-256color", 1);
         execvp(executable.constData(), argv.data());
+        // The terminal is the only place left to say why nothing started.
+        const QByteArray reason = "No pude ejecutar " + executable + ": " + std::strerror(errno) + "\r\n";
+        const ssize_t ignored = ::write(STDERR_FILENO, reason.constData(), static_cast<size_t>(reason.size()));
+        (void)ignored;
         _exit(127);
     }
     const int masterFlags = fcntl(m_state->master, F_GETFL, 0);

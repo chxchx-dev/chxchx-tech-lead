@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import os
-import shutil
 import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any
+
+from ..integrations.executable_search import find_executable
 
 
 def command_available(command: list[str] | str, cwd: Path, shell: bool) -> bool:
@@ -20,7 +21,7 @@ def command_available(command: list[str] | str, cwd: Path, shell: bool) -> bool:
     executable = command[0]
     if "/" in executable or "\\" in executable:
         return (cwd / executable).exists() if not Path(executable).is_absolute() else Path(executable).exists()
-    return shutil.which(executable) is not None
+    return find_executable(executable) is not None
 
 
 def pid_alive(pid: int) -> bool:

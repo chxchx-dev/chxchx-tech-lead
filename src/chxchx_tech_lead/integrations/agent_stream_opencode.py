@@ -73,7 +73,7 @@ def _tool(part: dict[str, Any]) -> Event:
 
 def _kind(name: str) -> str:
     lowered = name.casefold()
-    if lowered == "bash":
+    if lowered in {"bash", "shell"}:
         return "command"
     if lowered in _FILE_TOOLS:
         return "file_change"
