@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Mods para todos los agentes: además de Claude Code, los Mods llegan a **Codex** (`.agents/skills/`, que Codex lee; sin esa carpeta no ve ninguno) y a **OpenCode** (lee `.claude/skills/`, sin copia extra). Se instalan en la carpeta de cada agente configurado, `mod remove` los retira de todas con backup, y la preparación de proyectos los ofrece si hay cualquiera de los tres agentes.
 - Mods: el catálogo pasa de 9 a 22. Nuevos Mods por stack (Python, React/Next.js, NestJS, React Native, bases de datos, Redis, Docker, .NET, Rust, Go, aplicaciones con LLM), generales (revisión de seguridad, estrategia de pruebas) y GitHub Actions, que se recomienda por la infraestructura detectada (`infrastructure` en `mod.toml`). `mod apply` y Studio instalan los recomendados con un paso.
 - Chat visual con OpenCode: esperar tu respuesta a un permiso ya no cuenta como «dejó de responder».
 - Chat visual con OpenCode: aprobaciones y preguntas en vivo mediante `opencode serve` (HTTP y eventos del servidor): `permission.asked` y `question.asked` pausan el turno y Studio responde. El servidor es local, efímero, en un puerto libre y con contraseña por turno; «permitir en este chat» usa el patrón que propone OpenCode (`bash:git *`). Un proyecto sin archivos de contexto ya no manda al agente a buscarlos. Los tres agentes del chat visual son ahora en vivo.

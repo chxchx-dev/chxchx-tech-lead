@@ -6,6 +6,7 @@ from chxchx_tech_lead.core.mods import (
     ModRegistry,
     apply_mods,
     has_claude_project,
+    skill_agents,
     remove_mods,
 )
 from chxchx_tech_lead.core.models import ProjectInfo
@@ -114,3 +115,51 @@ def test_preparation_only_includes_mods_for_claude_projects(tmp_path: Path, monk
     claude = prepare_project(project, dry_run=True)
     assert "chxchx-model-advisor" in claude.mods
     assert not (tmp_path / ".claude").exists()
+
+
+def _agents_config(project: Path, *commands: str) -> None:
+    (project / ".ai").mkdir(exist_ok=True)
+    body = "".join(f'[[workspace.agents]]\nid = "{c}"\ncommand = ["{c}"]\ncwd = "."\n' for c in commands)
+    (project / ".ai" / "chxchx-tech.toml").write_text(body, encoding="utf-8")
+
+
+def test_codex_projects_also_get_the_mods_where_codex_reads_skills(tmp_path: Path) -> None:
+    _agents_config(tmp_path, "claude", "codex")
+    names = ("chxchx-test-strategy",)
+
+    first = apply_mods(tmp_path, names)
+    again = apply_mods(tmp_path, names)
+
+    claude, codex = (tmp_path / root / "skills" / names[0] / "SKILL.md" for root in (".claude", ".agents"))
+    assert first.installed == names and again.unchanged == names and not again.installed
+    assert claude.read_text(encoding="utf-8") == codex.read_text(encoding="utf-8")
+    assert skill_agents(tmp_path) == ("claude", "codex")
+
+
+def test_opencode_only_projects_use_claude_skills_and_no_codex_copy(tmp_path: Path) -> None:
+    _agents_config(tmp_path, "opencode")
+    assert skill_agents(tmp_path) == ("opencode",)
+
+    apply_mods(tmp_path, ("chxchx-test-strategy",))
+
+    assert (tmp_path / ".claude" / "skills" / "chxchx-test-strategy" / "SKILL.md").is_file()
+    assert not (tmp_path / ".agents").exists()
+
+
+def test_removal_retires_every_copy_with_a_backup_and_never_touches_foreign_files(tmp_path: Path) -> None:
+    _agents_config(tmp_path, "codex")
+    apply_mods(tmp_path, ("chxchx-test-strategy",))
+
+    preview = remove_mods(tmp_path, ("chxchx-test-strategy",), dry_run=True)
+    removed = remove_mods(tmp_path, ("chxchx-test-strategy",))
+
+    assert preview.installed == removed.installed == ("chxchx-test-strategy",) and len(removed.backups) == 2
+    assert not (tmp_path / ".agents" / "skills" / "chxchx-test-strategy").exists()
+    foreign = tmp_path / ".agents" / "skills" / "chxchx-test-strategy" / "SKILL.md"
+    foreign.parent.mkdir(parents=True)
+    foreign.write_text("mío", encoding="utf-8")
+    with pytest.raises(ValueError, match="no está administrado"):
+        remove_mods(tmp_path, ("chxchx-test-strategy",))
+    with pytest.raises(ValueError, match="no se sobrescribió"):
+        apply_mods(tmp_path, ("chxchx-test-strategy",))
+    assert foreign.read_text(encoding="utf-8") == "mío"

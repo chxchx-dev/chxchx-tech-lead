@@ -282,7 +282,7 @@ void MainWindow::performSecondaryAreaAction()
             QStringLiteral("--path"), m_projectPath, QStringLiteral("--dry-run")};
         const QStringList action = {QStringLiteral("mod"), QStringLiteral("apply"),
             QStringLiteral("--path"), m_projectPath};
-        runPreview(preview, action, {}, QStringLiteral("Aplicar Mods recomendados de Claude Code"));
+        runPreview(preview, action, {}, QStringLiteral("Aplicar Mods recomendados"));
     }
 }
 

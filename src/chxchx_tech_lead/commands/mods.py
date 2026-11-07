@@ -25,7 +25,7 @@ def mod_list(
         }, ensure_ascii=False), markup=False)
         return
     recommended = {item.mod.name: item for item in ModRegistry().recommendations(path)}
-    table = Table(title="Mods de Claude Code · locales al proyecto")
+    table = Table(title="Mods · locales al proyecto (Claude Code, Codex y OpenCode)")
     table.add_column("Mod", style="cyan")
     table.add_column("Descripción")
     table.add_column("Recomendación")
@@ -33,7 +33,7 @@ def mod_list(
         match = recommended.get(mod.name)
         table.add_row(mod.name, mod.description, "; ".join(match.reasons) if match else "—")
     console.print(table)
-    console.print("Son instrucciones Markdown; no instalan plugins ejecutables ni cambian la configuración global de Claude.")
+    console.print("Son instrucciones Markdown; no instalan plugins ejecutables ni cambian configuración global de ningún agente.")
 
 
 @mod_app.command("apply")
@@ -42,7 +42,7 @@ def mod_apply(
     path: Path = typer.Option(Path.cwd(), "--path", exists=True, file_okay=False, resolve_path=True),
     dry_run: bool = typer.Option(False, "--dry-run", help="Previsualiza sin escribir archivos ni backups."),
 ) -> None:
-    """Instala Mods como skills de Claude Code en .claude/skills del proyecto."""
+    """Instala Mods como skills del proyecto: .claude/skills (Claude Code y OpenCode) y .agents/skills (Codex)."""
     try:
         result = apply_mods(path, tuple(names) if names else None, dry_run=dry_run)
     except (OSError, ValueError) as exc:
@@ -55,7 +55,7 @@ def mod_apply(
     for backup in result.backups:
         console.print(f"Backup: {backup}")
     if result.installed:
-        console.print("Claude Code los reconoce al iniciar una sesión nueva; invócalos con /chxchx-<nombre>.")
+        console.print("Los agentes los reconocen al iniciar una sesión nueva; en Claude Code invócalos con /chxchx-<nombre>.")
     if dry_run:
         console.print("No se realizaron cambios.")
 

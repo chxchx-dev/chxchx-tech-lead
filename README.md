@@ -145,16 +145,16 @@ añade de una vez la unión de los packs compatibles, sin escribir sus nombres;
 selección sin volver a nombrar las skills. Son instrucciones Markdown para los
 agentes, no paquetes ejecutables ni utilidades instaladas individualmente.
 
-### Mods locales para Claude Code
+### Mods locales (Claude Code, Codex y OpenCode)
 
 El catálogo incluye 22 Mods de instrucciones de proyecto. Generales: asesor de modelo,
 revisión antes de integrar, depuración con evidencia, plan de funcionalidades, flujo Git,
 refactorización segura, documentación técnica, revisión de seguridad y estrategia de pruebas.
 Por stack (se recomiendan solo si se detecta): C++/Qt, Python, React/Next.js, NestJS,
 React Native, bases de datos (Postgres/Prisma), Redis, Docker, .NET, Rust, Go, aplicaciones
-con LLM, rendimiento y GitHub Actions (por infraestructura detectada). Se aplican en `.claude/skills/`, no instalan ejecutables,
-hooks ni ajustes globales de Claude. Claude Code carga las skills del proyecto al
-abrir una sesión nueva; consulta la [documentación oficial de skills](https://code.claude.com/docs/en/skills).
+con LLM, rendimiento y GitHub Actions (por infraestructura detectada). Se aplican como skills del proyecto: en `.claude/skills/` (las leen Claude Code y OpenCode) y,
+si el proyecto usa Codex, también en `.agents/skills/`. No instalan ejecutables, hooks ni ajustes
+globales. Los agentes cargan las skills al abrir una sesión nueva; consulta la [documentación oficial de skills](https://code.claude.com/docs/en/skills).
 
 ```bash
 chxchx-tech mod list --path .

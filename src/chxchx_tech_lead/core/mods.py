@@ -106,6 +106,24 @@ def project_mod_status(project: Path, registry: ModRegistry | None = None) -> li
     return result
 
 
+def _configured_agent_commands(root: Path) -> list[str]:
+    """Executable names of the agents in `.ai/chxchx-tech.toml`."""
+    try:
+        config = tomllib.loads((root / ".ai" / "chxchx-tech.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return []
+    workspace = config.get("workspace", {})
+    agents = workspace.get("agents", []) if isinstance(workspace, dict) else []
+    names: list[str] = []
+    for agent in agents if isinstance(agents, list) else []:
+        command = agent.get("command", []) if isinstance(agent, dict) else []
+        parts = command if isinstance(command, list) else [command]
+        if parts:
+            name = Path(str(parts[0]).replace("\\", "/")).name.casefold()
+            names.append(name.rsplit(".", 1)[0] if name.endswith((".exe", ".cmd")) else name)
+    return names
+
+
 def has_claude_project(root: Path) -> bool:
     """Recognize configured Claude agents and existing Claude project context."""
     if (root / ".claude").is_dir():
@@ -116,19 +134,28 @@ def has_claude_project(root: Path) -> bool:
             return True
     except (OSError, UnicodeDecodeError):
         pass
-    config_path = root / ".ai" / "chxchx-tech.toml"
-    try:
-        config = tomllib.loads(config_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
-        return False
-    workspace = config.get("workspace", {})
-    agents = workspace.get("agents", []) if isinstance(workspace, dict) else []
-    for agent in agents if isinstance(agents, list) else []:
-        command = agent.get("command", []) if isinstance(agent, dict) else []
-        parts = command if isinstance(command, list) else [command]
-        if any(Path(str(part).replace("\\", "/")).name.casefold() in {"claude", "claude.exe", "claude.cmd"} for part in parts[:1]):
-            return True
-    return False
+    return "claude" in _configured_agent_commands(root)
+
+
+def skill_agents(root: Path) -> tuple[str, ...]:
+    """Agents of the project that read Mods as skills: Claude, Codex and OpenCode."""
+    commands = set(_configured_agent_commands(root))
+    found = []
+    if has_claude_project(root):
+        found.append("claude")
+    if "codex" in commands or (root / ".agents").is_dir():
+        found.append("codex")
+    if "opencode" in commands or (root / ".opencode").is_dir():
+        found.append("opencode")
+    return tuple(found)
+
+
+def skill_roots(project: Path) -> tuple[tuple[str, Path], ...]:
+    """Where the Mods are written. Claude Code and OpenCode read `.claude/skills`; Codex reads `.agents/skills`."""
+    roots = [("claude", project / ".claude" / "skills")]
+    if "codex" in skill_agents(project):
+        roots.append(("agents", project / ".agents" / "skills"))
+    return tuple(roots)
 
 
 def apply_mods(
@@ -149,8 +176,9 @@ def apply_mods(
             raise ValueError(f"Mods desconocidos: {', '.join(missing)}")
         selected = tuple(catalog[name] for name in dict.fromkeys(names))
 
-    targets = [(mod, project / ".claude" / "skills" / mod.name / "SKILL.md", _render_mod(mod)) for mod in selected]
-    for mod, target, content in targets:
+    targets = [(mod, label, root / mod.name / "SKILL.md", _render_mod(mod))
+               for mod in selected for label, root in skill_roots(project)]
+    for mod, _, target, content in targets:
         if not target.exists():
             continue
         existing = target.read_text(encoding="utf-8")
@@ -159,24 +187,26 @@ def apply_mods(
         if f"<!-- chxchx-mod:{mod.name} -->" not in existing:
             raise ValueError(f"{target} existe y no está administrado por ChxChx; no se sobrescribió.")
 
-    unchanged = tuple(mod.name for mod, target, content in targets if target.exists() and target.read_text(encoding="utf-8") == content)
-    pending = [(mod, target, content) for mod, target, content in targets if mod.name not in unchanged]
-    if dry_run or not pending:
-        return ModApplyResult(tuple(mod.name for mod, _, _ in pending), unchanged, (), dry_run)
+    current = [(mod, label, target, content) for mod, label, target, content in targets
+               if not (target.exists() and target.read_text(encoding="utf-8") == content)]
+    pending_names = tuple(dict.fromkeys(mod.name for mod, *_ in current))
+    unchanged = tuple(mod.name for mod in selected if mod.name not in pending_names)
+    if dry_run or not current:
+        return ModApplyResult(pending_names, unchanged, (), dry_run)
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     backup_root = project / ".ai" / "backups" / "claude-mods" / stamp
     backups: list[str] = []
-    for mod, target, _ in pending:
+    for mod, label, target, _ in current:
         if target.exists():
-            backup = backup_root / mod.name / "SKILL.md"
+            backup = backup_root / label / mod.name / "SKILL.md"
             backup.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(target, backup)
             backups.append(str(backup))
-    for _, target, content in pending:
+    for _, _, target, content in current:
         target.parent.mkdir(parents=True, exist_ok=True)
         _atomic_write(target, content)
-    return ModApplyResult(tuple(mod.name for mod, _, _ in pending), unchanged, tuple(backups), False)
+    return ModApplyResult(pending_names, unchanged, tuple(backups), False)
 
 
 def remove_mods(
@@ -192,26 +222,32 @@ def remove_mods(
     if missing:
         raise ValueError(f"Mods desconocidos: {', '.join(missing)}")
     selected = tuple(dict.fromkeys(names))
-    targets = [(name, project / ".claude" / "skills" / name / "SKILL.md") for name in selected]
-    for name, target in targets:
+    targets = [(name, label, root / name / "SKILL.md") for name in selected for label, root in _all_skill_roots(project)]
+    for name, _, target in targets:
         if not target.exists():
             continue
         if f"<!-- chxchx-mod:{name} -->" not in target.read_text(encoding="utf-8"):
             raise ValueError(f"{target} no está administrado por ChxChx; no se eliminó.")
-    present = [(name, target) for name, target in targets if target.exists()]
-    absent = tuple(name for name, target in targets if not target.exists())
+    present = [(name, label, target) for name, label, target in targets if target.exists()]
+    present_names = tuple(dict.fromkeys(name for name, _, _ in present))
+    absent = tuple(name for name in selected if name not in present_names)
     if dry_run or not present:
-        return ModApplyResult(tuple(name for name, _ in present), absent, (), dry_run)
+        return ModApplyResult(present_names, absent, (), dry_run)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     backups: list[str] = []
-    for name, target in present:
-        backup = project / ".ai" / "backups" / "claude-mods" / stamp / name / "SKILL.md"
+    for name, label, target in present:
+        backup = project / ".ai" / "backups" / "claude-mods" / stamp / label / name / "SKILL.md"
         backup.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(target, backup)
         backups.append(str(backup))
         target.unlink()
         target.parent.rmdir()
-    return ModApplyResult(tuple(name for name, _ in present), absent, tuple(backups), False)
+    return ModApplyResult(present_names, absent, tuple(backups), False)
+
+
+def _all_skill_roots(project: Path) -> tuple[tuple[str, Path], ...]:
+    """Removal looks in every root, so Mods are retired even after an agent was dropped from the project."""
+    return (("claude", project / ".claude" / "skills"), ("agents", project / ".agents" / "skills"))
 
 
 def _render_mod(mod: Mod) -> str:
