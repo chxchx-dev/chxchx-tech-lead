@@ -178,6 +178,7 @@ server.serve_forever()
 # A `claude -p --input-format stream-json` that asks the host before it acts, like the real CLI.
 CLAUDE = r'''
 import json, os, sys
+sys.stdin.reconfigure(encoding="utf-8")  # the host writes UTF-8 whatever the Windows code page is
 args = sys.argv[1:]
 live = "--input-format" in args
 log = os.environ.get("FAKE_CLI_LOG")
@@ -220,6 +221,7 @@ if live:
 # A `codex app-server` (JSON-RPC over stdio) that asks the host before it acts, like the real one.
 CODEX = r'''
 import json, os, sys
+sys.stdin.reconfigure(encoding="utf-8")
 args = sys.argv[1:]
 log = os.environ.get("FAKE_CLI_LOG")
 def note(**fields):

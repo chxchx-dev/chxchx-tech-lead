@@ -218,7 +218,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
                 for event in controls:
                     if event["type"] == "session":
                         session_id = event["session_id"]
-                    emit(event)
+                    if not (cancelled.is_set() and event["type"] == "error"):  # stopping it is not a failure
+                        emit(event)
                 continue
         for event in normalize(plan.provider, record):
             if event["type"] == "session":
