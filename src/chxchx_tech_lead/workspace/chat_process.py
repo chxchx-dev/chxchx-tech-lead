@@ -10,6 +10,7 @@ from collections import deque
 from pathlib import Path
 from typing import IO, Any
 
+from ..integrations.executable_search import with_search_path
 from .process_runtime import terminate_posix_process_group, terminate_windows_process_tree
 
 _STOP_TIMEOUT_SECONDS = 3.0
@@ -18,7 +19,8 @@ _STOP_TIMEOUT_SECONDS = 3.0
 def delete_opencode_session(executable: str, session_id: str, cwd: Path) -> None:
     """OpenCode cannot skip saving a session, so a lean turn removes it afterwards (best effort)."""
     try:
-        subprocess.run([executable, "session", "delete", session_id], cwd=cwd, capture_output=True, timeout=20, check=False)
+        subprocess.run([executable, "session", "delete", session_id], cwd=cwd, capture_output=True, timeout=20, check=False,
+                       env=with_search_path())
     except (OSError, subprocess.TimeoutExpired):
         pass
 

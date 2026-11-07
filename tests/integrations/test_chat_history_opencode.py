@@ -38,7 +38,7 @@ def test_reads_only_the_newest_session_that_belongs_to_the_project(tmp_path: Pat
 
 
 def test_returns_none_without_the_cli_or_a_matching_session(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(chat_history_opencode.shutil, "which", lambda name: None)
+    monkeypatch.setattr(chat_history_opencode, "find_executable", lambda name: None)
     assert latest_opencode_conversation(tmp_path) is None
     monkeypatch.setattr(chat_history_opencode, "run_json", lambda command, cwd: [])
     assert latest_opencode_conversation(tmp_path, executable="opencode") is None

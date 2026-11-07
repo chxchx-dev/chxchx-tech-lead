@@ -24,6 +24,7 @@ from ..integrations.agent_access import Access, opencode_agent
 from ..integrations.agent_codex_live import LiveCodex, configured_model
 from ..integrations.agent_live import LiveClaude
 from ..integrations.agent_opencode_live import LiveOpenCode
+from ..integrations.executable_search import with_search_path
 from ..integrations.agent_catalog import INSTALL_HINTS, agent_options, codex_limits, executable_available, resolve_executable
 from ..integrations.agent_stream import IMAGE_ARGUMENT_PROVIDERS, normalize, provider_for, turn_command, turn_environment
 from .agent_commands import CHAT_PANEL_REQUEST_MARKER, new_chat_prompt
@@ -183,7 +184,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
             encoding="utf-8",
             errors="replace",
             start_new_session=os.name != "nt",
-            env={**os.environ, **plan.env} if plan.env else None,
+            env=with_search_path({**os.environ, **plan.env}),
         )
     except OSError as exc:
         emit({"type": "error", "message": f"No pude iniciar {argv[0]}: {exc}"})

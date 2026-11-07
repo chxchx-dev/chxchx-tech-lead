@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..integrations.agent_usage import usage_snapshot_path
+from ..integrations.executable_search import find_executable, with_search_path
 from .chat_context import capture_after_session, prepare_new_chat
 
 _JOURNAL_PROVIDERS = {"codex": "Codex", "claude": "Claude", "opencode": "OpenCode"}
@@ -56,7 +57,13 @@ def main() -> int:
     print(f"\033[1;36m{banner(name, label, logo)}\033[0m", flush=True)
     print(flush=True)
     command, environment = _usage_instrumentation(command, name)
-    completed = subprocess.run(command, cwd=os.getcwd(), env=environment, check=False)
+    environment = with_search_path(environment)  # a Studio started from a launcher has a minimal PATH
+    command[0] = find_executable(command[0]) or command[0]
+    try:
+        completed = subprocess.run(command, cwd=os.getcwd(), env=environment, check=False)
+    except OSError as exc:
+        print(f"No pude iniciar `{command[0]}`: {exc}. ¿Está instalado y en el PATH?", file=sys.stderr, flush=True)
+        return 127
     if capture_memory and project_root is not None:
         capture_after_session(
             project_root,

@@ -7,20 +7,20 @@ only when a session summary is needed and loads a single session.
 
 from __future__ import annotations
 
-import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .chat_history import Conversation, ConversationMessage
 from .opencode_memory import belongs_to_project, run_json
+from .executable_search import find_executable
 
 _CANDIDATES = 5
 
 
 def latest_opencode_conversation(project_root: Path, *, executable: str | None = None) -> Conversation | None:
     root = project_root.expanduser().resolve()
-    binary = executable or shutil.which("opencode")
+    binary = executable or find_executable("opencode")
     if not binary or not root.is_dir():
         return None
     sessions = run_json([binary, "session", "list", "--max-count", str(_CANDIDATES), "--format", "json"], root)
