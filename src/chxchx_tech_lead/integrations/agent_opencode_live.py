@@ -29,6 +29,7 @@ Event = dict[str, Any]
 
 _LISTENING = re.compile(r"listening on (http://127\.0\.0\.1:\d+)")
 _STARTUP_SECONDS = 40
+_EVENT_STREAM_TIMEOUT = 6 * 3600  # the event stream is quiet while the person decides; the server ending closes it
 _STALL_SECONDS = 600  # nobody answers and nothing happens: give up instead of leaving the server running
 _PERMISSION_LABELS = {"bash": "comandos", "edit": "ediciones", "webfetch": "la web", "external_directory": "carpetas fuera del proyecto"}
 
@@ -99,6 +100,8 @@ class LiveOpenCode:
             except queue.Empty:
                 if self._process.poll() is not None:
                     return  # cancelled or crashed: the caller reports a non-zero exit
+                if self._pending:
+                    continue  # waiting for the person is not a stall; closing the chat cancels the turn
                 idle += 1
                 if idle >= _STALL_SECONDS:
                     yield {"type": "chxchx.error", "message": "OpenCode dejó de responder."}
@@ -192,7 +195,7 @@ class LiveOpenCode:
     def _listen(self) -> None:
         request = urllib.request.Request(self._base + "/event", headers={"Authorization": self._auth})
         try:
-            with urllib.request.urlopen(request, timeout=_STALL_SECONDS) as response:
+            with urllib.request.urlopen(request, timeout=_EVENT_STREAM_TIMEOUT) as response:
                 for raw in response:
                     line = raw.decode("utf-8", "replace").strip()
                     if not line.startswith("data:"):

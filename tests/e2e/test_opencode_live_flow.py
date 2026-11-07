@@ -143,3 +143,27 @@ def test_cancelling_a_waiting_turn_ends_it_without_an_error(tmp_path: Path) -> N
     writer.close()
     assert events[-1]["type"] == "done" and events[-1]["cancelled"] is True
     assert not any(e["type"] == "error" for e in events)
+
+
+def test_waiting_for_the_person_is_not_a_stall(tmp_path: Path, monkeypatch) -> None:
+    """A card left unanswered longer than the stall limit must not end the turn with "dejó de responder"."""
+    from chxchx_tech_lead.integrations import agent_opencode_live
+
+    monkeypatch.setattr(agent_opencode_live, "_STALL_SECONDS", 2)
+    # The fake server asks for a permission; nobody answers for twice the limit, then the turn is cancelled by closing stdin.
+    plan = agent_chat.plan_chat_turn(_service(tmp_path), "opencode", live=True, mode="workspace-write", session_id=None)
+    read_end, write_end = os.pipe()
+    reader, writer = os.fdopen(read_end, "r", encoding="utf-8"), os.fdopen(write_end, "w", encoding="utf-8")
+    events: list[dict] = []
+
+    def emit(event: dict) -> None:
+        events.append(event)
+        if event["type"] == "permission":
+            threading.Timer(4.5, lambda: (writer.write(json.dumps(_allow(event)) + "\n"), writer.flush())).start()
+
+    done = threading.Event()
+    threading.Thread(target=lambda: (agent_chat.run_chat_turn(plan, "PERMISO por favor", emit, cancel_input=reader), done.set()), daemon=True).start()
+    assert done.wait(30)
+    writer.close()
+    assert not any(e["type"] == "error" for e in events)
+    assert events[-1]["type"] == "done" and events[-1]["exit_code"] == 0
