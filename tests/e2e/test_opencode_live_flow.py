@@ -43,8 +43,7 @@ def _turn(root: Path, prompt: str, answer, **options):
     done = threading.Event()
     threading.Thread(target=lambda: (agent_chat.run_chat_turn(plan, prompt, emit, cancel_input=reader), done.set()), daemon=True).start()
     if not done.wait(30):
-        import shutil
-        raise AssertionError(f"the turn never finished; argv={plan.argv} which={shutil.which('opencode')} events={events} server={_rows_safe()}")
+        raise AssertionError(f"the turn never finished; probe={_probe(plan)} events={[e['type'] for e in events]} argv={plan.argv}")
     writer.close()
     return plan, events
 
@@ -59,6 +58,18 @@ def _allow(event):
 
 def _deny(event):
     return {"type": "answer", "request_id": event["request_id"], "behavior": "deny"}
+
+
+def _probe(plan) -> str:
+    """Runs the fake server by hand for a moment: its first output or its error says why a turn hung."""
+    import subprocess
+    try:
+        run = subprocess.run(plan.argv, capture_output=True, text=True, timeout=6, env={**os.environ, **plan.env})
+        return f"exit={run.returncode} out={run.stdout[:200]!r} err={run.stderr[-400:]!r}"
+    except subprocess.TimeoutExpired as exc:
+        return f"alive after 6s out={(exc.stdout or b'')[:200]!r} err={(exc.stderr or b'')[-400:]!r}"
+    except OSError as exc:
+        return f"cannot run: {exc}"
 
 
 def _rows_safe():
