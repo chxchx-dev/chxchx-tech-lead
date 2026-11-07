@@ -13,7 +13,7 @@ wheels = [
 
 [[package]]
 name = "chxchx-tech-lead"
-version = "0.5.1"
+version = "0.5.2.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "psutil" },
