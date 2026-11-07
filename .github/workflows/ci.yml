@@ -142,7 +142,18 @@ jobs:
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: ./scripts/sign-windows.ps1 -Files build-native/Release/chxchx-studio.exe
       - name: Create native install package
-        run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
+        shell: bash
+        run: |
+          # Building a DMG sometimes fails with "Resource busy" on the macOS runners: retry instead of failing the release.
+          for attempt in 1 2 3; do
+            if cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages; then exit 0; fi
+            echo "::warning::cpack failed (attempt $attempt of 3)"
+            if [ "$RUNNER_OS" = "macOS" ]; then
+              for volume in /Volumes/ChxChx*; do [ -d "$volume" ] && hdiutil detach -force "$volume" || true; done
+            fi
+            sleep 20
+          done
+          exit 1
       - name: Sign and notarize the macOS package
         if: runner.os == 'macOS' && env.SIGN_MACOS == 'true'
         shell: bash
