@@ -2,6 +2,7 @@
 #include "../src/git/git_assistant.hpp"
 #include "../src/git/git_assistant_models.hpp"
 #include "../src/git/git_assistant_prompts.hpp"
+#include "../src/git/git_commit_plan.hpp"
 #include "../src/git/git_explorer.hpp"
 #include "../src/git/git_guide.hpp"
 #include "../src/git/git_parsers.hpp"
@@ -90,7 +91,14 @@ int assistantChecks()
     context.recentSubjects = {"Añade la carga de configuración", "Corrige el acceso"};
     context.diff = diff;
     const QString commit = buildCommitPrompt(context);
-    CHECK(312, commit.contains("SOLO con el mensaje") && commit.contains("72 caracteres") && commit.contains("feature/login"));
+    CHECK(312, commit.contains("SOLO un objeto JSON") && commit.contains("agrupándolos por tema") && commit.contains("72 caracteres") && commit.contains("feature/login"));
+    // The assistant's plan: tolerant of fences, keeps real files once, adds what it left out, ignores plain text.
+    const QStringList pending = {"a.cpp", "a.hpp", "docs.md", "x.txt"};
+    const auto plan = parseCommitPlan("Aquí va:\n```json\n{\"commits\": [{\"message\": \"Añade a.\", \"files\": [\"a.cpp\", \"a.hpp\", \"zzz\"]}, {\"message\": \"Docs\", \"files\": [\"docs.md\", \"a.cpp\"]}]}\n```", pending);
+    CHECK(313, plan.size() == 3 && plan.at(0).message == "Añade a" && plan.at(0).files == QStringList({"a.cpp", "a.hpp"}));
+    CHECK(314, plan.at(1).files == QStringList({"docs.md"}) && plan.at(2).message == "Otros cambios" && plan.at(2).files == QStringList({"x.txt"}));
+    CHECK(315, parseCommitPlan("Mejora greet\n\n- algo", pending).isEmpty() && parseCommitPlan("{\"commits\": []}", pending).isEmpty());
+    CHECK(316, reconcileCommitPlan(plan, {"docs.md", "x.txt"}).size() == 2);
     CHECK(313, commit.contains("- Añade la carga de configuración") && commit.contains("M  src/app.py") && !commit.contains("M  .env") && commit.contains("los preparados"));
     CHECK(314, !commit.contains("supersecret") && commit.contains("Se omitieron por seguridad: .env") && !commit.contains("notas.md"));
     context.status = parseStatusV2(nul({"# branch.oid x", "# branch.head main", "1 .M N... 100644 100644 100644 a b notas.md"}));

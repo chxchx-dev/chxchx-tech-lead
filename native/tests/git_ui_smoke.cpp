@@ -7,6 +7,7 @@
 #include "../src/git/git_explorer.hpp"
 #include "../src/git/git_guide.hpp"
 #include "../src/git/git_history_view.hpp"
+#include "../src/git/git_commit_plan_view.hpp"
 #include "../src/git/git_panel.hpp"
 #include "../src/git/git_repository.hpp"
 
@@ -60,6 +61,15 @@ bool git(const QString &directory, const QStringList &args)
     process.setWorkingDirectory(directory);
     process.start("git", args);
     return process.waitForFinished(20000) && process.exitCode() == 0;
+}
+
+QByteArray gitOutput(const QString &directory, const QStringList &args)
+{
+    QProcess process;
+    process.setWorkingDirectory(directory);
+    process.start("git", args);
+    process.waitForFinished(20000);
+    return process.readAllStandardOutput();
 }
 
 } // namespace
@@ -320,7 +330,9 @@ if [ -n "$FAKE_ASSIST_SLEEP" ]; then
   read -t 30 line  # waits for the `cancel` line on stdin, as the real CLI does
   event done '"exit_code": 0, "cancelled": true'; exit 0
 fi
-if grep -q "Redacta el mensaje de commit" "$prompt_file"; then
+if [ -n "$FAKE_ASSIST_PLAN" ] && grep -q "Redacta el mensaje de commit" "$prompt_file"; then
+  event message '"role": "assistant", "text": "{\"commits\": [{\"message\": \"Mejora greet\", \"files\": [\"app.py\"]}, {\"message\": \"Añade notas\", \"files\": [\"notas.md\", \"no-existe.txt\"]}]}"'
+elif grep -q "Redacta el mensaje de commit" "$prompt_file"; then
   event message '"role": "assistant", "text": "```\nMejora greet y añade average.\n\n- Explica el cambio\n```"'
 else
   event message '"role": "assistant", "text": "Pasa esto.\n\n1. Abre el archivo.\n2. Pulsa `Preparar`."'
@@ -387,6 +399,22 @@ event done '"exit_code": 0'
         CHECK(177, waitFor([&] { return assist.toastText().contains("no es confiable"); }));
         CHECK(178, !assist.toastOffersAdvice());
         qunsetenv("FAKE_ASSIST_ERROR");
+
+        // Changes of several topics: the assistant proposes one commit for each, prepared one at a time.
+        CHECK(300, git(repo, {"reset", "-q"}));
+        CHECK(301, waitFor([&] { return changes->sectionCount("staged") == 0 && changes->sectionCount("changes") >= 2; }));
+        qputenv("FAKE_ASSIST_PLAN", "1");
+        changes->requestSuggestion();
+        GitCommitPlanView *plan = assist.commitPlan();
+        CHECK(302, waitFor([&] { return plan->groupCount() == 2; }, 8000));
+        CHECK(303, plan->plan().at(0).files == QStringList{"app.py"} && plan->plan().at(1).files == QStringList{"notas.md"});  // unknown files are dropped
+        CHECK(304, waitFor([&] { return changes->sectionCount("staged") == 1 && changes->messageText() == "Mejora greet"; }));
+        plan->prepare(1);  // another group: the first one is unprepared, this one is prepared
+        CHECK(305, waitFor([&] { return changes->sectionCount("staged") == 1 && changes->messageText() == "Añade notas"; }));
+        CHECK(306, QString::fromUtf8(gitOutput(repo, {"diff", "--cached", "--name-only"})).trimmed() == "notas.md");
+        changes->commitNow();
+        CHECK(307, waitFor([&] { return plan->groupCount() == 1 && plan->plan().first().files == QStringList{"app.py"}; }, 8000));  // committed files leave the plan
+        qunsetenv("FAKE_ASSIST_PLAN");
 
         // A Git error offers to ask for advice; the answer uses the error.
         assist.branchesView()->switchTo("no-existe", false);

@@ -31,6 +31,8 @@ QString extractConflictHunks(const QString &fileText, int maxHunks = 3, int maxL
 // A file git does not track yet, written as the diff it would be, so it is redacted like any other.
 QString newFileDiff(const QString &path, const QString &text, int maxChars = 4000);
 QString buildCommitPrompt(const GitAssistContext &context);
+// The files a commit suggestion is about: the prepared ones, or all pending when nothing is prepared (secrets excluded).
+QStringList commitCandidateFiles(const GitStatus &status);
 QString buildAdvicePrompt(GitAdviceKind kind, const GitAssistContext &context);
 // The agent's answer reduced to a commit message: no fences, quotes or "Mensaje:" lead-in.
 QString cleanCommitMessage(const QString &raw);

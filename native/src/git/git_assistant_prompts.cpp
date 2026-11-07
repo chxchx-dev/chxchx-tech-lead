@@ -120,15 +120,33 @@ QString extractConflictHunks(const QString &fileText, int maxHunks, int maxLines
     return result.join(QStringLiteral("\n\n"));
 }
 
+QStringList commitCandidateFiles(const GitStatus &status)
+{
+    const QList<GitEntry> staged = status.stagedEntries();
+    QStringList files;
+    for (const GitEntry &entry : staged.isEmpty() ? status.changedEntries() : staged) {
+        if (!isSensitivePath(entry.path) && !files.contains(entry.path)) files << entry.path;
+    }
+    return files;
+}
+
 QString buildCommitPrompt(const GitAssistContext &context)
 {
     QStringList parts;
     parts << QStringLiteral(
-        "Eres un asistente de Git dentro de un editor. Redacta el mensaje de commit para estos cambios.\n"
-        "Reglas:\n"
-        "- Responde SOLO con el mensaje: sin comillas, sin bloques de código y sin explicaciones.\n"
+        "Eres un asistente de Git dentro de un editor. Redacta el mensaje de commit para estos cambios, "
+        "entendiendo qué hace cada archivo y agrupándolos por tema.\n"
+        "Cómo agrupar:\n"
+        "- Cada commit cuenta una sola idea: una función, una corrección, una documentación, una configuración. "
+        "Junta los archivos que cambian por el mismo motivo (por ejemplo, el código y sus pruebas).\n"
+        "- No hagas un único commit gigante con temas mezclados, ni un commit por archivo. Si todo es un solo tema, devuelve un solo commit.\n"
+        "- Ordena los commits para que cada uno tenga sentido por sí mismo (primero la base, luego lo que depende de ella).\n"
+        "- Cada archivo va en un solo commit; usa exactamente las rutas de la lista. Máximo 6 commits.\n"
+        "Formato de la respuesta: SOLO un objeto JSON, sin bloques de código ni explicaciones:\n"
+        "{\"commits\": [{\"message\": \"...\", \"files\": [\"ruta\"]}]}\n"
+        "Reglas del mensaje:\n"
         "- Primera línea: resumen en imperativo de máximo 72 caracteres y sin punto final.\n"
-        "- Si aporta, deja una línea en blanco y 2 a 5 viñetas con «- » que expliquen qué cambió y por qué (no cómo).\n"
+        "- Si aporta, deja una línea en blanco y 2 a 5 viñetas con «- » que expliquen qué cambió y por qué (no cómo); usa \\n en el JSON.\n"
         "- Usa el mismo idioma y estilo que los commits recientes (español si no hay ninguno).\n"
         "- No inventes cambios que no aparezcan en la diferencia. No ejecutes comandos ni modifiques archivos.");
     parts << QStringLiteral("Rama: %1").arg(context.status.detached ? QStringLiteral("(sin rama)") : context.status.head);
@@ -143,7 +161,7 @@ QString buildCommitPrompt(const GitAssistContext &context)
     for (const GitEntry &entry : chosen) {
         if (!isSensitivePath(entry.path)) files << statusLine(entry);
     }
-    parts << QStringLiteral("Archivos que se guardan (%1):\n%2").arg(staged.isEmpty() ? QStringLiteral("todo lo pendiente") : QStringLiteral("los preparados"), files.join(QLatin1Char('\n')));
+    parts << QStringLiteral("Archivos que se guardan (%1; cada línea es el código de estado y la ruta, en \"files\" usa solo la ruta):\n%2").arg(staged.isEmpty() ? QStringLiteral("todo lo pendiente") : QStringLiteral("los preparados"), files.join(QLatin1Char('\n')));
     QStringList omitted;
     bool truncated = false;
     const QString safeDiff = truncateForPrompt(redactDiff(context.diff, &omitted), MaxDiffChars, &truncated);

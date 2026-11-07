@@ -42,6 +42,8 @@ public:
     QString commitButtonText() const;
     bool commitEnabled() const;
     void setMessage(const QString &message);
+    // Puts the proposed-commits strip under the message box.
+    void insertPlanView(QWidget *view);
     void commitNow();
     void stagePaths(const QStringList &paths);
     void unstagePaths(const QStringList &paths);

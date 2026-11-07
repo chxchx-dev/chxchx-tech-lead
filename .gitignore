@@ -71,3 +71,7 @@ Thumbs.db
 *secrets*.json
 **/secrets/
 **/credentials/
+
+# Mods instalados por `chxchx-tech mod apply` (se regeneran en cada PC; no se versionan).
+/.claude/skills/
+/.agents/skills/

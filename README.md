@@ -1140,7 +1140,7 @@ La pestaña **Git**, junto a **Archivos** en el panel izquierdo (`Ctrl+Shift+G`)
 
 Una tarjeta en la parte superior de **Cambios** dice cuál es el siguiente paso (listo para guardar, ramas separadas, conflictos…) y lo explica en pasos cortos. Eso funciona sin ningún agente. Si hay uno conectado, el asistente además:
 
-- **Sugiere el mensaje del commit** (botón **Sugerir**): lee tus cambios y los commits recientes, imita su estilo y rellena el mensaje. Tú lo editas y decides; no guarda nada por su cuenta.
+- **Sugiere los commits** (botón **Sugerir**): lee tus cambios y los commits recientes, imita su estilo y **agrupa los archivos por tema** (por ejemplo, el código con su prueba, la documentación y la configuración de CI por separado). Si hay varios temas muestra un plan de commits: prepara el primero y, tras guardarlo, prepara el siguiente; si es uno solo, rellena el mensaje como siempre. Tú lo editas y decides; no guarda nada por su cuenta.
 - **Da consejo guiado** (botón **Pedir consejo**, también tras un error): explica qué pasó y qué hacer, con pasos numerados. Con conflictos de fusión revisa los bloques en conflicto y recomienda qué conservar. Solo aconseja: no ejecuta nada ni modifica archivos.
 
 <img src="assets/screenshots/studio-git-assistant.png" alt="Tarjeta de guía y mensaje de commit sugerido por el asistente" width="300"> <img src="assets/screenshots/studio-git-advice.png" alt="Consejo del asistente para ramas separadas" width="420">
