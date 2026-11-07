@@ -177,3 +177,15 @@ def test_waiting_for_the_person_is_not_a_stall(tmp_path: Path, monkeypatch) -> N
     writer.close()
     assert not any(e["type"] == "error" for e in events)
     assert events[-1]["type"] == "done" and events[-1]["exit_code"] == 0
+
+
+def test_the_local_server_is_never_reached_through_a_proxy(tmp_path: Path, monkeypatch) -> None:
+    """A user's HTTP(S)_PROXY must not capture the conversation with the local server."""
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.setenv(name, "http://127.0.0.1:9")  # nothing listens there
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.delenv("no_proxy", raising=False)
+
+    _, events = _turn(tmp_path, "hola", lambda e: None)
+
+    assert events[-1]["type"] == "done" and events[-1]["exit_code"] == 0 and "eco: hola" in _texts(events)

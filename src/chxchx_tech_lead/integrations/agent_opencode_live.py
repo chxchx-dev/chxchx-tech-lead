@@ -29,6 +29,8 @@ Event = dict[str, Any]
 
 _LISTENING = re.compile(r"listening on (http://127\.0\.0\.1:\d+)")
 _STARTUP_SECONDS = 40
+# The server is on this machine: never through a proxy from the environment or the system settings.
+_LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 _EVENT_STREAM_TIMEOUT = 6 * 3600  # the event stream is quiet while the person decides; the server ending closes it
 _STALL_SECONDS = 600  # nobody answers and nothing happens: give up instead of leaving the server running
 _PERMISSION_LABELS = {"bash": "comandos", "edit": "ediciones", "webfetch": "la web", "external_directory": "carpetas fuera del proyecto"}
@@ -166,7 +168,7 @@ class LiveOpenCode:
         data = json.dumps(body).encode() if body is not None else None
         request = urllib.request.Request(self._base + path, data=data, method=method,
                                          headers={"Authorization": self._auth, "Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with _LOCAL.open(request, timeout=30) as response:
             raw = response.read()
         return json.loads(raw) if raw else None
 
@@ -195,7 +197,7 @@ class LiveOpenCode:
     def _listen(self) -> None:
         request = urllib.request.Request(self._base + "/event", headers={"Authorization": self._auth})
         try:
-            with urllib.request.urlopen(request, timeout=_EVENT_STREAM_TIMEOUT) as response:
+            with _LOCAL.open(request, timeout=_EVENT_STREAM_TIMEOUT) as response:
                 for raw in response:
                     line = raw.decode("utf-8", "replace").strip()
                     if not line.startswith("data:"):
