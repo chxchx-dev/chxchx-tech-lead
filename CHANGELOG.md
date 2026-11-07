@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.1 - 2026-11-06
+
 - Git en Studio: **Sugerir** entiende los cambios y los agrupa por tema en varios commits (código con sus pruebas, documentación, CI…) en lugar de un solo commit con todo. Muestra un plan; **Preparar** deja en el área de preparación solo los archivos de ese grupo y rellena su mensaje, y al guardar el siguiente queda a la espera. Los archivos que el asistente omita van a un último grupo; los inexistentes se descartan; los sensibles nunca se envían. Con un solo tema, el comportamiento es el de antes.
 - Los Mods instalados (`.claude/skills/` y `.agents/skills/`) ya no se versionan en este repositorio: se regeneran en cada PC con `mod apply` o desde Studio.
 - Mods para todos los agentes: además de Claude Code, los Mods llegan a **Codex** (`.agents/skills/`, que Codex lee; sin esa carpeta no ve ninguno) y a **OpenCode** (lee `.claude/skills/`, sin copia extra). Se instalan en la carpeta de cada agente configurado, `mod remove` los retira de todas con backup, y la preparación de proyectos los ofrece si hay cualquiera de los tres agentes.
