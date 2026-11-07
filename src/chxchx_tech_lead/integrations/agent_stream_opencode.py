@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .agent_permissions import opencode_denial
+
 Event = dict[str, Any]
 
 _MAX_OUTPUT_CHARS = 4000
@@ -28,7 +30,8 @@ def normalize_opencode(record: dict[str, Any]) -> list[Event]:
     if kind == "reasoning" and part.get("text"):
         return [{"type": "reasoning", "text": str(part["text"])}]
     if kind == "tool_use":
-        return [_tool(part)]
+        tool = _tool(part)
+        return [tool, *opencode_denial(part, tool["title"])]
     if kind == "step_finish":
         return _step_finish(part)
     if kind == "error":

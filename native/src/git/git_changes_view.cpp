@@ -425,6 +425,12 @@ void GitChangesView::discardPaths(const QStringList &paths)
     });
 }
 
+void GitChangesView::insertPlanView(QWidget *view)
+{
+    auto *column = static_cast<QVBoxLayout *>(layout());
+    column->insertWidget(column->indexOf(m_note) + 1, view);
+}
+
 void GitChangesView::setMessage(const QString &text)
 {
     m_message->setPlainText(text);

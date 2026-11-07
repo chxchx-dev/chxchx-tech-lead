@@ -11,6 +11,7 @@
 
 class GitBranchesView;
 class GitChangesView;
+class GitCommitPlanView;
 class GitHistoryView;
 class QLabel;
 class QPushButton;
@@ -44,6 +45,7 @@ public:
     void configureAssistant(const QString &cliProgram, GitAssistantController::AgentProvider agents, GitAssistantController::PreferredProvider preferred);
     GitAssistantController *assistant() const { return m_assistant; }
     void adviseNow(GitAdviceKind kind, const QString &lastError = QString());
+    GitCommitPlanView *commitPlan() const { return m_plan; }
     // Tests: show no dialogs; the advice is kept in `lastAdvice()` instead.
     void setAdviceDialogsEnabled(bool enabled) { m_adviceDialogs = enabled; }
     QString lastAdvice() const { return m_lastAdvice; }
@@ -65,6 +67,7 @@ signals:
     void explorerStatusChanged(const GitExplorerStatus &status);
 
 private:
+    void preparePlanGroup(int index);
     void applyStatus(const GitStatus &status);
     void showNotRepository(bool gitMissing);
     void loadBranches();
@@ -117,6 +120,7 @@ private:
     bool m_mergeInProgress = false;
     int m_stashCount = 0;
     GitChangesView *m_changes = nullptr;
+    GitCommitPlanView *m_plan = nullptr;
     GitHistoryView *m_history = nullptr;
     GitBranchesView *m_branches = nullptr;
 };

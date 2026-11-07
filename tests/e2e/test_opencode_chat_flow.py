@@ -74,10 +74,15 @@ def test_prompt_and_context_travel_by_stdin_not_argv(tmp_path: Path, fake_bin) -
 def test_read_only_denies_edit_and_bash_and_write_mode_does_not(tmp_path: Path, fake_bin) -> None:
     _turn(tmp_path, mode="read-only")
     _turn(tmp_path, mode="workspace-write")
+    _turn(tmp_path, mode="workspace-commands", network=True)
+    _turn(tmp_path, mode="workspace-write", allow=("bash",))
 
-    ro, rw = [call for call in fake_bin("opencode") if call["argv"][:1] == ["run"]]
+    ro, rw, commands, approved = [call for call in fake_bin("opencode") if call["argv"][:1] == ["run"]]
     assert ro["argv"][ro["argv"].index("--agent") + 1] == "plan" and ro["permission"] == '{"edit": "deny", "bash": "deny"}'
-    assert rw["argv"][rw["argv"].index("--agent") + 1] == "build" and rw["permission"] is None
+    # Editing is allowed; commands and the web are asked, which a headless run turns into a rejection (a card in Studio).
+    assert rw["argv"][rw["argv"].index("--agent") + 1] == "build" and rw["permission"] == '{"bash": "ask", "webfetch": "ask"}'
+    assert commands["permission"] == '{"bash": "allow", "webfetch": "allow"}'
+    assert approved["permission"] == '{"bash": "allow", "webfetch": "ask"}'
 
 
 def test_model_effort_and_images_become_cli_arguments(tmp_path: Path, fake_bin) -> None:

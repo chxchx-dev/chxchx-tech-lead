@@ -145,14 +145,16 @@ añade de una vez la unión de los packs compatibles, sin escribir sus nombres;
 selección sin volver a nombrar las skills. Son instrucciones Markdown para los
 agentes, no paquetes ejecutables ni utilidades instaladas individualmente.
 
-### Mods locales para Claude Code
+### Mods locales (Claude Code, Codex y OpenCode)
 
-El catálogo incluye nueve Mods de instrucciones de proyecto: asesor de modelo,
-revisión antes de integrar, depuración con evidencia, plan de funcionalidades,
-desarrollo nativo C++/Qt, flujo Git, refactorización segura, documentación técnica
-y rendimiento basado en mediciones. Se aplican en `.claude/skills/`, no instalan ejecutables,
-hooks ni ajustes globales de Claude. Claude Code carga las skills del proyecto al
-abrir una sesión nueva; consulta la [documentación oficial de skills](https://code.claude.com/docs/en/skills).
+El catálogo incluye 22 Mods de instrucciones de proyecto. Generales: asesor de modelo,
+revisión antes de integrar, depuración con evidencia, plan de funcionalidades, flujo Git,
+refactorización segura, documentación técnica, revisión de seguridad y estrategia de pruebas.
+Por stack (se recomiendan solo si se detecta): C++/Qt, Python, React/Next.js, NestJS,
+React Native, bases de datos (Postgres/Prisma), Redis, Docker, .NET, Rust, Go, aplicaciones
+con LLM, rendimiento y GitHub Actions (por infraestructura detectada). Se aplican como skills del proyecto: en `.claude/skills/` (las leen Claude Code y OpenCode) y,
+si el proyecto usa Codex, también en `.agents/skills/`. No instalan ejecutables, hooks ni ajustes
+globales. Los agentes cargan las skills al abrir una sesión nueva; consulta la [documentación oficial de skills](https://code.claude.com/docs/en/skills).
 
 ```bash
 chxchx-tech mod list --path .
@@ -1067,9 +1069,35 @@ sugerencias para empezar. Antes pasa por el mismo control de trust y RAM que la 
 Las respuestas se muestran con formato. Los comandos y cambios de archivos
 aparecen como tarjetas con su estado y una vista previa de la salida. El primer
 mensaje incluye el contexto del proyecto (estado, handoff, memoria y últimas
-sesiones), y los siguientes continúan la misma sesión. **Permisos** elige entre
-*Solo lectura* y *Editar workspace*. **Detener** corta el turno, y cerrar la
-pestaña también. **Nuevo chat** empieza otra conversación.
+sesiones), y los siguientes continúan la misma sesión. **Detener** corta el turno,
+y cerrar la pestaña también. **Nuevo chat** empieza otra conversación.
+
+**Seguridad y acceso.** Dos controles junto al cuadro de texto deciden qué puede hacer
+el agente en el siguiente mensaje:
+
+| Nivel | Qué puede hacer |
+| --- | --- |
+| 🔒 Solo lectura | Lee y propone; no modifica nada. |
+| ✎ Editar archivos (por defecto) | Modifica el proyecto. Ejecutar comandos o usar la web le pide permiso. |
+| ⚡ Editar y ejecutar | Además ejecuta comandos sin preguntar (Codex los corre dentro de su sandbox). |
+| ⚠ Acceso total | Sin restricciones ni sandbox. Pide confirmación cada vez que lo eliges. |
+
+**🌐 Red** permite el acceso a internet; apagado, lo que lo necesite pide permiso.
+Cuando el agente queda bloqueado, el turno termina con una **tarjeta de permiso**: dice
+qué intentó y ofrece *permitir una vez*, *permitir en este chat* (comando, herramienta
+o red) o *Ahora no*. Al elegir, Studio le pide que reintente. Una concesión «una vez» se
+gasta en ese reintento; las de «este chat» duran hasta **Nuevo chat**. Claude y OpenCode
+avisan con certeza de lo que rechazaron; Codex no pregunta en este modo y solo se
+señala como *posible* bloqueo del sandbox cuando el error lo delata (sin red, sistema
+de archivos de solo lectura). Con Claude, Codex y OpenCode la aprobación es **en vivo**: el agente se
+pausa, la tarjeta aparece al momento y, al elegir, sigue en el mismo turno (también
+cuando te hace una **pregunta con opciones**, que se muestra como botones con un
+campo para otra respuesta; «Ahora no» la deniega). En Codex las preguntas de aprobación
+solo aparecen en *Editar archivos* (en los demás niveles Codex no pregunta, y en *Solo lectura*
+tampoco puede salir del sandbox) y «permitir» dura ese turno; Codex usa su `app-server`, que
+su autor marca como experimental. OpenCode corre en un servidor local efímero (`opencode serve`)
+protegido con contraseña; en él, denegar una acción detiene el turno (así lo define OpenCode) y
+«permitir en este chat» se limita al patrón propuesto (por ejemplo `git *`).
 
 - **Modelo y Effort** muestran las opciones reales de cada agente. En Codex
   salen de su catálogo local, con los niveles que admite cada modelo. En Claude
@@ -1112,7 +1140,7 @@ La pestaña **Git**, junto a **Archivos** en el panel izquierdo (`Ctrl+Shift+G`)
 
 Una tarjeta en la parte superior de **Cambios** dice cuál es el siguiente paso (listo para guardar, ramas separadas, conflictos…) y lo explica en pasos cortos. Eso funciona sin ningún agente. Si hay uno conectado, el asistente además:
 
-- **Sugiere el mensaje del commit** (botón **Sugerir**): lee tus cambios y los commits recientes, imita su estilo y rellena el mensaje. Tú lo editas y decides; no guarda nada por su cuenta.
+- **Sugiere los commits** (botón **Sugerir**): lee tus cambios y los commits recientes, imita su estilo y **agrupa los archivos por tema** (por ejemplo, el código con su prueba, la documentación y la configuración de CI por separado). Si hay varios temas muestra un plan de commits: prepara el primero y, tras guardarlo, prepara el siguiente; si es uno solo, rellena el mensaje como siempre. Tú lo editas y decides; no guarda nada por su cuenta.
 - **Da consejo guiado** (botón **Pedir consejo**, también tras un error): explica qué pasó y qué hacer, con pasos numerados. Con conflictos de fusión revisa los bloques en conflicto y recomienda qué conservar. Solo aconseja: no ejecuta nada ni modifica archivos.
 
 <img src="assets/screenshots/studio-git-assistant.png" alt="Tarjeta de guía y mensaje de commit sugerido por el asistente" width="300"> <img src="assets/screenshots/studio-git-advice.png" alt="Consejo del asistente para ramas separadas" width="420">

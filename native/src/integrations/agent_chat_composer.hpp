@@ -22,6 +22,7 @@ public:
     void setRunning(bool running);
     void setInputEnabled(bool enabled, const QString &reason = {});
     void setText(const QString &text);
+    QString text() const;
     void setHint(const QString &hint);
     void focusInput();
     void clear();

@@ -17,6 +17,18 @@ from .session_journal import recent_sessions_prompt, record_session, summarize_l
 # notify(message, is_error)
 Notifier = Callable[[str, bool], None]
 
+# Files a new chat is told to read. The visual chat has nobody to approve a shell command, so it hands
+# them over inside the prompt instead (see `inline_project_context`).
+CONTEXT_FILES = (
+    "AGENTS.md",
+    ".ai/PROJECT.md",
+    ".ai/CURRENT_STATE.md",
+    ".ai/HANDOFF.md",
+    ".ai/memory/PROJECT_MEMORY.md",
+)
+_MAX_FILE_CHARS = 12_000
+_MAX_CONTEXT_CHARS = 36_000
+
 
 def prepare_new_chat(
     project_root: Path, notify: Notifier, *, opencode_executable: str | None = None
@@ -37,6 +49,37 @@ def prepare_new_chat(
     except OSError as exc:
         notify(f"No pude leer el diario de sesiones: {exc}", True)
     return extra
+
+
+def inline_project_context(project_root: Path, *, provider: str | None = None) -> str:
+    """The context files as text for a visual chat, so the agent never needs a command to read them.
+
+    Each file sits in an XML-like block: explicit-memory capture ignores such blocks, so project notes are never
+    mistaken for something the user asked to remember. Codex loads AGENTS.md by itself and skips it here.
+    """
+    parts: list[str] = []
+    budget = _MAX_CONTEXT_CHARS
+    for name in CONTEXT_FILES:
+        if provider == "Codex" and name == "AGENTS.md":
+            continue
+        path = project_root / name
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace").strip() if path.is_file() and not path.is_symlink() else ""
+        except OSError:
+            continue
+        if not text or budget <= 0:
+            continue
+        limit = min(_MAX_FILE_CHARS, budget)
+        clipped = text[:limit] + (f"\n[…recortado a {limit} caracteres; lee el archivo si necesitas el resto]" if len(text) > limit else "")
+        budget -= min(len(text), limit)
+        parts.append(f'<archivo-de-contexto ruta="{name}">\n{clipped}\n</archivo-de-contexto>')
+    if not parts:
+        return ("\n\nEste proyecto aún no tiene archivos de contexto (AGENTS.md ni .ai/): no los busques ni ejecutes "
+                "comandos para encontrarlos; empieza directamente con la solicitud.")
+    return (
+        "\n\nStudio ya leyó por ti los archivos de contexto de arriba y los incluye aquí. No ejecutes comandos "
+        "para leerlos de nuevo; el chat no puede pedirte permiso para eso.\n" + "\n".join(parts)
+    )
 
 
 def capture_after_session(

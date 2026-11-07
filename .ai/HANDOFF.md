@@ -2,7 +2,23 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
-## Instaladores y releases (publicados: 0.5.0 estable y preview dev)
+## Chat visual: aprobaciones en vivo (Claude, Codex y OpenCode hechos)
+
+- Hecho con Claude (ADR 0014): permisos y `AskUserQuestion` en vivo. Probar a mano en Studio con el Claude real: aprobar, «en este chat», denegar, preguntas con varias opciones/selección múltiple, detener mientras espera, y cerrar la pestaña con una solicitud abierta.
+- Resuelto: el contexto del chat nuevo se inyecta en el prompt (`inline_project_context`), así que ya no hay permiso para leerlo. Los archivos grandes se recortan (12 KB c/u, 36 KB en total).
+- Hecho con Codex (`app-server`): probar a mano en Studio con el Codex real (comando fuera del sandbox, archivo fuera del proyecto, denegar, pregunta `request_user_input`), y vigilar cambios del protocolo experimental. El proceso es por turno; un proceso por chat permitiría «permitir en este chat».
+- Hecho con OpenCode (`serve`): probar a mano en Studio con el OpenCode real (aprobar, «en este chat» con patrón, denegar —detiene el turno—, pregunta, cancelar con una solicitud abierta) y comprobar que no quedan procesos `opencode serve` tras cerrar la pestaña.
+- Pendiente: carpetas adicionales (`--add-dir`). El reintento automático de la fase 1 ya conserva el borrador del cuadro de texto.
+
+## Estado tras la 0.5.1 (estable publicada, `dev` en 0.5.2.dev0)
+
+- Publicado `v0.5.1` (11 assets, manifiesto estable). Trae chat en vivo de los tres agentes, niveles de acceso, 22 Mods para Claude/Codex/OpenCode, plan de commits por tema en Git y el instalador de Windows ARM64/x86 corregido.
+- Probar a mano en Studio con agentes reales: chat de OpenCode (el fallo «dejó de responder» se atribuyó a que esperar tu respuesta contaba como cuelgue; no se reprodujo en el real), la terminal integrada de OpenCode (¿responde libvterm a las consultas de terminal de OpenCode al arrancar?), el plan de commits en un repo con temas mezclados y la pantalla de Mods.
+- Mods: `.claude/skills/` y `.agents/skills/` no se versionan; `mod apply` los regenera. `chxchx-model-advisor` solo sirve con Claude.
+- CI: estuvo rojo desde el primer commit del chat en vivo por pruebas dependientes de plataforma (UTF-8 en Windows, `getfqdn` lento en macOS, pruebas TUI con pausas fijas). Revisar el CI tras cada push. Quedan pruebas TUI con `pause(0.x)` fijas que podrían ser inestables.
+- Pendiente: `--add-dir`, firma de instaladores (secretos), ARM64 nativo de Windows sin ejecutar en hardware real, probar `install.ps1`/Setup.exe en Windows real.
+
+## Instaladores y releases (publicados: 0.5.1 estable y preview dev)
 
 - Windows: x64 nativo; ARM64 usa el paquete x64 (emulación) salvo que el manifiesto traiga `asset.windows-arm64`; x86 de 32 bits cae a solo CLI. El job `native-windows-arm64` (experimental, compilación cruzada, nunca ejecutado) sube un artefacto que NO va al release: probarlo en un ARM64 real y luego conectarlo a `stage-release` (el instalador y `release_assets.py` ya lo soportan). La `0.5.1` estable debe llevar el arreglo de arquitectura de `install.ps1`.
 

@@ -1,5 +1,7 @@
 #include "agent_chat_cards.hpp"
 #include "agent_chat_markdown.hpp"
+#include "agent_chat_permission.hpp"
+#include "agent_chat_question.hpp"
 #include "../studio_theme.hpp"
 
 #include <QApplication>
@@ -271,6 +273,8 @@ ChatEntryCard *createChatEntryCard(const AgentChatModel::Entry &entry, const Cha
     case AgentChatModel::Kind::Tool: return new ChatToolCard(entry, parent);
     case AgentChatModel::Kind::Notice: return new NoticeCard(entry, parent);
     case AgentChatModel::Kind::Error: return new ErrorCard(entry, parent);
+    case AgentChatModel::Kind::Permission: return new ChatPermissionCard(entry, parent);
+    case AgentChatModel::Kind::Question: return new ChatQuestionCard(entry, parent);
     }
     return new NoticeCard(entry, parent);
 }

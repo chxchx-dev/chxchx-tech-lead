@@ -1,0 +1,3 @@
+Usa TypeScript estricto y componentes pequeños con una sola responsabilidad. Separa presentación, estado y acceso a datos; deriva el estado en vez de duplicarlo y evita `useEffect` para lo que se puede calcular durante el render. En Next.js distingue componentes de servidor y de cliente, mantén los secretos solo en el servidor y valida toda entrada en el borde (formularios, route handlers, acciones).
+
+Cuida accesibilidad (etiquetas, foco, contraste, teclado), estados de carga/error/vacío y rendimiento (imágenes, división de código, listas largas). Prueba comportamiento visible con Testing Library; no pruebes detalles de implementación. Ejecuta lint, tipos y tests antes de dar el cambio por listo.

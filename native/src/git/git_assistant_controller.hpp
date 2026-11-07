@@ -3,6 +3,7 @@
 #include "git_assistant.hpp"
 #include "git_assistant_models.hpp"
 #include "git_assistant_prompts.hpp"
+#include "git_commit_plan.hpp"
 
 #include <QHash>
 #include <QObject>
@@ -51,6 +52,8 @@ public:
 signals:
     void busyChanged(bool busy, const QString &text);
     void commitMessageReady(const QString &message, const QString &agentLabel);
+    // The changes belong to several topics: one proposed commit for each.
+    void commitPlanReady(const QList<GitCommitGroup> &plan, const QString &agentLabel);
     void adviceReady(GitAdviceKind kind, const QString &markdown, const QString &agentLabel);
     void failed(const QString &message);
     void agentsChanged();

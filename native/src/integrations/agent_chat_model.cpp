@@ -83,6 +83,27 @@ bool AgentChatModel::apply(const QJsonObject &event)
     } else if (type == QStringLiteral("error")) {
         entry.kind = Kind::Error;
         entry.text = event.value(QStringLiteral("message")).toString();
+    } else if (type == QStringLiteral("permission")) {
+        entry.kind = Kind::Permission;
+        entry.toolId = event.value(QStringLiteral("id")).toString();
+        entry.toolKind = event.value(QStringLiteral("tool")).toString();
+        entry.text = event.value(QStringLiteral("summary")).toString();
+        entry.output = event.value(QStringLiteral("detail")).toString();
+        entry.certain = event.value(QStringLiteral("certain")).toBool(true);
+        entry.choices = event.value(QStringLiteral("choices")).toArray();
+        entry.requestId = event.value(QStringLiteral("request_id")).toString();
+        // The same request is not asked twice in one turn.
+        for (const Entry &other : std::as_const(m_entries)) {
+            if (other.kind == Kind::Permission && other.toolId == entry.toolId && !entry.toolId.isEmpty() && other.decision.isEmpty())
+                return true;
+        }
+    } else if (type == QStringLiteral("question")) {
+        entry.kind = Kind::Question;
+        entry.requestId = event.value(QStringLiteral("request_id")).toString();
+        entry.toolId = event.value(QStringLiteral("id")).toString();
+        entry.questions = event.value(QStringLiteral("questions")).toArray();
+        if (entry.questions.isEmpty()) return true;
+        entry.text = QStringLiteral("pregunta"); // keeps the entry from being dropped as empty
     } else if (type == QStringLiteral("tool")) {
         const QString id = event.value(QStringLiteral("id")).toString();
         // Later events for the same tool update its card in place.
@@ -108,6 +129,34 @@ bool AgentChatModel::apply(const QJsonObject &event)
     if (entry.text.trimmed().isEmpty() && entry.kind != Kind::Tool) return true;
     m_entries.append(entry);
     return true;
+}
+
+bool AgentChatModel::awaitingAnswer() const
+{
+    for (const Entry &entry : m_entries) {
+        if ((entry.kind == Kind::Permission || entry.kind == Kind::Question) && !entry.requestId.isEmpty() && entry.decision.isEmpty())
+            return true;
+    }
+    return false;
+}
+
+void AgentChatModel::expireLiveRequests()
+{
+    for (Entry &entry : m_entries) {
+        if ((entry.kind != Kind::Permission && entry.kind != Kind::Question) || entry.requestId.isEmpty() || !entry.decision.isEmpty())
+            continue;
+        entry.decision = QStringLiteral("Ya no esperaba tu respuesta");
+        ++entry.revision;
+    }
+}
+
+void AgentChatModel::decidePermission(qsizetype index, const QString &label)
+{
+    if (index < 0 || index >= m_entries.size()
+        || (m_entries.at(index).kind != Kind::Permission && m_entries.at(index).kind != Kind::Question)) return;
+    Entry &entry = m_entries[index];
+    entry.decision = label.isEmpty() ? QStringLiteral("Ahora no") : label;
+    ++entry.revision;
 }
 
 void AgentChatModel::clear()

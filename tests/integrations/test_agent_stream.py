@@ -133,7 +133,8 @@ def test_opencode_turn_selects_agent_by_mode_and_resumes_by_session() -> None:
 
 def test_opencode_read_only_denies_edit_and_bash_through_the_environment() -> None:
     assert turn_environment(["opencode"], mode="read-only") == {"OPENCODE_PERMISSION": '{"edit": "deny", "bash": "deny"}'}
-    assert turn_environment(["opencode"], mode="workspace-write") == {}
+    # Editing the project is allowed; commands and the web need approval (rejected in a headless run).
+    assert turn_environment(["opencode"], mode="workspace-write") == {"OPENCODE_PERMISSION": '{"bash": "ask", "webfetch": "ask"}'}
     assert turn_environment(["codex"], mode="read-only") == {}
 
 

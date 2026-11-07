@@ -1,0 +1,3 @@
+name = "chxchx-nestjs-api"
+description = "APIs NestJS con módulos claros, validación en el borde y errores consistentes."
+stacks = ["nestjs"]

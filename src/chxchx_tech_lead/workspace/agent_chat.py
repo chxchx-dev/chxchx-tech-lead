@@ -9,33 +9,37 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
+import secrets
 import subprocess
 import sys
 import threading
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any
 
+from ..integrations.agent_access import Access, opencode_agent
+from ..integrations.agent_codex_live import LiveCodex, configured_model
+from ..integrations.agent_live import LiveClaude
+from ..integrations.agent_opencode_live import LiveOpenCode
 from ..integrations.agent_catalog import INSTALL_HINTS, agent_options, codex_limits, executable_available, resolve_executable
 from ..integrations.agent_stream import IMAGE_ARGUMENT_PROVIDERS, normalize, provider_for, turn_command, turn_environment
 from .agent_commands import CHAT_PANEL_REQUEST_MARKER, new_chat_prompt
 from .bridge_contracts import AGENT_OPTIONS_SCHEMA, SCHEMA_VERSION as BRIDGE_SCHEMA_VERSION
-from .chat_context import capture_after_session, prepare_new_chat
-from .process_runtime import terminate_posix_process_group, terminate_windows_process_tree
+from .chat_attachments import stage_images, validated_image
+from .chat_process import delete_opencode_session, drain, watch_cancel
+from .chat_context import capture_after_session, inline_project_context, prepare_new_chat
 from .service import WorkspaceOperationError
 
 SCHEMA = "chxchx.agent-event"
 SCHEMA_VERSION = 1
-_STOP_TIMEOUT_SECONDS = 3.0
-_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-_MAX_IMAGE_BYTES = 20 * 1024 * 1024
-ATTACHMENTS_DIR = Path(".ai") / "chat-attachments"
 
 Emit = Callable[[dict[str, Any]], None]
+# Providers that can pause a turn to ask the person (Claude: stream-json control requests, Codex: app-server,
+# OpenCode: `opencode serve`).
+LIVE_PROVIDERS = ("Claude", "Codex", "OpenCode")
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +56,10 @@ class ChatTurnPlan:
     effort: str | None = None
     images: tuple[Path, ...] = ()
     env: dict[str, str] = field(default_factory=dict)
+    network: bool = False
+    allow: tuple[str, ...] = ()
+    # Claude only: ask the host while the turn runs (approvals and questions) instead of denying.
+    live: bool = False
     # A one-off question (the Git assistant): no project context, no journal, no saved session, read-only.
     lean: bool = False
 
@@ -78,6 +86,9 @@ def plan_chat_turn(
     effort: str | None = None,
     images: tuple[Path, ...] = (),
     lean: bool = False,
+    network: bool = False,
+    allow: tuple[str, ...] = (),
+    live: bool = False,
 ) -> ChatTurnPlan:
     if lean:
         mode = "read-only"  # advice only: a lean turn must never be able to change files
@@ -101,17 +112,22 @@ def plan_chat_turn(
             f"{provider} no está instalado o `{config.command[0]}` no está en el PATH. "
             f"Instálalo con: {INSTALL_HINTS[provider]}"
         )
-    images = tuple(_validated_image(path) for path in images)
+    images = tuple(validated_image(path) for path in images)
     try:
         argv = turn_command(config.command, mode=mode, session_id=session_id, model=model, effort=effort,
                             images=[str(path) for path in images] if provider in IMAGE_ARGUMENT_PROVIDERS else (),
-                            ephemeral=lean)
+                            ephemeral=lean, network=network, allow=allow,
+                            live=live and not lean and provider in LIVE_PROVIDERS)
     except ValueError as exc:
         raise WorkspaceOperationError(str(exc)) from exc
     argv[0] = resolve_executable(argv[0])
     root = service.project.root.resolve()
+    live = live and not lean and provider in LIVE_PROVIDERS
+    env = turn_environment(config.command, mode=mode, network=network, allow=allow)
+    if live and provider == "OpenCode":
+        env["OPENCODE_SERVER_PASSWORD"] = secrets.token_urlsafe(24)  # only this chat's host may drive the server
     return ChatTurnPlan(agent_id, provider, root, (root / config.cwd).resolve(), argv, mode, session_id,
-                        tuple(config.command), model, effort, images, turn_environment(config.command, mode=mode), lean)
+                        tuple(config.command), model, effort, images, env, network, allow, live, lean)
 
 
 def agent_options_payload(service: Any, agent_id: str) -> dict[str, Any]:
@@ -140,17 +156,20 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
         emit({"type": "notice", "message": message, "error": is_error})
 
     argv = plan.argv
+    staged: list[Path] = []
     if plan.images:
-        staged = _stage_images(plan.project_root, plan.images)
+        staged = stage_images(plan.project_root, plan.images)
         if plan.provider in IMAGE_ARGUMENT_PROVIDERS:
             argv = turn_command(plan.command, mode=plan.mode, session_id=plan.session_id, model=plan.model,
-                                effort=plan.effort, images=[str(path) for path in staged], ephemeral=plan.lean)
+                                effort=plan.effort, images=[str(path) for path in staged], ephemeral=plan.lean,
+                                network=plan.network, allow=plan.allow, live=plan.live)
             argv[0] = resolve_executable(argv[0])
         else:
             listed = "\n".join(f"- {path.relative_to(plan.project_root).as_posix()}" for path in staged)
             prompt += f"\n\nImágenes adjuntas por el usuario (ábrelas con la herramienta Read antes de responder):\n{listed}"
     if plan.session_id is None and not plan.lean:
-        context = new_chat_prompt(str(plan.project_root)) + prepare_new_chat(plan.project_root, notify)
+        recovered = prepare_new_chat(plan.project_root, notify)  # compacts the context files first
+        context = new_chat_prompt(str(plan.project_root)) + inline_project_context(plan.project_root, provider=plan.provider) + recovered
         prompt = f"{context}\n\n{CHAT_PANEL_REQUEST_MARKER}\n{prompt}"
     started_at = datetime.now(timezone.utc)
     try:
@@ -173,28 +192,42 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
 
     stderr_tail: deque[str] = deque(maxlen=20)
     cancelled = threading.Event()
-    threading.Thread(target=_drain, args=(process.stderr, stderr_tail), daemon=True).start()
+    assert process.stdin is not None
+    live = _live_driver(plan, process, staged)
+    threading.Thread(target=drain, args=(process.stderr, stderr_tail), daemon=True).start()
     if cancel_input is not None:
-        threading.Thread(target=_watch_cancel, args=(cancel_input, process, cancelled), daemon=True).start()
+        threading.Thread(target=watch_cancel, args=(cancel_input, process, cancelled, live), daemon=True).start()
     try:
-        assert process.stdin is not None
-        process.stdin.write(prompt)
-        process.stdin.close()
+        if live is not None:
+            live.start(prompt)  # stdin stays open: the answers to the agent's questions go through it
+        else:
+            process.stdin.write(prompt)
+            process.stdin.close()
     except OSError:
         pass
 
     session_id = plan.session_id
     assert process.stdout is not None
-    for line in process.stdout:
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    records = live.records(process.stdout) if isinstance(live, LiveOpenCode) else _json_lines(process.stdout)
+    for record in records:
+        if live is not None:
+            controls = live.handle(record)
+            if live.done:
+                live.finish()  # the turn is over: let the agent exit
+            if controls is not None:
+                for event in controls:
+                    if event["type"] == "session":
+                        session_id = event["session_id"]
+                    if not (cancelled.is_set() and event["type"] == "error"):  # stopping it is not a failure
+                        emit(event)
+                continue
         for event in normalize(plan.provider, record):
             if event["type"] == "session":
                 session_id = event["session_id"]
             emit(event)
     exit_code = process.wait()
+    if isinstance(live, LiveOpenCode) and live.stopped_by_us:
+        exit_code = 0  # the server only ends because we stopped it after the turn
     if exit_code != 0 and not cancelled.is_set():
         detail = "\n".join(stderr_tail).strip()
         emit({"type": "error", "message": detail or f"{plan.provider} terminó con código {exit_code}"})
@@ -205,7 +238,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     if plan.lean:
         # Nothing of a one-off question belongs in the memory or the session journal.
         if plan.provider == "OpenCode" and session_id and plan.command:
-            _delete_opencode_session(resolve_executable(plan.command[0]), session_id, plan.cwd)
+            delete_opencode_session(resolve_executable(plan.command[0]), session_id, plan.cwd)
     else:
         capture_after_session(plan.project_root, notify, provider=plan.provider, started_at=started_at,
                               opencode_executable=resolve_executable(plan.command[0]) if plan.provider == "OpenCode" and plan.command else None)
@@ -213,38 +246,29 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     return exit_code
 
 
-def _delete_opencode_session(executable: str, session_id: str, cwd: Path) -> None:
-    """OpenCode cannot skip saving a session, so a lean turn removes it afterwards (best effort)."""
-    try:
-        subprocess.run([executable, "session", "delete", session_id], cwd=cwd, capture_output=True, timeout=20, check=False)
-    except (OSError, subprocess.TimeoutExpired):
-        pass
+def _json_lines(stream: IO[str]) -> Iterator[dict[str, Any]]:
+    for line in stream:
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            yield record
 
 
-def _validated_image(path: Path) -> Path:
-    resolved = path.expanduser().resolve()
-    if resolved.suffix.casefold() not in _IMAGE_SUFFIXES:
-        raise WorkspaceOperationError(f"Formato de imagen no soportado: {resolved.name}")
-    try:
-        size = resolved.stat().st_size
-    except OSError as exc:
-        raise WorkspaceOperationError(f"No encuentro la imagen: {resolved}") from exc
-    if size > _MAX_IMAGE_BYTES:
-        raise WorkspaceOperationError(f"La imagen supera 20 MB: {resolved.name}")
-    return resolved
-
-
-def _stage_images(project_root: Path, images: tuple[Path, ...]) -> list[Path]:
-    """Copy attachments inside the project so every agent mode may read them."""
-    folder = project_root / ATTACHMENTS_DIR
-    folder.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    staged = []
-    for index, source in enumerate(images):
-        target = folder / f"{stamp}-{index}-{source.name}"
-        shutil.copy2(source, target)
-        staged.append(target)
-    return staged
+def _live_driver(plan: ChatTurnPlan, process: subprocess.Popen[str], images: list[Path]) -> LiveClaude | LiveCodex | LiveOpenCode | None:
+    if not plan.live:
+        return None
+    stdin = process.stdin
+    assert stdin is not None
+    if plan.provider == "OpenCode":
+        return LiveOpenCode(process, password=plan.env["OPENCODE_SERVER_PASSWORD"], cwd=plan.cwd, session_id=plan.session_id,
+                            agent=opencode_agent(Access(plan.mode, plan.network, plan.allow)), model=plan.model, effort=plan.effort,
+                            images=images)
+    if plan.provider == "Codex":
+        return LiveCodex(stdin, cwd=plan.cwd, access=Access(plan.mode, plan.network, plan.allow), session_id=plan.session_id,
+                         model=plan.model or configured_model(plan.command), effort=plan.effort, images=images)
+    return LiveClaude(stdin)
 
 
 def json_line_emitter(stream: IO[str] = sys.stdout) -> Emit:
@@ -254,28 +278,3 @@ def json_line_emitter(stream: IO[str] = sys.stdout) -> Emit:
         stream.flush()
 
     return emit
-
-
-def _drain(stream: IO[str] | None, tail: deque[str]) -> None:
-    if stream is None:
-        return
-    for line in stream:
-        if line.strip():
-            tail.append(line.rstrip())
-
-
-def _watch_cancel(source: IO[str], process: subprocess.Popen[str], cancelled: threading.Event) -> None:
-    for line in source:
-        if line.strip() == "cancel":
-            break
-    # EOF also lands here: the caller went away, so never leave the agent running.
-    if process.poll() is not None:
-        return
-    cancelled.set()
-    try:
-        if os.name == "nt":
-            terminate_windows_process_tree(process.pid, process, timeout_seconds=_STOP_TIMEOUT_SECONDS)
-        else:
-            terminate_posix_process_group(process.pid, process, timeout_seconds=_STOP_TIMEOUT_SECONDS)
-    except (OSError, subprocess.TimeoutExpired):
-        process.kill()

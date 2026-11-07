@@ -24,8 +24,15 @@ def test_skills_panel_lists_catalog_and_manages_project_context(
 
     async def use_skills_panel():
         async with app.run_test() as pilot:
+            for _ in range(100):  # a slow runner may not have composed the screen yet
+                if app.query("#tabs"):
+                    break
+                await pilot.pause(0.1)
             app.action_show_skills()
-            await pilot.pause(0.2)
+            for _ in range(50):  # the panel fills in the background: wait for it instead of a fixed pause
+                await pilot.pause(0.1)
+                if app.query_one("#skills-table", DataTable).row_count:
+                    break
             assert app.query_one("#skills-table", DataTable).row_count == 21
             assert app.query_one("#packs-table", DataTable).row_count == 13
             assert app._pack_matches

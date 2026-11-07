@@ -34,3 +34,7 @@ proyecto desde una vista previa y no debe instalar código global de terceros.
   contexto común que puede sincronizarse para otros agentes.
 - Se puede añadir soporte a otros clientes con adapters separados sin cambiar
   este formato ni mezclar políticas del proveedor.
+
+## Actualización: otros agentes
+
+OpenCode lee `.claude/skills/` y Codex lee `.agents/skills/` (verificado con ambos CLI: sin esa carpeta Codex no ve las skills). Los Mods se escriben en `.claude/skills/` y, si el proyecto tiene Codex configurado o `.agents/`, también en `.agents/skills/`, con el mismo marcador y las mismas garantías de backup y no sobrescritura.

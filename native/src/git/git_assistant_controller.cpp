@@ -238,15 +238,19 @@ void GitAssistantController::suggestCommitMessage()
     }
     if (!begin(QStringLiteral("leyendo tus cambios"), QStringLiteral("Se enviará a %1 el resumen y las diferencias (diff) de tus cambios para redactar el mensaje del commit."))) return;
     const int generation = ++m_generation;
-    gather(true, false, 10, [this, generation](const GitAssistContext &context) {
+    const QStringList pending = commitCandidateFiles(m_status);
+    gather(true, false, 10, [this, generation, pending](const GitAssistContext &context) {
         if (generation != m_generation) return;
         const QString agent = currentAgentId();
         disconnect(m_assistant, &GitAssistant::finished, nullptr, nullptr);
-        connect(m_assistant, &GitAssistant::finished, this, [this, generation](const GitAssistantResult &result) {
+        connect(m_assistant, &GitAssistant::finished, this, [this, generation, pending](const GitAssistantResult &result) {
             if (generation != m_generation) return;
             setBusy(false, QString());
             if (result.cancelled) return emit failed(QStringLiteral("Cancelado."));
-            const QString message = result.ok() ? cleanCommitMessage(result.text) : QString();
+            const QList<GitCommitGroup> plan = result.ok() ? parseCommitPlan(result.text, pending) : QList<GitCommitGroup>();
+            if (plan.size() > 1) return emit commitPlanReady(plan, labelWithModel());
+            // One topic (or a plain answer): a single message, as before.
+            const QString message = plan.size() == 1 ? plan.first().message : (result.ok() ? cleanCommitMessage(result.text) : QString());
             if (message.isEmpty()) return emit failed(result.error.isEmpty() ? QStringLiteral("El asistente no devolvió un mensaje. Inténtalo otra vez.") : result.error);
             emit commitMessageReady(message, labelWithModel());
         }, Qt::SingleShotConnection);

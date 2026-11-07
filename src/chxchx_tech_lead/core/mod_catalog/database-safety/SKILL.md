@@ -1,0 +1,3 @@
+Cada cambio de esquema va en una migración versionada y revisable, nunca editada a mano en producción. Prefiere cambios compatibles hacia atrás (añadir antes de quitar, rellenar datos, luego retirar) y describe cómo revertir. Antes de operaciones destructivas pide confirmación y comprueba que existe un respaldo.
+
+Usa consultas parametrizadas, transacciones donde haya varias escrituras y revisa el plan (`EXPLAIN`) antes de crear índices; un índice nuevo debe justificarse con una consulta real. Con Prisma, regenera el cliente tras cambiar el esquema y no mezcles `db push` con migraciones. No ejecutes SQL contra datos reales sin que el usuario lo pida expresamente.

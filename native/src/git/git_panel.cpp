@@ -1,5 +1,7 @@
 #include "git_panel.hpp"
 
+#include "git_commit_plan_view.hpp"
+
 #include "git_advice_dialog.hpp"
 #include "git_assistant_bar.hpp"
 #include "git_branches_view.hpp"
@@ -173,6 +175,16 @@ GitPanel::GitPanel(QString projectPath, QWidget *parent)
         m_changes->setAssistantNote(QStringLiteral("Sugerido por %1. Revísalo y edítalo antes de guardar.").arg(agent));
         showToast(QStringLiteral("Mensaje sugerido. Puedes editarlo antes de guardar."), false);
     });
+    m_plan = new GitCommitPlanView(this);
+    m_changes->insertPlanView(m_plan);
+    connect(m_assistant, &GitAssistantController::commitPlanReady, this, [this](const QList<GitCommitGroup> &plan, const QString &agent) {
+        m_tabs->setCurrentIndex(ChangesTab);
+        m_plan->setPlan(plan, agent);
+        preparePlanGroup(0);
+        showToast(QStringLiteral("Agrupé los cambios en %1 commits. Revisa el primero y guárdalo; luego prepara el siguiente.").arg(plan.size()), false);
+    });
+    connect(m_plan, &GitCommitPlanView::prepareRequested, this, [this](int index) { preparePlanGroup(index); });
+    connect(m_plan, &GitCommitPlanView::dismissed, this, [this] { m_plan->setPlan({}, QString()); });
     connect(m_assistant, &GitAssistantController::adviceReady, this, [this](GitAdviceKind kind, const QString &markdown, const QString &agent) {
         m_lastAdvice = markdown;
         if (!m_adviceDialogs) return;
@@ -192,6 +204,32 @@ GitPanel::GitPanel(QString projectPath, QWidget *parent)
 }
 
 GitPanel::~GitPanel() = default;
+
+// Makes the commit be the group's files and nothing else from the plan, and puts its message in the box.
+void GitPanel::preparePlanGroup(int index)
+{
+    if (index < 0 || index >= m_plan->groupCount()) return;
+    const GitCommitGroup group = m_plan->plan().at(index);
+    QStringList planned;
+    for (const GitCommitGroup &other : m_plan->plan()) planned << other.files;
+    QStringList staged;
+    for (const GitEntry &entry : m_status.stagedEntries()) staged << entry.path;
+    QStringList outside;
+    for (const QString &path : staged) if (planned.contains(path) && !group.files.contains(path)) outside << path;
+    const auto stageGroup = [this, group] {
+        m_repository->stage(group.files, [this, group](const GitResult &result) {
+            if (!result.ok()) return showToast(QStringLiteral("No pude preparar los archivos de este commit."), true);
+            m_changes->setMessage(group.message);
+            m_changes->setAssistantNote(QStringLiteral("Commit preparado con %1 archivo(s). Revísalo y guárdalo.").arg(group.files.size()));
+            refresh();
+        });
+    };
+    if (outside.isEmpty()) return stageGroup();
+    m_repository->unstage(outside, m_status.initial, [this, stageGroup](const GitResult &result) {
+        if (!result.ok()) return showToast(QStringLiteral("No pude separar los archivos de otros commits."), true);
+        stageGroup();
+    });
+}
 
 void GitPanel::scheduleRefresh()
 {
@@ -261,6 +299,13 @@ void GitPanel::applyStatus(const GitStatus &status)
     m_branchButton->setText(status.detached ? QStringLiteral("(sin rama)") : (status.head.isEmpty() ? QStringLiteral("main") : status.head));
     m_syncButton->show();
     m_changes->setStatus(status);
+    if (m_plan != nullptr && m_plan->groupCount() > 0) {
+        // Committed or edited files drop out of the plan; what is left stays proposed.
+        QStringList pending;
+        for (const GitEntry &entry : status.stagedEntries()) pending << entry.path;
+        for (const GitEntry &entry : status.changedEntries()) pending << entry.path;
+        m_plan->setPlan(reconcileCommitPlan(m_plan->plan(), pending), QString());
+    }
     emit explorerStatusChanged(buildExplorerStatus(status, m_repository->root()));
     m_repository->stashList([this](const GitResult &result, const QList<GitStash> &stashes) {
         if (!result.ok()) return;

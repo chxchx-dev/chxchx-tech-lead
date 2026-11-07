@@ -260,3 +260,8 @@ void AgentChatComposer::setFocused(bool focused)
     setProperty("focused", focused);
     repolish(this);
 }
+
+QString AgentChatComposer::text() const
+{
+    return m_input->toPlainText();
+}

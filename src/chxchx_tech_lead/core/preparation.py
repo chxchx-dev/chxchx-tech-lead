@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .bootstrap import initialize_project
-from .mods import ModApplyResult, apply_mods, has_claude_project
+from .mods import ModApplyResult, apply_mods, skill_agents
 from .models import ProjectInfo
 from .trust import trust_project
 
@@ -31,7 +31,7 @@ def prepare_project(
     from ..skills import SkillRegistry, TechPackRegistry, enable_skills, enabled_skills
     from ..skills import sync_project_skills
 
-    claude_enabled = has_claude_project(info.root)
+    claude_enabled = bool(skill_agents(info.root))
     initialized = initialize_project(info, dry_run=dry_run)
     skill_registry = SkillRegistry()
     recommendations = skill_registry.recommendations(info.root)
@@ -61,7 +61,7 @@ def prepare_project(
         except (OSError, ValueError) as exc:
             warnings.append(f"Mods de Claude Code omitidos: {exc}")
         if mod_plan and mod_plan.installed:
-            actions.append("Instalar Mods recomendados de Claude Code: " + ", ".join(mod_plan.installed))
+            actions.append("Instalar Mods recomendados (Claude Code, Codex y OpenCode): " + ", ".join(mod_plan.installed))
     if trust:
         actions.append("Asegurar la confianza local del proyecto al terminar")
 

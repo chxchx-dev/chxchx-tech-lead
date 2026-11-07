@@ -150,6 +150,10 @@ qt_add_executable(chxchx-studio
     src/git/git_repository_remote.cpp
     src/git/git_assistant_prompts.cpp
     src/git/git_assistant_prompts.hpp
+    src/git/git_commit_plan.cpp
+    src/git/git_commit_plan.hpp
+    src/git/git_commit_plan_view.cpp
+    src/git/git_commit_plan_view.hpp
     src/git/git_guide.cpp
     src/git/git_guide.hpp
     src/git/git_assistant.cpp
@@ -196,6 +200,10 @@ qt_add_executable(chxchx-studio
     src/integrations/agent_chat_markdown.hpp
     src/integrations/agent_chat_cards.cpp
     src/integrations/agent_chat_cards.hpp
+    src/integrations/agent_chat_permission.cpp
+    src/integrations/agent_chat_permission.hpp
+    src/integrations/agent_chat_question.cpp
+    src/integrations/agent_chat_question.hpp
     src/integrations/agent_chat_view.cpp
     src/integrations/agent_chat_view.hpp
     src/integrations/agent_chat_usage.cpp
@@ -351,6 +359,8 @@ if(CHXCHX_BUILD_TESTS)
         src/integrations/agent_chat_composer.cpp src/integrations/agent_chat_composer.hpp
         src/integrations/agent_chat_markdown.cpp src/integrations/agent_chat_markdown.hpp
         src/integrations/agent_chat_cards.cpp src/integrations/agent_chat_cards.hpp
+        src/integrations/agent_chat_permission.cpp src/integrations/agent_chat_permission.hpp
+        src/integrations/agent_chat_question.cpp src/integrations/agent_chat_question.hpp
         src/integrations/agent_chat_view.cpp src/integrations/agent_chat_view.hpp
         src/integrations/agent_chat_usage.cpp src/integrations/agent_chat_usage.hpp
         src/integrations/agent_chat_style.hpp
@@ -375,7 +385,8 @@ if(CHXCHX_BUILD_TESTS)
         src/git/git_parsers.cpp src/git/git_parsers.hpp src/git/git_repository.cpp src/git/git_repository_remote.cpp src/git/git_repository.hpp
         src/git/git_explorer.cpp src/git/git_explorer.hpp src/git/git_assistant_prompts.cpp src/git/git_assistant_prompts.hpp
         src/git/git_guide.cpp src/git/git_guide.hpp src/git/git_assistant.cpp src/git/git_assistant.hpp
-        src/git/git_assistant_models.cpp src/git/git_assistant_models.hpp src/git/git_types.hpp)
+        src/git/git_assistant_models.cpp src/git/git_assistant_models.hpp src/git/git_types.hpp
+        src/git/git_commit_plan.cpp src/git/git_commit_plan.hpp)
     target_link_libraries(chxchx-git-smoke PRIVATE Qt6::Core)
     add_test(NAME native-git-smoke COMMAND chxchx-git-smoke)
 
@@ -384,7 +395,7 @@ if(CHXCHX_BUILD_TESTS)
         src/git/git_tree_delegate.cpp src/git/git_diff_view.cpp src/git/git_graph_delegate.cpp
         src/git/git_assistant_prompts.cpp src/git/git_guide.cpp src/git/git_assistant.cpp src/git/git_assistant_models.cpp
         src/git/git_assistant_controller.cpp
-        src/git/git_assistant_bar.cpp src/git/git_advice_dialog.cpp
+        src/git/git_assistant_bar.cpp src/git/git_advice_dialog.cpp src/git/git_commit_plan.cpp src/git/git_commit_plan_view.cpp
         src/git/git_history_view.cpp src/git/git_change_delegate.cpp src/git/git_changes_view.cpp
         src/git/git_branches_view.cpp src/git/git_panel.cpp
         src/git/git_types.hpp src/git/git_parsers.hpp src/git/git_repository.hpp src/git/git_diff_view.hpp

@@ -1,0 +1,4 @@
+name = "chxchx-database-safety"
+description = "Cambios de base de datos reversibles: migraciones, índices y consultas seguras."
+stacks = ["postgres", "prisma"]
+languages = ["sql"]
