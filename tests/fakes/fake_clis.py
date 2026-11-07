@@ -48,7 +48,9 @@ if log:
         stream.write(json.dumps({"tool": "opencode", "argv": args, "stdin": stdin_text,
                                  "permission": os.environ.get("OPENCODE_PERMISSION"), "cwd": os.getcwd()}) + "\n")
 now = int(time.time() * 1000)
-if args[:2] == ["session", "list"]:
+if args[:1] in (["--version"], ["-v"]):
+    print(os.environ.get("FAKE_OPENCODE_VERSION", "1.19.5"))
+elif args[:2] == ["session", "list"]:
     print(json.dumps([{"id": "ses_fake1", "directory": os.getcwd(), "time": {"updated": now}}]))
 elif args[:2] == ["session", "delete"]:
     print("deleted")
@@ -59,7 +61,8 @@ elif args[:1] == ["export"]:
 elif args[:1] == ["models"]:
     print("anthropic/claude-sonnet-5-5\nollama/qwen3-coder:30b-ctx32k")
 elif args[:1] == ["run"]:
-    session = args[args.index("--session") + 1] if "--session" in args else "ses_fake1"
+    session = args[args.index("--session") + 1] if "--session" in args else "ses_fake1" + os.environ.get("FAKE_SESSION_SUFFIX", "")
+    used = int(os.environ.get("FAKE_CONTEXT_TOKENS", "150"))  # what the context holds after this step
     def emit(kind, part=None, **extra):
         print(json.dumps({"type": kind, "timestamp": now, "sessionID": session, **({"part": part} if part else {}), **extra}), flush=True)
     emit("step_start", {"type": "step-start"})
@@ -68,9 +71,12 @@ elif args[:1] == ["run"]:
         sys.exit(1)
     emit("tool_use", {"type": "tool", "callID": "c1", "tool": "bash",
                       "state": {"status": "completed", "input": {"command": "ls"}, "output": "a.py\n"}})
-    emit("text", {"type": "text", "text": "eco: " + stdin_text.strip().splitlines()[-1]})
+    if "liberar tu ventana de contexto" in stdin_text:
+        emit("text", {"type": "text", "text": "## Objetivo\nTRASPASO: migrar el instalador"})
+    else:
+        emit("text", {"type": "text", "text": "eco: " + stdin_text.strip().splitlines()[-1]})
     emit("step_finish", {"type": "step-finish", "reason": "stop", "cost": 0.002,
-                         "tokens": {"input": 100, "output": 7, "reasoning": 0, "cache": {"read": 50, "write": 0}}})
+                         "tokens": {"input": used - 50, "output": 7, "reasoning": 0, "cache": {"read": 50, "write": 0}}})
 '''
 
 

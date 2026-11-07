@@ -50,6 +50,7 @@ class LiveOpenCode:
         self._subscribed = threading.Event()
         self._roles: dict[str, str] = {}
         self._emitted: set[tuple[str, str]] = set()
+        self.model_seen: str | None = None
         self._pending: dict[str, str] = {}  # request id -> "permission" | "question"
         self._questions: dict[str, list[str]] = {}
         self.done = False
@@ -130,6 +131,8 @@ class LiveOpenCode:
         elif kind == "message.updated":
             info = props.get("info") if isinstance(props.get("info"), dict) else {}
             self._roles[str(info.get("id"))] = str(info.get("role"))
+            if info.get("role") == "assistant" and info.get("providerID") and info.get("modelID"):
+                self.model_seen = f"{info['providerID']}/{info['modelID']}"  # to find its context window
         elif kind == "message.part.updated" and isinstance(props.get("part"), dict):
             return self._part(props["part"])
         return []

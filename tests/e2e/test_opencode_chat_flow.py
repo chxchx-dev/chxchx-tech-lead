@@ -132,3 +132,19 @@ def test_a_lean_turn_leaves_no_trace_in_opencode_or_in_the_project(tmp_path: Pat
     assert [call["argv"] for call in fake_bin("opencode") if call["argv"][:2] == ["session", "delete"]] == [["session", "delete", "ses_fake1"]]
     assert not (tmp_path / ".ai" / "history" / "SESSIONS.md").exists()          # no journal entry
     assert not [call for call in fake_bin("opencode") if call["argv"][:2] == ["session", "list"]]  # and no memory capture
+
+
+def test_opencode_two_falls_back_to_headless_turns_with_the_new_flags_and_permissions(tmp_path: Path, fake_bin, monkeypatch) -> None:
+    """The 1.x local server API is gone in 2.x: the chat must still work (approvals come back as cards)."""
+    monkeypatch.setenv("FAKE_OPENCODE_VERSION", "2.2.6")
+    plan = agent_chat.plan_chat_turn(_service(tmp_path), "opencode", mode="workspace-write", session_id=None, live=True, effort="high",
+                                     model="anthropic/claude-sonnet-5-5")
+
+    assert plan.opencode_major == 2 and not plan.live and "OPENCODE_SERVER_PASSWORD" not in plan.env
+    events: list[dict] = []
+    code = agent_chat.run_chat_turn(plan, "hola", events.append)
+
+    run = [call for call in fake_bin("opencode") if call["argv"][:1] == ["run"]][0]
+    assert code == 0 and events[-1]["type"] == "done" and any(e["type"] == "message" for e in events)
+    assert run["argv"][1] == "--standalone" and "--variant" not in run["argv"]
+    assert run["argv"][run["argv"].index("--model") + 1] == "anthropic/claude-sonnet-5-5#high"

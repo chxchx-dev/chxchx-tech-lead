@@ -14,6 +14,7 @@ from typing import Any
 from .chat_history import Conversation, ConversationMessage
 from .opencode_memory import belongs_to_project, run_json
 from .executable_search import find_executable
+from .opencode_export import export_session, updated_value
 
 _CANDIDATES = 5
 
@@ -32,7 +33,7 @@ def latest_opencode_conversation(project_root: Path, *, executable: str | None =
         directory = session.get("directory")
         if not isinstance(directory, str) or not belongs_to_project(directory, root):
             continue
-        exported = run_json([binary, "export", session["id"], "--sanitize"], root)
+        exported = export_session(run_json, binary, session["id"], root)
         return _conversation(session, exported, root)
     return None
 
@@ -61,8 +62,7 @@ def _conversation(session: dict[str, Any], exported: Any, root: Path) -> Convers
 
 
 def _updated_at(session: dict[str, Any]) -> datetime:
-    time_data = session.get("time")
-    updated = time_data.get("updated") if isinstance(time_data, dict) else None
+    updated = updated_value(session)
     if isinstance(updated, (int, float)):
         try:
             return datetime.fromtimestamp(updated / 1000 if updated > 10_000_000_000 else updated, tz=timezone.utc)

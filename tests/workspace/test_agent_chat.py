@@ -157,6 +157,7 @@ print(json.dumps({"type": "step_finish", "sessionID": "ses_fake", "part": {"cost
 
 def test_plan_accepts_opencode_and_carries_the_read_only_permissions(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(agent_chat, "executable_available", lambda executable: True)
+    monkeypatch.setattr(agent_chat, "opencode_major", lambda executable: 1)  # whatever is installed on this machine
     image = tmp_path / "captura.png"
     image.write_bytes(b"png")
 

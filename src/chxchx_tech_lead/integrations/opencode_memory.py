@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from .executable_search import find_executable, with_search_path
+from .opencode_export import export_session, updated_value
 
 
 _SESSION_ID = re.compile(r"[A-Za-z0-9_-]{1,128}\Z")
@@ -46,7 +47,7 @@ def explicit_user_messages(
         if not isinstance(directory, str) or not belongs_to_project(directory, root):
             continue
 
-        exported = run_json([binary, "export", session_id, "--sanitize"], root)
+        exported = export_session(run_json, binary, session_id, root)
         if not isinstance(exported, dict):
             continue
         info = exported.get("info")
@@ -104,8 +105,7 @@ def belongs_to_project(directory: str, project_root: Path) -> bool:
 
 
 def _session_date(session: dict[str, Any]) -> str:
-    time_data = session.get("time")
-    updated = time_data.get("updated") if isinstance(time_data, dict) else None
+    updated = updated_value(session)
     if isinstance(updated, (int, float)):
         timestamp = updated / 1000 if updated > 10_000_000_000 else updated
         try:

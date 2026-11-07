@@ -26,7 +26,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from .agent_access import LEVELS, Access, claude_arguments, codex_arguments, opencode_agent, opencode_environment
+from .agent_access import LEVELS, Access, claude_arguments, codex_arguments
+from .agent_opencode_turn import argv as opencode_argv, environment as opencode_environment
 from .agent_codex_live import server_command
 from .agent_permissions import claude_denials, codex_block
 from .agent_stream_opencode import normalize_opencode
@@ -59,6 +60,7 @@ def turn_command(
     network: bool = False,
     allow: Sequence[str] = (),
     live: bool = False,
+    opencode_major: int | None = None,
 ) -> list[str]:
     """Build the structured-turn argv; the prompt is written to stdin.
 
@@ -101,23 +103,16 @@ def turn_command(
     if provider == "OpenCode" and live:
         return [executable, "serve", "--port", "0", "--hostname", "127.0.0.1"]  # see agent_opencode_live
     if provider == "OpenCode":
-        argv = [executable, "run", *configured, "--format", "json", "--agent", opencode_agent(access)]
-        if session_id:
-            argv += ["--session", session_id]
-        if model:
-            argv += ["--model", model]
-        if effort:
-            argv += ["--variant", effort]
-        for image in images:
-            argv += ["--file", image]
-        return argv
+        return opencode_argv(executable, configured, access, session_id=session_id, model=model, effort=effort,
+                             images=images, major=opencode_major)
     raise ValueError("El chat visual solo está disponible para Codex, Claude Code y OpenCode")
 
 
-def turn_environment(command: Sequence[str], *, mode: str, network: bool = False, allow: Sequence[str] = ()) -> dict[str, str]:
+def turn_environment(command: Sequence[str], *, mode: str, network: bool = False, allow: Sequence[str] = (),
+                     opencode_major: int | None = None) -> dict[str, str]:
     """Extra environment variables a turn needs on top of the inherited one."""
     if provider_for(command) == "OpenCode":
-        return opencode_environment(Access(mode, network, tuple(allow)))
+        return opencode_environment(Access(mode, network, tuple(allow)), opencode_major)
     return {}
 
 

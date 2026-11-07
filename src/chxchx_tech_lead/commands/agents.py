@@ -174,6 +174,8 @@ def agent_chat(
         help="Claude pregunta durante el turno (permisos y preguntas); las respuestas llegan por stdin (uso de Studio)."),
     cancel_on_stdin: bool = typer.Option(False, "--cancel-on-stdin",
         help="Detiene el agente al leer `cancel` o EOF por stdin (uso de Studio)."),
+    auto_release: bool = typer.Option(True, "--auto-release/--no-auto-release",
+        help="Libera el contexto solo al pasar del 90 %: guarda un traspaso y la siguiente sesión continúa con él."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Muestra el comando del turno sin ejecutarlo."),
 ):
     """Ejecuta un turno de chat estructurado y emite eventos JSONL `chxchx.agent-event` v1."""
@@ -182,7 +184,7 @@ def agent_chat(
         text = load_prompt(prompt, prompt_file)
         plan = plan_chat_turn(_workspace_service(path), agent_id, mode=mode, session_id=session or None,
                               model=model or None, effort=effort or None, images=tuple(images), lean=lean,
-                              network=network, allow=tuple(allow), live=live and cancel_on_stdin)
+                              network=network, allow=tuple(allow), live=live and cancel_on_stdin, auto_release=auto_release)
     except WorkspaceOperationError as exc:
         emit({"type": "error", "message": str(exc)})
         emit({"type": "done", "exit_code": 1, "cancelled": False, "session_id": session or None})
