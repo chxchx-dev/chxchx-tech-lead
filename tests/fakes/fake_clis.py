@@ -169,7 +169,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             replies[request_id] = (body or {}).get("reply") if request_id.startswith("per_") else ((body or {}).get("answers") if kind == "reply" else "rejected")
             return self.send_json(True)
         self.send_json({})
-server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+class Server(http.server.ThreadingHTTPServer):
+    def server_bind(self):
+        # The stock version resolves the host name (`getfqdn`), which takes tens of seconds on macOS runners.
+        import socketserver
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = "127.0.0.1", self.socket.getsockname()[1]
+server = Server(("127.0.0.1", 0), Handler)
 print("opencode server listening on http://127.0.0.1:%d" % server.server_port, flush=True)
 server.serve_forever()
 '''
