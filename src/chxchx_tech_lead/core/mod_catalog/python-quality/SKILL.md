@@ -1,0 +1,3 @@
+Trabaja con el entorno del proyecto (`uv run`, `uv sync`) y no instales paquetes globales. Mantén `pyproject.toml` y el lockfile como fuente de dependencias; fija versiones mínimas razonables y no añadas una librería si la biblioteca estándar basta.
+
+Escribe funciones pequeñas con anotaciones de tipo en las interfaces públicas, `pathlib` para rutas, `subprocess` con lista de argumentos (nunca `shell=True` con entrada externa) y excepciones específicas con mensajes accionables. Cubre cada cambio con pytest: casos felices, bordes y errores; usa `tmp_path` y `monkeypatch` en lugar de tocar el entorno real. Antes de cerrar ejecuta `python -m compileall` y la suite completa, y di qué no pudiste probar.

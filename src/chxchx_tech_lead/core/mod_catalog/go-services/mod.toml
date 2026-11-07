@@ -1,0 +1,4 @@
+name = "chxchx-go-services"
+description = "Servicios Go: contextos, errores envueltos y concurrencia sin fugas."
+stacks = ["go"]
+languages = ["go"]

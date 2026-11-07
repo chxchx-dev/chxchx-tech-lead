@@ -21,6 +21,7 @@ class Mod:
     languages: tuple[str, ...]
     always_recommend: bool
     instructions: str
+    infrastructure: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,11 +53,12 @@ class ModRegistry:
 
     def recommendations(self, project: Path) -> list[ModRecommendation]:
         info = detect_project(project)
-        stacks, languages = set(info.stacks), set(info.languages)
+        stacks, languages, infrastructure = set(info.stacks), set(info.languages), set(info.infrastructure)
         result = []
         for mod in self.list():
             reasons = [f"stack detectado: {stack}" for stack in mod.stacks if stack in stacks]
             reasons.extend(f"lenguaje detectado: {lang}" for lang in mod.languages if lang in languages)
+            reasons.extend(f"infraestructura detectada: {item}" for item in mod.infrastructure if item in infrastructure)
             if mod.always_recommend:
                 reasons.append("flujo general recomendado")
             if reasons:
@@ -74,6 +76,7 @@ class ModRegistry:
             description=description,
             stacks=tuple(values.get("stacks", [])),
             languages=tuple(values.get("languages", [])),
+            infrastructure=tuple(values.get("infrastructure", [])),
             always_recommend=bool(values.get("always_recommend", False)),
             instructions=manifest.with_name("SKILL.md").read_text(encoding="utf-8").strip(),
         )

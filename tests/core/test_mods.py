@@ -24,6 +24,23 @@ def test_catalog_recommends_general_and_detected_native_mods(tmp_path: Path) -> 
     assert "qt" in " ".join(recommendations["chxchx-native-qt"].reasons)
 
 
+def test_every_catalog_mod_is_well_formed_and_stack_mods_follow_the_project(tmp_path: Path) -> None:
+    mods = ModRegistry().list()
+    assert len({mod.name for mod in mods}) == len(mods) and len(mods) >= 20
+    assert all(mod.name.startswith("chxchx-") and mod.description and len(mod.instructions) > 200 for mod in mods)
+
+    (tmp_path / "app.py").write_text("print(1)", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+    (tmp_path / "Dockerfile").write_text("FROM python:3.12\n", encoding="utf-8")
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text("on: push\n", encoding="utf-8")
+
+    names = {item.mod.name for item in ModRegistry().recommendations(tmp_path)}
+
+    assert {"chxchx-python-quality", "chxchx-docker-hygiene", "chxchx-github-actions", "chxchx-security-review"} <= names
+    assert not names & {"chxchx-native-qt", "chxchx-web-react", "chxchx-rust-safety", "chxchx-dotnet-csharp"}
+
+
 def test_apply_is_project_local_and_idempotent(tmp_path: Path) -> None:
     names = ("chxchx-model-advisor",)
 
