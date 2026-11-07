@@ -42,7 +42,9 @@ def _turn(root: Path, prompt: str, answer, **options):
 
     done = threading.Event()
     threading.Thread(target=lambda: (agent_chat.run_chat_turn(plan, prompt, emit, cancel_input=reader), done.set()), daemon=True).start()
-    assert done.wait(30), "the turn never finished"
+    if not done.wait(30):
+        import shutil
+        raise AssertionError(f"the turn never finished; argv={plan.argv} which={shutil.which('opencode')} events={events} server={_rows_safe()}")
     writer.close()
     return plan, events
 
@@ -57,6 +59,14 @@ def _allow(event):
 
 def _deny(event):
     return {"type": "answer", "request_id": event["request_id"], "behavior": "deny"}
+
+
+def _rows_safe():
+    log = os.environ.get("FAKE_CLI_LOG")
+    try:
+        return Path(log).read_text(encoding="utf-8")[-1500:] if log else "(sin registro)"
+    except OSError:
+        return "(registro ilegible)"
 
 
 def _rows(fake_bin, tool="opencode-serve"):
