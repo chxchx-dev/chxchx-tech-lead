@@ -81,5 +81,4 @@ def test_the_installed_version_is_read_once_per_executable(tmp_path: Path) -> No
 
     assert agent_opencode_turn.opencode_major(two) == 2 and agent_opencode_turn.opencode_major(one) == 1
     assert agent_opencode_turn.opencode_major(str(tmp_path / "no-existe")) is None
-    assert agent_opencode_turn.supports_live(1) and agent_opencode_turn.supports_live(None) and not agent_opencode_turn.supports_live(2)
     assert agent_opencode_turn.environment(Access("workspace-write", False, ()), 2)["OPENCODE_CONFIG_CONTENT"]

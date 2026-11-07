@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Aprobaciones y preguntas en vivo con OpenCode 2.x.** El chat visual vuelve a pausarse y preguntar al instante también con la 2.x, con un controlador nuevo sobre su API local (`/api/session`, `/prompt`, eventos `/api/event`, respuestas de permisos y formularios). Mismas tarjetas que con la 1.x: «permitir esta vez», «permitir `git *` en este chat» (se vuelve la regla `bash:git *`), denegar (el paso se interrumpe, sin mostrarlo como error) y preguntas con opciones, selección múltiple y respuesta libre. La sesión se reanuda por id, el modelo y el esfuerzo viajan en la referencia del modelo y el nivel de acceso entra como configuración del servidor del turno. Se elige por la versión instalada (1.x sigue con su controlador). Verificado con OpenCode 2.2.6 real (aprobar, denegar, pregunta, regla pre-aprobada, reanudar, cancelar sin procesos sueltos) y con un servidor falso de la 2.x (6 mutaciones, 6 detectadas).
+
 ## 0.5.2 - 2026-11-07
 
 - **Liberación automática de contexto** en el chat visual (Claude, Codex y OpenCode). Al terminar un turno con el contexto en el 90 % o más, el agente escribe un traspaso de la conversación (objetivo, decisiones, lo hecho, estado, pendiente, datos exactos) en esa misma sesión y en solo lectura; el siguiente mensaje arranca una sesión nueva que recibe el traspaso junto con los archivos de contexto del proyecto y sigue sin que se note (un solo aviso discreto). El traspaso vive en `.ai/chat-handoffs/` y se borra al usarse. `agent chat --no-auto-release` lo desactiva. Para modelos de OpenCode que no informan su ventana se lee de su configuración o de su caché de modelos, y Studio ya recibe la ventana para mostrar el porcentaje. Ver ADR 0015.

@@ -4,7 +4,7 @@ OpenCode 2 changed what Studio relies on: `--variant` is gone (the variant trave
 `provider/model#variant`), permissions come from an ordered ruleset (`permissions`, tool `shell`) and not from
 `OPENCODE_PERMISSION`, `run` talks to a shared background service unless `--standalone` is given (so that the
 per-turn configuration reaches it), and the local server of 1.x (`opencode serve`, used for live approvals) has a
-different API. A turn therefore uses `run --standalone` on 2.x; approvals come back as cards between messages.
+different API (`agent_opencode_live2`). A headless turn uses `run --standalone` on 2.x.
 """
 
 from __future__ import annotations
@@ -33,11 +33,6 @@ def opencode_major(executable: str) -> int | None:
         except (OSError, subprocess.TimeoutExpired):
             _VERSIONS[key] = None
     return _VERSIONS[key]
-
-
-def supports_live(major: int | None) -> bool:
-    """The live driver speaks the 1.x server API."""
-    return major is None or major < 2
 
 
 def _rule(action: str, effect: str, resource: str = "*") -> dict[str, str]:

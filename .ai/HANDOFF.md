@@ -10,9 +10,9 @@
 - Hecho con OpenCode (`serve`): probar a mano en Studio con el OpenCode real (aprobar, «en este chat» con patrón, denegar —detiene el turno—, pregunta, cancelar con una solicitud abierta) y comprobar que no quedan procesos `opencode serve` tras cerrar la pestaña.
 - Pendiente: carpetas adicionales (`--add-dir`). El reintento automático de la fase 1 ya conserva el borrador del cuadro de texto.
 
-## OpenCode 2.x y contexto automático (sin publicar aún)
+## OpenCode 2.x y contexto automático (publicados en la 0.5.2; dev sigue en 0.5.3.dev0)
 
-- OpenCode 2.x (`opencode --version`) trae otra API local (`/api/...`, spec en `GET /openapi.json` del servidor): el modo en vivo del chat solo funciona en la 1.x; en la 2.x se usa `run --standalone` con tarjetas entre mensajes. Pendiente: un `LiveOpenCode` para la 2.x (`POST /api/session`, `/api/session/{id}/prompt`, SSE `/api/event`, `permission/{id}/reply`, formularios `/api/session/{id}/form/{id}/reply`).
+- OpenCode 2.x: el modo en vivo usa `agent_opencode_live2.py` (API `/api/...`, spec en `GET /openapi.json` del servidor); 1.x sigue con `agent_opencode_live.py`. Los turnos sin servidor (asistente de Git, CLI) en 2.x usan `run --standalone` (`agent_opencode_turn.py`). Pendiente: probar en Studio con la 2.x real, y subagentes/permisos de sesiones hijas con la 2.x.
 - Liberación automática de contexto al 90 % (ADR 0015): probada con Claude, Codex y OpenCode reales forzando el umbral; falta probarla en Studio con una conversación larga de verdad.
 - Búsqueda de agentes fuera del PATH (`executable_search.py`): hipótesis para «no inicia» en otros PC; la causa probable en instalaciones nuevas era además OpenCode 2.x. Confirmar en la Mac.
 
@@ -24,7 +24,7 @@
 - CI: estuvo rojo desde el primer commit del chat en vivo por pruebas dependientes de plataforma (UTF-8 en Windows, `getfqdn` lento en macOS, pruebas TUI con pausas fijas). Revisar el CI tras cada push. Quedan pruebas TUI con `pause(0.x)` fijas que podrían ser inestables.
 - Pendiente: `--add-dir`, firma de instaladores (secretos), ARM64 nativo de Windows sin ejecutar en hardware real, probar `install.ps1`/Setup.exe en Windows real.
 
-## Instaladores y releases (publicados: 0.5.1 estable y preview dev)
+## Instaladores y releases (publicados: 0.5.2 estable y preview dev)
 
 - Windows: x64 nativo; ARM64 usa el paquete x64 (emulación) salvo que el manifiesto traiga `asset.windows-arm64`; x86 de 32 bits cae a solo CLI. El job `native-windows-arm64` (experimental, compilación cruzada, nunca ejecutado) sube un artefacto que NO va al release: probarlo en un ARM64 real y luego conectarlo a `stage-release` (el instalador y `release_assets.py` ya lo soportan). La `0.5.1` estable debe llevar el arreglo de arquitectura de `install.ps1`.
 

@@ -134,10 +134,10 @@ def test_a_lean_turn_leaves_no_trace_in_opencode_or_in_the_project(tmp_path: Pat
     assert not [call for call in fake_bin("opencode") if call["argv"][:2] == ["session", "list"]]  # and no memory capture
 
 
-def test_opencode_two_falls_back_to_headless_turns_with_the_new_flags_and_permissions(tmp_path: Path, fake_bin, monkeypatch) -> None:
-    """The 1.x local server API is gone in 2.x: the chat must still work (approvals come back as cards)."""
+def test_opencode_two_headless_turns_use_the_new_flags_and_permissions(tmp_path: Path, fake_bin, monkeypatch) -> None:
+    """Without the live server (the Git assistant, the CLI) a 2.x turn is `run --standalone` with the new flags."""
     monkeypatch.setenv("FAKE_OPENCODE_VERSION", "2.2.6")
-    plan = agent_chat.plan_chat_turn(_service(tmp_path), "opencode", mode="workspace-write", session_id=None, live=True, effort="high",
+    plan = agent_chat.plan_chat_turn(_service(tmp_path), "opencode", mode="workspace-write", session_id=None, effort="high",
                                      model="anthropic/claude-sonnet-5-5")
 
     assert plan.opencode_major == 2 and not plan.live and "OPENCODE_SERVER_PASSWORD" not in plan.env
