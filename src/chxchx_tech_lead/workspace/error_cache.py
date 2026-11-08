@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +10,11 @@ from ..core.paths import home_dir
 
 _MAX_ENTRIES = 200
 _MAX_MESSAGE_CHARS = 2400
+_SECRET_ASSIGNMENT = re.compile(
+    r"(?i)(\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|passwd|secret|authorization)\b\s*[:=]\s*)([^\s,;]+)"
+)
+_BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*")
+_KNOWN_TOKEN = re.compile(r"\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,})\b")
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +43,7 @@ def record_error(
             "project": project[:120],
             "project_path": str(project_path)[:500],
             "operation": operation[:120],
-            "message": message[:_MAX_MESSAGE_CHARS],
+            "message": _redact(message)[:_MAX_MESSAGE_CHARS],
         }
     )
     _write_entries(path, entries[-_MAX_ENTRIES:])
@@ -90,3 +96,9 @@ def _write_entries(path: Path, entries: list[dict[str, str]]) -> None:
     with path.open("w", encoding="utf-8") as stream:
         for entry in entries:
             stream.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def _redact(message: str) -> str:
+    message = _SECRET_ASSIGNMENT.sub(r"\1[REDACTED]", message)
+    message = _BEARER_TOKEN.sub("Bearer [REDACTED]", message)
+    return _KNOWN_TOKEN.sub("[REDACTED]", message)

@@ -12,6 +12,7 @@
 #include <functional>
 
 class AgentChatComposer;
+class AgentChatImageDescriptions;
 class AgentChatSettings;
 class AgentChatView;
 class ChatUsageBar;
@@ -97,4 +98,5 @@ private:
     int m_lastMode = 0;
     std::function<bool()> m_confirmFullAccess;
     AgentChatComposer *m_composer = nullptr;
+    AgentChatImageDescriptions *m_imageDescriptions = nullptr;
 };

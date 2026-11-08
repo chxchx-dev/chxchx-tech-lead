@@ -143,6 +143,21 @@ def test_claude_images_are_staged_in_the_project_and_listed_in_the_prompt(tmp_pa
     assert events[1]["text"].startswith("eco: - .ai/chat-attachments/")
 
 
+def test_lean_image_description_removes_only_the_staged_copy(tmp_path: Path, isolated_home) -> None:
+    image = tmp_path / "captura.png"
+    image.write_bytes(b"png")
+    script = tmp_path / "fake_claude.py"
+    script.write_text(FAKE_CLAUDE, encoding="utf-8")
+    plan = agent_chat.ChatTurnPlan("claude", "Claude", tmp_path, tmp_path, [sys.executable, str(script)],
+                                   "read-only", None, ("claude",), images=(image,), lean=True)
+    events: list[dict] = []
+
+    assert agent_chat.run_chat_turn(plan, "Describe la imagen", events.append) == 0
+    assert image.read_bytes() == b"png"
+    assert list((tmp_path / ".ai" / "chat-attachments").iterdir()) == []
+    assert any(event["type"] == "message" for event in events)
+
+
 FAKE_OPENCODE = r"""
 import json, os, sys
 sys.stdout.reconfigure(encoding="utf-8")

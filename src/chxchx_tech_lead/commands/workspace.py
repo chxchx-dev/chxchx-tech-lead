@@ -13,10 +13,30 @@ from ..ui.cli_output import (
 )
 from ..cli_registry import editor_app, workspace_app
 from ..workspace.context_compaction import DEFAULT_BUDGET_CHARS, DEFAULT_KEEP_SECTIONS, compact_context
-from ..workspace.error_cache import record_error
+from ..workspace.error_cache import error_cache_path, list_errors, record_error
 from ..workspace.project_context import workspace_service_for as _workspace_service
 from ..workspace.service import WorkspaceOperationError
 from .workspace_context import inspect_workspace as _workspace_inspection
+
+
+@workspace_app.command("errors")
+def workspace_errors(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    limit: int = typer.Option(50, "--limit", min=1, max=200, help="Cantidad máxima de errores recientes."),
+):
+    """Muestra los errores locales registrados para este proyecto."""
+    errors = list_errors(project_path=path, limit=limit)
+    if not errors:
+        console.print(f"No hay errores guardados para {path.resolve()}.", markup=False)
+    else:
+        for error in errors:
+            console.print(
+                f"{error.occurred_at} · {error.operation}: {error.message}",
+                markup=False,
+                soft_wrap=True,
+            )
+    console.print(f"Caché local: {error_cache_path()}", markup=False, soft_wrap=True)
+
 
 @workspace_app.command("status")
 def workspace_status(

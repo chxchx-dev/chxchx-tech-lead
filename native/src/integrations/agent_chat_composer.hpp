@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QFrame>
+#include <QHash>
+#include <QSet>
 #include <QStringList>
 #include <QTemporaryDir>
 
@@ -24,6 +26,9 @@ public:
     void setText(const QString &text);
     QString text() const;
     void setHint(const QString &hint);
+    void setImageDescriptionCacheProject(const QString &projectPath);
+    void setImageDescriptionBusy(const QString &path, bool busy);
+    void setImageDescription(const QString &path, const QString &markdown, const QString &error = {});
     void focusInput();
     void clear();
     QStringList attachments() const { return m_attachments; }
@@ -33,6 +38,8 @@ public:
 signals:
     void sendRequested(const QString &text, const QStringList &images);
     void stopRequested();
+    void describeImageRequested(const QString &path);
+    void cancelImageDescriptionRequested(const QString &path);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -42,6 +49,8 @@ private:
     bool pasteClipboardImage();
     void updateAttachments();
     void setFocused(bool focused);
+    bool isTemporaryImage(const QString &path) const;
+    void useCachedDescription(const QString &path, const QString &markdown);
 
     QPlainTextEdit *m_input = nullptr;
     QPushButton *m_send = nullptr;
@@ -50,6 +59,11 @@ private:
     QHBoxLayout *m_toolbar = nullptr;
     QLabel *m_hint = nullptr;
     QStringList m_attachments;
+    QString m_descriptionProject;
+    QHash<QString, QString> m_descriptions;
+    QSet<QString> m_useDescriptions;
+    QSet<QString> m_describing;
+    QSet<QString> m_ownedTemporaryImages;
     QTemporaryDir m_pasted;
     bool m_running = false;
     int m_pastedCount = 0;

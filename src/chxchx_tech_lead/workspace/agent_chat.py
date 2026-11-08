@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import IO, Any
 
 from ..integrations.agent_opencode_live import LiveOpenCode
-from ..integrations.agent_opencode_turn import opencode_major, supports_live
+from ..integrations.agent_opencode_live2 import LiveOpenCodeV2
+from ..integrations.agent_opencode_turn import opencode_major
 from ..integrations.executable_search import with_search_path
 from ..integrations.agent_catalog import INSTALL_HINTS, agent_options, codex_limits, executable_available, resolve_executable
 from ..integrations.agent_stream import IMAGE_ARGUMENT_PROVIDERS, normalize, provider_for, turn_command, turn_environment
@@ -31,7 +32,7 @@ from .chat_compaction import (HANDOFF_PROMPT, UsageWatch, consume_handoff, hando
                               save_handoff)
 from .chat_drivers import json_lines, live_driver
 from .chat_options import agent_options_payload  # noqa: F401  (public name kept)
-from .chat_attachments import stage_images, validated_image
+from .chat_attachments import remove_staged_images, stage_images, validated_image
 from .chat_process import delete_opencode_session, drain, watch_cancel
 from .chat_context import capture_after_session, inline_project_context, prepare_new_chat
 from .service import WorkspaceOperationError
@@ -127,7 +128,7 @@ def plan_chat_turn(
     root = service.project.root.resolve()
     handoff = "" if lean else load_handoff(root, provider, session_id)
     major = opencode_major(resolve_executable(config.command[0])) if provider == "OpenCode" else None
-    can_live = live and not lean and provider in LIVE_PROVIDERS and (provider != "OpenCode" or supports_live(major))
+    can_live = live and not lean and provider in LIVE_PROVIDERS
     continued_from, session_id = (session_id, None) if handoff else (None, session_id)
     try:
         argv = turn_command(config.command, mode=mode, session_id=session_id, model=model, effort=effort,
@@ -192,6 +193,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
         )
     except OSError as exc:
         emit({"type": "error", "message": f"No pude iniciar {argv[0]}: {exc}"})
+        if plan.lean:
+            remove_staged_images(plan.project_root, staged)
         emit({"type": "done", "exit_code": 127, "cancelled": False, "session_id": plan.session_id})
         return 127
 
@@ -213,7 +216,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
 
     session_id = plan.session_id
     assert process.stdout is not None
-    records = live.records(process.stdout) if isinstance(live, LiveOpenCode) else json_lines(process.stdout)
+    records = live.records(process.stdout) if isinstance(live, (LiveOpenCode, LiveOpenCodeV2)) else json_lines(process.stdout)
     for record in records:
         if live is not None:
             controls = live.handle(record)
@@ -231,7 +234,9 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
                 session_id = event["session_id"]
             emit(watch.observe(event, getattr(live, "model_seen", None)))
     exit_code = process.wait()
-    if isinstance(live, LiveOpenCode) and live.stopped_by_us:
+    if plan.lean:
+        remove_staged_images(plan.project_root, staged)
+    if isinstance(live, (LiveOpenCode, LiveOpenCodeV2)) and live.stopped_by_us:
         exit_code = 0  # the server only ends because we stopped it after the turn
     if exit_code != 0 and not cancelled.is_set():
         detail = "\n".join(stderr_tail).strip()

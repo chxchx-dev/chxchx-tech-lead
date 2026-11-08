@@ -633,6 +633,12 @@ chxchx-tech agent add opencode --path .
 chxchx-tech agent add ollama-opencode --path .
 ```
 
+Si el proyecto aún no tiene `.ai/chxchx-tech.toml`, inicialízalo primero:
+`chxchx-tech init <RUTA> --dry-run`, revisa la vista previa y repite el comando
+sin `--dry-run`; después vuelve a añadir OpenCode. Los errores de configuración
+y chat quedan en la caché local. Consúltalos con
+`chxchx-tech workspace errors <RUTA>` o desde `Más → Errores` en la TUI y Studio.
+
 La operación es idempotente, conserva el resto de la configuración y crea un
 backup antes de escribir. En Studio, abre `Agentes → Añadir agente`, elige
 OpenCode o OpenCode con Ollama local, revisa la vista previa y confirma. Luego
@@ -765,6 +771,7 @@ chxchx-tech stop [PATH]                atajo para detener procesos gestionados
 
 ```text
 chxchx-tech workspace status [PATH|ALIAS]  inspección sin ejecutar procesos
+chxchx-tech workspace errors [PATH]        muestra errores locales del proyecto
 chxchx-tech workspace trust [PATH]         aprueba el proyecto localmente
 chxchx-tech workspace open [PATH|ALIAS]    prepara sesión y acciones auto_start
 chxchx-tech workspace start [PATH|ALIAS]   inicia sesión y procesos configurados
@@ -1116,8 +1123,17 @@ protegido con contraseña; en él, denegar una acción detiene el turno (así lo
   tokens de la sesión. En Claude también muestra el costo estimado. OpenCode
   informa tokens y costo, pero no la ventana de contexto.
 - 📎 adjunta imágenes; también puedes pegarlas con `Ctrl+V` o arrastrarlas al
-  cuadro de texto. Se copian a `.ai/chat-attachments/`: Codex las recibe con
-  `--image`, OpenCode con `--file` y Claude las lee desde esa ruta.
+  cuadro de texto. El pegado admite imágenes del portapapeles y archivos de
+  imagen copiados. Sin caché, se copian a `.ai/chat-attachments/`: Codex las
+  recibe con `--image`, OpenCode con `--file` y Claude las lee desde esa ruta.
+- En cada adjunto, **✦** genera bajo demanda una descripción Markdown con el
+  agente seleccionado en modo de solo lectura y sin guardar sesión. Se guarda
+  en `.ai/cache/image-descriptions/`, identificada por SHA-256; al volver a
+  adjuntar esa misma imagen se usa el Markdown por defecto, con opción de enviar
+  la imagen original si todavía existe. La caché vence a los 30 días y conserva
+  hasta 200 descripciones. Si la imagen vino del portapapeles, su copia temporal
+  se elimina cuando el Markdown se guardó correctamente; los archivos elegidos
+  desde el disco no se borran. No se genera ni se envía nada al agente al pegar.
 - Si el agente no está instalado, el chat lo indica y muestra el comando para
   instalarlo.
 

@@ -142,7 +142,18 @@ jobs:
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: ./scripts/sign-windows.ps1 -Files build-native/Release/chxchx-studio.exe
       - name: Create native install package
-        run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages
+        shell: bash
+        run: |
+          # Building a DMG sometimes fails with "Resource busy" on the macOS runners: retry instead of failing the release.
+          for attempt in 1 2 3; do
+            if cpack --config build-native/CPackConfig.cmake -C Release -B build-native/packages; then exit 0; fi
+            echo "::warning::cpack failed (attempt $attempt of 3)"
+            if [ "$RUNNER_OS" = "macOS" ]; then
+              for volume in /Volumes/ChxChx*; do [ -d "$volume" ] && hdiutil detach -force "$volume" || true; done
+            fi
+            sleep 20
+          done
+          exit 1
       - name: Sign and notarize the macOS package
         if: runner.os == 'macOS' && env.SIGN_MACOS == 'true'
         shell: bash
@@ -422,18 +433,25 @@ jobs:
           set -euo pipefail
           export PATH="$HOME/.local/bin:$PATH"
           launcher=chxchx-studio; [[ "$CHANNEL" == dev ]] && launcher=chxchx-studio-dev
-          bash dist/release/install.sh --channel "$CHANNEL" --dry-run
+          # A failing installer step puts the end of its output in the annotation (the job log is not visible from outside).
+          step() {
+            if "$@" >step.log 2>&1; then cat step.log; return 0; fi
+            cat step.log
+            echo "::error title=Falló: $*::$(tail -n 25 step.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+            return 1
+          }
+          step bash dist/release/install.sh --channel "$CHANNEL" --dry-run
           test ! -e "$HOME/.local/bin/$launcher"
-          bash dist/release/install.sh --channel "$CHANNEL"
+          step bash dist/release/install.sh --channel "$CHANNEL"
           if ! "$launcher" --version; then
             echo "::error title=Studio no arranca::$(ldd "$(ls -d "$HOME"/.local/opt/chxchx-studio/*/bin/chxchx-studio | head -1)" 2>&1 | grep 'not found' | tr '\n' ' ')"
             exit 1
           fi
           chxchx-tech --help >/dev/null
-          bash dist/release/install.sh --channel "$CHANNEL" --update
+          step bash dist/release/install.sh --channel "$CHANNEL" --update
           "$launcher" --version
-          bash dist/release/install.sh --uninstall --dry-run
-          bash dist/release/install.sh --uninstall
+          step bash dist/release/install.sh --uninstall --dry-run
+          step bash dist/release/install.sh --uninstall
           test ! -e "$HOME/.local/bin/$launcher"
           test ! -e "$HOME/.local/bin/chxchx-tech"
       - name: Install, launch, update and uninstall (Windows)

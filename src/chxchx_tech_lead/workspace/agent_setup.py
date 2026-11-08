@@ -59,7 +59,10 @@ def add_agent(root: Path, provider_id: str, *, dry_run: bool = False) -> AgentSe
         original = config_path.read_bytes()
         config = tomllib.loads(original.decode("utf-8"))
     except FileNotFoundError as exc:
-        raise AgentSetupError("No existe .ai/chxchx-tech.toml; ejecuta `chxchx-tech init` primero.") from exc
+        raise AgentSetupError(
+            f"No existe {config_path}. Inicializa el proyecto con `chxchx-tech init \"{project_root}\" "
+            "--dry-run`, revisa la vista previa y repite sin `--dry-run` antes de volver a añadir OpenCode."
+        ) from exc
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise AgentSetupError(f"No pude leer la configuración del proyecto: {exc}") from exc
 

@@ -1,5 +1,6 @@
 #include "agent_chat_widget.hpp"
 #include "agent_chat_composer.hpp"
+#include "agent_chat_image_descriptions.hpp"
 #include "agent_chat_settings.hpp"
 #include "agent_chat_style.hpp"
 #include "agent_chat_usage.hpp"
@@ -92,7 +93,26 @@ AgentChatWidget::AgentChatWidget(QString projectPath, QString agentId, QString c
     auto *footerLayout = new QVBoxLayout(footer);
     footerLayout->setContentsMargins(16, 6, 16, 14);
     m_composer = new AgentChatComposer(footer);
+    m_composer->setImageDescriptionCacheProject(m_projectPath);
     m_settings = new AgentChatSettings(m_projectPath, m_agentId, m_cliProgram, m_composer);
+    m_imageDescriptions = new AgentChatImageDescriptions(m_cliProgram, m_projectPath, m_agentId, this);
+    connect(m_composer, &AgentChatComposer::describeImageRequested, this, [this](const QString &path) {
+        if (isRunning()) {
+            m_composer->setHint(QStringLiteral("Espera a que termine el turno actual antes de describir la imagen."));
+            return;
+        }
+        m_imageDescriptions->describe(path, m_settings->model(), m_settings->effort());
+    });
+    connect(m_composer, &AgentChatComposer::cancelImageDescriptionRequested, this,
+        [this](const QString &path) {
+            if (m_imageDescriptions->currentImage() == path) m_imageDescriptions->cancel();
+        });
+    connect(m_imageDescriptions, &AgentChatImageDescriptions::busyChanged, this,
+        [this](bool busy, const QString &path) { m_composer->setImageDescriptionBusy(path, busy); });
+    connect(m_imageDescriptions, &AgentChatImageDescriptions::finished, this,
+        [this](const ImageDescriptionResult &result) {
+            m_composer->setImageDescription(result.imagePath, result.markdown, result.error);
+        });
     m_mode = new ChatPillPicker(m_composer);
     m_mode->addItem(QStringLiteral("🔒 Solo lectura"), QStringLiteral("read-only"));
     m_mode->addItem(QStringLiteral("✎ Editar archivos"), QStringLiteral("workspace-write"));
@@ -194,6 +214,10 @@ void AgentChatWidget::sendMessage(const QString &text, const QStringList &images
 {
     const QString message = text.trimmed();
     if (message.isEmpty() || isRunning() || !m_available) return;
+    if (m_imageDescriptions->isBusy()) {
+        m_composer->setHint(QStringLiteral("Espera a que termine o cancela la descripción de imagen antes de enviar."));
+        return;
+    }
     if (m_cliProgram.isEmpty()) {
         m_composer->setHint(QStringLiteral("No se encontró chxchx-tech. Configura CHXCHX_TECH_CLI o añádelo al PATH."));
         return;

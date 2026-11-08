@@ -4,6 +4,7 @@ import importlib.util
 from typer.testing import CliRunner
 
 from chxchx_tech_lead.cli import app
+from chxchx_tech_lead.workspace.error_cache import record_error
 
 
 runner = CliRunner()
@@ -47,6 +48,23 @@ def test_workspace_trust_allows_uninitialized_project(tmp_path: Path, monkeypatc
     assert result.exit_code == 0, result.stdout
     assert "proyecto confiable" in result.stdout
     assert (tmp_path / "global" / "trusted_projects.json").exists()
+
+
+def test_workspace_errors_lists_only_the_selected_project(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    other = tmp_path / "other"
+    project.mkdir()
+    other.mkdir()
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "global"))
+    record_error(project="project", project_path=project, operation="agent add", message="Missing config")
+    record_error(project="other", project_path=other, operation="build", message="Other error")
+
+    result = runner.invoke(app, ["workspace", "errors", str(project)])
+
+    assert result.exit_code == 0, result.stdout
+    assert "agent add: Missing config" in result.stdout
+    assert "Other error" not in result.stdout
+    assert "errors.jsonl" in result.stdout
 
 
 def test_process_list_reports_empty_configuration(tmp_path: Path, monkeypatch):

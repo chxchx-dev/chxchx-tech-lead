@@ -1,6 +1,7 @@
 #include "../src/integrations/agent_chat_markdown.hpp"
 #include "../src/integrations/agent_chat_model.hpp"
 #include "../src/integrations/agent_chat_composer.hpp"
+#include "../src/integrations/agent_chat_image_descriptions.hpp"
 #include "../src/integrations/agent_chat_permission.hpp"
 #include "../src/integrations/agent_chat_question.hpp"
 #include "../src/integrations/agent_chat_usage.hpp"
@@ -8,8 +9,18 @@
 #include "../src/integrations/agent_chat_widget.hpp"
 
 #include <QApplication>
+#include <QBuffer>
+#include <QClipboard>
 #include <QElapsedTimer>
+#include <QDateTime>
+#include <QFileInfo>
+#include <QFile>
 #include <QImage>
+#include <QKeyEvent>
+#include <QMimeData>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QToolButton>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -52,7 +63,27 @@ int fakeOptions(const QStringList &arguments)
 // Stands in for `chxchx-tech agent chat` so the smoke test runs on every OS.
 int fakeCli(const QStringList &arguments)
 {
-    const QString prompt = arguments.value(arguments.indexOf(QStringLiteral("--prompt")) + 1);
+    QString prompt;
+    if (arguments.contains(QStringLiteral("--prompt-file"))) {
+        QFile file(arguments.value(arguments.indexOf(QStringLiteral("--prompt-file")) + 1));
+        if (file.open(QIODevice::ReadOnly)) prompt = QString::fromUtf8(file.readAll());
+    } else {
+        prompt = arguments.value(arguments.indexOf(QStringLiteral("--prompt")) + 1);
+    }
+    if (arguments.contains(QStringLiteral("--lean"))) {
+        if (!arguments.contains(QStringLiteral("--prompt-file")) || !arguments.contains(QStringLiteral("--image"))
+            || !arguments.contains(QStringLiteral("--cancel-on-stdin"))
+            || arguments.value(arguments.indexOf(QStringLiteral("--model")) + 1) != QStringLiteral("gpt-test")
+            || arguments.value(arguments.indexOf(QStringLiteral("--effort")) + 1) != QStringLiteral("low")) {
+            emitLine({{QStringLiteral("type"), QStringLiteral("error")},
+                {QStringLiteral("message"), QStringLiteral("Faltan opciones de descripción de imagen.")}});
+            return 2;
+        }
+        emitLine({{QStringLiteral("type"), QStringLiteral("message")}, {QStringLiteral("role"), QStringLiteral("assistant")},
+            {QStringLiteral("text"), QStringLiteral("# Descripción simulada\n\n- Texto: ABRIR\n- Observación: pantalla roja.")}});
+        emitLine({{QStringLiteral("type"), QStringLiteral("done")}, {QStringLiteral("exit_code"), 0}});
+        return 0;
+    }
     const bool resumed = arguments.contains(QStringLiteral("--session"));
     emitLine({{QStringLiteral("type"), QStringLiteral("session")}, {QStringLiteral("session_id"), QStringLiteral("fake-1")}});
     if (prompt == QStringLiteral("dormir")) {
@@ -283,6 +314,130 @@ static AgentChatComposer *composerOf(AgentChatWidget &chat)
     return chat.findChild<AgentChatComposer *>();
 }
 
+static int clipboardImageCheck()
+{
+    AgentChatComposer composer;
+    auto *input = composer.findChild<QPlainTextEdit *>(QStringLiteral("composerInput"));
+    if (input == nullptr) return 71;
+
+    QImage pixel(4, 4, QImage::Format_RGB32);
+    pixel.fill(Qt::red);
+    QByteArray png;
+    QBuffer buffer(&png);
+    if (!buffer.open(QIODevice::WriteOnly) || !pixel.save(&buffer, "PNG")) return 72;
+    auto *mime = new QMimeData;
+    mime->setData(QStringLiteral("image/x-chxchx-raw"), png);
+    if (mime->hasImage()) return 74; // force the raw image/* fallback instead of Qt's imageData path
+    QApplication::clipboard()->setMimeData(mime);
+
+    input->setFocus();
+    QKeyEvent paste(QEvent::KeyPress, Qt::Key_V, Qt::ControlModifier);
+    QApplication::sendEvent(input, &paste);
+    if (composer.attachments().size() != 1) return 73;
+
+    QTemporaryDir copiedFiles;
+    const QString copiedImage = copiedFiles.filePath(QStringLiteral("copiada.png"));
+    if (!pixel.save(copiedImage, "PNG")) return 75;
+    AgentChatComposer fileComposer;
+    auto *fileInput = fileComposer.findChild<QPlainTextEdit *>(QStringLiteral("composerInput"));
+    if (fileInput == nullptr) return 76;
+    auto *fileMime = new QMimeData;
+    fileMime->setUrls({QUrl::fromLocalFile(copiedImage)});
+    QApplication::clipboard()->setMimeData(fileMime);
+    fileInput->setFocus();
+    QKeyEvent pasteFile(QEvent::KeyPress, Qt::Key_V, Qt::ControlModifier);
+    QApplication::sendEvent(fileInput, &pasteFile);
+    return fileComposer.attachments() == QStringList{QFileInfo(copiedImage).absoluteFilePath()} ? 0 : 77;
+}
+
+static bool waitDescription(AgentChatImageDescriptions &describer, int timeoutMs = 15000)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (describer.isBusy() && timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        QThread::msleep(10);
+    }
+    QCoreApplication::processEvents();
+    return !describer.isBusy();
+}
+
+static int imageDescriptionCheck()
+{
+    QTemporaryDir project;
+    const QString imagePath = project.filePath(QStringLiteral("captura.png"));
+    QImage image(8, 8, QImage::Format_RGB32);
+    image.fill(Qt::red);
+    if (!image.save(imagePath, "PNG")) return 78;
+
+    AgentChatImageDescriptions describer(QCoreApplication::applicationFilePath(), project.path(), QStringLiteral("codex"));
+    ImageDescriptionResult result;
+    bool done = false;
+    QObject::connect(&describer, &AgentChatImageDescriptions::finished, &describer,
+        [&](const ImageDescriptionResult &value) { result = value; done = true; });
+    describer.describe(imagePath, QStringLiteral("gpt-test"), QStringLiteral("low"));
+    if (!waitDescription(describer) || !done || !result.ok()) return 79;
+    if (!QFileInfo::exists(imagePath) || !result.markdown.contains(QStringLiteral("Observación: pantalla roja"))) return 80;
+    if (AgentChatImageDescriptions::cachePath(project.path(), imagePath).section(QLatin1Char('/'), -1).size() != 67) return 81;
+    if (AgentChatImageDescriptions::cachedDescription(project.path(), imagePath) != result.markdown) return 82;
+
+    AgentChatComposer composer;
+    composer.setImageDescriptionCacheProject(project.path());
+    if (composer.addAttachments({imagePath}) != 1) return 83;
+    QString sentText;
+    QStringList sentImages;
+    QObject::connect(&composer, &AgentChatComposer::sendRequested, &composer,
+        [&](const QString &text, const QStringList &images) { sentText = text; sentImages = images; });
+    auto *send = composer.findChild<QPushButton *>(QStringLiteral("sendButton"));
+    if (send == nullptr) return 84;
+    send->click();
+    if (!sentText.contains(QStringLiteral("Descripción guardada de la imagen"))
+        || !sentText.contains(QStringLiteral("ABRIR")) || !sentImages.isEmpty()) return 85;
+
+    AgentChatComposer originalChoice;
+    originalChoice.setImageDescriptionCacheProject(project.path());
+    if (originalChoice.addAttachments({imagePath}) != 1) return 88;
+    auto *descriptionButton = originalChoice.findChild<QToolButton *>(QStringLiteral("imageDescriptionButton"));
+    if (descriptionButton == nullptr) return 89;
+    descriptionButton->click();
+    QStringList originalImages;
+    QObject::connect(&originalChoice, &AgentChatComposer::sendRequested, &originalChoice,
+        [&](const QString &, const QStringList &images) { originalImages = images; });
+    auto *originalSend = originalChoice.findChild<QPushButton *>(QStringLiteral("sendButton"));
+    if (originalSend == nullptr) return 90;
+    originalSend->click();
+    if (originalImages != QStringList{imagePath}) return 91;
+
+    AgentChatComposer pasted;
+    pasted.setImageDescriptionCacheProject(project.path());
+    auto *input = pasted.findChild<QPlainTextEdit *>(QStringLiteral("composerInput"));
+    auto *mime = new QMimeData;
+    QFile cachedImage(imagePath);
+    if (!cachedImage.open(QIODevice::ReadOnly)) return 86;
+    mime->setData(QStringLiteral("image/png"), cachedImage.readAll());
+    QApplication::clipboard()->setMimeData(mime);
+    input->setFocus();
+    QKeyEvent pasteEvent(QEvent::KeyPress, Qt::Key_V, Qt::ControlModifier);
+    QApplication::sendEvent(input, &pasteEvent);
+    if (pasted.attachments().size() != 1 || QFileInfo::exists(pasted.attachments().first())) return 87;
+    QStringList pastedImages;
+    QObject::connect(&pasted, &AgentChatComposer::sendRequested, &pasted,
+        [&](const QString &text, const QStringList &images) {
+            sentText = text;
+            pastedImages = images;
+        });
+    pasted.findChild<QPushButton *>(QStringLiteral("sendButton"))->click();
+    if (!pastedImages.isEmpty() || !sentText.contains(QStringLiteral("pantalla roja"))) return 92;
+    const QString cachedPath = AgentChatImageDescriptions::cachePath(project.path(), imagePath);
+    QFile expired(cachedPath);
+    if (!expired.open(QIODevice::ReadWrite)
+        || !expired.setFileTime(QDateTime::currentDateTimeUtc().addDays(-31), QFileDevice::FileModificationTime)) return 93;
+    expired.close();
+    if (!AgentChatImageDescriptions::cachedDescription(project.path(), imagePath).isEmpty()
+        || QFileInfo::exists(cachedPath)) return 94;
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     // Read argv before QApplication: Qt consumes options such as --session.
@@ -294,6 +449,8 @@ int main(int argc, char **argv)
         return fakeOptions(arguments);
     QApplication app(argc, argv);
 
+    if (const int failure = clipboardImageCheck()) return failure;
+    if (const int failure = imageDescriptionCheck()) return failure;
     if (const int failure = modelChecks()) return failure;
 
     QTemporaryDir project;

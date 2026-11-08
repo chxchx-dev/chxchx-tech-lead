@@ -86,8 +86,8 @@ inline QString agentChatStyleSheet(const StudioTheme &theme)
         #permissionSkip { background-color: transparent; color: @textMuted@; border: 0; padding: 5px 8px; }
         #permissionSkip:hover { color: @text@; }
 
-        #chatGhost { background-color: transparent; border: 0; color: @textMuted@; padding: 2px 6px; }
-        #chatGhost:hover { color: @selectedText@; background-color: @surfaceHover@; border-radius: 6px; }
+        #chatGhost, #imageDescriptionButton { background-color: transparent; border: 0; color: @textMuted@; padding: 2px 6px; }
+        #chatGhost:hover, #imageDescriptionButton:hover { color: @selectedText@; background-color: @surfaceHover@; border-radius: 6px; }
 
         #errorCard { background-color: @dangerSoft@; border: 1px solid @dangerBorder@; border-radius: 12px; }
         #errorTitle { color: @danger@; font-weight: 700; background: transparent; }
