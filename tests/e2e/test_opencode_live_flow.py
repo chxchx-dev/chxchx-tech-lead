@@ -103,6 +103,19 @@ def test_the_prompt_carries_agent_model_and_effort(tmp_path: Path, fake_bin) -> 
     assert prompts[1]["agent"] == "plan" and "model" not in prompts[1]
 
 
+def test_live_prompt_carries_the_staged_image_as_a_file_part(tmp_path: Path, fake_bin) -> None:
+    image = tmp_path / "captura.png"
+    image.write_bytes(b"png")
+
+    _turn(tmp_path, "Describe la captura", lambda e: None, images=(image,))
+
+    prompt = next(row["prompt"] for row in _rows(fake_bin) if "prompt" in row)
+    image_part = next(part for part in prompt["parts"] if part["type"] == "file")
+    staged = next((tmp_path / ".ai" / "chat-attachments").glob("*captura.png"))
+    assert image_part["mime"] == "image/png" and image_part["filename"].endswith("captura.png")
+    assert staged.as_uri() == image_part["url"] and staged.read_bytes() == b"png"
+
+
 def test_the_permission_policy_is_given_to_the_server(tmp_path: Path, fake_bin) -> None:
     _turn(tmp_path, "hola", lambda e: None, allow=("bash:python3 *",))
     server = _rows(fake_bin)[0]

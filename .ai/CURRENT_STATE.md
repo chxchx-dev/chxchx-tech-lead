@@ -1,5 +1,21 @@
 # Current State
 
+## Release 0.5.3 preparado (2026-11-08)
+
+- Versión estable fijada en `pyproject.toml` y `uv.lock`. Suite Python: 511 passed, 1 skipped, 10 deselected; compilación de Studio y `chxchx-agent-chat-smoke` pasan con Qt 6.11. El binario local informa `ChxChx Studio 0.5.3`; el tag coincide con la versión.
+- Incluye el diagnóstico/registro local de errores de OpenCode y el pegado de imágenes con caché Markdown descritos abajo. Falta el CI/publicador remoto del tag y el QA visual con un modelo real.
+
+## Pegado de imágenes en Studio (2026-11-08)
+
+- El compositor acepta imágenes `image/*` aunque Qt no las marque con `hasImage()`, y archivos de imagen copiados como URL local. **✦** genera una descripción con el agente actual en `--lean`, solo lectura y sin sesión; la guarda atómicamente por SHA-256 en `.ai/cache/image-descriptions/` (30 días, máximo 200). Al reutilizarla, manda el Markdown en lugar de la imagen; conserva la opción de enviar el original cuando existe. Elimina la copia del portapapeles solo después de persistir la descripción; no toca imágenes fuente del usuario. Los turnos `--lean` limpian sus copias de `.ai/chat-attachments` al terminar.
+- Smoke Qt cubre generación, caché, reutilización, envío de imagen original, borrado de la copia pegada, vencimiento y MIME crudo; OpenCode 1.x/2.x cubiertos con E2E. Suite completa: 511 passed, 1 skipped, 10 deselected; `compileall`, build de Studio y smoke Qt pasan. Falta probarlo desde una ventana real de Studio con un modelo de visión.
+
+## OpenCode y registro de errores (2026-11-08)
+
+- `agent add opencode` identifica la ruta del TOML faltante y muestra la inicialización con `--dry-run`. ChxChx registra errores de alta, preflight y chat en la caché local; `chxchx-tech workspace errors <PATH>` permite consultarlos, igual que `Más → Errores` en TUI/Studio. La caché redacta credenciales habituales.
+- Para usar OpenCode en un proyecto sin configuración, inicialízalo primero y vuelve a añadir OpenCode; después vuelve a confiar el proyecto porque cambia el hash de configuración.
+- Suite completa verificada: 511 passed, 1 skipped, 10 deselected. `python -m compileall src` y `git diff --check` también pasan.
+
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
 ## Chat visual: seguridad y acceso (ADR 0014)

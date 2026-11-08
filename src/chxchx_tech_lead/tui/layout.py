@@ -234,7 +234,7 @@ def _conversations() -> ComposeResult:
 
 def _errors() -> ComposeResult:
     with TabPane("Errores", id="errors"):
-        yield Static("Errores recientes de la TUI guardados localmente", id="errors-summary", classes="summary")
+        yield Static("Errores recientes de ChxChx guardados localmente", id="errors-summary", classes="summary")
         with Horizontal(classes="toolbar"):
             yield Button("Actualizar errores", id="btn-errors-refresh")
         with Horizontal(classes="wide"):

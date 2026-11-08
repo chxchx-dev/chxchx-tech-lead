@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -10,6 +11,7 @@ from ..cli_registry import agent_app, workspace_app
 from ..integrations.agent_stream import MODES
 from ..workspace.agent_chat import json_line_emitter, load_prompt, plan_chat_turn, run_chat_turn
 from ..workspace.agent_setup import AgentSetupError, add_agent
+from ..workspace.error_cache import record_error
 from ..workspace.handoff import update_handoff
 from ..workspace.project_context import workspace_service_for as _workspace_service
 from ..workspace.service import WorkspaceOperationError
@@ -26,7 +28,8 @@ def agent_add(
     try:
         result = add_agent(path, provider, dry_run=dry_run)
     except AgentSetupError as exc:
-        console.print(f"[red]✗ {exc}[/]")
+        _record_agent_error(path, "agent add", str(exc))
+        console.print(f"✗ {exc}", style="red", soft_wrap=True)
         raise typer.Exit(code=1)
     if not result.changed:
         console.print(f"[green]✓[/] {result.preview} ({result.path})")
@@ -79,9 +82,11 @@ def agent_start(
         else:
             result = service.start_agent(agent_id, dry_run=dry_run, new_chat=new_chat)
     except WorkspaceOperationError as exc:
+        _record_agent_error(path, "agent start", str(exc))
         console.print(f"[red]✗ {exc}[/]")
         raise typer.Exit(code=1)
     except ValueError as exc:
+        _record_agent_error(path, "agent start", str(exc))
         console.print(f"[red]✗ {exc}[/]")
         raise typer.Exit(code=1)
     if preset is not None or all_agents:
@@ -105,9 +110,11 @@ def agent_attach(
         service.prepare_agents(dry_run=dry_run)
         result = service.attach_agent(agent_id, dry_run=dry_run)
     except WorkspaceOperationError as exc:
+        _record_agent_error(path, "agent attach", str(exc))
         console.print(f"[red]✗ {exc}[/]")
         raise typer.Exit(code=1)
     except ValueError as exc:
+        _record_agent_error(path, "agent attach", str(exc))
         console.print(f"[red]✗ {exc}[/]")
         raise typer.Exit(code=1)
     console.print(f"[green]✓[/] {'DRY RUN: ' if dry_run else ''}{' '.join(result.command)}")
@@ -147,6 +154,7 @@ def agent_preflight(
             additional_active=additional_active,
         )
     except WorkspaceOperationError as exc:
+        _record_agent_error(path, "agent preflight", str(exc))
         console.print(f"[red]✗ {exc}[/]")
         raise typer.Exit(code=1)
     if not agent_ids:
@@ -186,15 +194,44 @@ def agent_chat(
                               model=model or None, effort=effort or None, images=tuple(images), lean=lean,
                               network=network, allow=tuple(allow), live=live and cancel_on_stdin, auto_release=auto_release)
     except WorkspaceOperationError as exc:
+        _record_agent_error(path, "agent chat", str(exc))
         emit({"type": "error", "message": str(exc)})
         emit({"type": "done", "exit_code": 1, "cancelled": False, "session_id": session or None})
         raise typer.Exit(code=1)
     if dry_run:
         emit({"type": "plan", "provider": plan.provider, "argv": plan.argv, "cwd": str(plan.cwd), "mode": plan.mode})
         return
-    exit_code = run_chat_turn(plan, text, emit, cancel_input=sys.stdin if cancel_on_stdin else None)
+    cancelled = False
+
+    def emit_chat_event(event: dict[str, Any]) -> None:
+        nonlocal cancelled
+        emit(event)
+        if event.get("type") == "notice" and event.get("error") is True:
+            _record_agent_error(path, f"agent chat · {plan.provider}", str(event.get("message", "")))
+        if event.get("type") == "done":
+            cancelled = bool(event.get("cancelled"))
+
+    try:
+        exit_code = run_chat_turn(plan, text, emit_chat_event, cancel_input=sys.stdin if cancel_on_stdin else None)
+    except Exception as exc:
+        _record_agent_error(path, f"agent chat · {plan.provider}", f"Fallo interno {type(exc).__name__}: {exc}")
+        raise
     if exit_code != 0:
+        if not cancelled:
+            _record_agent_error(path, f"agent chat · {plan.provider}", f"{plan.provider} terminó con código {exit_code}.")
         raise typer.Exit(code=1)
+
+
+def _record_agent_error(path: Path, operation: str, message: str) -> None:
+    try:
+        record_error(
+            project=path.name or str(path),
+            project_path=path,
+            operation=operation,
+            message=message,
+        )
+    except OSError:
+        pass
 
 
 @agent_app.command("list")
@@ -205,6 +242,7 @@ def agent_list(
     try:
         _print_agent_statuses(_workspace_service(path).agent_statuses())
     except WorkspaceOperationError as exc:
+        _record_agent_error(Path(path), "agent list", str(exc))
         console.print(f"[red]✗ {exc}[/]")
         raise typer.Exit(code=1)
 

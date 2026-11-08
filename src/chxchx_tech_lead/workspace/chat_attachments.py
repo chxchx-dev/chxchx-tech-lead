@@ -37,3 +37,16 @@ def stage_images(project_root: Path, images: tuple[Path, ...]) -> list[Path]:
         shutil.copy2(source, target)
         staged.append(target)
     return staged
+
+
+def remove_staged_images(project_root: Path, staged: list[Path]) -> None:
+    """Remove only copies produced inside this project's attachment directory."""
+    folder = (project_root / ATTACHMENTS_DIR).resolve()
+    for path in staged:
+        candidate = path.absolute()
+        try:
+            if candidate.is_symlink() or candidate.resolve().parent != folder:
+                continue
+            candidate.unlink(missing_ok=True)
+        except OSError:
+            continue

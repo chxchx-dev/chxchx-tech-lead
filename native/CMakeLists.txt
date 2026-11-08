@@ -190,6 +190,8 @@ qt_add_executable(chxchx-studio
     src/integrations/agent_session_widget.hpp
     src/integrations/agent_chat_model.cpp
     src/integrations/agent_chat_model.hpp
+    src/integrations/agent_chat_image_descriptions.cpp
+    src/integrations/agent_chat_image_descriptions.hpp
     src/integrations/agent_chat_widget.cpp
     src/integrations/agent_chat_widget.hpp
     src/integrations/agent_chat_settings.cpp
@@ -354,6 +356,7 @@ if(CHXCHX_BUILD_TESTS)
 
     add_executable(chxchx-agent-chat-smoke tests/agent_chat_smoke.cpp
         src/integrations/agent_chat_model.cpp src/integrations/agent_chat_model.hpp
+        src/integrations/agent_chat_image_descriptions.cpp src/integrations/agent_chat_image_descriptions.hpp
         src/integrations/agent_chat_widget.cpp src/integrations/agent_chat_widget.hpp
         src/integrations/agent_chat_settings.cpp src/integrations/agent_chat_settings.hpp
         src/integrations/agent_chat_composer.cpp src/integrations/agent_chat_composer.hpp

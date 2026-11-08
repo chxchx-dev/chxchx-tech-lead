@@ -1,5 +1,21 @@
 # Handoff
 
+## Release 0.5.3 preparado (2026-11-08)
+
+- Versión estable y lock sincronizados. Validación local: 511 passed, 1 skipped, 10 deselected; Studio y smoke nativo compilados, smoke nativo y `--version` correctos. El tag `v0.5.3` activa el publicador estable de GitHub Actions.
+- Pendiente fuera de CI: probar el botón ✦ desde una ventana de Studio con un modelo de visión real.
+
+## Imágenes pegadas y caché de descripciones (2026-11-08)
+
+- Implementado **✦ Describir y guardar** a demanda con el agente/modelo actual en `--lean`. Genera Markdown con OCR, distribución, observaciones, inferencias e incertidumbres; lo guarda por SHA-256, caduca a los 30 días y limita a 200 entradas. Al readjuntar, el Markdown se usa por defecto; mientras el original esté disponible, el botón permite volver a enviarlo. La copia temporal del portapapeles y las copias de staging de consultas `--lean` se eliminan solo tras completar el guardado/turno; los archivos originales elegidos por el usuario se conservan.
+- Smoke nativo cubre generación simulada, reutilización, vencimiento y eliminación solo de copias del portapapeles; la suite Python pasó (511 passed, 1 skipped, 10 deselected), `compileall` y el build completo de Studio también pasan. Pendiente: probar el botón con un agente/modelo de visión real en Studio y revisar la caché bajo `.ai/cache/image-descriptions/`.
+
+## OpenCode y registro de errores (2026-11-08)
+
+- Causa confirmada del mensaje mostrado: `agent add` necesita `.ai/chxchx-tech.toml`; sin ese archivo OpenCode todavía no está registrado en el workspace.
+- Para habilitarlo en el proyecto afectado: `chxchx-tech init <PATH> --dry-run`, revisar y repetir sin `--dry-run`; luego `chxchx-tech agent add opencode --path <PATH>` o usar Añadir agente en Studio, y volver a confiar el proyecto.
+- Errores de alta, preflight y chat quedan en la caché local. Consultar con `chxchx-tech workspace errors <PATH>` o `Más → Errores` en TUI/Studio. Suite completa: 511 passed, 1 skipped, 10 deselected.
+
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
 ## Chat visual: aprobaciones en vivo (Claude, Codex y OpenCode hechos)
@@ -44,12 +60,6 @@
 
 - Probar a mano con un remoto real (GitHub por HTTPS con gestor de credenciales y por SSH con llave): publicar, enviar, recibir, divergencia + fusión, conflicto + cancelar fusión, y que un remoto sin credenciales falle rápido con el mensaje de ayuda (sin colgar). Probar también cancelar una operación lenta, Apartar/aplicar/eliminar y el color del explorador en un repo grande.
 - Pendiente (fase 3): preparar por bloques, blame, historial por archivo, resolver conflictos con un editor, búsqueda en el historial. Decisión tomada: no ofrecer `rebase` ni envío forzado.
-
-## Visor de Git (fase 1 hecha; probar a mano)
-
-- Probar en Studio con un repo real: abrir la pestaña Git, preparar/quitar/descartar (revisar `.git/chxchx-backups/`), commit con y sin nada preparado, historial en un repo con muchas ramas, cambiar/crear/borrar ramas, un repo sin commits, una carpeta que no es repo, y un repo grande (rendimiento del estado y del historial).
-- Confirmar en el CI de Windows y macOS que `native-git-smoke` y `native-git-ui-smoke` pasan (rutas, `GIT_CONFIG_GLOBAL`, fin de línea).
-- Fase 2: `push`/`pull`/`fetch` con autenticación (sin pedir contraseñas en la interfaz), stash y estado de Git en el árbol de archivos. Fase 3: preparar por bloques, blame, historial por archivo, resolver conflictos y búsqueda en el historial.
 
 ## Último cambio
 

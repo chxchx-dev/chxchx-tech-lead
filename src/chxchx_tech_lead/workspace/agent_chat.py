@@ -32,7 +32,7 @@ from .chat_compaction import (HANDOFF_PROMPT, UsageWatch, consume_handoff, hando
                               save_handoff)
 from .chat_drivers import json_lines, live_driver
 from .chat_options import agent_options_payload  # noqa: F401  (public name kept)
-from .chat_attachments import stage_images, validated_image
+from .chat_attachments import remove_staged_images, stage_images, validated_image
 from .chat_process import delete_opencode_session, drain, watch_cancel
 from .chat_context import capture_after_session, inline_project_context, prepare_new_chat
 from .service import WorkspaceOperationError
@@ -193,6 +193,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
         )
     except OSError as exc:
         emit({"type": "error", "message": f"No pude iniciar {argv[0]}: {exc}"})
+        if plan.lean:
+            remove_staged_images(plan.project_root, staged)
         emit({"type": "done", "exit_code": 127, "cancelled": False, "session_id": plan.session_id})
         return 127
 
@@ -232,6 +234,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
                 session_id = event["session_id"]
             emit(watch.observe(event, getattr(live, "model_seen", None)))
     exit_code = process.wait()
+    if plan.lean:
+        remove_staged_images(plan.project_root, staged)
     if isinstance(live, (LiveOpenCode, LiveOpenCodeV2)) and live.stopped_by_us:
         exit_code = 0  # the server only ends because we stopped it after the turn
     if exit_code != 0 and not cancelled.is_set():

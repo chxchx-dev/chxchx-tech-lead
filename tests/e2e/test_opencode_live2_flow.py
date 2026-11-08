@@ -69,6 +69,20 @@ def test_a_plain_turn_goes_through_the_v2_api(tmp_path: Path, fake_bin) -> None:
     assert create["location"] == {"directory": str(tmp_path.resolve())}
 
 
+def test_live_prompt_carries_the_staged_image_file(tmp_path: Path, fake_bin) -> None:
+    image = tmp_path / "captura.png"
+    image.write_bytes(b"png")
+
+    _turn(tmp_path, "Describe la captura", lambda e: None, images=(image,))
+
+    prompt = next(row["prompt"] for row in _rows(fake_bin) if "prompt" in row)
+    image_file = prompt["files"][0]
+    staged = next((tmp_path / ".ai" / "chat-attachments").glob("*captura.png"))
+    assert image_file["description"] == "image/png" and image_file["name"].endswith("captura.png")
+    assert image_file["source"]["uri"] == image_file["uri"]
+    assert staged.as_uri() == image_file["uri"] and staged.read_bytes() == b"png"
+
+
 def test_allowing_replies_once_and_the_turn_continues(tmp_path: Path, fake_bin) -> None:
     _, events = _turn(tmp_path, "PERMISO", _answer("allow"))
 

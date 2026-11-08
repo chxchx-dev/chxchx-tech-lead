@@ -1,5 +1,6 @@
 from pathlib import Path
 import tomllib
+from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
@@ -9,6 +10,7 @@ from chxchx_tech_lead.core.registry import register_project
 from chxchx_tech_lead.core.runner import CommandResult
 from chxchx_tech_lead.core.models import ProjectInfo
 from chxchx_tech_lead.integrations.mcp_diagnostics import McpDiagnostic
+from chxchx_tech_lead.workspace.error_cache import list_errors
 
 
 runner = CliRunner()
@@ -51,6 +53,63 @@ def test_agent_add_cli_previews_then_creates_a_backup_and_appends_provider(tmp_p
     backups = list((tmp_path / "chxchx-home" / "backups").rglob("chxchx-tech.toml"))
     assert len(backups) == 1
     assert backups[0].read_bytes() == original
+
+
+def test_agent_add_missing_config_explains_init_and_records_error(tmp_path: Path, monkeypatch):
+    project = tmp_path / "new project"
+    project.mkdir()
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "chxchx-home"))
+
+    result = runner.invoke(app, ["agent", "add", "opencode", "--path", str(project)])
+    errors = list_errors(project_path=project)
+
+    assert result.exit_code == 1
+    assert str(project / ".ai" / "chxchx-tech.toml") in result.stdout
+    assert "chxchx-tech init" in result.stdout
+    assert "--dry-run" in result.stdout
+    assert len(errors) == 1
+    assert errors[0].operation == "agent add"
+    assert "chxchx-tech init" in errors[0].message
+
+
+def test_agent_chat_preflight_error_is_available_in_local_error_log(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "chxchx-home"))
+
+    result = runner.invoke(app, ["agent", "chat", "opencode", "--path", str(project), "--prompt", "hola"])
+    errors = list_errors(project_path=project)
+
+    assert result.exit_code == 1
+    assert len(errors) == 1
+    assert errors[0].operation == "agent chat"
+    assert "workspace" in errors[0].message
+
+
+def test_agent_chat_runtime_failure_records_provider_and_exit_code(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "chxchx-home"))
+    monkeypatch.setattr(
+        "chxchx_tech_lead.commands.agents.plan_chat_turn",
+        lambda *_args, **_kwargs: SimpleNamespace(provider="OpenCode"),
+    )
+
+    def fail_turn(_plan, _prompt, emit, **_kwargs):
+        emit({"type": "error", "message": "provider output with password=hunter2"})
+        emit({"type": "done", "exit_code": 2, "cancelled": False})
+        return 2
+
+    monkeypatch.setattr("chxchx_tech_lead.commands.agents.run_chat_turn", fail_turn)
+
+    result = runner.invoke(app, ["agent", "chat", "opencode", "--path", str(project), "--prompt", "hola"])
+    errors = list_errors(project_path=project)
+
+    assert result.exit_code == 1
+    assert len(errors) == 1
+    assert errors[0].operation == "agent chat · OpenCode"
+    assert errors[0].message == "OpenCode terminó con código 2."
+    assert "hunter2" not in errors[0].message
 
 
 def test_editor_setup_dry_run_and_generation_are_idempotent(tmp_path: Path):
