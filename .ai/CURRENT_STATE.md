@@ -1,9 +1,9 @@
 # Current State
 
-## Release 0.5.3 preparado (2026-11-08)
+## Release 0.5.3 publicado (2026-11-08)
 
 - Versión estable fijada en `pyproject.toml` y `uv.lock`. Suite Python: 511 passed, 1 skipped, 10 deselected; compilación de Studio y `chxchx-agent-chat-smoke` pasan con Qt 6.11. El binario local informa `ChxChx Studio 0.5.3`; el tag coincide con la versión.
-- Incluye el diagnóstico/registro local de errores de OpenCode y el pegado de imágenes con caché Markdown descritos abajo. El primer CI remoto encontró que Rich partía la salida de `workspace errors` en Ubuntu/Python 3.13; se fijó `soft_wrap=True` y el test enfocado pasó con ancho de 40 columnas. Falta repetir el CI del tag y el QA visual con un modelo real.
+- Incluye el diagnóstico/registro local de errores de OpenCode y el pegado de imágenes con caché Markdown descritos abajo. El primer CI encontró un ajuste de línea de Rich en Ubuntu/Python 3.13; `soft_wrap=True` lo corrige. El run 42507440204 pasó las matrices, builds nativos y smoke de instaladores; release `v0.5.3` publicado con 11 assets. Falta QA visual con un modelo de visión real.
 
 ## Pegado de imágenes en Studio (2026-11-08)
 
