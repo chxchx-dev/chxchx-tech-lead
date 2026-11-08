@@ -33,8 +33,9 @@ def workspace_errors(
             console.print(
                 f"{error.occurred_at} · {error.operation}: {error.message}",
                 markup=False,
+                soft_wrap=True,
             )
-    console.print(f"Caché local: {error_cache_path()}", markup=False)
+    console.print(f"Caché local: {error_cache_path()}", markup=False, soft_wrap=True)
 
 
 @workspace_app.command("status")

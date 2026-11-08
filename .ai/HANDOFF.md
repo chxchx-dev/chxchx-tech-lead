@@ -2,7 +2,7 @@
 
 ## Release 0.5.3 preparado (2026-11-08)
 
-- Versión estable y lock sincronizados. Validación local: 511 passed, 1 skipped, 10 deselected; Studio y smoke nativo compilados, smoke nativo y `--version` correctos. El tag `v0.5.3` activa el publicador estable de GitHub Actions.
+- Versión estable y lock sincronizados. Validación local: 511 passed, 1 skipped, 10 deselected; Studio y smoke nativo compilados, smoke nativo y `--version` correctos. El primer CI del tag encontró una salida envuelta por Rich en Ubuntu/Python 3.13; se corrigió y el test enfocado pasa con ancho de 40 columnas. Hay que actualizar el tag `v0.5.3` al commit de la corrección y esperar el CI/publicador.
 - Pendiente fuera de CI: probar el botón ✦ desde una ventana de Studio con un modelo de visión real.
 
 ## Imágenes pegadas y caché de descripciones (2026-11-08)
