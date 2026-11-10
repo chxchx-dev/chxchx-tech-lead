@@ -1,5 +1,18 @@
 # Handoff
 
+> Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
+
+## Alta de agentes sin init y registro de fallos (2026-11-10)
+
+- `agent add` ya no falla si falta `.ai/chxchx-tech.toml`: ejecuta `init --minimal` (solo toml + `.ai/memory`, con backup) y añade el agente; `--dry-run` solo previsualiza. Código en `workspace/agent_autoinit.py`. Tras añadirlo hay que volver a confiar el proyecto.
+- Inicio muestra «Siguiente paso recomendado» (`native/src/main_window_guidance.cpp`): lista preparar → confiar → agente → skills → abrir, marca lo hecho según el estado real y un botón ejecuta el paso actual con los flujos de vista previa existentes. Compila y arranca offscreen; 11 smoke pasan; no se ha visto en ventana real.
+- Studio registra fallos de arranque de agentes (`bridge report-error`, operación `studio:agent-start:<id>`), visibles en Más → Errores. Studio, tras confirmar `agent add`, abre solo la vista previa de trust (la config cambia el hash); el trust sigue siendo una confirmación explícita. Pendiente: probar en Studio real; los cambios siguen sin commit en `dev`. Suite: 510+1 passed tras el ajuste de test_cli.
+
+## Abrir carpeta de proyecto (2026-11-09)
+
+- Implementado sin commit en `dev`. Pendiente: probar a mano el diálogo y la ventana nueva (Fedora, macOS, Windows; en macOS el ejecutable dentro del .app debe relanzarse bien), añadir smoke Qt si se quiere cobertura y documentar el atajo en README/EDITOR-PARITY. `main_window.cpp` sigue sobre 300 líneas (excepción previa).
+- Tip de entorno: con `LD_LIBRARY_PATH` apuntando a la instalación stable de Studio, el build falla con `Qt_6.11 not found`; compilar con `env -u LD_LIBRARY_PATH`.
+
 ## Release 0.5.3 publicado (2026-11-08)
 
 - Versión estable y lock sincronizados. Validación local: 511 passed, 1 skipped, 10 deselected; Studio y smoke nativo compilados, smoke nativo y `--version` correctos. El CI del tag pasó todas las matrices/builds y `installer-smoke` en Ubuntu, Windows y macOS; el release `v0.5.3` se publicó con 11 assets. Su primer intento reveló el ajuste de Rich en Ubuntu/Python 3.13, corregido con `soft_wrap=True`.
@@ -25,41 +38,6 @@
 - Hecho con Codex (`app-server`): probar a mano en Studio con el Codex real (comando fuera del sandbox, archivo fuera del proyecto, denegar, pregunta `request_user_input`), y vigilar cambios del protocolo experimental. El proceso es por turno; un proceso por chat permitiría «permitir en este chat».
 - Hecho con OpenCode (`serve`): probar a mano en Studio con el OpenCode real (aprobar, «en este chat» con patrón, denegar —detiene el turno—, pregunta, cancelar con una solicitud abierta) y comprobar que no quedan procesos `opencode serve` tras cerrar la pestaña.
 - Pendiente: carpetas adicionales (`--add-dir`). El reintento automático de la fase 1 ya conserva el borrador del cuadro de texto.
-
-## OpenCode 2.x y contexto automático (publicados en la 0.5.2; dev sigue en 0.5.3.dev0)
-
-- OpenCode 2.x: el modo en vivo usa `agent_opencode_live2.py` (API `/api/...`, spec en `GET /openapi.json` del servidor); 1.x sigue con `agent_opencode_live.py`. Los turnos sin servidor (asistente de Git, CLI) en 2.x usan `run --standalone` (`agent_opencode_turn.py`). Pendiente: probar en Studio con la 2.x real, y subagentes/permisos de sesiones hijas con la 2.x.
-- Liberación automática de contexto al 90 % (ADR 0015): probada con Claude, Codex y OpenCode reales forzando el umbral; falta probarla en Studio con una conversación larga de verdad.
-- Búsqueda de agentes fuera del PATH (`executable_search.py`): hipótesis para «no inicia» en otros PC; la causa probable en instalaciones nuevas era además OpenCode 2.x. Confirmar en la Mac.
-
-## Estado tras la 0.5.1 (estable publicada, `dev` en 0.5.2.dev0)
-
-- Publicado `v0.5.1` (11 assets, manifiesto estable). Trae chat en vivo de los tres agentes, niveles de acceso, 22 Mods para Claude/Codex/OpenCode, plan de commits por tema en Git y el instalador de Windows ARM64/x86 corregido.
-- Probar a mano en Studio con agentes reales: chat de OpenCode (el fallo «dejó de responder» se atribuyó a que esperar tu respuesta contaba como cuelgue; no se reprodujo en el real), la terminal integrada de OpenCode (¿responde libvterm a las consultas de terminal de OpenCode al arrancar?), el plan de commits en un repo con temas mezclados y la pantalla de Mods.
-- Mods: `.claude/skills/` y `.agents/skills/` no se versionan; `mod apply` los regenera. `chxchx-model-advisor` solo sirve con Claude.
-- CI: estuvo rojo desde el primer commit del chat en vivo por pruebas dependientes de plataforma (UTF-8 en Windows, `getfqdn` lento en macOS, pruebas TUI con pausas fijas). Revisar el CI tras cada push. Quedan pruebas TUI con `pause(0.x)` fijas que podrían ser inestables.
-- Pendiente: `--add-dir`, firma de instaladores (secretos), ARM64 nativo de Windows sin ejecutar en hardware real, probar `install.ps1`/Setup.exe en Windows real.
-
-## Instaladores y releases (publicados: 0.5.2 estable y preview dev)
-
-- Windows: x64 nativo; ARM64 usa el paquete x64 (emulación) salvo que el manifiesto traiga `asset.windows-arm64`; x86 de 32 bits cae a solo CLI. El job `native-windows-arm64` (experimental, compilación cruzada, nunca ejecutado) sube un artefacto que NO va al release: probarlo en un ARM64 real y luego conectarlo a `stage-release` (el instalador y `release_assets.py` ya lo soportan). La `0.5.1` estable debe llevar el arreglo de arquitectura de `install.ps1`.
-
-- Empujar a `dev` y revisar que pasen `installer-smoke` (sobre todo Windows `install.ps1`, que nunca se ejecutó, y macOS DMG), `native-build` con el `.rc`/`.icns` nuevos y NSIS con `/DCHANNEL`. Arreglar lo que aparezca antes de anunciar los comandos.
-- Primer release estable: subir `pyproject.toml` a `X.Y.Z` (sin `.dev0`), mantener `uv.lock` al día, empujar el tag `vX.Y.Z`. Comprobar que `releases/latest/download/install.sh` y `.ps1` responden.
-- Cuando haya certificados: crear los secretos (`WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD`, `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`) y probar `sign-windows.ps1`/`sign-macos.sh` (nunca ejecutados). La firma de macOS recrea el DMG, así que revisa su aspecto.
-- Pendiente menor: `install.sh` no copia el icono si el paquete es anterior al `.png` nuevo; el updater de Studio no actualiza el icono/`.desktop`; Arch/openSUSE no tienen paquete.
-
-## Asistente de Git (hecho; validar con agentes reales)
-
-- Comprobar qué modelo elige el modo automático con cada CLI real (`opencode models`, catálogo de Codex, alias de Claude) y que `--model`/`--effort low` no den error; si el "ligero" elegido no convence, ajustar los patrones de `looksLight` o fijar el modelo desde el menú.
-
-- Probar con un agente real: sugerir mensaje con y sin cambios preparados, consejo ante ramas separadas / envío rechazado / conflictos, cancelar, cambiar de agente, y que el diálogo de consentimiento aparezca la primera vez. Comprobar que ninguna consulta deja sesión (Codex `--ephemeral`, Claude `--no-session-persistence`, OpenCode borra la suya) ni toca `.ai/`.
-- Revisar con un repo que tenga `.env` y secretos en el código que nada sensible sale (ver ADR 0012). Pendiente: resolver conflictos con ayuda del agente en el editor, sugerir cómo dividir un cambio en varios commits.
-
-## Visor de Git (fases 1 y 2 hechas; probar contra un remoto real)
-
-- Probar a mano con un remoto real (GitHub por HTTPS con gestor de credenciales y por SSH con llave): publicar, enviar, recibir, divergencia + fusión, conflicto + cancelar fusión, y que un remoto sin credenciales falle rápido con el mensaje de ayuda (sin colgar). Probar también cancelar una operación lenta, Apartar/aplicar/eliminar y el color del explorador en un repo grande.
-- Pendiente (fase 3): preparar por bloques, blame, historial por archivo, resolver conflictos con un editor, búsqueda en el historial. Decisión tomada: no ofrecer `rebase` ni envío forzado.
 
 ## Último cambio
 

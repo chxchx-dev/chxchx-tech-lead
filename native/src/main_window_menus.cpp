@@ -93,6 +93,23 @@ void MainWindow::buildActions()
 
     addAction(fileMenu, QStringLiteral("file.open"), QStringLiteral("Abrir archivo…"),
         QKeySequence::Open, [this] { openFile(); }, QStringLiteral("document-open"), QStyle::SP_DialogOpenButton);
+    addAction(fileMenu, QStringLiteral("file.openFolder"), QStringLiteral("Abrir carpeta de proyecto…"),
+        QKeySequence(QStringLiteral("Ctrl+Shift+O")), [this] { chooseProjectFolder(); },
+        QStringLiteral("folder-open"), QStyle::SP_DirOpenIcon);
+    auto *recentProjects = fileMenu->addMenu(QStringLiteral("Proyectos recientes"));
+    connect(recentProjects, &QMenu::aboutToShow, this, [this, recentProjects] {
+        recentProjects->clear();
+        const QStringList folders = recentProjectFolders();
+        if (folders.isEmpty()) {
+            recentProjects->addAction(QStringLiteral("Sin proyectos recientes"))->setEnabled(false);
+            return;
+        }
+        for (const QString &folder : folders) {
+            QAction *action = recentProjects->addAction(QStringLiteral("%1 — %2").arg(QDir(folder).dirName(), folder));
+            connect(action, &QAction::triggered, this, [this, folder] { openProjectFolder(folder); });
+        }
+    });
+    fileMenu->addSeparator();
     addAction(fileMenu, QStringLiteral("file.save"), QStringLiteral("Guardar"),
         QKeySequence::Save, [this] { saveFile(); }, QStringLiteral("document-save"), QStyle::SP_DialogSaveButton);
     addAction(fileMenu, QStringLiteral("file.saveAs"), QStringLiteral("Guardar como…"),

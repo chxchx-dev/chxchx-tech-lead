@@ -94,6 +94,19 @@ def bridge_errors(
     _emit_payload(errors_payload, path)
 
 
+@bridge_app.command("report-error")
+def bridge_report_error(
+    path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),
+    operation: str = typer.Argument(..., help="Operación que falló, p. ej. studio:agent-start:opencode."),
+    message: str = typer.Argument(..., help="Mensaje exacto del error."),
+) -> None:
+    """Guarda en la caché local un error detectado por Studio (con credenciales redactadas)."""
+    from ..workspace.error_cache import record_error
+
+    record_error(project=path.name, project_path=path, operation=operation, message=message)
+    typer.echo(json.dumps({"schema": "chxchx.bridge.reported-error", "schema_version": SCHEMA_VERSION}))
+
+
 @bridge_app.command("ci")
 def bridge_ci(
     path: Path = typer.Argument(Path.cwd(), exists=True, file_okay=False, resolve_path=True),

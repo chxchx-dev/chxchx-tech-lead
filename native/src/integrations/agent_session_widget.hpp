@@ -21,6 +21,7 @@ public:
 
 signals:
     void runningStateChanged(bool running);
+    void launchFailed(const QString &message);
 
 private:
     QString m_agentId;

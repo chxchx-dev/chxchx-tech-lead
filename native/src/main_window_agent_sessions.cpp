@@ -17,6 +17,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMessageBox>
+#include <QProcess>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QFileSystemModel>
@@ -169,6 +170,16 @@ void MainWindow::createEmbeddedAgentSession(const QString &agentId, const QStrin
     m_agentSessionProjects.insert(key, m_projectPath);
     connect(session, &AgentSessionWidget::runningStateChanged, this,
         [this] { updateAgentDashboard(); });
+    connect(session, &AgentSessionWidget::launchFailed, this,
+        [this, agentId, projectPath = m_projectPath](const QString &message) {
+            appendOutput(message);
+            statusBar()->showMessage(message, 10000);
+            const QString cli = m_bridgeClient->program();
+            if (!cli.isEmpty()) {
+                QProcess::startDetached(cli, {QStringLiteral("bridge"), QStringLiteral("report-error"),
+                    projectPath, QStringLiteral("studio:agent-start:%1").arg(agentId), message});
+            }
+        });
     updateAgentDashboard();
     connect(session, &QObject::destroyed, this, [this, key] {
         m_agentSessions.remove(key);

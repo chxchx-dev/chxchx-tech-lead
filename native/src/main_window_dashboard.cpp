@@ -3,6 +3,7 @@
 #include "integrations/agent_session_widget.hpp"
 #include "studio_icons.hpp"
 
+#include <QGroupBox>
 #include <QComboBox>
 #include <QDir>
 #include <QFileInfo>
@@ -69,6 +70,8 @@ void MainWindow::showAreaDashboard(const QJsonObject &payload, const QString &ar
         }
     }
     updateHomeActionState();
+    m_homeGuidance->setVisible(area == QStringLiteral("overview"));
+    if (area == QStringLiteral("overview")) updateHomeGuidance(payload);
     const auto addRow = [this](const QString &text, const QString &iconName,
         QStyle::StandardPixmap fallback) {
         auto *item = new QListWidgetItem(studioIcon(iconName, fallback), text, m_dashboardItems);

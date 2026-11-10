@@ -27,7 +27,9 @@ class QCloseEvent;
 class QDialog;
 class QComboBox;
 class QFileSystemModel;
+class QGroupBox;
 class QLabel;
+class QVBoxLayout;
 class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
@@ -85,6 +87,9 @@ private slots:
     void openVisualChat();
     void openLocalModels();
     void addAgentToProject(const QString &provider);
+    void buildHomeGuidance(QWidget *parent, QVBoxLayout *layout);
+    void updateHomeGuidance(const QJsonObject &payload);
+    void runHomeGuidanceAction();
     void selectMemoryNote(QListWidgetItem *item);
     void selectChatConversation(QListWidgetItem *item);
     void openCommandPalette();
@@ -174,6 +179,10 @@ private:
     void restoreEditorSession();
     void saveEditorSession() const;
     QStringList recentProjectFiles() const;
+    QStringList recentProjectFolders() const;
+    void recordRecentProjectFolder(const QString &path);
+    void chooseProjectFolder();
+    void openProjectFolder(const QString &path);
     void recordRecentProjectFile(const QString &path);
 
     QPointer<QWidget> m_editTargetWidget;
@@ -200,6 +209,10 @@ private:
     QLabel *m_dashboardSummary = nullptr;
     QListWidget *m_dashboardItems = nullptr;
     QWidget *m_homeQuickActions = nullptr;
+    QGroupBox *m_homeGuidance = nullptr;
+    QLabel *m_homeGuidanceSteps = nullptr;
+    QPushButton *m_homeGuidanceButton = nullptr;
+    QString m_homeGuidanceAction;
     QComboBox *m_homeAgentSelector = nullptr;
     QPushButton *m_homeTrustButton = nullptr;
     QPushButton *m_homeWorkspaceButton = nullptr;
@@ -286,6 +299,7 @@ private:
     bool m_projectTrusted = false;
     bool m_previewPending = false;
     bool m_governorRetryPending = false;
+    bool m_trustAfterAgentAdd = false;
     bool m_refreshAfterAction = false;
     bool m_refreshQueued = false;
     bool m_restoringEditorSession = false;

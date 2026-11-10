@@ -293,6 +293,8 @@ void MainWindow::buildLayout()
     dashboardLayout->addWidget(m_dashboardTitle);
     dashboardLayout->addWidget(m_areaDescription);
     dashboardLayout->addWidget(m_dashboardSummary);
+    buildHomeGuidance(m_dashboardPage, dashboardLayout);
+    m_homeGuidance->setVisible(m_currentArea == QStringLiteral("overview"));
     dashboardLayout->addWidget(m_homeQuickActions);
     dashboardLayout->addWidget(dashboardListTitle);
     dashboardLayout->addWidget(m_dashboardItems, 1);
