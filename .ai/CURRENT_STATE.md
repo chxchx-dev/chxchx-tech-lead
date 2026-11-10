@@ -2,6 +2,12 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## Alta de agentes sin init y registro de fallos (2026-11-10)
+
+- `agent add` ya no falla si falta `.ai/chxchx-tech.toml`: ejecuta `init --minimal` (solo toml + `.ai/memory`, con backup) y añade el agente; `--dry-run` solo previsualiza. Código en `workspace/agent_autoinit.py`. Tras añadirlo hay que volver a confiar el proyecto.
+- Inicio muestra «Siguiente paso recomendado» (`native/src/main_window_guidance.cpp`): lista preparar → confiar → agente → skills → abrir, marca lo hecho según el estado real y un botón ejecuta el paso actual con los flujos de vista previa existentes. Compila y arranca offscreen; 11 smoke pasan; no se ha visto en ventana real.
+- Studio registra fallos de arranque de agentes (`bridge report-error`, operación `studio:agent-start:<id>`), visibles en Más → Errores. Studio, tras confirmar `agent add`, abre solo la vista previa de trust (la config cambia el hash); el trust sigue siendo una confirmación explícita. Pendiente: probar en Studio real; los cambios siguen sin commit en `dev`. Suite: 510+1 passed tras el ajuste de test_cli.
+
 ## Abrir carpeta de proyecto en Studio (2026-11-09)
 
 - **Archivo → Abrir carpeta de proyecto…** (`Ctrl+Shift+O`) y **Archivo → Proyectos recientes** (hasta 10, en `QSettings`). Abren la carpeta en una ventana nueva de Studio (`QProcess::startDetached` del propio ejecutable), sin tocar terminales/agentes del proyecto actual; Inicio ofrece `Preparar y entrar` y el trust sigue explícito. Código en `native/src/main_window_projects.cpp`. Compila y arranca offscreen; no se ha probado con la ventana real ni en macOS/Windows.
@@ -31,13 +37,6 @@
 - Codex en vivo: `agent_codex_live.py` (`LiveCodex`, cliente JSON-RPC de `codex app-server`), `codex_server_settings` (nivel → sandbox/aprobación), `answer` con `scope`. Probado con un `codex app-server` falso (`tests/e2e/test_codex_live_flow.py`, 4 mutaciones) y con Codex real (aprobar fuera del sandbox, denegar).
 - OpenCode en vivo: `agent_opencode_live.py` (`LiveOpenCode`: `opencode serve` + SSE + replies HTTP, con contraseña por turno), `agent_chat._json_lines/_live_driver`. Probado con un `opencode serve` falso (`tests/e2e/test_opencode_live_flow.py`, 5 mutaciones) y con OpenCode real (permiso permitido y denegado, pregunta; sin procesos huérfanos).
 - Pruebas: `tests/integrations/test_agent_access.py`, e2e de OpenCode, `agent_chat_smoke` (3 mutaciones detectadas). Verificado con claude/opencode/codex reales salvo `bypassPermissions` y `danger-full-access`.
-
-## Instaladores y canales de release (ADR 0013)
-
-- `scripts/install.sh` (Linux/macOS) e `scripts/install.ps1` (Windows): canal stable/dev, `--version`, `--update`, `--cli-only`, `--uninstall`, `--dry-run`, verificación SHA-256 con el manifiesto, nada ajeno se sobrescribe. `scripts/release_assets.py` genera manifiesto + `SHA256SUMS`. Wrappers: `install-studio.*`, `install-studio-fedora.sh`, `bootstrap.*`. `windows-studio-setup.nsi` empaqueta `install.ps1` (`-DCHANNEL`).
-- CMake lee la versión de `pyproject.toml`; Studio responde `--version`/`--help` antes de Qt; iconos en `native/packaging/` (png/ico/icns, `.rc` en Windows). Updater Python (`studio_channels.py`, `studio_update_launcher.py`) sigue el canal instalado; corregido que `parse_manifest` rechazaba `schema_version`.
-- CI: `stage-release` → `installer-smoke` (ubuntu, macOS x2, Windows, servidor localhost + `CHXCHX_TEST_BASE`) → `publish-studio-preview` / `publish-studio-stable` (tag `v*`, con `check-release-tag`). Firma condicionada a secretos (`WINDOWS_CERT_*`, `MACOS_*`, `APPLE_*`).
-- Verificado en Linux: `tests/installers` (37) y `tests/integrations/test_studio_channels.py` (8), build local de Studio con `--version`. **No verificado**: `install.ps1`, NSIS, flujo DMG, `installer-smoke` y publicación real, firma (sin pwsh/macOS/certificados aquí).
 
 ## Estado actual
 

@@ -2,6 +2,13 @@
 
 Secciones archivadas automáticamente, de la más reciente a la más antigua.
 
+## Instaladores y canales de release (ADR 0013)
+
+- `scripts/install.sh` (Linux/macOS) e `scripts/install.ps1` (Windows): canal stable/dev, `--version`, `--update`, `--cli-only`, `--uninstall`, `--dry-run`, verificación SHA-256 con el manifiesto, nada ajeno se sobrescribe. `scripts/release_assets.py` genera manifiesto + `SHA256SUMS`. Wrappers: `install-studio.*`, `install-studio-fedora.sh`, `bootstrap.*`. `windows-studio-setup.nsi` empaqueta `install.ps1` (`-DCHANNEL`).
+- CMake lee la versión de `pyproject.toml`; Studio responde `--version`/`--help` antes de Qt; iconos en `native/packaging/` (png/ico/icns, `.rc` en Windows). Updater Python (`studio_channels.py`, `studio_update_launcher.py`) sigue el canal instalado; corregido que `parse_manifest` rechazaba `schema_version`.
+- CI: `stage-release` → `installer-smoke` (ubuntu, macOS x2, Windows, servidor localhost + `CHXCHX_TEST_BASE`) → `publish-studio-preview` / `publish-studio-stable` (tag `v*`, con `check-release-tag`). Firma condicionada a secretos (`WINDOWS_CERT_*`, `MACOS_*`, `APPLE_*`).
+- Verificado en Linux: `tests/installers` (37) y `tests/integrations/test_studio_channels.py` (8), build local de Studio con `--version`. **No verificado**: `install.ps1`, NSIS, flujo DMG, `installer-smoke` y publicación real, firma (sin pwsh/macOS/certificados aquí).
+
 ## Instalación local stable (2026-11-04)
 
 - ChxChx Studio `0.5.0` instalado desde el release oficial stable en Fedora x86_64 usando `curl -fsSL https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.sh | bash -s -- --no-deps`. El primer intento sin `--no-deps` se detuvo porque `sudo` requería una terminal; las bibliotecas de Qt ya estaban instaladas. `--dry-run` y la instalación verificaron el manifiesto y los SHA-256.

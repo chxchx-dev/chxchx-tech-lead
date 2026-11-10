@@ -24,6 +24,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
+#include <QGroupBox>
 #include <QClipboard>
 #include <QDateTime>
 #include <QSortFilterProxyModel>
@@ -537,6 +538,7 @@ void MainWindow::selectArea(int row)
     if (dashboardArea) {
         m_mainPages->setCurrentWidget(m_dashboardPage);
         m_homeQuickActions->setVisible(m_currentArea == QStringLiteral("overview"));
+        m_homeGuidance->setVisible(m_currentArea == QStringLiteral("overview"));
         m_dashboardTitle->setText(item->text());
         m_dashboardSummary->setText(QStringLiteral("Consultando el estado del proyecto…"));
         m_dashboardItems->clear();
@@ -1092,6 +1094,8 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             return;
         }
         m_governorRetryPending = !m_forceActionArguments.isEmpty();
+        m_trustAfterAgentAdd = arguments.size() >= 2 && arguments.at(0) == QStringLiteral("agent")
+            && arguments.at(1) == QStringLiteral("add");
         runCommand(arguments);
         statusBar()->showMessage(QStringLiteral("Ejecutando operación confirmada…"));
         return;
@@ -1136,6 +1140,21 @@ void MainWindow::finishCommand(int exitCode, QProcess::ExitStatus status)
             m_openAgentAfterRefresh = true;
         } else {
             m_prepareAndEnterAgentId.clear();
+        }
+    }
+    if (m_trustAfterAgentAdd) {
+        m_trustAfterAgentAdd = false;
+        if (status == QProcess::NormalExit && exitCode == 0) {
+            // Añadir un agente cambia la configuración y con ella el hash de trust: se ofrece
+            // reconfirmar de inmediato (con vista previa) en vez de dejar al usuario buscar el botón.
+            QTimer::singleShot(0, this, [this] {
+                const QStringList preview = {QStringLiteral("workspace"), QStringLiteral("trust"),
+                    m_projectPath, QStringLiteral("--dry-run")};
+                const QStringList action = {QStringLiteral("workspace"), QStringLiteral("trust"), m_projectPath};
+                runPreview(preview, action, {}, QStringLiteral("Confirmar confianza del proyecto"));
+            });
+            statusBar()->showMessage(QStringLiteral("Agente añadido; confirma la confianza del proyecto."), 5000);
+            return;
         }
     }
     statusBar()->showMessage(status == QProcess::NormalExit && exitCode == 0

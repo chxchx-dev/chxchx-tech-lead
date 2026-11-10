@@ -2,6 +2,12 @@
 
 Secciones archivadas automáticamente, de la más reciente a la más antigua.
 
+## OpenCode 2.x y contexto automático (publicados en la 0.5.2; dev sigue en 0.5.3.dev0)
+
+- OpenCode 2.x: el modo en vivo usa `agent_opencode_live2.py` (API `/api/...`, spec en `GET /openapi.json` del servidor); 1.x sigue con `agent_opencode_live.py`. Los turnos sin servidor (asistente de Git, CLI) en 2.x usan `run --standalone` (`agent_opencode_turn.py`). Pendiente: probar en Studio con la 2.x real, y subagentes/permisos de sesiones hijas con la 2.x.
+- Liberación automática de contexto al 90 % (ADR 0015): probada con Claude, Codex y OpenCode reales forzando el umbral; falta probarla en Studio con una conversación larga de verdad.
+- Búsqueda de agentes fuera del PATH (`executable_search.py`): hipótesis para «no inicia» en otros PC; la causa probable en instalaciones nuevas era además OpenCode 2.x. Confirmar en la Mac.
+
 ## Estado tras la 0.5.1 (estable publicada, `dev` en 0.5.2.dev0)
 
 - Publicado `v0.5.1` (11 assets, manifiesto estable). Trae chat en vivo de los tres agentes, niveles de acceso, 22 Mods para Claude/Codex/OpenCode, plan de commits por tema en Git y el instalador de Windows ARM64/x86 corregido.

@@ -55,21 +55,23 @@ def test_agent_add_cli_previews_then_creates_a_backup_and_appends_provider(tmp_p
     assert backups[0].read_bytes() == original
 
 
-def test_agent_add_missing_config_explains_init_and_records_error(tmp_path: Path, monkeypatch):
+def test_agent_add_without_config_prepares_project_minimally(tmp_path: Path, monkeypatch):
     project = tmp_path / "new project"
     project.mkdir()
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "chxchx-home"))
 
-    result = runner.invoke(app, ["agent", "add", "opencode", "--path", str(project)])
-    errors = list_errors(project_path=project)
+    preview = runner.invoke(app, ["agent", "add", "opencode", "--path", str(project), "--dry-run"])
+    assert preview.exit_code == 0, preview.stdout
+    assert not (project / ".ai").exists()
 
-    assert result.exit_code == 1
-    assert str(project / ".ai" / "chxchx-tech.toml") in result.stdout
-    assert "chxchx-tech init" in result.stdout
-    assert "--dry-run" in result.stdout
-    assert len(errors) == 1
-    assert errors[0].operation == "agent add"
-    assert "chxchx-tech init" in errors[0].message
+    added = runner.invoke(app, ["agent", "add", "opencode", "--path", str(project)])
+    parsed = tomllib.loads((project / ".ai" / "chxchx-tech.toml").read_text(encoding="utf-8"))
+
+    assert added.exit_code == 0, added.stdout
+    assert parsed["workspace"]["agents"][-1]["command"] == ["opencode"]
+    assert not (project / "AGENTS.md").exists()
+    again = runner.invoke(app, ["agent", "add", "opencode", "--path", str(project)])
+    assert again.exit_code == 0 and "ya configurado" in again.stdout.lower()
 
 
 def test_agent_chat_preflight_error_is_available_in_local_error_log(tmp_path: Path, monkeypatch):

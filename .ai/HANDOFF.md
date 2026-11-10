@@ -2,6 +2,12 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Alta de agentes sin init y registro de fallos (2026-11-10)
+
+- `agent add` ya no falla si falta `.ai/chxchx-tech.toml`: ejecuta `init --minimal` (solo toml + `.ai/memory`, con backup) y añade el agente; `--dry-run` solo previsualiza. Código en `workspace/agent_autoinit.py`. Tras añadirlo hay que volver a confiar el proyecto.
+- Inicio muestra «Siguiente paso recomendado» (`native/src/main_window_guidance.cpp`): lista preparar → confiar → agente → skills → abrir, marca lo hecho según el estado real y un botón ejecuta el paso actual con los flujos de vista previa existentes. Compila y arranca offscreen; 11 smoke pasan; no se ha visto en ventana real.
+- Studio registra fallos de arranque de agentes (`bridge report-error`, operación `studio:agent-start:<id>`), visibles en Más → Errores. Studio, tras confirmar `agent add`, abre solo la vista previa de trust (la config cambia el hash); el trust sigue siendo una confirmación explícita. Pendiente: probar en Studio real; los cambios siguen sin commit en `dev`. Suite: 510+1 passed tras el ajuste de test_cli.
+
 ## Abrir carpeta de proyecto (2026-11-09)
 
 - Implementado sin commit en `dev`. Pendiente: probar a mano el diálogo y la ventana nueva (Fedora, macOS, Windows; en macOS el ejecutable dentro del .app debe relanzarse bien), añadir smoke Qt si se quiere cobertura y documentar el atajo en README/EDITOR-PARITY. `main_window.cpp` sigue sobre 300 líneas (excepción previa).
@@ -32,12 +38,6 @@
 - Hecho con Codex (`app-server`): probar a mano en Studio con el Codex real (comando fuera del sandbox, archivo fuera del proyecto, denegar, pregunta `request_user_input`), y vigilar cambios del protocolo experimental. El proceso es por turno; un proceso por chat permitiría «permitir en este chat».
 - Hecho con OpenCode (`serve`): probar a mano en Studio con el OpenCode real (aprobar, «en este chat» con patrón, denegar —detiene el turno—, pregunta, cancelar con una solicitud abierta) y comprobar que no quedan procesos `opencode serve` tras cerrar la pestaña.
 - Pendiente: carpetas adicionales (`--add-dir`). El reintento automático de la fase 1 ya conserva el borrador del cuadro de texto.
-
-## OpenCode 2.x y contexto automático (publicados en la 0.5.2; dev sigue en 0.5.3.dev0)
-
-- OpenCode 2.x: el modo en vivo usa `agent_opencode_live2.py` (API `/api/...`, spec en `GET /openapi.json` del servidor); 1.x sigue con `agent_opencode_live.py`. Los turnos sin servidor (asistente de Git, CLI) en 2.x usan `run --standalone` (`agent_opencode_turn.py`). Pendiente: probar en Studio con la 2.x real, y subagentes/permisos de sesiones hijas con la 2.x.
-- Liberación automática de contexto al 90 % (ADR 0015): probada con Claude, Codex y OpenCode reales forzando el umbral; falta probarla en Studio con una conversación larga de verdad.
-- Búsqueda de agentes fuera del PATH (`executable_search.py`): hipótesis para «no inicia» en otros PC; la causa probable en instalaciones nuevas era además OpenCode 2.x. Confirmar en la Mac.
 
 ## Último cambio
 
