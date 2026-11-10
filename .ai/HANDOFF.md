@@ -39,14 +39,6 @@
 - Liberación automática de contexto al 90 % (ADR 0015): probada con Claude, Codex y OpenCode reales forzando el umbral; falta probarla en Studio con una conversación larga de verdad.
 - Búsqueda de agentes fuera del PATH (`executable_search.py`): hipótesis para «no inicia» en otros PC; la causa probable en instalaciones nuevas era además OpenCode 2.x. Confirmar en la Mac.
 
-## Estado tras la 0.5.1 (estable publicada, `dev` en 0.5.2.dev0)
-
-- Publicado `v0.5.1` (11 assets, manifiesto estable). Trae chat en vivo de los tres agentes, niveles de acceso, 22 Mods para Claude/Codex/OpenCode, plan de commits por tema en Git y el instalador de Windows ARM64/x86 corregido.
-- Probar a mano en Studio con agentes reales: chat de OpenCode (el fallo «dejó de responder» se atribuyó a que esperar tu respuesta contaba como cuelgue; no se reprodujo en el real), la terminal integrada de OpenCode (¿responde libvterm a las consultas de terminal de OpenCode al arrancar?), el plan de commits en un repo con temas mezclados y la pantalla de Mods.
-- Mods: `.claude/skills/` y `.agents/skills/` no se versionan; `mod apply` los regenera. `chxchx-model-advisor` solo sirve con Claude.
-- CI: estuvo rojo desde el primer commit del chat en vivo por pruebas dependientes de plataforma (UTF-8 en Windows, `getfqdn` lento en macOS, pruebas TUI con pausas fijas). Revisar el CI tras cada push. Quedan pruebas TUI con `pause(0.x)` fijas que podrían ser inestables.
-- Pendiente: `--add-dir`, firma de instaladores (secretos), ARM64 nativo de Windows sin ejecutar en hardware real, probar `install.ps1`/Setup.exe en Windows real.
-
 ## Último cambio
 
 - El test de recuperación del ProcessManager usa un handle simulado. Cubre persistencia, recuperación y selección del terminador sin iniciar un subprocess de larga duración, eliminando la espera de `taskkill` en Windows.
