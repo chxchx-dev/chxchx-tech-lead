@@ -10,6 +10,7 @@ from ..ui.cli_output import console, print_agent_statuses as _print_agent_status
 from ..cli_registry import agent_app, workspace_app
 from ..integrations.agent_stream import MODES
 from ..workspace.agent_chat import json_line_emitter, load_prompt, plan_chat_turn, run_chat_turn
+from ..workspace.agent_autoinit import minimal_init, needs_minimal_init
 from ..workspace.agent_setup import AgentSetupError, add_agent
 from ..workspace.error_cache import record_error
 from ..workspace.handoff import update_handoff
@@ -26,6 +27,14 @@ def agent_add(
 ):
     """Añade OpenCode o OpenCode con el selector de modelos local de Ollama."""
     try:
+        if needs_minimal_init(path):
+            label = "DRY RUN: se prepararía" if dry_run else "Preparando"
+            console.print(f"[cyan]→[/] {label} el proyecto con `init --minimal` (falta .ai/chxchx-tech.toml).")
+            for action in minimal_init(path, dry_run=dry_run):
+                console.print(f"[green]✓[/] {action}")
+            if dry_run:
+                console.print("Después se añadiría el agente; ejecuta sin --dry-run para aplicarlo.")
+                return
         result = add_agent(path, provider, dry_run=dry_run)
     except AgentSetupError as exc:
         _record_agent_error(path, "agent add", str(exc))
