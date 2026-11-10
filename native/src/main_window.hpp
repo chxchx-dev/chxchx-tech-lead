@@ -174,6 +174,10 @@ private:
     void restoreEditorSession();
     void saveEditorSession() const;
     QStringList recentProjectFiles() const;
+    QStringList recentProjectFolders() const;
+    void recordRecentProjectFolder(const QString &path);
+    void chooseProjectFolder();
+    void openProjectFolder(const QString &path);
     void recordRecentProjectFile(const QString &path);
 
     QPointer<QWidget> m_editTargetWidget;

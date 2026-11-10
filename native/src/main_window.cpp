@@ -128,6 +128,7 @@ MainWindow::MainWindow(QString projectPath, QWidget *parent)
     setWindowTitle(QStringLiteral("ChxChx Studio — %1").arg(QFileInfo(m_projectPath).fileName()));
     setWindowIcon(QIcon(QStringLiteral(":/brand/logo-min.png")));
     resize(1440, 920);
+    recordRecentProjectFolder(m_projectPath);
     buildActions();
     buildLayout();
     buildAppearance();

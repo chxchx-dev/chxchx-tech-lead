@@ -2,6 +2,27 @@
 
 Secciones archivadas automáticamente, de la más reciente a la más antigua.
 
+## Instaladores y releases (publicados: 0.5.2 estable y preview dev)
+
+- Windows: x64 nativo; ARM64 usa el paquete x64 (emulación) salvo que el manifiesto traiga `asset.windows-arm64`; x86 de 32 bits cae a solo CLI. El job `native-windows-arm64` (experimental, compilación cruzada, nunca ejecutado) sube un artefacto que NO va al release: probarlo en un ARM64 real y luego conectarlo a `stage-release` (el instalador y `release_assets.py` ya lo soportan). La `0.5.1` estable debe llevar el arreglo de arquitectura de `install.ps1`.
+
+- Empujar a `dev` y revisar que pasen `installer-smoke` (sobre todo Windows `install.ps1`, que nunca se ejecutó, y macOS DMG), `native-build` con el `.rc`/`.icns` nuevos y NSIS con `/DCHANNEL`. Arreglar lo que aparezca antes de anunciar los comandos.
+- Primer release estable: subir `pyproject.toml` a `X.Y.Z` (sin `.dev0`), mantener `uv.lock` al día, empujar el tag `vX.Y.Z`. Comprobar que `releases/latest/download/install.sh` y `.ps1` responden.
+- Cuando haya certificados: crear los secretos (`WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD`, `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`) y probar `sign-windows.ps1`/`sign-macos.sh` (nunca ejecutados). La firma de macOS recrea el DMG, así que revisa su aspecto.
+- Pendiente menor: `install.sh` no copia el icono si el paquete es anterior al `.png` nuevo; el updater de Studio no actualiza el icono/`.desktop`; Arch/openSUSE no tienen paquete.
+
+## Asistente de Git (hecho; validar con agentes reales)
+
+- Comprobar qué modelo elige el modo automático con cada CLI real (`opencode models`, catálogo de Codex, alias de Claude) y que `--model`/`--effort low` no den error; si el "ligero" elegido no convence, ajustar los patrones de `looksLight` o fijar el modelo desde el menú.
+
+- Probar con un agente real: sugerir mensaje con y sin cambios preparados, consejo ante ramas separadas / envío rechazado / conflictos, cancelar, cambiar de agente, y que el diálogo de consentimiento aparezca la primera vez. Comprobar que ninguna consulta deja sesión (Codex `--ephemeral`, Claude `--no-session-persistence`, OpenCode borra la suya) ni toca `.ai/`.
+- Revisar con un repo que tenga `.env` y secretos en el código que nada sensible sale (ver ADR 0012). Pendiente: resolver conflictos con ayuda del agente en el editor, sugerir cómo dividir un cambio en varios commits.
+
+## Visor de Git (fases 1 y 2 hechas; probar contra un remoto real)
+
+- Probar a mano con un remoto real (GitHub por HTTPS con gestor de credenciales y por SSH con llave): publicar, enviar, recibir, divergencia + fusión, conflicto + cancelar fusión, y que un remoto sin credenciales falle rápido con el mensaje de ayuda (sin colgar). Probar también cancelar una operación lenta, Apartar/aplicar/eliminar y el color del explorador en un repo grande.
+- Pendiente (fase 3): preparar por bloques, blame, historial por archivo, resolver conflictos con un editor, búsqueda en el historial. Decisión tomada: no ofrecer `rebase` ni envío forzado.
+
 ## Visor de Git (fase 1 hecha; probar a mano)
 
 - Probar en Studio con un repo real: abrir la pestaña Git, preparar/quitar/descartar (revisar `.git/chxchx-backups/`), commit con y sin nada preparado, historial en un repo con muchas ramas, cambiar/crear/borrar ramas, un repo sin commits, una carpeta que no es repo, y un repo grande (rendimiento del estado y del historial).
