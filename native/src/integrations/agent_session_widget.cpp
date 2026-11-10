@@ -34,6 +34,7 @@ AgentSessionWidget::AgentSessionWidget(QString agentId, QString program, QString
     });
     connect(m_pty, &PtySession::failed, this, [this](const QString &message) {
         m_status->setText(message);
+        emit launchFailed(message);
         emit runningStateChanged(false);
         focusTerminal();
     });
@@ -50,8 +51,12 @@ AgentSessionWidget::AgentSessionWidget(QString agentId, QString program, QString
         emit runningStateChanged(true);
         focusTerminal();
     } else {
-        m_status->setText(QStringLiteral("No se pudo iniciar %1: %2").arg(m_agentId, error));
+        const QString message = QStringLiteral("No se pudo iniciar %1 (%2): %3")
+            .arg(m_agentId, program, error);
+        m_status->setText(message);
         m_stop->setEnabled(false);
+        // Se emite al volver al bucle de eventos para que el creador alcance a conectar la señal.
+        QTimer::singleShot(0, this, [this, message] { emit launchFailed(message); });
     }
 }
 
