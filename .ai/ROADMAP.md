@@ -1,120 +1,168 @@
-# Roadmap
+# Roadmap de ejecución: producto unificado en Rust
 
-## Estado de la versión de uso diario
+- Actualizado: 2026-11-12.
+- Alcance confirmado: un producto Rust; CLI, TUI y Studio como modos de interacción.
+- Studio: nativo, sin WebView. Toolkit pendiente de prototipo.
+- Estado: trabajo incremental en `migracion-rust`; status, detección, init,
+  rollback de archivos, trust local y setup MCP compartido están implementados
+  parcialmente en la rama. La paridad global sigue abierta; el legado conserva
+  la autoridad de producto.
 
-La rama `dev` ya contiene el control plane Python (CLI/TUI) y ChxChx Studio, la
-aplicación nativa C++20/Qt 6. Studio integra el Skill Registry, Tech Packs,
-workspace/trust, RAM Governor, procesos, agentes, terminal PTY/ConPTY, memoria,
-handoff, navegación, edición, búsqueda de nombres/contenido, archivos recientes
-y restauración de grupos divididos, además de ajustes configurables.
-El inventario de capacidades está en `.ai/EDITOR-PARITY.md`.
+## Documentos y orden de trabajo
 
-## CI/CD opcional de proyectos
+- [RUST-MIGRATION.md](RUST-MIGRATION.md): arquitectura, estructura y transición.
+- [ADR 0016](adr/0016-rust-control-plane.md): decisiones y propuestas pendientes.
+- [RELEASE-ROADMAP.md](RELEASE-ROADMAP.md): versiones y actualizaciones futuras.
+- [EDITOR-PARITY.md](EDITOR-PARITY.md): baseline funcional a contrastar con código.
+- [RUST-CAPABILITY-MATRIX.md](RUST-CAPABILITY-MATRIX.md): capacidades, evidencia y
+  datos inspeccionados para el port.
+- [Roadmap anterior](history/ROADMAP-PRE-RUST.md): referencia del legado, sin prioridad
+  sobre este plan. Sus resultados históricos no acreditan validación actual.
 
-- CI por proyecto está disponible en CLI/TUI/Studio para Python, Node.js y
-  CMake/C++/Qt. El usuario conserva el control de instalación, ejecución y
-  retirada; no hay credenciales de despliegue en ese workflow.
-- CD de proyectos del usuario tiene una primera implementación opt-in en
-  CLI/TUI/Studio para GitHub Actions por SSH a un VPS con Docker Compose. Es
-  manual por defecto; el trigger automático por rama requiere opt-in explícito.
-  Revisa `.ai/adr/0007-opt-in-compose-vps-deployment.md` para el alcance y los
-  límites de la primera versión.
-- El pipeline de publicación de ChxChx queda fuera de este bloque y aplazado;
-  no se modifica ni se publica Studio como consecuencia del CD de proyectos.
+La organización se hace por capacidades, no por tres aplicaciones. No se crean
+crates independientes para CLI/TUI/Studio ni versiones por interfaz. Cada tarea
+incluye su caso de uso, integraciones, pruebas y presentaciones aplicables.
+La separación de presentación y dominio se mantiene dentro del paquete común.
 
-## Cierre para empezar a usar Studio en proyectos reales
+## Secuencia de hitos
 
-1. Recompilar y abrir un repositorio de trabajo con `./scripts/dev-studio.sh
-   /ruta/al/proyecto`; el script configura `CHXCHX_TECH_CLI` hacia el `.venv`
-   local si existe. Si se abre directamente el binario, asegurar que
-   `chxchx-tech` esté en el `PATH` o definir esa variable.
-2. Recorrer Guía: Init/preparación con preview, recomendaciones y sincronización
-   de skills, trust del proyecto y nueva sesión de agente con contexto.
-3. Probar en un repositorio real y confiable: abrir/guardar archivos, buscar
-   rutas, usar undo/redo y atajos, abrir una shell, iniciar y cerrar una sesión
-   de agente, revisar handoff, y verificar trust/RAM antes de ejecutar.
-4. Corregir los fallos concretos que aparezcan y confirmar que cerrar Studio no
-   deja procesos inesperados. Registrar la validación manual en el handoff.
+Los ítems se marcan completos con evidencia enlazada, no por existir un
+prototipo o workflow.
 
-Esta revisión funcional en Fedora es el único paso que bloquea afirmar que el
-usuario ya puede empezar a usar esta copia a diario. Si el proyecto se va a
-usar también en macOS o Windows, ejecutar además el build y smoke nativos en
-cada plataforma destino. El CI tiene trabajos configurados para Linux, Fedora,
-macOS y Windows, pero cada plataforma requiere evidencia de una ejecución
-verde; la configuración del workflow no equivale a que haya pasado.
+### R0 — Inventario y baseline (fase 0)
 
-## Pendientes de Studio; no bloquean el uso local básico
+- [x] R0.1 Inspección inicial de capacidades: proyecto/trust, procesos/recursos,
+  agentes/permisos, conocimiento/contexto, Git, automatización y distribución.
+  La matriz registra capacidad, implementación/contrato/datos, evidencia de pruebas,
+  modos y dueños actual/destino; QA/dependencias se cierran en sus gates de fase.
+- [ ] R0.2 Cerrar inventario de configuración, registros, trust, QSettings,
+  catálogos, caches y rutas. La inspección inicial está en la matriz; faltan
+  confirmar claves exactas QSettings y rutas de algunos datos regenerables.
+- [ ] R0.3 Reproducir checks del legado y registrar limitaciones del entorno.
+- [ ] R0.4 Medir arranque, RSS, CPU idle, búsquedas y paquete con repositorios
+  pequeños/grandes y comandos reproducibles; fijar presupuestos de aceptación.
 
-- Attach integrado a Zellij disponible desde la paleta de comandos. Falta
-  validarlo manualmente con una sesión real; se conserva el launcher externo.
-- Smoke Qt offscreen cubre render ANSI, navegación al inicio/fin, resize con
-  historial y sesión PTY larga con entrada; falta QA visual del reflow real.
-- Búsqueda de contenido implementada en segundo plano: omite binarios y archivos
-  mayores de 1 MiB, con máximo de 64 MiB leídos y 100 coincidencias por consulta.
-- Archivos recientes y grupos divididos restaurables: persiste hasta 20 rutas por
-  proyecto y reabre solo archivos limpios que existan dentro de la raíz canónica.
-  Terminales/agentes no se reabren automáticamente.
-- Diff Git de archivo implementado como lectura acotada desde `HEAD`; no incluye
-  archivos sin seguimiento ni cambios aún no guardados. Navegación básica de declaraciones
-  disponible en Python, C/C++, JS/TS, Java y C#. Evaluar LSP después de medir su costo.
-- Baseline del índice: el checkout de 341 archivos indexa en 4 ms y busca una
-  ruta inexistente en p50 0.392 ms/p95 0.404 ms; fixture sintética de 10.000
-  archivos indexa en 62–65 ms, busca una ruta inexistente en p50 9.00 ms/p95
-  9.55 ms y escanea contenido en 99–100 ms. Falta medir primer frame y RAM de
-  Studio en repos reales grandes, y fijar límites antes de publicar.
-- CPack y CI generan ZIP para Windows, DMG para macOS y TGZ para Ubuntu desde Qt
-  SDK. Fedora empaqueta TGZ con las bibliotecas Qt del sistema. El workflow
-  ahora valida binarios, runtimes/plugins y el bundle macOS, y sube solo el
-  paquete final fuera del staging temporal de CPack; el instalador valida el
-  SHA-256 del manifiesto. CI run #87 pasó las validaciones de paquete en todos
-  los runners configurados. Sigue pendiente probar la instalación/arranque en
-  una segunda máquina Fedora.
-- Decidir si el núcleo Python seguirá siendo la autoridad mediante el bridge o
-  si comienza una migración gradual a un núcleo C++ compartido. No bloquear el
-  uso de Studio con una reescritura sin una necesidad medida.
+Salida parcial: matriz inicial lista; falta cerrar R0.2, reproducir validaciones
+del legado y registrar mediciones antes de cerrar R0. Dependencias: ninguna.
 
-## Plan de mejora acordado (noviembre 2026)
+### R1 — Viabilidad del producto nativo (fase 1)
 
-1. Memoria por chat confiable: hecho en `feature/reliable-chat-memory`.
-2. Contexto liviano: hecho. Compactación hacia `.ai/history/` y diario automático de sesiones inyectado en el chat nuevo.
-3. **Integración visual de Codex y Claude en Studio**: primera versión hecha (ADR 0009, chat por turnos estructurados). Pendiente: aprobación por acción, diffs visuales y validar Claude. Antes solo corrían como CLI en una pestaña PTY. Objetivo: un panel de chat nativo con mensajes renderizados, herramientas y diffs propuestos, aprobación de cambios, historial y reanudación de sesión. Hay que evaluar los modos estructurados oficiales de cada agente (salida JSON/stream, SDK) mediante un adapter en `integrations/`, y conservar la pestaña PTY como alternativa.
-4. Fluidez de Studio: hecho. Detector ~2× más rápido, canal de lectura separado, caché por comando y refresco automático; falta QA manual.
-5. QA interactivo en Fedora (en curso, ver "Correcciones desde QA manual").
-6. Lo que falta para reemplazar VSCode, en este orden:
-   - Git visual: estado, stage/unstage por archivo o hunk, commit, diff lado a lado, ramas y push/pull con confirmación.
-   - LSP: autocompletado, ir a definición, referencias, hover y diagnósticos en línea. El servidor de lenguaje corre fuera del proceso UI y lo administra el workspace.
-   - Panel de problemas que junte LSP, salida de tests y CI.
-   - Chat visual: aprobación por acción (`codex app-server` / `--permission-prompt-tool`) y diffs visuales de `file_change`.
-   - Validar Claude en el chat visual con la CLI real.
+- [ ] R1.1 Prototipo con árbol, editor, terminal, chat simulado y permisos;
+  ejecutar los escenarios del plan de migración, incluidos IME y accesibilidad.
+- [ ] R1.2 Evaluar Iced; comparar Egui si hay límites. Documentar estrategia de
+  editor/VT, licencias y costo de capacidades que hoy resuelve Scintilla.
+- [ ] R1.3 Comprobar build/arranque Windows, macOS, Ubuntu y Fedora; separar
+  evidencia real de plataformas aún no disponibles.
+- [ ] R1.4 Cerrar ADR del toolkit/editor y alcance del primer build Rust.
 
-### Correcciones desde QA manual (noviembre 2026)
+Salida: viabilidad demostrada antes del port extenso; pendientes con costo y
+resolución explícitos. Dependencias: escenarios y baseline de R0.
 
-- [x] Chat visual con agente no instalado: antes mostraba `[Errno 2] No such file or directory: 'claude'`. Debe avisar antes y dar el comando de instalación.
-- [x] Elegir modelo y effort en el chat visual, con las opciones reales de cada agente.
-- [x] Mostrar lo gastado y lo que queda: contexto usado/ventana, límites de 5 h y semanal (Codex), costo (Claude) y tokens de la sesión.
-- [x] Adjuntar imágenes en el chat visual (archivo y pegar desde el portapapeles).
-- [x] Interfaz del chat más vistosa, a la altura de otros IDE: tarjetas nativas, código copiable, píldoras de modelo, effort y permisos, y medidores de uso.
-- [x] Rediseño visual de todo Studio: motor de temas (6 temas), iconos propios, hoja de estilos moderna y barra de estado útil.
-- [x] Cambio de tema y coloreado de código por lenguaje según la paleta del tema.
-- [x] Validar Claude en el chat visual con la CLI real (2.1.316): imagen, modelo, effort, costo, contexto y reanudación.
-- [x] Pendientes menores del rediseño: títulos Markdown completos, iconos por tipo en el explorador y paleta ANSI para el tema claro.
-- [x] Responsivo: las acciones de área salen del panel lateral (la lista de secciones ya no se mueve), cuadrículas que se adaptan al ancho, páginas con desplazamiento, anchos mínimos de paneles y un chat que cabe en paneles divididos.
+### R2 — Aplicación común y primera capacidad completa (fase 2)
 
-## Evolución posterior
+- [x] R2.1 Crear un paquete Cargo en `migration/rust/`, con biblioteca común,
+  `app/`, `features/`, `integrations/`, `runtime/`, `protocol/` e `interfaces/`.
+- [x] R2.2 Definir primera API de lectura compartida, contrato y features
+  `cli`, `tui`, `studio`; entrypoints finos y una sola versión.
+- [x] R2.3 Entregar resumen de proyecto de solo lectura en los
+  tres modos; misma acción y política, presentaciones adaptadas a cada modo.
+- [ ] R2.4 Añadir CI de formato/lints/contracts y validación automatizada de
+  capacidades; comprobar build CLI sin GUI y de los tres modos. Workflow de
+  formato/build/Clippy agregado; falta validar el schema como contrato en CI y
+  definir suite automatizada de capacidades.
 
-- Memoria de proyecto resiliente: el wrapper previo al chat nuevo recupera
-  solicitudes explícitas de los transcripts Codex/Claude locales del proyecto,
-  las agrega a `.ai/memory/PROJECT_MEMORY.md` sin duplicarlas y las inyecta al
-  prompt. Falta confirmar manualmente el ciclo en Studio; depende de que el
-  transcript local siga disponible y no restaura sesiones completas.
-- Roles de agente y workflows una vez que el flujo diario tenga validación real.
-- ChxChx Insights y aprendizaje desde el trabajo, con controles de privacidad y
-  promoción explícita de observaciones a skills.
-- Importación externa de skills solo con normalización, revisión de seguridad y
-  conservación de licencia/procedencia.
+Salida parcial R2.1–R2.3: el resumen usa el mismo DTO y lógica en los tres modos.
+R2.4 y la paridad completa requieren terminar R0 y validar R1.
 
-## Regla de convivencia entre interfaces
+### R3 — Preparación y mutaciones seguras (fase 3)
 
-CLI, TUI y Studio operan la misma configuración y servicios del proyecto. Abrir
-o cerrar una interfaz no debe iniciar, duplicar ni detener procesos de otra;
-foco, pestañas y paneles pertenecen a cada interfaz.
+- [ ] R3.1 Migrar configuración, init mínimo/completo y preparación. Detección
+  de stacks/lenguajes/gestores/infraestructura y resolución de perfiles ya está
+  en `migration/rust/src/features/`, compartida por los tres modos; falta
+  demostrar paridad automatizada y migrar el resto del flujo. El resumen valida
+  compatibilidad estructural inicial de TOML v1/v2. Init completo/compacto,
+  plantillas, bloques administrados, migración v1→v2 y registro local ya tienen
+  preview/aplicación compartidos y backup. `integrate` ya comparte preview y
+  configuración MCP Claude/Codex/OpenCode; init completo genera el ejemplo MCP
+  de OpenCode con backup. Init registra el directorio del proyecto en Basic
+  Memory al aplicar; el preview no invoca el CLI y los fallos de registro quedan
+  como avisos después de completar los cambios locales. `projects list/current`
+  ya consulta el registro desde el mismo caso de uso en las tres interfaces;
+  `projects sync` comparte preview/aplicación, snapshots, backup y rollback por
+  proyecto. Faltan `switch` con runtime de workspace/agentes, instaladores,
+  paridad automatizada y QA multiplataforma. `doctor` ya entrega reporte
+  estático en CLI/TUI/Studio.
+- [ ] R3.2 Migrar trust, preview/aplicación, backups y planes con versión de
+  configuración; rechazar aprobaciones obsoletas. Init/rollback de archivos y
+  registro ya verifican cambios desde preview y recuperan ante errores; trust
+  explícito/revocación también verifica el hash de config y respalda el registro
+  global. Faltan trust/preview para los otros dominios de mutación y paridad
+  automatizada.
+- [ ] R3.3 Migrar skills/packs/mods y empaquetar recursos fuera del paquete Python.
+- [ ] R3.4 Cubrir los recorridos comunes en CLI, TUI y Studio usando las mismas
+  operaciones; probar dry-run, idempotencia, fallos y rollback.
+
+Salida: preparación segura equivalente al legado. Dependencias: R2.
+
+### R4 — Workspace, procesos y terminal (fase 4)
+
+- [ ] R4.1 Validar diseño de supervisor bajo demanda, IPC y dueño por proyecto.
+- [ ] R4.2 Migrar recursos/RAM Governor, start/stop/resume y estado persistente.
+- [ ] R4.3 Integrar PTY/ConPTY, emulación VT, resize, scrollback y launcher externo.
+- [ ] R4.4 Probar dos modos abiertos a la vez, exclusión mutua, caída/reconexión,
+  PID reutilizado, cierre de chat y cierre de interfaz sin procesos huérfanos.
+
+Salida: ejecución compartida con política de ciclo de vida comprobada por SO.
+Dependencias: R3 y prototipo terminal de R1.
+
+### R5 — Agentes, conocimiento y contexto (fase 5)
+
+- [ ] R5.1 Migrar adapters Codex/Claude/OpenCode/Ollama y eventos normalizados.
+- [ ] R5.2 Conservar modelos/effort, aprobaciones, preguntas, cancelación, uso,
+  adjuntos y caché de descripciones donde estén disponibles actualmente.
+- [ ] R5.3 Migrar memoria, historial, contexto, diario, handoff y registro de errores.
+- [ ] R5.4 Probar falsos E2E y smoke real controlado; presentar las acciones comunes
+  desde todos los modos sin interpretar protocolos de proveedores en widgets.
+
+Salida: sesiones y permisos equivalentes, datos preservados, sin exposición de
+secretos en logs/fixtures. Dependencias: R4.
+
+### R6 — Operación y experiencia integradas (fases 6–7)
+
+- [ ] R6.1 Migrar Git, asistente, backups, remotos y serialización de escrituras.
+- [ ] R6.2 Migrar modelos locales, CI/CD opt-in, diagnósticos y preferencias.
+- [ ] R6.3 Completar editor, búsqueda, paletas, atajos, paneles y estados de
+  carga/error; las acciones operativas siguen siendo capacidades comunes.
+- [ ] R6.4 Cerrar matriz de paridad y QA interactivo en Windows/macOS/Ubuntu/Fedora,
+  incluyendo operación por consola, teclado, accesibilidad y uso simultáneo.
+
+Salida: capacidades existentes cubiertas; no un MVP con regresiones presentado
+como reemplazo completo. Dependencias: R5; las tareas Git pueden adelantarse si
+R3/R4 ya ofrecen sus garantías, sin cambiar el orden de las puertas de salida.
+
+### R7 — Release, corte y retiro del legado (fase 8)
+
+- [ ] R7.1 Aplicar prereleases y criterios de [RELEASE-ROADMAP.md](RELEASE-ROADMAP.md).
+- [ ] R7.2 Adaptar manifiesto/instaladores/actualizador, features distribuidas y
+  versión común; preservar canales, marcadores y launchers existentes.
+- [ ] R7.3 Probar instalar → abrir → actualizar → rollback → desinstalar en
+  equipos limpios por plataforma; validar migración de datos y compatibilidad IPC.
+- [ ] R7.4 Promover Rust a raíz, cambiar autoridad/launchers y retirar Python/Qt
+  solo cuando sus operaciones estén cubiertas y la versión anterior sea recuperable.
+
+Salida: producto Rust distribuible y recuperable sin Python/Qt propios.
+Dependencias: R6 y validaciones de release. Publicar es una acción posterior,
+no consecuencia automática de completar este documento.
+
+## Primeras entregas pequeñas
+
+1. **PR de inventario:** R0.1–R0.2; matriz y datos, sin mover código.
+2. **PR de baseline:** R0.3–R0.4; mediciones, fixtures y evidencia reproducible.
+3. **PR de viabilidad:** R1; prototipo acotado y decisión de editor/GUI.
+4. **PR de base común:** R2.1–R2.2; un paquete y sus fronteras.
+5. **Primera capacidad en curso:** R2.3 entrega estado compartido; R2.4 tiene
+   workflow de formato/build y necesita completar lints/contratos.
+
+Cada PR declara capacidad, efectos, autoridad, presentaciones aplicables,
+validación y rollback cuando corresponda. El implementador registra resultados
+en CURRENT_STATE/HANDOFF. Sin fechas prometidas antes de medir el alcance.

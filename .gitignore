@@ -7,6 +7,7 @@ __pycache__/
 htmlcov/
 dist/
 build/
+target/
 *.egg-info/
 .DS_Store
 Thumbs.db
@@ -33,6 +34,12 @@ Thumbs.db
 !/.ai/adr/0006-opt-in-project-ci-and-deployment-boundary.md
 !/.ai/adr/0008-studio-first-editor.md
 !/.ai/adr/0009-visual-agent-chat.md
+!/.ai/RUST-MIGRATION.md
+!/.ai/RELEASE-ROADMAP.md
+!/.ai/history/
+.ai/history/*
+!/.ai/history/ROADMAP-PRE-RUST.md
+!/.ai/adr/0016-rust-control-plane.md
 # Documentación de trabajo privada/local del mantenedor.
 /docs/
 /.codex/

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chxchx.dev/schemas/project-overview-v1.schema.json",
+  "title": "ChxChx Project Overview",
+  "type": "object",
+  "required": ["schema", "schema_version", "project", "detection", "workspace"],
+  "properties": {
+    "schema": { "const": "chxchx.project-overview" },
+    "schema_version": { "const": 1 },
+    "project": {
+      "type": "object",
+      "required": ["name", "root", "git_repository", "has_ai_directory", "has_agents_guide", "has_claude_guide", "detected_markers"],
+      "properties": {
+        "name": { "type": "string" },
+        "root": { "type": "string" },
+        "git_repository": { "type": "boolean" },
+        "has_ai_directory": { "type": "boolean" },
+        "has_agents_guide": { "type": "boolean" },
+        "has_claude_guide": { "type": "boolean" },
+        "detected_markers": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "detection": {
+      "type": "object",
+      "required": ["stacks", "languages", "package_managers", "infrastructure", "profile", "profile_rules"],
+      "properties": {
+        "stacks": { "type": "array", "items": { "type": "string" } },
+        "languages": { "type": "array", "items": { "type": "string" } },
+        "package_managers": { "type": "array", "items": { "type": "string" } },
+        "infrastructure": { "type": "array", "items": { "type": "string" } },
+        "profile": { "type": "string" },
+        "profile_rules": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "workspace": {
+      "type": "object",
+      "required": ["config_path", "config_exists", "config_parseable", "config_version", "config_supported", "config_validation_error", "trusted"],
+      "properties": {
+        "config_path": { "type": "string" },
+        "config_exists": { "type": "boolean" },
+        "config_parseable": { "type": ["boolean", "null"] },
+        "config_version": { "type": ["integer", "null"] },
+        "config_supported": { "type": ["boolean", "null"] },
+        "config_validation_error": { "type": ["string", "null"] },
+        "trusted": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

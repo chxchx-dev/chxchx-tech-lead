@@ -1,0 +1,136 @@
+# Referencia histórica del roadmap anterior a la organización unificada
+
+Archivado el 2026-11-12. El plan activo es [ROADMAP.md](../ROADMAP.md).
+El contenido siguiente se conserva como referencia del producto Python/Qt.
+Sus rutas y resultados corresponden al documento original.
+
+# Roadmap
+
+## Nueva dirección: migración a Rust (2026-11-12)
+
+El usuario solicita reestructurar núcleo, CLI, TUI y Studio con Rust y confirma
+Studio nativo sin WebView. La propuesta de fases, límites y criterios de salida
+está en [RUST-MIGRATION.md](../RUST-MIGRATION.md) y el
+[ADR 0016](../adr/0016-rust-control-plane.md). El siguiente trabajo es inventario y
+baseline, seguido del prototipo de editor/terminal antes del port completo.
+La GUI concreta sigue pendiente de validación. Los apartados siguientes
+describen el producto existente y su backlog; no implican que Rust ya esté implementado.
+
+## Estado de la versión de uso diario
+
+La rama `dev` ya contiene el control plane Python (CLI/TUI) y ChxChx Studio, la
+aplicación nativa C++20/Qt 6. Studio integra el Skill Registry, Tech Packs,
+workspace/trust, RAM Governor, procesos, agentes, terminal PTY/ConPTY, memoria,
+handoff, navegación, edición, búsqueda de nombres/contenido, archivos recientes
+y restauración de grupos divididos, además de ajustes configurables.
+El inventario de capacidades está en `.ai/EDITOR-PARITY.md`.
+
+## CI/CD opcional de proyectos
+
+- CI por proyecto está disponible en CLI/TUI/Studio para Python, Node.js y
+  CMake/C++/Qt. El usuario conserva el control de instalación, ejecución y
+  retirada; no hay credenciales de despliegue en ese workflow.
+- CD de proyectos del usuario tiene una primera implementación opt-in en
+  CLI/TUI/Studio para GitHub Actions por SSH a un VPS con Docker Compose. Es
+  manual por defecto; el trigger automático por rama requiere opt-in explícito.
+  Revisa `.ai/adr/0007-opt-in-compose-vps-deployment.md` para el alcance y los
+  límites de la primera versión.
+- El pipeline de publicación de ChxChx queda fuera de este bloque y aplazado;
+  no se modifica ni se publica Studio como consecuencia del CD de proyectos.
+
+## Cierre para empezar a usar Studio en proyectos reales
+
+1. Recompilar y abrir un repositorio de trabajo con `./scripts/dev-studio.sh
+   /ruta/al/proyecto`; el script configura `CHXCHX_TECH_CLI` hacia el `.venv`
+   local si existe. Si se abre directamente el binario, asegurar que
+   `chxchx-tech` esté en el `PATH` o definir esa variable.
+2. Recorrer Guía: Init/preparación con preview, recomendaciones y sincronización
+   de skills, trust del proyecto y nueva sesión de agente con contexto.
+3. Probar en un repositorio real y confiable: abrir/guardar archivos, buscar
+   rutas, usar undo/redo y atajos, abrir una shell, iniciar y cerrar una sesión
+   de agente, revisar handoff, y verificar trust/RAM antes de ejecutar.
+4. Corregir los fallos concretos que aparezcan y confirmar que cerrar Studio no
+   deja procesos inesperados. Registrar la validación manual en el handoff.
+
+Esta revisión funcional en Fedora es el único paso que bloquea afirmar que el
+usuario ya puede empezar a usar esta copia a diario. Si el proyecto se va a
+usar también en macOS o Windows, ejecutar además el build y smoke nativos en
+cada plataforma destino. El CI tiene trabajos configurados para Linux, Fedora,
+macOS y Windows, pero cada plataforma requiere evidencia de una ejecución
+verde; la configuración del workflow no equivale a que haya pasado.
+
+## Pendientes de Studio; no bloquean el uso local básico
+
+- Attach integrado a Zellij disponible desde la paleta de comandos. Falta
+  validarlo manualmente con una sesión real; se conserva el launcher externo.
+- Smoke Qt offscreen cubre render ANSI, navegación al inicio/fin, resize con
+  historial y sesión PTY larga con entrada; falta QA visual del reflow real.
+- Búsqueda de contenido implementada en segundo plano: omite binarios y archivos
+  mayores de 1 MiB, con máximo de 64 MiB leídos y 100 coincidencias por consulta.
+- Archivos recientes y grupos divididos restaurables: persiste hasta 20 rutas por
+  proyecto y reabre solo archivos limpios que existan dentro de la raíz canónica.
+  Terminales/agentes no se reabren automáticamente.
+- Diff Git de archivo implementado como lectura acotada desde `HEAD`; no incluye
+  archivos sin seguimiento ni cambios aún no guardados. Navegación básica de declaraciones
+  disponible en Python, C/C++, JS/TS, Java y C#. Evaluar LSP después de medir su costo.
+- Baseline del índice: el checkout de 341 archivos indexa en 4 ms y busca una
+  ruta inexistente en p50 0.392 ms/p95 0.404 ms; fixture sintética de 10.000
+  archivos indexa en 62–65 ms, busca una ruta inexistente en p50 9.00 ms/p95
+  9.55 ms y escanea contenido en 99–100 ms. Falta medir primer frame y RAM de
+  Studio en repos reales grandes, y fijar límites antes de publicar.
+- CPack y CI generan ZIP para Windows, DMG para macOS y TGZ para Ubuntu desde Qt
+  SDK. Fedora empaqueta TGZ con las bibliotecas Qt del sistema. El workflow
+  ahora valida binarios, runtimes/plugins y el bundle macOS, y sube solo el
+  paquete final fuera del staging temporal de CPack; el instalador valida el
+  SHA-256 del manifiesto. CI run #87 pasó las validaciones de paquete en todos
+  los runners configurados. Sigue pendiente probar la instalación/arranque en
+  una segunda máquina Fedora.
+- Decidir si el núcleo Python seguirá siendo la autoridad mediante el bridge o
+  si comienza una migración gradual a un núcleo C++ compartido. No bloquear el
+  uso de Studio con una reescritura sin una necesidad medida.
+
+## Plan de mejora acordado (noviembre 2026)
+
+1. Memoria por chat confiable: hecho en `feature/reliable-chat-memory`.
+2. Contexto liviano: hecho. Compactación hacia `.ai/history/` y diario automático de sesiones inyectado en el chat nuevo.
+3. **Integración visual de Codex y Claude en Studio**: primera versión hecha (ADR 0009, chat por turnos estructurados). Pendiente: aprobación por acción, diffs visuales y validar Claude. Antes solo corrían como CLI en una pestaña PTY. Objetivo: un panel de chat nativo con mensajes renderizados, herramientas y diffs propuestos, aprobación de cambios, historial y reanudación de sesión. Hay que evaluar los modos estructurados oficiales de cada agente (salida JSON/stream, SDK) mediante un adapter en `integrations/`, y conservar la pestaña PTY como alternativa.
+4. Fluidez de Studio: hecho. Detector ~2× más rápido, canal de lectura separado, caché por comando y refresco automático; falta QA manual.
+5. QA interactivo en Fedora (en curso, ver "Correcciones desde QA manual").
+6. Lo que falta para reemplazar VSCode, en este orden:
+   - Git visual: estado, stage/unstage por archivo o hunk, commit, diff lado a lado, ramas y push/pull con confirmación.
+   - LSP: autocompletado, ir a definición, referencias, hover y diagnósticos en línea. El servidor de lenguaje corre fuera del proceso UI y lo administra el workspace.
+   - Panel de problemas que junte LSP, salida de tests y CI.
+   - Chat visual: aprobación por acción (`codex app-server` / `--permission-prompt-tool`) y diffs visuales de `file_change`.
+   - Validar Claude en el chat visual con la CLI real.
+
+### Correcciones desde QA manual (noviembre 2026)
+
+- [x] Chat visual con agente no instalado: antes mostraba `[Errno 2] No such file or directory: 'claude'`. Debe avisar antes y dar el comando de instalación.
+- [x] Elegir modelo y effort en el chat visual, con las opciones reales de cada agente.
+- [x] Mostrar lo gastado y lo que queda: contexto usado/ventana, límites de 5 h y semanal (Codex), costo (Claude) y tokens de la sesión.
+- [x] Adjuntar imágenes en el chat visual (archivo y pegar desde el portapapeles).
+- [x] Interfaz del chat más vistosa, a la altura de otros IDE: tarjetas nativas, código copiable, píldoras de modelo, effort y permisos, y medidores de uso.
+- [x] Rediseño visual de todo Studio: motor de temas (6 temas), iconos propios, hoja de estilos moderna y barra de estado útil.
+- [x] Cambio de tema y coloreado de código por lenguaje según la paleta del tema.
+- [x] Validar Claude en el chat visual con la CLI real (2.1.316): imagen, modelo, effort, costo, contexto y reanudación.
+- [x] Pendientes menores del rediseño: títulos Markdown completos, iconos por tipo en el explorador y paleta ANSI para el tema claro.
+- [x] Responsivo: las acciones de área salen del panel lateral (la lista de secciones ya no se mueve), cuadrículas que se adaptan al ancho, páginas con desplazamiento, anchos mínimos de paneles y un chat que cabe en paneles divididos.
+
+## Evolución posterior
+
+- Memoria de proyecto resiliente: el wrapper previo al chat nuevo recupera
+  solicitudes explícitas de los transcripts Codex/Claude locales del proyecto,
+  las agrega a `.ai/memory/PROJECT_MEMORY.md` sin duplicarlas y las inyecta al
+  prompt. Falta confirmar manualmente el ciclo en Studio; depende de que el
+  transcript local siga disponible y no restaura sesiones completas.
+- Roles de agente y workflows una vez que el flujo diario tenga validación real.
+- ChxChx Insights y aprendizaje desde el trabajo, con controles de privacidad y
+  promoción explícita de observaciones a skills.
+- Importación externa de skills solo con normalización, revisión de seguridad y
+  conservación de licencia/procedencia.
+
+## Regla de convivencia entre interfaces
+
+CLI, TUI y Studio operan la misma configuración y servicios del proyecto. Abrir
+o cerrar una interfaz no debe iniciar, duplicar ni detener procesos de otra;
+foco, pestañas y paneles pertenecen a cada interfaz.

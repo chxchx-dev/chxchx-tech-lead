@@ -2,6 +2,115 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Estado y siguiente capacidad Rust
+
+- Rama activa: `migracion-rust`; paquete unificado en `migration/rust/`.
+  `project-overview`, detección/perfiles y preparación completa/compacta usan
+  casos de uso compartidos por CLI/TUI/Studio.
+- `init [PATH] [--minimal]` es preview por defecto y aplica solo con `--apply`.
+  Completo genera plantillas faltantes, actualiza solo bloques administrados,
+  migra TOML v1→v2, registra el proyecto y crea backups. Registro/cambios de
+  archivos rechazan previews obsoletos y recuperan el estado ante fallos.
+- `rollback [PATH]` también previsualiza por defecto; `--apply` restaura el
+  último backup de archivos administrados después de guardar el estado actual.
+  TUI: `b` previsualiza y `x` restaura. Studio expone las mismas operaciones.
+- `workspace trust/untrust [PATH]` previsualiza y requiere `--apply`; vincula la
+  aprobación al SHA-256 de la config, respalda el JSON global y detecta cambios
+  entre preview y escritura. Sin config también se puede confiar explícitamente.
+  TUI: `t`/`u`, luego `y`; Studio usa botones. Init no concede confianza.
+- `integrate [PATH] --client all|claude|codex|opencode` comparte preview/aplicación
+  MCP en CLI/TUI/Studio. Solo `--apply` invoca clientes oficiales y registra el
+  proyecto Basic Memory. `--refresh` es visible en preview. Init completo crea
+  el ejemplo de OpenCode como archivo administrado, con backup/rollback.
+- Init completo y compacto también registran `.ai/memory` en Basic Memory al
+  aplicar. La vista previa no ejecuta su CLI; si el registro falla, conserva
+  los cambios locales y comunica un aviso en CLI/TUI/Studio. TUI y Studio
+  ejecutan el apply en segundo plano y evitan mutaciones simultáneas.
+- `doctor [PATH]` comparte reporte de solo lectura en CLI; TUI usa `d` y Studio
+  ofrece un botón. Verifica herramientas, archivos, configuración/trust, cwd y
+  MCP de Claude/Codex sin lanzar procesos configurados.
+- `projects list/current` lee el catálogo local compartido desde CLI, TUI (`p`) y
+  Studio. Lista alias, nombre, perfil, stacks, ruta, disponibilidad y último
+  proyecto. El registro ausente es una lista vacía; JSON mal formado se reporta
+  sin tocarlo.
+- Validación Windows: compilación `cargo check --locked` default y CLI/TUI/Studio,
+  Clippy, formato y `git diff --check` pasan. No se ejecutaron pruebas ni
+  comandos externos en este tramo.
+- La fase de paridad/pruebas R3.4 aún no empieza; la suite no se ejecutó. Queda
+  anotada después de terminar `projects switch`, instaladores y las capacidades
+  planificadas para R3.
+- `projects sync` ya comparte preview y apply. Detecta snapshots obsoletos del
+  registro/archivos, hace backup por proyecto y revierte si falla una escritura;
+  TUI (`s`/`y`) y Studio ejecutan en segundo plano.
+- Siguiente tramo: `projects switch` junto con runtime workspace/agentes, que
+  debe suspender y arrancar los procesos con las políticas de trust/recursos.
+  Después siguen instaladores.
+  Mantener el producto legado como autoridad hasta cerrar paridad por capacidad.
+- Local Windows: `cargo fmt --all -- --check`, `cargo check --locked` default y
+  CLI/TUI/Studio por separado, Clippy con warnings denegados y `git diff --check`
+  pasan. No se ejecutó la suite, Basic Memory, CLIs MCP ni CI; falta validar el
+  comportamiento real con instalaciones y revisar macOS/Linux.
+- Basic Memory/Serena no exponen `write_memory` en esta sesión; este checkpoint
+  está guardado solo en los archivos `.ai/` versionables.
+
+## Migración en curso: producto compartido Rust (2026-11-12)
+
+- Rama `migracion-rust` activa; trabajar desde ahí. El producto Rust está en
+  `migration/rust/` para evitar colisión con `src/` Python durante el port.
+- Paquete Cargo único `chxchx-tech` (`0.6.0-dev.0`, interno/no publicado), con
+  features y bins en un mismo manifiesto. No agregar crate ni versionado por UI.
+- CLI/TUI/Studio comparten `features/project_overview::inspect_project`, incluida
+  detección y compatibilidad inicial de configuración. El Studio es un prototipo
+  visual nativo con overview + refresh; el TUI muestra la misma salida. Sigue
+  pendiente probar interacción de ventana y teclado. Solo Windows fue compilado
+  localmente.
+- Contrato `chxchx.project-overview` v1 no es el bridge legado de status completo.
+  Expandir por etapas y conservar ambos contratos mientras migra Qt.
+- `.ai/RUST-CAPABILITY-MATRIX.md` contiene matriz/datos iniciales. Roadmap R0/R1
+  no se cierra: faltan revisar claves QSettings/rutas, validaciones del legado,
+  baseline local y prototipo de editor/terminal/accessibility.
+- Check local: formato, `cargo check --locked` default/CLI/TUI y Clippy pasan en
+  Windows. CI incluye formato/build/Clippy para Ubuntu/Windows/macOS, todavía sin
+  resultados multiplataforma. No se agregaron ni ejecutaron tests en este turno.
+- Siguiente capacidad: `init --dry-run` y preparación con backup/rollback; luego
+  registro/recientes. No retirar Python/Qt hasta probar paridad por capacidades.
+
+## Organización unificada y versiones (2026-11-12)
+
+- Requisito aclarado: un producto Rust por capacidades, CLI/TUI/Studio como
+  presentaciones internas; sin crates, roadmaps ni versiones independientes por
+  interfaz. Se corrigieron RUST-MIGRATION y ADR 0016; Rust empieza bajo
+  `migration/rust/` y solo se promueve a raíz tras el corte validado.
+- Plan activo: `.ai/ROADMAP.md`, R0–R7. Empezar con PR de inventario R0.1–R0.2,
+  después baseline R0.3–R0.4 y prototipo R1. No comenzar un port completo de una
+  UI aislada. Cada capacidad debe incluir presentaciones aplicables y tests comunes.
+- Versiones: `.ai/RELEASE-ROADMAP.md`; propuesta 0.6.0 alpha/beta/RC/estable para
+  migración, 0.7–0.9 evolución y 1.0 estabilidad. Numeración y alcance sujetos a
+  evidencia y a contrastar releases antes de publicar; versión actual intacta.
+- Política propuesta: release común, builds con features, canales stable/dev,
+  update compartido con preview, compatibilidad IPC/datos y rollback de binarios
+  y datos. El roadmap anterior se preserva como referencia en history.
+- Solo documentación/allowlist Git. Compileall, diff y enlaces locales correctos;
+  `python -m pytest` no pudo ejecutar por módulo pytest ausente. Basic Memory y
+  Serena no disponibles; no se alteraron el código ni la instalación Rust.
+
+## Planeación de migración a Rust (2026-11-12)
+
+- Entregados `.ai/RUST-MIGRATION.md` y ADR 0016 (propuesto). Requisito confirmado:
+  CLI/TUI/Studio en Rust, Studio nativo sin WebView. No se comenzó el port.
+- Próximo lote: inventariar capacidades/contratos/datos/dueños, medir baseline y
+  construir un prototipo de editor + terminal antes de fijar la GUI. Iced es
+  candidato, no decisión cerrada; evaluar Egui si no cumple requisitos.
+- Mantener autoridad única por operación y paridad con Git Qt, modelos locales,
+  CI/CD opt-in, permisos en vivo, trust, memoria, instaladores y rollback.
+- Validación: `python -m compileall -q src`, enlaces Markdown y `git diff --check`
+  correctos. Pytest no ejecutado: no está instalado en Python local; UV falló al
+  descargar dependencias por restricción de red. El reintento con permisos
+  ampliados se detuvo en preparación sin resultados. Quedaron `.venv` incompleto
+  y `.cache/uv` locales, ignorados por Git; no hay cambios de código.
+- No usar resultados históricos de Fedora como evidencia del entorno Windows
+  actual. Basic Memory/Serena no disponibles; checkpoint guardado en estos archivos.
+
 ## Alta de agentes sin init y registro de fallos (2026-11-10)
 
 - `agent add` ya no falla si falta `.ai/chxchx-tech.toml`: ejecuta `init --minimal` (solo toml + `.ai/memory`, con backup) y añade el agente; `--dry-run` solo previsualiza. Código en `workspace/agent_autoinit.py`. Tras añadirlo hay que volver a confiar el proyecto.

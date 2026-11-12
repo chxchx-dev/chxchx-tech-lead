@@ -1,0 +1,37 @@
+[package]
+name = "chxchx-tech"
+version = "0.6.0-dev.0"
+edition = "2024"
+publish = false
+description = "ChxChx local development control plane"
+
+[lib]
+name = "chxchx_tech"
+path = "src/lib.rs"
+
+[[bin]]
+name = "chxchx-tech"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "chxchx-studio"
+path = "src/bin/chxchx-studio.rs"
+required-features = ["studio"]
+
+[features]
+default = ["cli", "tui", "studio"]
+cli = ["dep:clap"]
+tui = ["dep:ratatui"]
+studio = ["dep:iced"]
+
+[dependencies]
+clap = { version = "=4.6.7", features = ["derive"], optional = true }
+iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "thread-pool", "x11", "wayland"], optional = true }
+ratatui = { version = "=0.30.2", default-features = false, features = ["crossterm_0_29", "macros"], optional = true }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.149"
+sha1 = "=0.10.6"
+sha2 = "=0.10.9"
+time = { version = "=0.3.55", features = ["formatting"] }
+toml = "=0.9.12"

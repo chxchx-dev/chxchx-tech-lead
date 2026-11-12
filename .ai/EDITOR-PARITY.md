@@ -1,5 +1,15 @@
 # Aplicación nativa y paridad con TUI
 
+> Dirección futura (2026-11-12): Rust también para Studio, nativo sin WebView.
+> [RUST-MIGRATION.md](RUST-MIGRATION.md) propone sustituir el destino C++ por
+> Rust tras validar editor, terminal y GUI. Este inventario conserva su función
+> de baseline; las secciones C++/Qt describen el diseño anterior y el producto
+> actual, no una selección de toolkit para el nuevo Studio.
+> CLI/TUI/Studio serán modos del mismo paquete Rust organizado por capacidades;
+> la paridad no implica mantener proyectos, crates o releases separados por UI.
+> El inventario del port está en [RUST-CAPABILITY-MATRIX.md](RUST-CAPABILITY-MATRIX.md).
+> La primera lectura Rust no cubre todavía este inventario de paridad.
+
 ## Objetivo
 
 La aplicación de escritorio debe ofrecer edición de código y todas las vistas y acciones de la TUI, con la misma configuración, servicios de workspace, límites de recursos, permisos, memoria y resultados. La disposición puede adaptarse a escritorio, pero ninguna capacidad de la TUI debe quedar inaccesible.

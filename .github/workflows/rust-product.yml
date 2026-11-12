@@ -1,0 +1,37 @@
+name: Rust product builds
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path migration/rust/Cargo.toml --all -- --check
+
+  product-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux window build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libwayland-dev libx11-dev libx11-xcb-dev libxcb1-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev
+      - name: Check the full product (CLI, TUI and Studio)
+        run: cargo check --manifest-path migration/rust/Cargo.toml --locked
+      - name: Check the console-only build without GUI dependencies
+        run: cargo check --manifest-path migration/rust/Cargo.toml --locked --no-default-features --features cli
+      - name: Run Clippy for the full product
+        run: cargo clippy --manifest-path migration/rust/Cargo.toml --locked -- -D warnings
