@@ -8,7 +8,8 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
 
-    if let Err(error) = chxchx_tech::interfaces::studio::run(root) {
+    let file = std::env::args_os().nth(2).map(PathBuf::from);
+    if let Err(error) = chxchx_tech::interfaces::studio::run_with_file(root, file) {
         eprintln!("No se pudo iniciar ChxChx Studio: {error}");
         std::process::exit(1);
     }
