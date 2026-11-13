@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from chxchx_tech_lead.integrations.explicit_memory import user_visible_text
 from chxchx_tech_lead.workspace.agent_commands import CHAT_PANEL_REQUEST_MARKER
 from chxchx_tech_lead.workspace.chat_context import inline_project_context
@@ -46,7 +48,12 @@ def test_a_symlinked_context_file_is_not_followed(tmp_path: Path) -> None:
     root = project(tmp_path)
     secret = tmp_path.parent / f"{tmp_path.name}-secret.txt"
     secret.write_text("TOKEN=abc", encoding="utf-8")
-    (root / ".ai" / "HANDOFF.md").symlink_to(secret)
+    try:
+        (root / ".ai" / "HANDOFF.md").symlink_to(secret)
+    except OSError as error:
+        if getattr(error, "winerror", None) != 1314:
+            raise
+        pytest.skip("Windows no permite crear symlinks sin el privilegio requerido")
     assert "TOKEN=abc" not in inline_project_context(root, provider="Claude")
 
 
