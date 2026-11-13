@@ -286,10 +286,21 @@ install(FILES "${lexilla_SOURCE_DIR}/License.txt"
 install(FILES "${libvterm_SOURCE_DIR}/LICENSE"
     DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/chxchx-studio/libvterm)
 
+set(CHXCHX_QT_DEPLOY_OPTIONS)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Qt's generic deploy tool excludes system library directories by default.
+    # Keep Qt itself when it comes from Fedora/Debian system packages; other
+    # system libraries remain external and are installed by the Linux installer.
+    list(APPEND CHXCHX_QT_DEPLOY_OPTIONS
+        POST_INCLUDE_REGEXES "^/(usr/)?lib(64|/x86_64-linux-gnu)/libQt6.*\\.so(\\..*)?$"
+    )
+endif()
+
 qt_generate_deploy_app_script(
     TARGET chxchx-studio
     OUTPUT_SCRIPT deploy_script
     NO_TRANSLATIONS
+    ${CHXCHX_QT_DEPLOY_OPTIONS}
 )
 install(SCRIPT ${deploy_script})
 
