@@ -1,5 +1,55 @@
 # Current State
 
+## Baseline de rendimiento legado, R0.4 parcial (2026-11-12)
+
+- Medición Release en Fedora 44: `.ai/PERFORMANCE-BASELINE.md` contiene
+  fixtures, hardware, comandos, latencia p50/p95, RSS, CPU y tamaños.
+- En proyecto grande (5,001 archivos): CLI `status` p95 372 ms; proxy de
+  arranque Studio p95 330 ms; RSS idle máximo 67.1 MiB; índice p95 172 ms;
+  búsqueda de rutas p95 9.18 ms/100 llamadas; contenido p95 136 ms.
+- El TGZ CPack mide 4.31 MB pero falla el verificador por faltar bibliotecas
+  Qt/plugins. No fijar presupuesto de paquete ni cerrar R0.4 hasta corregirlo.
+- Añadidos generador de fixtures y harness opt-in para benchmark de índice;
+  no se cambió funcionalidad del producto. No se ejecutaron tests en este tramo.
+
+## Baseline legado en Fedora 44 (2026-11-12)
+
+- Python: `python -m compileall -q src tests scripts` pasó en Python 3.14.10;
+  `uv run pytest --junitxml=/tmp/chxchx-rust-migration-baseline-pytest.xml`
+  pasó 511 tests, 1 skipped y 10 deselected con Python 3.11.18 de uv.
+- Studio legado: configuración y build CMake/Ninja pasaron con GCC 16.2.1,
+  CMake 4.3.0, Ninja 1.13.2 y Qt 6.11.2. CTest pasó 11/11 smoke, incluidos
+  Git UI y terminales. Build aislado en `/tmp`; warnings deprecados solo en
+  Scintilla/Qt vendorizados.
+- El Rust product ya compila aquí con `cargo check --locked` (ver sección de
+  matriz). R0.3 queda reproducido en Fedora; fuera de evidencia quedan live,
+  empaquetado/release, QA visual y otras plataformas. R0.4 aún requiere medir.
+- No se modificó código del producto. Basic Memory/Serena no están disponibles.
+
+## Matriz de capacidades y datos Rust (2026-11-12)
+
+- Creada `.ai/RUST-CAPABILITY-MATRIX.md` con dueño/evidencia por capacidad,
+  estado Rust, registros/rutas globales y por proyecto, y todas las claves
+  QSettings localizadas en el Studio legado. R0.2 queda documentado; R0.3/R0.4
+  y R1 siguen abiertos.
+- `.gitignore` permite versionar la matriz. En Fedora 44, `rustc/cargo 1.100.0`
+  y `cargo check --manifest-path migration/rust/Cargo.toml --locked` pasan.
+  No se ejecutaron suites ni cambió código. Basic Memory/Serena no están
+  disponibles.
+
+## Revisión de brechas de migración Rust (2026-11-12)
+
+- El paquete unificado en `migration/rust/` ya comparte catálogo, preparación,
+  trust, MCP, sync y doctor entre CLI/TUI/Studio. La paridad global sigue abierta.
+- El roadmap referencia `.ai/RUST-CAPABILITY-MATRIX.md`, pero ese archivo no
+  existe en el checkout. R0.2–R0.4 y R1 siguen sin cerrar; la CI compila y corre
+  Clippy, pero aún no valida schemas ni ejecuta pruebas Rust.
+- Antes de ampliar runtime/switch, reconstruir la matriz y evidencia del legado,
+  habilitar contratos y pruebas de capacidades en CI, y cerrar los gates R0/R1.
+  Después validar diseño del supervisor/runtime y abordar `projects switch`.
+- Sin cambios de código en esta revisión. Basic Memory y Serena no están
+  disponibles en la sesión; el checkpoint se conserva localmente.
+
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
 ## Sincronización de proyectos Rust (2026-11-12)
@@ -131,105 +181,6 @@
   No se agregaron ni ejecutaron tests por
   instrucción de la sesión; falta evidencia de paridad funcional y build/QA en
   macOS/Linux.
-
-## Inicio de migración Rust en `migracion-rust` (2026-11-12)
-
-- La rama `migracion-rust` existe desde `main` y está activa. Conserva los
-  cambios documentales pendientes previos de esta planeación.
-- Agregado `migration/rust`: un paquete `chxchx-tech` con features CLI/TUI/Studio
-  y una biblioteca compartida. Versión interna `0.6.0-dev.0`, no publicada.
-- Primer slice `project-overview`: CLI (`status [PATH] [--json]`), Ratatui (`tui`)
-  e Iced (`studio open`) consumen el mismo servicio/DTO; lectura de root/config,
-  marcadores superiores, Git y SHA-256 de trust local. Schema dedicado
-  `chxchx.project-overview` v1; no representa aún paridad con el bridge legado.
-- Iced 0.14 software renderer necesita executor `thread-pool`. Los paquetes
-  quedaron fijados por `Cargo.lock`. Workflows `.github/workflows/rust-product.yml`
-  para formato y build (Ubuntu, Windows, macOS), sin ejecución de tests en este
-  incremento. Se confirmó build local Windows; otros targets pendientes.
-- Inventario inicial de capacidades/datos en `.ai/RUST-CAPABILITY-MATRIX.md`;
-  R0.1 inicial completo y R0.2, R0.3/R0.4 pendientes. R1 prototipo visual aún
-  no pasa editor/accesibilidad/QA. R2.1–R2.3 implementados; R2.4 parcial.
-- Próximo trabajo: terminar inventario, completar build CLI sin GUI y lint;
-  extender `projects` por la misma fachada para detección/configuración sin
-  mutación. Trust existente solo se lee; no se alteró la confianza del usuario.
-- No se crearon ni ejecutaron pruebas por el alcance de validación de este turno.
-  Compile y formato verificados; suite existente aún no ejecutada.
-
-## Producto Rust unificado y roadmap de versiones (2026-11-12)
-
-- El usuario aclara que CLI/TUI/Studio deben pertenecer a un proyecto organizado,
-  sin separarlos como productos. El plan y ADR 0016 ahora proponen un paquete
-  Cargo con biblioteca común, capacidades en `features/` y presentación bajo
-  `interfaces/`; reemplaza la propuesta inicial de crates por interfaz.
-- `.ai/ROADMAP.md` es el plan activo con R0–R7, dependencias, checklists y primeras
-  entregas pequeñas. El roadmap previo queda en `.ai/history/ROADMAP-PRE-RUST.md`.
-  Nada de implementación se marca terminado. El siguiente paso es R0: inventario
-  de capacidades/datos y baseline, seguido de viabilidad GUI/editor/terminal.
-- `.ai/RELEASE-ROADMAP.md` propone 0.5.x legado, 0.6.0 alpha/beta/RC → Rust estable,
-  0.7 fluidez/accesibilidad, 0.8 LSP, 0.9 revisión y 1.0 contratos/soporte. Son
-  objetivos, sin fechas ni versiones publicadas; comprobar números antes de tags.
-- Una versión, manifiesto y actualización por producto; features de build para
-  consola/completo. Actualización con preview, sesiones activas, compatibilidad
-  de datos, backup y rollback. No se modificó código, toolchain ni versión actual.
-- Validación de esta ampliación: compileall y diff correctos; enlaces locales
-  comprobados. `python -m pytest` no ejecuta tests porque falta pytest en Python
-  local. No se repitieron descargas que fallaron en la entrega previa.
-- Basic Memory/Serena siguen sin herramientas disponibles; checkpoint en archivos.
-
-## Planeación de migración a Rust (2026-11-12)
-
-- El usuario solicita reestructurar núcleo, CLI, TUI y Studio con Rust y confirma
-  Studio nativo sin WebView. Solo se realizó planeación; no se cambió código ni
-  se instaló/configuró el toolchain Rust.
-- Plan versionable en `.ai/RUST-MIGRATION.md`, ADR 0016 propuesto y enlaces desde
-  PROJECT/ROADMAP/EDITOR-PARITY. Stack candidato: Clap, Ratatui/Crossterm e Iced;
-  GUI/editor/VT y runtime compartido requieren prototipo antes de su adopción.
-- Próximo paso: matriz de paridad/autoridad y baseline, luego prototipo visual.
-  Python/Qt siguen siendo la implementación actual. Git nativo también debe
-  migrarse; no basta con portar el bridge Python.
-- Basic Memory y Serena no están expuestos como herramientas en esta sesión;
-  checkpoint conservado en archivos locales del proyecto.
-- Validación actual: `python -m compileall -q src`, enlaces Markdown locales y
-  `git diff --check` correctos. Pytest no se ejecutó: no está instalado en Python
-  local y `uv run pytest` falló descargando dependencias por restricción de red;
-  el reintento con permisos ampliados se detuvo durante la preparación, sin
-  resultados. UV creó un `.venv` local incompleto y caché ignorados por Git.
-
-## Alta de agentes sin init y registro de fallos (2026-11-10)
-
-- `agent add` ya no falla si falta `.ai/chxchx-tech.toml`: ejecuta `init --minimal` (solo toml + `.ai/memory`, con backup) y añade el agente; `--dry-run` solo previsualiza. Código en `workspace/agent_autoinit.py`. Tras añadirlo hay que volver a confiar el proyecto.
-- Inicio muestra «Siguiente paso recomendado» (`native/src/main_window_guidance.cpp`): lista preparar → confiar → agente → skills → abrir, marca lo hecho según el estado real y un botón ejecuta el paso actual con los flujos de vista previa existentes. Compila y arranca offscreen; 11 smoke pasan; no se ha visto en ventana real.
-- Studio registra fallos de arranque de agentes (`bridge report-error`, operación `studio:agent-start:<id>`), visibles en Más → Errores. Studio, tras confirmar `agent add`, abre solo la vista previa de trust (la config cambia el hash); el trust sigue siendo una confirmación explícita. Pendiente: probar en Studio real; los cambios siguen sin commit en `dev`. Suite: 510+1 passed tras el ajuste de test_cli.
-
-## Abrir carpeta de proyecto en Studio (2026-11-09)
-
-- **Archivo → Abrir carpeta de proyecto…** (`Ctrl+Shift+O`) y **Archivo → Proyectos recientes** (hasta 10, en `QSettings`). Abren la carpeta en una ventana nueva de Studio (`QProcess::startDetached` del propio ejecutable), sin tocar terminales/agentes del proyecto actual; Inicio ofrece `Preparar y entrar` y el trust sigue explícito. Código en `native/src/main_window_projects.cpp`. Compila y arranca offscreen; no se ha probado con la ventana real ni en macOS/Windows.
-
-## Release 0.5.3 publicado (2026-11-08)
-
-- Versión estable fijada en `pyproject.toml` y `uv.lock`. Suite Python: 511 passed, 1 skipped, 10 deselected; compilación de Studio y `chxchx-agent-chat-smoke` pasan con Qt 6.11. El binario local informa `ChxChx Studio 0.5.3`; el tag coincide con la versión.
-- Incluye el diagnóstico/registro local de errores de OpenCode y el pegado de imágenes con caché Markdown descritos abajo. El primer CI encontró un ajuste de línea de Rich en Ubuntu/Python 3.13; `soft_wrap=True` lo corrige. El run 42507440204 pasó las matrices, builds nativos y smoke de instaladores; release `v0.5.3` publicado con 11 assets. Falta QA visual con un modelo de visión real.
-
-## Pegado de imágenes en Studio (2026-11-08)
-
-- El compositor acepta imágenes `image/*` aunque Qt no las marque con `hasImage()`, y archivos de imagen copiados como URL local. **✦** genera una descripción con el agente actual en `--lean`, solo lectura y sin sesión; la guarda atómicamente por SHA-256 en `.ai/cache/image-descriptions/` (30 días, máximo 200). Al reutilizarla, manda el Markdown en lugar de la imagen; conserva la opción de enviar el original cuando existe. Elimina la copia del portapapeles solo después de persistir la descripción; no toca imágenes fuente del usuario. Los turnos `--lean` limpian sus copias de `.ai/chat-attachments` al terminar.
-- Smoke Qt cubre generación, caché, reutilización, envío de imagen original, borrado de la copia pegada, vencimiento y MIME crudo; OpenCode 1.x/2.x cubiertos con E2E. Suite completa: 511 passed, 1 skipped, 10 deselected; `compileall`, build de Studio y smoke Qt pasan. Falta probarlo desde una ventana real de Studio con un modelo de visión.
-
-## OpenCode y registro de errores (2026-11-08)
-
-- `agent add opencode` identifica la ruta del TOML faltante y muestra la inicialización con `--dry-run`. ChxChx registra errores de alta, preflight y chat en la caché local; `chxchx-tech workspace errors <PATH>` permite consultarlos, igual que `Más → Errores` en TUI/Studio. La caché redacta credenciales habituales.
-- Para usar OpenCode en un proyecto sin configuración, inicialízalo primero y vuelve a añadir OpenCode; después vuelve a confiar el proyecto porque cambia el hash de configuración.
-- Suite completa verificada: 511 passed, 1 skipped, 10 deselected. `python -m compileall src` y `git diff --check` también pasan.
-
-> Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
-
-## Chat visual: seguridad y acceso (ADR 0014)
-
-- `agent_access.py` (niveles → banderas por CLI), `agent_permissions.py` (evento `permission`), `agent chat --network/--allow`. Studio: selector de 4 niveles, botón 🌐 Red, `ChatPermissionCard`, confirmación de acceso total, concesiones «una vez» / «en este chat» (`AgentChatWidget::answerPermission`).
-- Fase 2 (Claude en vivo): `agent_live.py` (`LiveClaude`: control_request ↔ control_response), `agent chat --live`, `ChatQuestionCard`, `answerPermission`/`answerQuestion` escriben JSON por stdin. Probado con un `claude` falso que espera al host (`tests/e2e/test_claude_live_flow.py`, 3 mutaciones) y con Claude real.
-- Codex en vivo: `agent_codex_live.py` (`LiveCodex`, cliente JSON-RPC de `codex app-server`), `codex_server_settings` (nivel → sandbox/aprobación), `answer` con `scope`. Probado con un `codex app-server` falso (`tests/e2e/test_codex_live_flow.py`, 4 mutaciones) y con Codex real (aprobar fuera del sandbox, denegar).
-- OpenCode en vivo: `agent_opencode_live.py` (`LiveOpenCode`: `opencode serve` + SSE + replies HTTP, con contraseña por turno), `agent_chat._json_lines/_live_driver`. Probado con un `opencode serve` falso (`tests/e2e/test_opencode_live_flow.py`, 5 mutaciones) y con OpenCode real (permiso permitido y denegado, pregunta; sin procesos huérfanos).
-- Pruebas: `tests/integrations/test_agent_access.py`, e2e de OpenCode, `agent_chat_smoke` (3 mutaciones detectadas). Verificado con claude/opencode/codex reales salvo `bypassPermissions` y `danger-full-access`.
 
 ## Estado actual
 

@@ -1,5 +1,69 @@
 # Handoff
 
+## R0.4 medido parcialmente; paquete Fedora incompleto (2026-11-12)
+
+- Resultados y reproducción: `.ai/PERFORMANCE-BASELINE.md`. Se midió Release
+  con fixtures de 21 y 5,001 archivos en Fedora 44. En el fixture grande, CLI
+  `status` p95 372 ms; Studio startup proxy p95 330 ms; RSS idle máximo 67.1
+  MiB; índice p95 172 ms y contenido p95 136 ms.
+- Se añadieron `scripts/perf/create_fixtures.py`,
+  `scripts/perf/measure_processes.py` y el target opt-in
+  `CHXCHX_BUILD_BENCHMARKS` para medir `ProjectFileIndex`.
+- Pendiente para cerrar R0.4: investigar y reparar deploy/CPack Qt del TGZ
+  Linux; hoy mide 4.31 MB, pero el verificador detecta Qt Core/Widgets/
+  Core5Compat y plataforma xcb ausentes. Volver a generar y validar tamaño;
+  fijar límite de paquete cuando sea distribuible. El deploy genérico omite
+  dependencias Qt en `/lib64`; forzarlas no bastó porque falla ajustando el
+  RPATH de un plugin Fedora sin entrada RPATH. El intento custom se revirtió.
+- Presupuestos de comparación preliminares constan en el reporte. R1 es el
+  siguiente gate después de cerrar este bloqueo de paquete. No se ejecutaron
+  tests en esta medición. Basic Memory/Serena no disponibles.
+
+## Baseline Fedora completado; siguiente R0.4 (2026-11-12)
+
+- Python compileall pasó; `uv run pytest` pasó 511, saltó 1 y excluyó 10 live.
+  El entorno uv usa Python 3.11.18; el host es Fedora 44/Python 3.14.10.
+- Qt legado: GCC 16.2.1/CMake 4.3/Ninja 1.13/Qt 6.11; Studio compiló y CTest
+  pasó 11/11. Se usó `env -u LD_LIBRARY_PATH`; warnings solo en dependencias
+  Scintilla/Qt vendorizadas. Build temporal `/tmp/chxchx-native-baseline.NzU66P`.
+- R0.3 queda evidenciado para Fedora. No cubre live, instaladores/release,
+  interacción visual ni macOS/Windows/Ubuntu. Rust `cargo check --locked` pasó.
+- Siguiente: ejecutar R0.4 con repositorios pequeños/grandes fijados y medir
+  startup, RSS idle/activo, CPU idle, latencia p50/p95 y tamaño de paquete; no
+  cerrar gates hasta guardar comandos, hardware, muestras y condiciones.
+  Después cerrar prototipo R1 antes de diseñar `projects switch`/supervisor.
+- No se hicieron cambios de código; Basic Memory/Serena siguen sin herramienta.
+
+## Siguiente paso de migración Rust (2026-11-12)
+
+- `.ai/RUST-CAPABILITY-MATRIX.md` ya documenta capacidades, contratos,
+  autoridad, rutas globales y por proyecto, catálogos y QSettings. R0.2 queda
+  documentado; R0.3/R0.4 y R1 todavía no pasan sus gates.
+- Fedora 44 quedó comprobada con `rustc/cargo 1.100.0`; `cargo check
+  --manifest-path migration/rust/Cargo.toml --locked` pasó. No se ejecutaron
+  tests ni Clippy.
+- Continuar con baseline reproducible del producto legado en Fedora: registrar
+  versión/plataforma, checks disponibles y limitaciones; después medir startup,
+  RAM/CPU/búsqueda/paquete en proyectos de tamaño fijo. No usar resultados
+  históricos como evidencia del equipo actual.
+- Luego completar el prototipo R1 de editor/terminal/IME/accesibilidad y decidir
+  toolkit; `projects switch` queda detrás del diseño del supervisor/runtime.
+- No se ejecutaron suites ni builds en este tramo. Basic Memory/Serena no están
+  disponibles en la sesión.
+
+## Revisión de brechas Rust (2026-11-12)
+
+- Hallazgos: falta `.ai/RUST-CAPABILITY-MATRIX.md` aunque ROADMAP y
+  RUST-MIGRATION la enlazan; R0.2–R0.4 y R1 siguen abiertos; CI no valida schemas
+  ni ejecuta tests Rust. No dar por cerradas las fases de paridad.
+- Próximo orden recomendado: restaurar/completar inventario y reproducir baseline
+  (R0); cerrar prototipo GUI/editor/terminal y decisión ADR (R1); añadir pruebas
+  compartidas y validación de contratos a CI (R2.4/R3.4); después acordar el
+  supervisor y migrar `projects switch` con runtime de workspace/agentes.
+- Luego siguen skills/packs/mods, adapters de agentes/contexto, Git, CI/CD,
+  preferencias, instaladores y QA real en Windows/macOS/Ubuntu/Fedora. Sin cambios
+  de código en esta revisión; Basic Memory/Serena no están disponibles.
+
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
 ## Estado y siguiente capacidad Rust
@@ -121,32 +185,6 @@
 
 - Implementado sin commit en `dev`. Pendiente: probar a mano el diálogo y la ventana nueva (Fedora, macOS, Windows; en macOS el ejecutable dentro del .app debe relanzarse bien), añadir smoke Qt si se quiere cobertura y documentar el atajo en README/EDITOR-PARITY. `main_window.cpp` sigue sobre 300 líneas (excepción previa).
 - Tip de entorno: con `LD_LIBRARY_PATH` apuntando a la instalación stable de Studio, el build falla con `Qt_6.11 not found`; compilar con `env -u LD_LIBRARY_PATH`.
-
-## Release 0.5.3 publicado (2026-11-08)
-
-- Versión estable y lock sincronizados. Validación local: 511 passed, 1 skipped, 10 deselected; Studio y smoke nativo compilados, smoke nativo y `--version` correctos. El CI del tag pasó todas las matrices/builds y `installer-smoke` en Ubuntu, Windows y macOS; el release `v0.5.3` se publicó con 11 assets. Su primer intento reveló el ajuste de Rich en Ubuntu/Python 3.13, corregido con `soft_wrap=True`.
-- Pendiente fuera de CI: probar el botón ✦ desde una ventana de Studio con un modelo de visión real.
-
-## Imágenes pegadas y caché de descripciones (2026-11-08)
-
-- Implementado **✦ Describir y guardar** a demanda con el agente/modelo actual en `--lean`. Genera Markdown con OCR, distribución, observaciones, inferencias e incertidumbres; lo guarda por SHA-256, caduca a los 30 días y limita a 200 entradas. Al readjuntar, el Markdown se usa por defecto; mientras el original esté disponible, el botón permite volver a enviarlo. La copia temporal del portapapeles y las copias de staging de consultas `--lean` se eliminan solo tras completar el guardado/turno; los archivos originales elegidos por el usuario se conservan.
-- Smoke nativo cubre generación simulada, reutilización, vencimiento y eliminación solo de copias del portapapeles; la suite Python pasó (511 passed, 1 skipped, 10 deselected), `compileall` y el build completo de Studio también pasan. Pendiente: probar el botón con un agente/modelo de visión real en Studio y revisar la caché bajo `.ai/cache/image-descriptions/`.
-
-## OpenCode y registro de errores (2026-11-08)
-
-- Causa confirmada del mensaje mostrado: `agent add` necesita `.ai/chxchx-tech.toml`; sin ese archivo OpenCode todavía no está registrado en el workspace.
-- Para habilitarlo en el proyecto afectado: `chxchx-tech init <PATH> --dry-run`, revisar y repetir sin `--dry-run`; luego `chxchx-tech agent add opencode --path <PATH>` o usar Añadir agente en Studio, y volver a confiar el proyecto.
-- Errores de alta, preflight y chat quedan en la caché local. Consultar con `chxchx-tech workspace errors <PATH>` o `Más → Errores` en TUI/Studio. Suite completa: 511 passed, 1 skipped, 10 deselected.
-
-> Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
-
-## Chat visual: aprobaciones en vivo (Claude, Codex y OpenCode hechos)
-
-- Hecho con Claude (ADR 0014): permisos y `AskUserQuestion` en vivo. Probar a mano en Studio con el Claude real: aprobar, «en este chat», denegar, preguntas con varias opciones/selección múltiple, detener mientras espera, y cerrar la pestaña con una solicitud abierta.
-- Resuelto: el contexto del chat nuevo se inyecta en el prompt (`inline_project_context`), así que ya no hay permiso para leerlo. Los archivos grandes se recortan (12 KB c/u, 36 KB en total).
-- Hecho con Codex (`app-server`): probar a mano en Studio con el Codex real (comando fuera del sandbox, archivo fuera del proyecto, denegar, pregunta `request_user_input`), y vigilar cambios del protocolo experimental. El proceso es por turno; un proceso por chat permitiría «permitir en este chat».
-- Hecho con OpenCode (`serve`): probar a mano en Studio con el OpenCode real (aprobar, «en este chat» con patrón, denegar —detiene el turno—, pregunta, cancelar con una solicitud abierta) y comprobar que no quedan procesos `opencode serve` tras cerrar la pestaña.
-- Pendiente: carpetas adicionales (`--add-dir`). El reintento automático de la fase 1 ya conserva el borrador del cuadro de texto.
 
 ## Último cambio
 

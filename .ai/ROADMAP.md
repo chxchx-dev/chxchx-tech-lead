@@ -35,15 +35,27 @@ prototipo o workflow.
   agentes/permisos, conocimiento/contexto, Git, automatización y distribución.
   La matriz registra capacidad, implementación/contrato/datos, evidencia de pruebas,
   modos y dueños actual/destino; QA/dependencias se cierran en sus gates de fase.
-- [ ] R0.2 Cerrar inventario de configuración, registros, trust, QSettings,
-  catálogos, caches y rutas. La inspección inicial está en la matriz; faltan
-  confirmar claves exactas QSettings y rutas de algunos datos regenerables.
-- [ ] R0.3 Reproducir checks del legado y registrar limitaciones del entorno.
+- [x] R0.2 Cerrar inventario de configuración, registros, trust, QSettings,
+  catálogos, caches y rutas. La matriz registra claves QSettings, ámbitos y
+  formatos/rutas locales inspeccionados; quedan por validar datos en ejecución
+  dentro del baseline R0.3/R0.4.
+- [x] R0.3 Reproducir checks del legado y registrar limitaciones del entorno.
+  Fedora 44: compileall correcto; `uv run pytest` 511 passed, 1 skipped,
+  10 deselected; build Qt/C++ local correcto y CTest 11/11. Las pruebas live,
+  empaquetado de release, QA interactivo y otros SO siguen fuera de esta
+  evidencia local.
 - [ ] R0.4 Medir arranque, RSS, CPU idle, búsquedas y paquete con repositorios
   pequeños/grandes y comandos reproducibles; fijar presupuestos de aceptación.
+  Evidencia parcial Release Fedora 44: `.ai/PERFORMANCE-BASELINE.md` registra
+  métricas, fixtures reproducibles y límites provisionales. Queda abierto porque
+  el TGZ CPack no contiene Qt Core/Widgets/Core5Compat ni el plugin xcb y falla
+  `verify_studio_package.py`; el deploy genérico filtra Qt en `/lib64` y falla
+  al ajustar el RPATH del plugin Fedora al intentar incluirlo. Falta corregir y
+  volver a medir el paquete.
 
-Salida parcial: matriz inicial lista; falta cerrar R0.2, reproducir validaciones
-del legado y registrar mediciones antes de cerrar R0. Dependencias: ninguna.
+Salida parcial: R0.1–R0.3 documentados/reproducidos; R0.4 tiene baseline
+parcial. Falta un paquete Studio válido y tamaño aceptable antes de cerrar R0.
+Dependencias: ninguna.
 
 ### R1 — Viabilidad del producto nativo (fase 1)
 
@@ -156,8 +168,10 @@ no consecuencia automática de completar este documento.
 
 ## Primeras entregas pequeñas
 
-1. **PR de inventario:** R0.1–R0.2; matriz y datos, sin mover código.
-2. **PR de baseline:** R0.3–R0.4; mediciones, fixtures y evidencia reproducible.
+1. **PR de inventario:** R0.1–R0.2; matriz y datos, sin mover código. El
+   inventario está documentado; falta revisión y validación de runtime.
+2. **PR de baseline:** R0.3–R0.4. Checks del legado y evidencia Fedora están
+   registrados; faltan mediciones, fixtures de rendimiento y tamaño reproducible.
 3. **PR de viabilidad:** R1; prototipo acotado y decisión de editor/GUI.
 4. **PR de base común:** R2.1–R2.2; un paquete y sus fronteras.
 5. **Primera capacidad en curso:** R2.3 entrega estado compartido; R2.4 tiene
