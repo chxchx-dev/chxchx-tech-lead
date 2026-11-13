@@ -1,6 +1,6 @@
 # Roadmap de ejecución: producto unificado en Rust
 
-- Actualizado: 2026-11-12.
+- Actualizado: 2026-11-13.
 - Alcance confirmado: un producto Rust; CLI, TUI y Studio como modos de interacción.
 - Studio: nativo, sin WebView. Toolkit pendiente de prototipo.
 - Estado: trabajo incremental en `migracion-rust`; status, detección, init,
@@ -49,9 +49,12 @@ prototipo o workflow.
   Evidencia parcial Release Fedora 44: `.ai/PERFORMANCE-BASELINE.md` registra
   métricas, fixtures reproducibles y límites provisionales. Queda abierto porque
   el TGZ CPack no contiene Qt Core/Widgets/Core5Compat ni el plugin xcb y falla
-  `verify_studio_package.py`; el deploy genérico filtra Qt en `/lib64` y falla
-  al ajustar el RPATH del plugin Fedora al intentar incluirlo. Falta corregir y
-  volver a medir el paquete.
+  `verify_studio_package.py`. Se añadió un candidato que incluye Qt6 desde las
+  rutas de bibliotecas del sistema y usa patchelf en el job Fedora 44; aún falta
+  una ejecución CI verde, inspección/arranque del TGZ y nueva medición de tamaño
+  antes de cerrar el gate. A solicitud del usuario, la corrida Fedora local se
+  difiere hasta retomarla en Fedora; el intento con Podman en Windows se detuvo
+  manualmente antes de compilar (219/386 tareas), sin resultado de CTest/CPack.
 
 Salida parcial: R0.1–R0.3 documentados/reproducidos; R0.4 tiene baseline
 parcial. Falta un paquete Studio válido y tamaño aceptable antes de cerrar R0.
@@ -61,10 +64,16 @@ Dependencias: ninguna.
 
 - [ ] R1.1 Prototipo con árbol, editor, terminal, chat simulado y permisos;
   ejecutar los escenarios del plan de migración, incluidos IME y accesibilidad.
+  Windows ya tiene shell de IDE equivalente a la estructura Qt, explorador,
+  editor con pestañas/resaltado/guardado y terminal PTY/ConPTY por líneas con
+  trust. Faltan chat, teclado terminal completo, IME, accesibilidad y QA de paridad.
 - [ ] R1.2 Evaluar Iced; comparar Egui si hay límites. Documentar estrategia de
   editor/VT, licencias y costo de capacidades que hoy resuelve Scintilla.
 - [ ] R1.3 Comprobar build/arranque Windows, macOS, Ubuntu y Fedora; separar
-  evidencia real de plataformas aún no disponibles.
+  evidencia real de plataformas aún no disponibles. Evidencia inicial Windows:
+  el binario Rust `chxchx-studio` compiló con MSVC y arrancó responsivo; solo se
+  validó el shell inicial; el port IDE añade editor y terminal con smoke Windows,
+  sin acreditar paridad del editor ni el resto de plataformas.
 - [ ] R1.4 Cerrar ADR del toolkit/editor y alcance del primer build Rust.
 
 Salida: viabilidad demostrada antes del port extenso; pendientes con costo y
@@ -72,19 +81,28 @@ resolución explícitos. Dependencias: escenarios y baseline de R0.
 
 ### R2 — Aplicación común y primera capacidad completa (fase 2)
 
-- [x] R2.1 Crear un paquete Cargo en `migration/rust/`, con biblioteca común,
-  `app/`, `features/`, `integrations/`, `runtime/`, `protocol/` e `interfaces/`.
+- [ ] R2.1 Crear el paquete único y sus fronteras comunes. El paquete Cargo,
+  biblioteca, `features/`, `integrations/` e `interfaces/` ya existen;
+  `app/`, `runtime/` y `protocol/` aún no están materializados como módulos.
 - [x] R2.2 Definir primera API de lectura compartida, contrato y features
   `cli`, `tui`, `studio`; entrypoints finos y una sola versión.
 - [x] R2.3 Entregar resumen de proyecto de solo lectura en los
   tres modos; misma acción y política, presentaciones adaptadas a cada modo.
 - [ ] R2.4 Añadir CI de formato/lints/contracts y validación automatizada de
-  capacidades; comprobar build CLI sin GUI y de los tres modos. Workflow de
-  formato/build/Clippy agregado; falta validar el schema como contrato en CI y
-  definir suite automatizada de capacidades.
+  capacidades. El workflow queda configurado para Windows/macOS/Ubuntu: compila
+  los tres modos y el CLI sin GUI, ejecuta Clippy y la suite de integración CLI,
+  y valida la salida real de `status --json` contra el schema v1. En Windows,
+  formato, check full/CLI, Clippy, tests CLI (3 passed) y schema pasaron. La suite
+  cubre preview/apply/idempotencia
+  de init mínimo, preview/apply/revocación de trust y catálogo vacío/JSON
+  inválido. La implementación está lista; falta una ejecución remota satisfactoria
+  en los tres runners antes de cerrar el gate. La cobertura de paridad amplia y
+  de fallos/rollback continúa en R3.4.
 
-Salida parcial R2.1–R2.3: el resumen usa el mismo DTO y lógica en los tres modos.
-R2.4 y la paridad completa requieren terminar R0 y validar R1.
+Salida R2.2–R2.4: el resumen usa el mismo DTO y lógica en los tres modos; CI
+comprueba contratos y una primera serie de flujos compartidos. R2.1 mantiene
+pendiente materializar la estructura `app/`, `runtime/` y `protocol/`. La
+paridad completa y la validación del reemplazo visual siguen detrás de R0/R1.
 
 ### R3 — Preparación y mutaciones seguras (fase 3)
 
@@ -111,6 +129,12 @@ R2.4 y la paridad completa requieren terminar R0 y validar R1.
   global. Faltan trust/preview para los otros dominios de mutación y paridad
   automatizada.
 - [ ] R3.3 Migrar skills/packs/mods y empaquetar recursos fuera del paquete Python.
+  Avance (2026-11-13): lectura del catálogo, recomendaciones, selección por proyecto,
+  sincronización de `.ai/SKILLS.md`/`AGENTS.md` y apply/remove de Mods con backup
+  están en Rust (`catalog`, `project_skills`, `project_mods`), con CLI y Studio y
+  6 pruebas de recorrido. Sigue abierto: los recursos se leen de
+  `src/chxchx_tech_lead/` al compilar (no viven fuera del paquete Python), falta la
+  TUI y el comando `skills sync` independiente de la selección.
 - [ ] R3.4 Cubrir los recorridos comunes en CLI, TUI y Studio usando las mismas
   operaciones; probar dry-run, idempotencia, fallos y rollback.
 
@@ -121,6 +145,8 @@ Salida: preparación segura equivalente al legado. Dependencias: R2.
 - [ ] R4.1 Validar diseño de supervisor bajo demanda, IPC y dueño por proyecto.
 - [ ] R4.2 Migrar recursos/RAM Governor, start/stop/resume y estado persistente.
 - [ ] R4.3 Integrar PTY/ConPTY, emulación VT, resize, scrollback y launcher externo.
+  Hay backend portable-pty/vt100 inicial con trust, entrada por líneas, resize y
+  smoke Windows; faltan teclado raw, colores/celdas, scrollback navegable y QA.
 - [ ] R4.4 Probar dos modos abiertos a la vez, exclusión mutua, caída/reconexión,
   PID reutilizado, cierre de chat y cierre de interfaz sin procesos huérfanos.
 
@@ -174,8 +200,10 @@ no consecuencia automática de completar este documento.
    registrados; faltan mediciones, fixtures de rendimiento y tamaño reproducible.
 3. **PR de viabilidad:** R1; prototipo acotado y decisión de editor/GUI.
 4. **PR de base común:** R2.1–R2.2; un paquete y sus fronteras.
-5. **Primera capacidad en curso:** R2.3 entrega estado compartido; R2.4 tiene
-   workflow de formato/build y necesita completar lints/contratos.
+5. **Contratos y primera cobertura:** R2.4 cuenta con tests de CLI, validación
+   de schema y workflow configurado; espera resultados remotos Windows/macOS/
+   Ubuntu para cerrar el gate. R2.1 mantiene pendiente `app/`, `runtime/` y
+   `protocol/`; R3.4 amplía la paridad automatizada.
 
 Cada PR declara capacidad, efectos, autoridad, presentaciones aplicables,
 validación y rollback cuando corresponda. El implementador registra resultados

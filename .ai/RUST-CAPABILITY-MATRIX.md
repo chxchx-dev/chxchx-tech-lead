@@ -1,33 +1,34 @@
 # Matriz de capacidades para la migración a Rust
 
-- Actualizada: 2026-11-12.
+- Actualizada: 2026-11-13.
 - Propósito: inventariar contratos, datos, autoridad y evidencia del producto
   legado frente al paquete único `migration/rust/`.
 - Regla de estado: “Parcial” indica que existe un slice Rust; no certifica paridad
   ni permite cambiar la autoridad del producto.
-- No se ejecutaron suites en esta revisión. Los enlaces a tests identifican la
-  cobertura legado disponible, no resultados de ejecución actuales.
+- La suite Rust actual está en `migration/rust/tests/product_workflows.rs` y la
+  ejecución local Windows (2026-11-13) pasó 3 pruebas. El estado de CI remoto en
+  macOS/Linux queda pendiente de la siguiente ejecución del workflow.
 
 ## Capacidad y autoridad
 
 | Capacidad | Autoridad actual / evidencia legado | Slice Rust y contratos | Pendiente y puerta |
 | --- | --- | --- | --- |
 | Detección, perfiles y overview | Python: `core/detector.py`, `core/profiles.py`; tests `tests/test_detector.py`, `tests/test_profiles.py` | `features/project_detection.rs`, `project_profiles.rs`, `project_overview.rs`; `chxchx.project-overview` v1 | Paridad automatizada de detección/config; la schema no sustituye `chxchx.project-status` v1. |
-| Configuración, init y preparación | Python: `core/project_config.py`, `config_migrations.py`, `bootstrap.py`, `preparation.py`, `templates.py`; tests `tests/workspace/test_config.py`, `tests/test_templates.py` | `project_config*`, `project_setup.rs`, `project_templates.rs`; preview/apply, migración v1→v2 y backups | Comparar todos los campos y efectos; probar idempotencia, fallos y rollback en copias aisladas. |
-| Catálogo, cambio y sync de proyectos | Python: `core/registry.py`, `commands/projects.py`; tests `tests/test_registry.py`, `tests/test_sync.py` | `project_catalog.rs`, `project_registry.rs`, `project_sync.rs`; `projects list/current/sync` | `projects switch` requiere runtime compartido; validar datos malformados y registro obsoleto. |
-| Trust | Python: `core/trust.py`; tests `tests/workspace/test_trust.py` | `project_trust.rs`; aprobación local ligada al hash de config, preview y backup del registro | Comparar semántica/hash y migración; nunca importar confianza con menor rigor. |
+| Configuración, init y preparación | Python: `core/project_config.py`, `config_migrations.py`, `bootstrap.py`, `preparation.py`, `templates.py`; tests `tests/workspace/test_config.py`, `tests/test_templates.py` | `project_config*`, `project_setup.rs`, `project_templates.rs`; preview/apply, migración v1→v2 y backups | Test CLI preview/apply/idempotencia de init mínimo. Comparar campos completos; cubrir modo completo, fallos y rollback en copias aisladas. |
+| Catálogo, cambio y sync de proyectos | Python: `core/registry.py`, `commands/projects.py`; tests `tests/test_registry.py`, `tests/test_sync.py` | `project_catalog.rs`, `project_registry.rs`, `project_sync.rs`; `projects list/current/sync` | Test CLI verifica registro ausente y JSON inválido preservado. `projects switch` requiere runtime; faltan planes obsoletos y cobertura sync/rollback. |
+| Trust | Python: `core/trust.py`; tests `tests/workspace/test_trust.py` | `project_trust.rs`; aprobación local ligada al hash de config, preview y backup del registro | Test CLI cubre preview/apply/untrust y backup. Comparar semántica/hash, planes obsoletos y migración; nunca importar confianza con menor rigor. |
 | Backups y rollback | Python: `core/backup.py`, `workspace/manager.py`; tests `tests/test_backup.py`, `tests/workspace/test_manager.py` | `project_backup.rs`, `project_rollback.rs`; rollback de archivos administrados | Cobertura común de fallos parciales y datos ajenos preservados. |
 | MCP, memoria externa y diagnóstico | Python: `integrations/mcp.py`, `basic_memory.py`, `mcp_diagnostics.py`; tests `tests/test_integrations.py`, `tests/test_mcp_diagnostics.py` | `mcp_setup.rs`, `mcp_codex.rs`, `mcp_clients.rs`, `basic_memory.rs`, `doctor.rs`; configuración oficial Claude/Codex/OpenCode | Validar con CLIs instalados, sin credenciales de CI; completar contratos y pruebas falsas. |
 | Procesos, workspace y recursos | Python: `workspace/process_manager.py`, `process_runtime.py`, `resources.py`, `service.py`; tests `tests/workspace/test_process_manager.py`, `test_process_runtime.py`, `test_resources.py` | Sin runtime Rust portado | Diseñar dueño por proyecto, límites/RAM Governor, exclusión, persistencia, crash/reconexión y cierre antes de `switch`. |
-| Terminal y sesiones Zellij | Python: `adapters/terminal/`, `workspace/terminal_operations.py`, `zellij_tabs.py`; tests `tests/adapters/test_terminal.py`, `tests/workspace/test_layouts.py` | Sin PTY/ConPTY ni emulador VT Rust | Prototipo de R1 y luego transporte/emulación; preservar terminal externo como fallback. |
+| Terminal y sesiones Zellij | Python: `adapters/terminal/`, `workspace/terminal_operations.py`, `zellij_tabs.py`; tests `tests/adapters/test_terminal.py`, `tests/workspace/test_layouts.py` | PTY/ConPTY portable-pty + parser vt100 inicial; entrada por líneas, trust y smoke Windows | Prototipo de R1 y luego transporte/emulación; preservar terminal externo como fallback. |
 | Agentes, permisos y chat | Python: `adapters/agents/`, `integrations/agent_*`, `workspace/agent_chat.py`; tests `tests/e2e/test_*live*`, `tests/workspace/test_agent_chat.py`, `tests/integrations/test_agent_access.py` | Sin adapters de agente Rust | Codex, Claude, OpenCode/Ollama, eventos, aprobación/preguntas, cancelación, modelos, adjuntos y límites. Depende de R4. |
-| Skills, Tech Packs y Mods | Python: `skills/`, `core/mods.py`, `core/mod_catalog/`; tests `tests/test_skill*`, `tests/test_tech_packs.py`, `tests/core/test_mods.py` | Sin catálogos portados; solo existe `assets/profiles.toml` | Empaquetar recursos Rust y portar detección, recomendaciones, apply/remove con backup (R3.3). |
+| Skills, Tech Packs y Mods | Python: `skills/`, `core/mods.py`, `core/mod_catalog/`; tests `tests/test_skill*`, `tests/test_tech_packs.py`, `tests/core/test_mods.py` | Portado en CLI y Studio: catálogo empaquetado al compilar, selección por proyecto, sync de contexto y Mods con backup; falta TUI y mover los recursos fuera del paquete Python (R3.3) | Empaquetar recursos Rust y portar detección, recomendaciones, apply/remove con backup (R3.3). |
 | Memoria, historial y contexto | Python: `workspace/memory_history.py`, `session_journal.py`, `chat_context.py`, `chat_compaction.py`, `handoff.py`; tests `tests/workspace/test_memory_history.py`, `test_session_journal.py`, `test_handoff.py`, `test_chat_context_inline.py` | Sin capacidad equivalente completa | Portar lectura/escritura segura, historial, handoff, diario y reglas de retención sin transcripciones/secretos en logs. |
 | Errores y logs | Python: `workspace/error_cache.py`, `process_manager.py`; tests `tests/workspace/test_error_cache.py` | Solo diagnósticos estáticos vía `doctor`; sin registro/runtime de errores | Definir retención, redacción, límites y consulta por proyecto durante R4/R5. |
-| Git y asistente | Implementación propia de Studio: `native/src/git/`; ADR 0011/0012; tests `native/tests/git_smoke.cpp`, `git_ui_smoke.cpp` | Sin Git Rust | Portar status/diff, ramas, stash, remotos, asistente y backups; preservar argv seguro y locks por repo (R6). |
+| Git y asistente | Implementación propia de Studio: `native/src/git/`; ADR 0011/0012; tests `native/tests/git_smoke.cpp`, `git_ui_smoke.cpp` | Portado en Studio (sin asistente IA): status, stage/unstage, commit, descarte con copia en `.git`, ramas, historial con grafo, stash, fetch/pull/push, guía y diffs; ver `features/git/` | Portar status/diff, ramas, stash, remotos, asistente y backups; preservar argv seguro y locks por repo (R6). |
 | CI/CD de proyectos | Python: `integrations/ci_*`, `deploy_*`; tests `tests/integrations/test_ci*`, `test_deploy*` | Sin capacidad Rust | Mantener opt-in, preview/confirmación, estado/logs y retiro; no confundir CD del producto con el del proyecto. |
 | Modelos locales | Python: `integrations/local_model_*`, `ollama.py`; tests `tests/integrations/test_local_models.py`, `tests/e2e/test_local_models_flow.py` | Sin capacidad Rust | Portar inventario, ajuste, instalación/remoción y Ollama tras definir procesos/recursos. |
-| Editor, búsqueda y preferencias | Studio legado: `native/src/` (Scintilla/Lexilla, búsqueda, símbolos, layouts); tests `native/tests/editor_smoke.cpp`, `content_search_smoke.cpp`, `symbol_index_smoke.cpp` | Studio Iced inicial; no editor, VT ni paridad de preferencias | Gate R1: prototipo, IME, accesibilidad, archivos grandes, teclado y costo de reemplazar Scintilla. |
+| Editor, búsqueda y preferencias | Studio legado: `native/src/` (Scintilla/Lexilla, búsqueda, símbolos, layouts); tests `native/tests/editor_smoke.cpp`, `content_search_smoke.cpp`, `symbol_index_smoke.cpp` | Shell Iced con disposición Qt, editor UTF-8, pestañas, resaltado, búsqueda, undo/redo y guardado con respaldo/conflictos; preferencias avanzadas pendientes | Gate R1: prototipo, IME, accesibilidad, archivos grandes, teclado y costo de reemplazar Scintilla. |
 | Distribución y actualización | `integrations/installers.py`, `studio_update_*`, CMake/CPack; tests `tests/installers/`, `tests/test_studio_package.py`, `native/tests/` | Sin instaladores/actualizador Rust | Un solo release por producto; instalar/actualizar/rollback/desinstalar en máquinas limpias (R7). |
 
 ## Datos, preferencias y rutas inspeccionados
@@ -41,6 +42,7 @@ override; el default es `~/.chxchx-tech-lead/`. Allí se encuentran:
 | --- | --- |
 | `projects.json` | Catálogo y proyecto reciente; `core/registry.py`. |
 | `trusted_projects.json` | Trust por raíz canónica y SHA-256 de configuración; `core/trust.py`. |
+| `studio-preferences.json` | Solo Rust: layout, tamaño de ventana, proyectos recientes y sesión por proyecto (clave SHA-256 de la raíz). Reemplaza en el Studio Rust las claves QSettings de la tabla inferior; no se importan ni se leen. |
 | `workspace-state.json` | Estado persistido de workspace/procesos; `workspace/state.py`. |
 | `backups/` | Backups por proyecto y operación; `core/backup.py`. |
 | `logs/workspaces/` | Salida acotada de procesos administrados; `workspace/process_manager.py`. |
@@ -121,14 +123,23 @@ cada valor y presentar preview si cambia la política o el ámbito.
   ausentes; falta corregirlo, medir el paquete válido y cerrar R0.4.
 - R1 sigue abierto: evaluar árbol/editor/terminal/chat/permisos, IME,
   accesibilidad, archivos grandes, paquetes y builds/arranques por plataforma.
-- R2.4 y R3.4 siguen abiertos: añadir pruebas comunes de capacidades, validar
-  schemas/fixtures en CI y cubrir preview, idempotencia, plan obsoleto, rollback
-  y errores. `migration/rust/` aún no tiene suite Rust de capacidades.
-- `.github/workflows/rust-product.yml` compila y ejecuta Clippy en Ubuntu,
-  Windows y macOS; también verifica CLI sin GUI. No incluye Fedora ni tests.
-  El build Rust local en Fedora (`cargo check --manifest-path
-  migration/rust/Cargo.toml --locked`) también pasó; aún faltan Rust tests y
-  validar los otros runners en el estado actual.
+- R2.4 tiene una primera puerta automatizada: el workflow está configurado para
+  compilar los tres modos y el CLI sin GUI, ejecutar Clippy y `cargo test` en
+  Windows/macOS/Ubuntu, y validar con Draft 2020-12 la salida real de
+  `status --json` contra el schema versionado.
+  La integración cubre init mínimo (preview/apply/idempotencia), trust
+  (preview/apply/revocación) y catálogo (registro ausente/JSON inválido), en
+  home temporal aislado. La suite no representa todavía toda la paridad.
+- R3.4 continúa abierto: extender la cobertura a previews obsoletos, preservación
+  de datos ajenos, errores parciales y rollback; mapear los recorridos comunes
+  de cada capacidad a sus modos aplicables.
+- R2.1 está parcial: el crate tiene `features/`, `integrations/` e
+  `interfaces/`, pero aún no módulos `app/`, `runtime/` y `protocol/`.
+- `.github/workflows/rust-product.yml` compila, ejecuta Clippy y tests de CLI en
+  Ubuntu, Windows y macOS; también verifica CLI sin GUI y valida el schema del
+  JSON emitido por la CLI. No incluye Fedora. El build Rust local histórico en
+  Fedora pasó `cargo check`; la CI remota debe confirmar los resultados de estos
+  nuevos pasos en cada runner.
 - Quedaron fuera de R0.3: pruebas Python `live` (10 deselected y 1 skip),
   empaquetado de release, QA interactivo de la ventana y builds/pruebas macOS,
   Windows y Ubuntu en esta sesión.

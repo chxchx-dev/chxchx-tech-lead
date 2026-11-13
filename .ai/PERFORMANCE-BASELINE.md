@@ -72,5 +72,13 @@ stat -c '%n %s bytes' /tmp/chxchx-perf-baseline.MNI0jw/packages/*.tar.gz /tmp/ch
 python scripts/verify_studio_package.py --platform linux-fedora-x86_64 --package-dir /tmp/chxchx-perf-baseline.MNI0jw/packages --output-dir /tmp/chxchx-perf-baseline.MNI0jw/staged-package
 ```
 
+La CI ahora reproduce también el paquete nativo en Fedora 44: instala
+`patchelf` y Perl (requerido por CMake), configura con
+`-DQT_DEPLOY_USE_PATCHELF=ON`, ejecuta CPack y valida
+el TGZ. El deploy incluye por regex solo los `.so` de Qt6 desde directorios
+Linux de sistema; el resto de dependencias gráficas las aporta el instalador.
+Esta corrección candidata aún requiere una ejecución remota satisfactoria y
+una nueva medición del paquete para cerrar R0.4.
+
 Las rutas se eligieron como temporales para esta corrida y deben estar vacías
 al repetirla, ya que el generador de fixtures no sobrescribe árboles existentes.

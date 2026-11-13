@@ -1,5 +1,235 @@
 # Handoff
 
+## Sugerencias de commit (2026-11-13)
+
+- Reglas en `suggest_rules.rs` (clasificación, nombres, tipo), `suggest_split.rs`
+  (módulos grandes), `suggest_checks.rs` (secretos, formato). Para ajustar una regla,
+  añadir un caso en `suggest_tests.rs`. Cuando existan agentes (R4) se puede ofrecer una
+  sugerencia con IA además de esta, con consentimiento y sin enviar archivos sensibles.
+
+## Git (2026-11-13)
+
+- Pedido: Git completo en la barra izquierda, como el Studio Qt, con recomendaciones.
+  Hecho salvo lo listado como «No portado» en `.ai/CURRENT_STATE.md`.
+- Las pruebas de `features/git/tests.rs` crean repositorios temporales con el `git` real y
+  se omiten si no existe. Usan `core.autocrlf=false` para ser deterministas en Windows.
+- Siguiente paso natural: el asistente (sugerir mensaje / consejo) cuando se porten los
+  agentes (R4); hoy la guía es determinista y local.
+- Un repositorio con el proyecto en una subcarpeta usa `Repository::prefix`: los archivos
+  fuera de la carpeta no se muestran en el explorador y no se pueden abrir desde el panel.
+
+## Espacio de trabajo a la izquierda (2026-11-13)
+
+- Pedido del usuario: mover «Espacio de trabajo» del lado derecho al menú izquierdo para
+  ganar pantalla. Hecho; detalle en `.ai/CURRENT_STATE.md`. Para añadir una sección,
+  una entrada en `GROUPS` de `studio_workspace.rs`, la página en `Page` y su menú/atajo.
+
+## UX del Studio (2026-11-13, Windows)
+
+- Pedido: que no se sienta bugueado ni pegado, con barra de menú y de herramientas.
+  Detalle y hallazgos en `.ai/CURRENT_STATE.md`.
+- El rail ya no contiene páginas; navegar secciones es por menú Ir, barra de
+  herramientas y panel derecho. Para añadir un comando: una entrada en
+  `studio_menu_items.rs` y, si es frecuente, un botón en `studio_toolbar.rs`; los que
+  inician un plan se encadenan con `Message::Sequence` para abrir antes su sección.
+- Pendiente: navegación con flechas dentro de los menús, buscar y reemplazar,
+  búsqueda con regex/mayúsculas, numeración de líneas, y QA de ratón real.
+- Estado del código del Studio: todos los módulos bajo 300 líneas.
+
+## Rendimiento, catálogo y persistencia (2026-11-13, Windows)
+
+- Pedido del usuario: Studio Rust lento/pegado, portar packs, plugins, skills y demás,
+  y dejar la persistencia completa sin perder el diseño. Detalle y mediciones en
+  `.ai/CURRENT_STATE.md`.
+- «Plugins» se interpretó como los Mods del legado (instrucciones para agentes). No se
+  portó el catálogo de agentes (`agent_catalog.py`), los modelos locales (Ollama), Git,
+  chat ni CI/CD: siguen en el legado y son el siguiente bloque de paridad (R4/R6).
+- El catálogo se lee de `src/chxchx_tech_lead/` al compilar (`build.rs`, constante
+  `LEGACY`). Al promover Rust a la raíz hay que mover esos directorios y cambiar la
+  constante; hasta entonces hay una sola fuente de verdad, sin copias que se desfasen.
+- Pendiente de QA manual en la GUI: aplicar/retirar skills y mods con clics reales,
+  arrastre de separadores, atajos y escalado. La TUI no tiene catálogo (R3.4).
+- Excepciones a las 300 líneas: `interfaces/cli.rs` (538, ya excedía antes; siguiente
+  paso: extraer los comandos de proyecto a `cli_projects.rs`).
+- Para medir rendimiento usar `--release`; el script de benchmark usó 120 cambios de
+  tamaño de la ventana y el CPU del proceso. No habilitar wgpu sin repetirlo.
+
+## Rediseño visual IDE con marca ChxChx (2026-11-13, Windows)
+
+- El usuario pidió remodelar el diseño del Studio Rust: aspecto de IDE
+  profesional, marca ChxChx con los logos de `assets/` y solo tecnología nativa
+  de Rust. Hecho sobre Iced existente; detalle en `.ai/CURRENT_STATE.md`.
+- Para cambiar colores o tipografía editar `studio_design.rs`; para el aspecto
+  de un widget, `studio_styles.rs`. Si cambia el logo de `assets/`, regenerar
+  `migration/rust/assets/brand/` (recorte al contenido y reescalado con Pillow:
+  isotipo 40 y 256 px, logo 420 px de alto, `.ico` multitamaño).
+- Pendiente de QA manual: arrastre de separadores, `Ctrl+B`/`Ctrl+J`, panel de
+  revisión con planes reales, terminal con sesión activa, escalado HiDPI y
+  teclado/accesibilidad. Pendiente de CI: build Linux/macOS con `image` y la
+  build-dependency `embed-resource` (en esos SO el script no hace nada).
+- Ideas no implementadas: barra de título propia sin decoraciones nativas,
+  numeración de líneas (el `text_editor` de Iced no trae gutter), tema claro,
+  fuentes incrustadas y persistencia del tamaño de paneles.
+- Sigue vigente: R1/R4/R6 abiertos; no presentar este port como IDE completo.
+- Para capturas de verificación usar `PrintWindow` sobre el handle de Studio;
+  no capturar la pantalla ni enviar teclas globales.
+
+## Port IDE activo: misma estructura del Qt en Rust (2026-11-13)
+
+- Usuario pide IDE completo y misma cara del Qt. Se sustituyó el shell de
+  dashboard por disposición Qt: explorador izquierdo, pestañas/editor central,
+  secciones derechas y panel inferior. Paleta Medianoche tomada de
+  `native/src/studio_themes.cpp`. Las páginas operativas viven dentro de Inicio.
+- Esta pasada añade iconos SVG basados en el set Qt, cabecera con workspace,
+  toolbar de accesos rápidos, navegación vertical de actividad, iconos en árbol,
+  pestañas, secciones y tarjetas, selector de panel inferior y barra de estado.
+  Se revisó la app corriendo en Windows; la ventana queda abierta mostrando un
+  archivo Rust.
+- `project_files` implementa listado lazy, lectura UTF-8 <=2 MiB, guardado con
+  respaldo en home/editor-backups, conflictos y rechazo de enlaces/rutas externas.
+  Editor con resaltado, búsqueda, undo/redo, tabs y confirmación de descarte.
+  Bin Studio acepta raíz y archivo relativo opcional; `run(root)` se conserva.
+- `integrations/terminal` encapsula portable-pty/VT; `workspace_terminal` valida
+  trust. UI de líneas + Ctrl+C, resize y panel ocultable; no representa todavía
+  una terminal interactiva completa. Se corrigió el handshake ConPTY de cursor.
+- Checks Windows: Clippy all-targets y 11 tests Rust (8+3) pasan. CI ahora prueba
+  también las capacidades terminal con default features. Falta evidencia remota.
+- La UI visual adicional pasó `cargo check --locked --bin chxchx-studio` y
+  `cargo build --locked --bin chxchx-studio`; no se repitieron pruebas.
+- Se revisó visualmente el ejecutable Windows con archivo Rust abierto. Check
+  CLI-only, compileall y 2 tests de workflows pasan. Terminal resize y send
+  corren en workers; no se concedió trust al repo para la demostración visual.
+- Siguiente paridad: terminal con teclado raw/colores/scrollback, Git visual,
+  agentes/chat/permisos, editor avanzado y paneles acoplables. R1/R4/R6 siguen
+  abiertos; no presentar este port como IDE completo ni retirar Qt/Python.
+- Módulos nuevos bajo 300 líneas; Basic Memory no disponible, checkpoint local.
+
+## Rediseño activo de Studio Rust (2026-11-13, Windows)
+
+- Implementado shell Iced con cinco áreas operativas, estado del proyecto,
+  recomendación contextual y tarjetas. Acciones existentes conservan sus planes
+  y confirmación en un panel de revisión. Tema oscuro/verde y texto orientado
+  a preparar, revisar permisos, conectar y recuperar respaldos.
+- Presentación separada en módulos `studio_*`, todos menores de 300 líneas;
+  sin cambios a casos de uso ni integraciones. Ventana 1120×500 y scroll.
+- Check/Clippy/formato y 3 tests CLI pasan. Build y arranque Windows comprobados;
+  primera captura revisada y tamaño inicial corregido para caber en pantalla.
+- Siguiente: QA interactivo de navegación, previews, teclado y escalado; después
+  avanzar prototipo editor/terminal de R1. Este rediseño cubre las capacidades
+  portadas; todavía no acredita paridad completa ni accesibilidad.
+- Basic Memory no está disponible; checkpoint local.
+
+## Continuación activa: Studio nativo Rust en Windows (2026-11-13)
+
+- El usuario confirmó que el destino es Rust nativo y pidió pausar la validación
+  Fedora para comprobar también Windows. El Studio Rust actual usa Iced; Qt/C++
+  corresponde al legado, no a la interfaz nueva.
+- Windows x86_64 MSVC: `cargo build --locked --manifest-path
+  migration/rust/Cargo.toml --bin chxchx-studio` pasó. Se abrió
+  `migration/rust/target/debug/chxchx-studio.exe` desde la raíz y Windows
+  informó el proceso `chxchx-studio` como responsivo. Esta evidencia solo cubre
+  build y arranque del dashboard actual; no cierra el prototipo R1 de editor,
+  terminal, IME, accesibilidad ni la selección final del toolkit.
+- Checks Rust Windows: formato, `cargo check` de producto y CLI, Clippy,
+  build offline de Studio, `cargo test --no-default-features --features cli`
+  (3 passed) y validación del schema v1 pasaron. `python -m compileall -q src`
+  también pasó.
+- Suite Python Windows: `uv run pytest` pasó 475, omitió 37 y deseleccionó 10.
+  La prueba de symlink se omite solo si Windows devuelve `WinError 1314` al
+  crearlo; en los demás casos sigue comprobando que no se siga el enlace.
+- Las corridas E2E dejaron 120 procesos de servidores OpenCode falsos en TEMP;
+  se cerraron por coincidencia exacta con `opencode-fake.py`; no quedan activos.
+- Se detuvo por instrucción del usuario la ejecución Fedora 44 del Studio
+  legado Qt: alcanzó 219/386 tareas y fue terminada por `podman stop` (salida
+  137). No llegó a CTest, CPack ni al verificador; no es un resultado de fallo
+  del código. Luego se eliminó `podman-machine-default`, liberando la imagen y
+  disco de Fedora; Podman CLI sigue instalado. R0.4 sigue abierto y diferido
+  hasta que el usuario lo ejecute en Fedora.
+- El build parcial de 443 MB continúa en una carpeta única bajo `$TEMP`; la
+  revisión automática bloqueó su eliminación recursiva. El usuario debe quitar
+  `chxchx-r04-fedora44-*` de TEMP si quiere liberar también ese espacio.
+- Los cambios candidatos de CPack Fedora siguen sin validar. Al retomarlos,
+  separar la evidencia del artefacto legado Qt de la validación del producto
+  Rust.
+- Basic Memory/Serena y `.ai/SKILLS.md` no están disponibles en este checkout;
+  el checkpoint se conserva aquí y en `.ai/CURRENT_STATE.md`.
+
+## Continuación activa: R2.4 (2026-11-13, Windows)
+
+- R2.4 ya tiene base automatizada. `migration/rust/tests/product_workflows.rs`
+  ejecuta la CLI en subprocesos con proyecto, `CHXCHX_TECH_HOME` y `PATH`
+  temporales. Cubre `init --minimal` preview/apply/idempotencia, trust
+  preview/apply/revocación con backup y `projects list` con registro vacío o
+  malformado preservado. No ejecuta Basic Memory ni otros clientes externos.
+- R2.4 también añade al workflow de tres plataformas la suite CLI y una
+  validación Draft 2020-12 de la salida real `status --json` con
+  `jsonschema==4.26.0`. Local Windows: formato, tests (3 passed) y el script de
+  schema pasan. Aún faltan resultados de la ejecución remota macOS/Linux.
+- Corregido un fallo real de init en Windows: `directory_resolves_inside`
+  compara ahora rutas canónicas normalizadas, sin prefijo `\\?\`. Corregida
+  también la paridad del validador: `workspace.header.logo` permite cadena
+  vacía como el modelo Python y como la plantilla Rust por defecto.
+- Roadmap/matriz actualizados. El gate R2.4 queda abierto hasta una ejecución
+  remota verde en los tres runners; R3.4 sigue abierto para preview obsoleto,
+  casos completos, fallos parciales, rollback, preservación de contenido ajeno
+  y mapeo de capacidades a presentaciones.
+  R2.1 sigue parcial (`app/`, `runtime/`, `protocol/` faltan), R0.4 espera la
+  corrección de CPack/Qt en Fedora y R1 requiere el prototipo editor/terminal.
+- Siguiente: recoger los resultados remotos de la nueva matriz cuando CI ejecute
+  estos cambios. Después retomar R0.4 con una compilación/paquete CPack real en
+  Fedora 44; este checkout Windows no puede certificar ese gate. R1 aún requiere
+  el prototipo interactivo de editor/terminal antes de ampliar el port.
+- Se conservan como referencia los checkpoints y limitaciones de Python de la
+  revisión anterior. Basic Memory/Serena no están disponibles.
+
+## Punto activo para retomar (2026-11-13, Windows)
+
+Esta sección define el siguiente trabajo. Las secciones inferiores se conservan
+como checkpoints históricos: referencias a matriz ausente, init pendiente,
+cambios sin commit en `dev` o `switch` como siguiente tarea ya no describen el
+punto activo.
+
+- Se revisaron AGENTS, PROJECT, CURRENT_STATE, ROADMAP, RUST-MIGRATION,
+  RUST-CAPABILITY-MATRIX, PERFORMANCE-BASELINE, EDITOR-PARITY, RELEASE-ROADMAP,
+  ADR 0016, README y el paquete/CI Rust. Rama `migracion-rust`, HEAD `619edfa`,
+  árbol inicialmente limpio. No hubo cambios funcionales ni de configuración.
+- La migración completa no está lista para cerrar ni para reemplazar el legado:
+  solo hay un conjunto parcial de operaciones Rust compartidas; faltan editor,
+  PTY/ConPTY, supervisor/procesos/recursos, agentes, skills/packs/mods, contexto,
+  Git, CI/CD, preferencias, distribución y QA multiplataforma.
+- R0.4 es el primer gate abierto: el paquete Fedora medido carece de Qt/plugins.
+  Reproducir allí con la versión de Qt documentada, corregir el deploy/CPack de
+  `native/CMakeLists.txt`, pasar `scripts/verify_studio_package.py`, volver a
+  medir tamaño y completar presupuestos/mediciones pendientes. Este Windows no
+  tiene CMake/Ninja/CTest en PATH; no se reprodujo el fallo Linux ni un build Qt.
+- Después validar R1: árbol/editor/terminal/chat/permisos, IME, teclado,
+  accesibilidad y builds/arranques por SO, antes de cerrar el ADR de GUI/editor.
+- En Windows se puede adelantar R2.4: pruebas compartidas para capacidades ya
+  portadas y validación del contrato `schemas/project-overview-v1.schema.json`
+  en `.github/workflows/rust-product.yml`. Actualmente no hay suite Rust y la
+  CI solo comprueba formato, compilación y Clippy. No posponer esta cobertura
+  hasta después de `switch`/instaladores como sugieren checkpoints anteriores.
+- R2.1 está marcado completo, pero `app/`, `runtime/` y `protocol/` no existen
+  como módulos del paquete actual; la estructura y el supervisor siguen por
+  materializarse. No asumir que ese check acredita runtime o IPC implementado.
+- Mantener un paquete/versión y operaciones comunes; avanzar luego con R3–R7.
+  No promover Rust a raíz ni retirar Python/Qt hasta cerrar los gates de paridad,
+  instalación/actualización/rollback y QA.
+- Validación Windows: `python -m compileall -q src` pasó con Python 3.13.0.
+  `uv run pytest` (Python 3.12.14) terminó en 225.44 s: 475 passed, 36 skipped,
+  10 deselected y 1 failed. Falló
+  `tests/workspace/test_chat_context_inline.py::test_a_symlinked_context_file_is_not_followed`
+  por `WinError 1314` al crear el enlace del fixture, antes de ejecutar el código
+  del producto. Resolver la portabilidad de esa prueba o verificarla en un
+  runner con permiso de symlinks; no contar esta ejecución como suite verde.
+- Rust (Cargo 1.99.1): `cargo fmt --manifest-path migration/rust/Cargo.toml
+  --all -- --check`, `cargo check --manifest-path migration/rust/Cargo.toml
+  --locked --offline`, el mismo check con `--no-default-features --features cli`
+  y `cargo clippy --manifest-path migration/rust/Cargo.toml --locked --offline
+  -- -D warnings` pasaron. No se ejecutaron pruebas Rust, agentes reales, MCP,
+  QA visual, CI remoto ni cambios sobre proyectos registrados.
+- Basic Memory/Serena no están disponibles; checkpoint local en estos archivos.
+
 ## R0.4 medido parcialmente; paquete Fedora incompleto (2026-11-12)
 
 - Resultados y reproducción: `.ai/PERFORMANCE-BASELINE.md`. Se midió Release
