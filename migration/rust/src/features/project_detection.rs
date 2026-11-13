@@ -22,7 +22,7 @@ struct TreeScan {
     qt_candidates: Vec<PathBuf>,
 }
 
-const IGNORED_DIRECTORIES: &[&str] = &[
+pub(crate) const IGNORED_DIRECTORIES: &[&str] = &[
     ".git",
     ".venv",
     "venv",

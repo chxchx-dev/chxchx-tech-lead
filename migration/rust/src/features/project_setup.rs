@@ -1,7 +1,7 @@
 use crate::features::project_backup::backup_project;
 use crate::features::project_config_migrations::plan_config_update;
 use crate::features::project_config_template::memory_project_name;
-use crate::features::project_overview::inspect_project;
+use crate::features::project_overview::{inspect_project, normalize_canonical_path};
 use crate::features::project_registry::{
     RegistryUpdate, apply_registration, check_registration_unchanged, plan_registration,
     restore_registry,
@@ -16,7 +16,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct ProjectFileChange {
     pub(crate) relative: String,
     pub(crate) before: Option<Vec<u8>>,
@@ -392,7 +392,7 @@ pub fn apply_project_init(plan: &ProjectInitPlan) -> Result<ProjectInitApplicati
     })
 }
 
-fn missing_directory_chain(root: &Path, relative: &str) -> Result<Vec<PathBuf>, String> {
+pub(crate) fn missing_directory_chain(root: &Path, relative: &str) -> Result<Vec<PathBuf>, String> {
     let target = root.join(relative);
     if !target.starts_with(root) {
         return Err("Ruta de directorio inválida para init".to_owned());
@@ -448,7 +448,7 @@ fn plan_missing_file(
     }
 }
 
-fn plan_file_change(
+pub(crate) fn plan_file_change(
     root: &Path,
     relative: &str,
     after: Vec<u8>,
@@ -696,17 +696,19 @@ pub(crate) fn rollback_project(
     errors
 }
 
-fn directory_resolves_inside(root: &Path, directory: &Path) -> bool {
+pub(crate) fn directory_resolves_inside(root: &Path, directory: &Path) -> bool {
     if directory == root {
         return true;
     }
     if !directory.exists() {
         return directory.starts_with(root);
     }
-    fs::canonicalize(directory).is_ok_and(|canonical| canonical.starts_with(root))
+    fs::canonicalize(directory)
+        .map(normalize_canonical_path)
+        .is_ok_and(|canonical| canonical.starts_with(root))
 }
 
-fn invalid_project_paths(root: &Path) -> Option<String> {
+pub(crate) fn invalid_project_paths(root: &Path) -> Option<String> {
     let ai_path = root.join(".ai");
     if fs::symlink_metadata(&ai_path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
         return Some(".ai es un enlace simbólico; init no lo atraviesa".to_owned());
@@ -722,7 +724,7 @@ fn invalid_project_paths(root: &Path) -> Option<String> {
     None
 }
 
-fn append_rollback(error: String, rollback: Vec<String>) -> String {
+pub(crate) fn append_rollback(error: String, rollback: Vec<String>) -> String {
     if rollback.is_empty() {
         error
     } else {

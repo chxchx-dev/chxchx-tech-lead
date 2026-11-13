@@ -52,8 +52,14 @@ fn validate_workspace(
             .as_table()
             .ok_or_else(|| "workspace.header debe ser una tabla".to_owned())?;
         optional_bool(header, "enabled", "workspace.header.enabled")?;
-        for key in ["label", "logo", "template"] {
+        for key in ["label", "template"] {
             optional_string(header, key, &format!("workspace.header.{key}"))?;
+        }
+        if header
+            .get("logo")
+            .is_some_and(|value| value.as_str().is_none())
+        {
+            return Err("workspace.header.logo debe ser texto".to_owned());
         }
         if let Some(template) = header.get("template").and_then(toml::Value::as_str) {
             validate_template(template)?;
