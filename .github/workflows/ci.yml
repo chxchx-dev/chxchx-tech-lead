@@ -246,18 +246,22 @@ jobs:
   native-fedora:
     name: Native Qt build and portable package · Fedora
     runs-on: ubuntu-latest
-    container: fedora:latest
+    container: fedora:44
     needs: native-build
     steps:
       - name: Install build dependencies
-        run: dnf install -y cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qt5compat-devel git
+        run: dnf install -y cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qt5compat-devel git patchelf perl python3
       - uses: actions/checkout@v4
       - name: Configure native Studio
-        run: cmake -S native -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DCHXCHX_BUILD_TESTS=ON
+        run: cmake -S native -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release -DCHXCHX_BUILD_TESTS=ON -DQT_DEPLOY_USE_PATCHELF=ON
       - name: Build native Studio
         run: cmake --build build-native --parallel 2
       - name: Smoke test Scintilla editor
         run: ctest --test-dir build-native --output-on-failure
+      - name: Create Fedora-native CPack package
+        run: cpack --config build-native/CPackConfig.cmake -C Release -B build-native/fedora-packages
+      - name: Validate Fedora-native CPack package
+        run: python3 scripts/verify_studio_package.py --platform linux-fedora-x86_64 --package-dir build-native/fedora-packages --output-dir build-native/fedora-verified
       - name: Download self-contained Linux Qt package
         uses: actions/download-artifact@v4
         with:
