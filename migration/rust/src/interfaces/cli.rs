@@ -2,6 +2,9 @@ use crate::features::project_overview::inspect_project;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+#[path = "cli_catalog.rs"]
+mod catalog;
+
 #[derive(Debug, Parser)]
 #[command(
     name = "chxchx-tech",
@@ -68,6 +71,21 @@ enum Command {
         /// Aplica la vista previa y permite invocar los CLIs oficiales.
         #[arg(long)]
         apply: bool,
+    },
+    /// Gestiona las skills habilitadas del proyecto.
+    Skills {
+        #[command(subcommand)]
+        command: catalog::SkillsCommand,
+    },
+    /// Consulta y aplica Tech Packs (conjuntos de skills por stack).
+    Packs {
+        #[command(subcommand)]
+        command: catalog::PacksCommand,
+    },
+    /// Instala o retira Mods (flujos de trabajo para agentes) en el proyecto.
+    Mods {
+        #[command(subcommand)]
+        command: catalog::ModsCommand,
     },
     /// Diagnostica herramientas y configuración del proyecto sin ejecutar comandos.
     Doctor {
@@ -159,6 +177,9 @@ pub fn run() -> Result<(), String> {
             refresh,
             apply,
         } => show_integrate(&path, &client, refresh, apply),
+        Command::Skills { command } => catalog::skills(command),
+        Command::Packs { command } => catalog::packs(command),
+        Command::Mods { command } => catalog::mods(command),
         Command::Doctor { path } => show_doctor(&path),
         #[cfg(feature = "tui")]
         Command::Tui { path } => crate::interfaces::tui::run(path),
