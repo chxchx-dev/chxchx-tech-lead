@@ -13,6 +13,7 @@ project(chxchx_studio VERSION ${CHXCHX_STUDIO_VERSION_BASE} LANGUAGES C CXX)
 include(GNUInstallDirs)
 
 option(CHXCHX_BUILD_TESTS "Build native editor smoke tests" OFF)
+option(CHXCHX_BUILD_BENCHMARKS "Build native performance benchmarks" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -419,4 +420,14 @@ if(CHXCHX_BUILD_TESTS)
     add_test(NAME native-layout-smoke COMMAND chxchx-layout-smoke)
     set_tests_properties(native-layout-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     set_tests_properties(native-agent-chat-smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()
+
+if(CHXCHX_BUILD_BENCHMARKS)
+    add_executable(chxchx-project-file-index-bench
+        benchmarks/project_file_index_bench.cpp
+        src/project_file_index.cpp
+        src/project_file_index.hpp
+    )
+    target_include_directories(chxchx-project-file-index-bench PRIVATE src)
+    target_link_libraries(chxchx-project-file-index-bench PRIVATE Qt6::Core)
 endif()

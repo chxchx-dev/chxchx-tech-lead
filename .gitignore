@@ -35,6 +35,8 @@ Thumbs.db
 !/.ai/adr/0008-studio-first-editor.md
 !/.ai/adr/0009-visual-agent-chat.md
 !/.ai/RUST-MIGRATION.md
+!/.ai/RUST-CAPABILITY-MATRIX.md
+!/.ai/PERFORMANCE-BASELINE.md
 !/.ai/RELEASE-ROADMAP.md
 !/.ai/history/
 .ai/history/*
