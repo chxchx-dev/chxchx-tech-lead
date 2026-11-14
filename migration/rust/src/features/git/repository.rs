@@ -117,6 +117,8 @@ impl Repository {
     pub fn log(&self, count: usize) -> Result<Vec<GitCommit>, GitFailure> {
         let run = Run::new([
             "log".to_owned(),
+            // A stash is saved work, not history: its two internal commits would show up as noise in the graph.
+            "--exclude=refs/stash".to_owned(),
             "--all".to_owned(),
             "--topo-order".to_owned(),
             format!("-n{count}"),

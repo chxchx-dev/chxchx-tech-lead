@@ -5,6 +5,8 @@ use iced::widget::{column, tooltip};
 
 #[path = "studio_git_changes.rs"]
 mod changes;
+#[path = "studio_git_graph.rs"]
+mod graph;
 #[path = "studio_git_history.rs"]
 mod history;
 #[path = "studio_git_prompts.rs"]

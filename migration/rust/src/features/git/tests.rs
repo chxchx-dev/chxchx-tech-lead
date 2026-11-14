@@ -269,3 +269,24 @@ fn guidance_reads_a_real_repository() {
         Situation::Clean
     );
 }
+
+#[test]
+fn the_history_does_not_show_stashes_as_commits() {
+    let Some((_keep, repo)) = repository(true) else {
+        return;
+    };
+    write(&repo, "a.txt", "uno\n");
+    repo.stage(&["a.txt".to_owned()]).unwrap();
+    repo.commit("base", false).unwrap();
+    write(&repo, "a.txt", "dos\n");
+    repo.stash_push("idea a medias", false).unwrap();
+
+    let log = repo.log(50).unwrap();
+
+    assert_eq!(repo.stashes().unwrap().len(), 1);
+    assert_eq!(
+        log.iter().map(|c| c.subject.as_str()).collect::<Vec<_>>(),
+        ["base"],
+        "a stash adds commits ('On main: …', 'index on main: …') that are not history"
+    );
+}

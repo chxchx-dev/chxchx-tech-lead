@@ -1,9 +1,8 @@
 //! "Historial" and "Ramas" tabs.
 use super::super::git::{Confirm, DiffTarget, Event};
-use super::{ago, event};
-use crate::features::git::graph::render;
+use super::{ago, event, graph};
 use crate::interfaces::studio::*;
-use iced::widget::{column, text_input, tooltip};
+use iced::widget::{Canvas, column, text_input, tooltip};
 
 pub(super) fn log(state: &Dashboard) -> Element<'_, Message> {
     let git = &state.git;
@@ -16,63 +15,66 @@ pub(super) fn log(state: &Dashboard) -> Element<'_, Message> {
         .padding([4, 14])
         .into();
     }
-    let width = git
+    let lanes = git
         .log
         .iter()
         .map(|commit| commit.graph.lane_count)
         .max()
         .unwrap_or(1);
-    let mut list = column![].spacing(1);
+    let mut list = column![].spacing(0);
     for (index, commit) in git.log.iter().enumerate() {
         let selected = git.selected_commit == Some(index);
-        let mut subject = row![
-            text(&commit.subject)
-                .size(12)
-                .wrapping(iced::widget::text::Wrapping::None)
-        ]
-        .spacing(6)
-        .align_y(iced::Center);
+        let head = commit.refs.iter().any(|name| name.starts_with("HEAD"));
+        // Branch and tag chips come first: a long message must never push them out of view.
+        let mut subject = row![].spacing(5).align_y(iced::Center);
         for name in commit.refs.iter().take(2) {
             subject = subject.push(ref_chip(name));
         }
-        list = list.push(
-            button(
-                row![
-                    container(
-                        text(render(&commit.graph, width))
-                            .size(12)
-                            .font(design::MONO)
-                            .color(design::BRAND_CYAN)
-                            .wrapping(iced::widget::text::Wrapping::None),
-                    )
-                    .width(width as f32 * 15.0),
-                    column![
-                        subject,
-                        text(format!(
-                            "{} · {} · {}",
-                            commit.short_hash(),
-                            commit.author,
-                            ago(commit.time)
-                        ))
-                        .size(10)
-                        .color(design::FAINT)
-                        .wrapping(iced::widget::text::Wrapping::None),
-                    ]
-                    .spacing(2)
-                    .width(Fill),
-                ]
-                .spacing(8)
-                .align_y(iced::Center),
-            )
-            .width(Fill)
-            .clip(true)
-            .padding([4, 6])
-            .style(styles::ghost(selected))
-            .on_press(event(Event::SelectCommit(index))),
+        subject = subject.push(
+            text(&commit.subject)
+                .size(12)
+                .font(if head { design::UI_BOLD } else { design::UI })
+                .wrapping(iced::widget::text::Wrapping::None),
         );
+        let meta = text(format!(
+            "{} · {} · {}",
+            commit.short_hash(),
+            commit.author,
+            ago(commit.time)
+        ))
+        .size(10)
+        .color(design::FAINT)
+        .wrapping(iced::widget::text::Wrapping::None);
+        let line = styles::tip(
+            button(column![subject, meta].spacing(3).width(Fill))
+                .width(Fill)
+                .height(graph::ROW_HEIGHT)
+                .clip(true)
+                .padding([5, 6])
+                .style(styles::ghost(selected))
+                .on_press(event(Event::SelectCommit(index))),
+            &commit.subject,
+            tooltip::Position::Right,
+        );
+        let mut body = column![line].width(Fill);
         if selected {
-            list = list.push(details(state, &commit.hash));
+            body = body.push(details(state, &commit.hash));
         }
+        // The graph is as tall as the row and its details, so lanes run through them.
+        list = list.push(
+            row![
+                Canvas::new(graph::Graph {
+                    row: commit.graph.clone(),
+                    lanes,
+                    head,
+                    selected,
+                })
+                .width(graph::width(lanes))
+                .height(Fill),
+                body,
+            ]
+            .width(Fill),
+        );
     }
     styles::vscroll(container(list).padding([0, 6]))
         .height(Fill)
