@@ -36,7 +36,14 @@ jobs:
       - name: Run Clippy for the full product
         run: cargo clippy --manifest-path migration/rust/Cargo.toml --locked --all-targets -- -D warnings
       - name: Run Rust capability integration tests
-        run: cargo test --manifest-path migration/rust/Cargo.toml --locked
+        shell: bash
+        run: |
+          # The end of the output goes into the annotation: the job log is not visible from outside.
+          set -o pipefail
+          cargo test --manifest-path migration/rust/Cargo.toml --locked 2>&1 | tee test.log && exit 0
+          code=${PIPESTATUS[0]}
+          echo "::error title=cargo test falló ($code)::$(tail -n 45 test.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          exit "$code"
       - name: Set up Python for JSON Schema validation
         uses: actions/setup-python@v5
         with:
