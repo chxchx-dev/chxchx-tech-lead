@@ -1,0 +1,5 @@
+name = "postgres-data"
+description = "Prácticas de esquema, consultas y migraciones PostgreSQL."
+stacks = ["postgres"]
+languages = []
+skills = ["postgres", "api-design", "testing", "security-review"]

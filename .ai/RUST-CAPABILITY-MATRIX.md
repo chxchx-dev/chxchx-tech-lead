@@ -2,10 +2,10 @@
 
 - Actualizada: 2026-11-13.
 - Propósito: inventariar contratos, datos, autoridad y evidencia del producto
-  legado frente al paquete único `migration/rust/`.
+  legado frente al paquete único la raíz del repositorio.
 - Regla de estado: “Parcial” indica que existe un slice Rust; no certifica paridad
   ni permite cambiar la autoridad del producto.
-- La suite Rust actual está en `migration/rust/tests/product_workflows.rs` y la
+- La suite Rust actual está en `tests/product_workflows.rs` y la
   ejecución local Windows (2026-11-13) pasó 3 pruebas. El estado de CI remoto en
   macOS/Linux queda pendiente de la siguiente ejecución del workflow.
 

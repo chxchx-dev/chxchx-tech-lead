@@ -1,0 +1,6 @@
+name = "postgres"
+description = "PostgreSQL guidance for safe schemas, queries, and migrations."
+stacks = ["postgres"]
+languages = ["sql"]
+tags = ["postgresql", "database", "sql"]
+origin = "chxchx"

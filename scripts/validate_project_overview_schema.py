@@ -13,7 +13,7 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / "schemas" / "project-overview-v1.schema.json"
-CARGO_MANIFEST = ROOT / "migration" / "rust" / "Cargo.toml"
+CARGO_MANIFEST = ROOT / "Cargo.toml"
 
 
 def main() -> int:

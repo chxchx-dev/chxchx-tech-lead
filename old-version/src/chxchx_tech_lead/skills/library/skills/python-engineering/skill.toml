@@ -1,0 +1,6 @@
+name = "python-engineering"
+description = "Python engineering conventions for maintainable, typed application code."
+stacks = ["python"]
+languages = ["python"]
+tags = ["typing", "architecture", "python"]
+origin = "chxchx"

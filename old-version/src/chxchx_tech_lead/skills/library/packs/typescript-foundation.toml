@@ -1,0 +1,5 @@
+name = "typescript-foundation"
+description = "Prácticas compartidas para proyectos TypeScript y Node.js."
+stacks = []
+languages = ["typescript"]
+skills = ["typescript-engineering", "api-design", "testing", "security-review", "code-review"]

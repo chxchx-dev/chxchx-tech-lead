@@ -143,7 +143,7 @@ el launcher compatible `chxchx-studio` usa la misma biblioteca. Si Windows
 necesita un ejecutable GUI sin consola, sigue siendo un launcher fino del mismo
 paquete. Cambiar de modo no fusiona procesos ni transfiere permisos implícitamente.
 
-Durante la transición Rust se construye bajo `migration/rust/` para no ocupar
+Durante la transición Rust se construye bajo la raíz del repositorio para no ocupar
 el `src/` Python actual. `native/` permanece operativo. Promover el árbol Rust a
 raíz y retirar esos árboles es una tarea del corte final con rollback probado.
 No queda una carpeta permanente por implementación antigua.
@@ -176,7 +176,7 @@ escalado, portapapeles y atajos forman parte de la evaluación.
 `portable-pty` transporta entrada/salida; no pinta ni emula una terminal.
 
 El prototipo inicial usa Clap, Ratatui, Iced y un renderer nativo software Iced.
-Se fijaron versiones en `migration/rust/Cargo.toml`/`Cargo.lock` para reproducir
+Se fijaron versiones en `Cargo.toml`/`Cargo.lock` para reproducir
 el build. Esto valida solo la compilación de arranque en Windows; aún no cierra
 la evaluación visual, de editor, accesibilidad o soporte por plataforma.
 

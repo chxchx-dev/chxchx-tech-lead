@@ -18,7 +18,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$manifest = Join-Path $root 'migration\rust\Cargo.toml'
+$manifest = Join-Path $root 'Cargo.toml'
 $profileName = if ($Debug) { 'debug' } else { 'release' }
 
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
@@ -30,7 +30,7 @@ if (-not $Debug) { $cargoArgs += '--release' }
 & cargo @cargoArgs
 if ($LASTEXITCODE -ne 0) { throw "cargo build falló (código $LASTEXITCODE)." }
 
-$binary = Join-Path $root "migration\rust\target\$profileName\chxchx-studio.exe"
+$binary = Join-Path $root "target\$profileName\chxchx-studio.exe"
 if (-not (Test-Path $binary)) { throw "No se encontró $binary tras compilar." }
 
 Write-Host "Abriendo $binary"

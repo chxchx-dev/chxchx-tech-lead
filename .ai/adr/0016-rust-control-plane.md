@@ -41,7 +41,7 @@ de núcleo C++ por Rust; no afirma que la migración ya exista.
   deben validarse antes de trasladar la autoridad de procesos.
 - Una autoridad por operación durante la transición. Conservar contratos
   compatibles del bridge v1 y comparar mutaciones solo en copias aisladas.
-- Rust se desarrolla inicialmente en `migration/rust/`; promoverlo a raíz al
+- Rust se desarrolla inicialmente en la raíz del repositorio; promoverlo a raíz al
   retirar el legado evita colisiones con `src/` Python. Un solo ciclo de release,
   manifiesto y política de actualización para todos los modos del producto.
 - Preservar datos, backups, dry-run, permisos, idempotencia, canales y rollback.

@@ -1,0 +1,5 @@
+name = "dotnet-service"
+description = "Base para servicios .NET y APIs C# mantenibles."
+stacks = ["dotnet"]
+languages = []
+skills = ["dotnet-engineering", "api-design", "testing", "security-review", "code-review"]

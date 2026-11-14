@@ -1,0 +1,5 @@
+name = "redis-services"
+description = "Guías de caché y colas basadas en Redis."
+stacks = ["redis"]
+languages = []
+skills = ["redis", "api-design", "testing", "security-review"]
