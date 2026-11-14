@@ -53,24 +53,6 @@
   búsqueda con regex/mayúsculas, numeración de líneas, y QA de ratón real.
 - Estado del código del Studio: todos los módulos bajo 300 líneas.
 
-## Rendimiento, catálogo y persistencia (2026-11-13, Windows)
-
-- Pedido del usuario: Studio Rust lento/pegado, portar packs, plugins, skills y demás,
-  y dejar la persistencia completa sin perder el diseño. Detalle y mediciones en
-  `.ai/CURRENT_STATE.md`.
-- «Plugins» se interpretó como los Mods del legado (instrucciones para agentes). No se
-  portó el catálogo de agentes (`agent_catalog.py`), los modelos locales (Ollama), Git,
-  chat ni CI/CD: siguen en el legado y son el siguiente bloque de paridad (R4/R6).
-- El catálogo se lee de `src/chxchx_tech_lead/` al compilar (`build.rs`, constante
-  `LEGACY`). Al promover Rust a la raíz hay que mover esos directorios y cambiar la
-  constante; hasta entonces hay una sola fuente de verdad, sin copias que se desfasen.
-- Pendiente de QA manual en la GUI: aplicar/retirar skills y mods con clics reales,
-  arrastre de separadores, atajos y escalado. La TUI no tiene catálogo (R3.4).
-- Excepciones a las 300 líneas: `interfaces/cli.rs` (538, ya excedía antes; siguiente
-  paso: extraer los comandos de proyecto a `cli_projects.rs`).
-- Para medir rendimiento usar `--release`; el script de benchmark usó 120 cambios de
-  tamaño de la ventana y el CPU del proceso. No habilitar wgpu sin repetirlo.
-
 ## Último cambio
 
 - El test de recuperación del ProcessManager usa un handle simulado. Cubre persistencia, recuperación y selección del terminador sin iniciar un subprocess de larga duración, eliminando la espera de `taskkill` en Windows.

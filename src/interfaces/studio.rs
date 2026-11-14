@@ -323,7 +323,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
             .chat
             .chats
             .iter()
-            .any(|chat| state.panes.has_chat(&chat.agent.id))
+            .any(|chat| state.panes.shows_chat(&chat.agent.id))
         {
             subscriptions.push(iced::event::listen_with(|event, _, _| match event {
                 iced::Event::Window(iced::window::Event::FileDropped(path)) => {

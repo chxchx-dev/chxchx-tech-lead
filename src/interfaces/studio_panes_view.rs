@@ -1,72 +1,64 @@
-//! Drawing of the pane grid: a title bar per pane (drag handle, what it shows, split/maximize/close).
+//! Drawing of the pane grid: each pane shows a strip of tabs (like an editor group) and the active one.
 use super::super::*;
-use super::{Content, Event};
+use super::{Content, Event, Group};
 use iced::widget::pane_grid::{self, Axis, PaneGrid, TitleBar};
 use iced::widget::tooltip;
 
 pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Message> {
     let focus = state.panes.focus;
-    let grid = PaneGrid::new(&state.panes.grid, move |pane, content, is_maximized| {
+    let grid = PaneGrid::new(&state.panes.grid, move |pane, group, is_maximized| {
         let focused = focus == Some(pane);
-        let (icon, tint, title) = describe(state, content);
+        let current = group.current();
         let mut controls = row![].spacing(2).align_y(iced::Center);
-        if matches!(content, Content::Terminal(_)) {
+        if matches!(current, Some(Content::Terminal(_))) {
             controls = controls.push(control(
                 "stop",
                 "Interrumpir (Ctrl+C)",
                 Message::Terminal(terminal::Event::Interrupt),
             ));
         }
-        if !is_maximized && !matches!(content, Content::Activity) {
-            controls = controls
-                .push(control(
-                    "columns",
-                    "Dividir a la derecha con una terminal",
-                    Message::Panes(Event::Split(pane, Axis::Vertical)),
-                ))
-                .push(control(
-                    "panel-bottom",
-                    "Dividir abajo con una terminal",
-                    Message::Panes(Event::Split(pane, Axis::Horizontal)),
-                ));
+        if !is_maximized {
+            controls = if group.tabs.len() > 1 {
+                controls
+                    .push(control(
+                        "columns",
+                        "Sacar esta pestaña a un panel a la derecha",
+                        Message::Panes(Event::MoveOut(pane, Axis::Vertical)),
+                    ))
+                    .push(control(
+                        "panel-bottom",
+                        "Sacar esta pestaña a un panel de abajo",
+                        Message::Panes(Event::MoveOut(pane, Axis::Horizontal)),
+                    ))
+            } else {
+                controls
+                    .push(control(
+                        "columns",
+                        "Dividir a la derecha con una terminal",
+                        Message::Panes(Event::Split(pane, Axis::Vertical)),
+                    ))
+                    .push(control(
+                        "panel-bottom",
+                        "Dividir abajo con una terminal",
+                        Message::Panes(Event::Split(pane, Axis::Horizontal)),
+                    ))
+            };
         }
         controls = controls.push(if is_maximized {
             control("minus", "Restaurar", Message::Panes(Event::Restore))
         } else {
             control("layers", "Maximizar", Message::Panes(Event::Maximize(pane)))
         });
-        if !matches!(content, Content::Editor) {
-            controls = controls.push(control(
-                "close",
-                "Cerrar",
-                Message::Panes(Event::Close(pane)),
-            ));
-        }
-        let head = row![
-            icons::icon(
-                "dot",
-                if focused {
-                    design::ACCENT
-                } else {
-                    design::BORDER_STRONG
-                },
-                8.0
-            ),
-            icons::icon(icon, if focused { tint } else { design::MUTED }, 13.0),
-            text(title)
-                .size(11)
-                .font(design::UI_BOLD)
-                .color(if focused { design::TEXT } else { design::MUTED })
-                .wrapping(iced::widget::text::Wrapping::None),
-        ]
-        .spacing(7)
-        .align_y(iced::Center);
-        pane_grid::Content::new(body(state, content))
+        let body = match current {
+            Some(content) => body(state, content),
+            None => Space::new().into(),
+        };
+        pane_grid::Content::new(body)
             .title_bar(
-                TitleBar::new(head)
+                TitleBar::new(tab_strip(state, pane, group, focused))
                     .controls(pane_grid::Controls::new(controls))
                     .always_show_controls()
-                    .padding([5, 10])
+                    .padding([3, 6])
                     .style(styles::pane_title(focused)),
             )
             .style(styles::pane(focused))
@@ -125,6 +117,51 @@ fn describe<'a>(state: &'a Dashboard, content: &'a Content) -> (&'static str, ic
         }
         Content::Terminal(None) => ("terminal", design::TINT_GREEN, "Terminal".to_owned()),
     }
+}
+
+/// One tab per item of the group; the pane stays draggable by the space around them.
+fn tab_strip<'a>(
+    state: &'a Dashboard,
+    pane: pane_grid::Pane,
+    group: &'a Group,
+    focused: bool,
+) -> Element<'a, Message> {
+    let mut strip = row![].spacing(3).align_y(iced::Center);
+    for (index, content) in group.tabs.iter().enumerate() {
+        let active = index == group.active;
+        let (icon, tint, title) = describe(state, content);
+        let mut tab = row![
+            icons::icon(icon, if active { tint } else { design::FAINT }, 13.0),
+            text(title)
+                .size(11)
+                .font(design::UI_BOLD)
+                .color(if active && focused {
+                    design::TEXT
+                } else if active {
+                    design::MUTED
+                } else {
+                    design::FAINT
+                })
+                .wrapping(iced::widget::text::Wrapping::None),
+        ]
+        .spacing(6)
+        .align_y(iced::Center);
+        if *content != Content::Editor {
+            tab = tab.push(
+                button(icons::icon("close", design::FAINT, 10.0))
+                    .padding(2)
+                    .style(styles::ghost(false))
+                    .on_press(Message::Panes(Event::CloseTab(pane, index))),
+            );
+        }
+        strip = strip.push(
+            button(tab)
+                .padding([4, 8])
+                .style(styles::ghost(active))
+                .on_press(Message::Panes(Event::Select(pane, index))),
+        );
+    }
+    strip.into()
 }
 
 fn body<'a>(state: &'a Dashboard, content: &'a Content) -> Element<'a, Message> {

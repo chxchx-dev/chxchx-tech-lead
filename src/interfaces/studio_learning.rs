@@ -63,7 +63,7 @@ fn steps(state: &Dashboard) -> Vec<Step> {
             title: "Acomoda tu espacio",
             detail: "Arrastra la barra de título de un panel hasta el borde de otro para dividir la pantalla; maximiza el que necesites.",
             label: "Dividir con una terminal",
-            done: Some(state.panes.grid.len() >= 3),
+            done: Some(state.panes.grid.len() >= 2 || state.panes.terminal_panes() >= 2),
             action: editor.map(|pane| {
                 Message::Panes(panes::Event::Split(
                     pane,
