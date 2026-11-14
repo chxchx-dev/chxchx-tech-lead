@@ -40,6 +40,9 @@ pub fn open_agent(root: &Path, agent: &Agent) -> Result<Session, String> {
     command.env("COLORTERM", "truecolor");
     // A Studio started from a launcher has a minimal PATH: the agent's own `node` must be found.
     command.env("PATH", agent_path());
+    for (key, value) in crate::integrations::process_memory::LEAN_ENV {
+        command.env(key, value);
+    }
     Session::spawn(command)
 }
 
@@ -55,6 +58,9 @@ pub fn open(root: &Path) -> Result<Session, String> {
     command.cwd(root);
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
+    for (key, value) in crate::integrations::process_memory::LEAN_ENV {
+        command.env(key, value);
+    }
     Session::spawn(command)
 }
 

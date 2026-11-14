@@ -27,6 +27,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
             if state.page == Page::Home {
                 body = body
                     .push(next_step(project))
+                    .push(learning::card(state))
                     .push(agents::home_card(state))
                     .push(
                         row![

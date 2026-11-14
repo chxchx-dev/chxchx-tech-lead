@@ -96,7 +96,6 @@ fn layout_toggle<'a>(
 /// panel. At most one item per group is marked, and clicking it again hides the panel.
 pub(super) fn activity_rail(state: &Dashboard) -> Element<'_, Message> {
     let side = |side: Side| state.editor.explorer && state.shell.side == side;
-    let dock = shell::dock_tab(state);
     let rail = column![
         rail_action(
             "folder",
@@ -122,13 +121,13 @@ pub(super) fn activity_rail(state: &Dashboard) -> Element<'_, Message> {
         rail_action(
             "terminal",
             "Terminal (Ctrl+J)",
-            dock == Some(DockTab::Terminal),
+            shell::dock_visible(state, DockTab::Terminal),
             Message::Shell(ShellEvent::ToggleTab(DockTab::Terminal)),
         ),
         rail_action(
             "bell",
             "Actividad",
-            dock == Some(DockTab::Activity),
+            shell::dock_visible(state, DockTab::Activity),
             Message::Shell(ShellEvent::ToggleTab(DockTab::Activity)),
         ),
     ]

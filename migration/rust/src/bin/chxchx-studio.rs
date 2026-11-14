@@ -4,6 +4,8 @@ use chxchx_tech::features::startup_log;
 use std::path::PathBuf;
 
 fn main() {
+    // Before any thread starts: keeps the memory the system reports for Studio small.
+    chxchx_tech::integrations::process_memory::lean_allocator();
     // Windows has no console here: failures and panics must also reach a file.
     startup_log::install_panic_hook();
     let root = std::env::args_os()

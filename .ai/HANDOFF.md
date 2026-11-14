@@ -2,6 +2,14 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Studio Rust: chat visual, paneles, memoria y ruta de aprendizaje (2026-11-14)
+
+- Chat visual (`interfaces/studio_chat*.rs`, `integrations/chat_bridge.rs`, `features/chat_model.rs`): usa `chxchx-tech agent chat --live` del CLI de Python; permisos en vivo, niveles de acceso, imágenes (`integrations/chat_images.rs`, se reducen a 1568 px), tokens/contexto/plan.
+- Paneles acomodables (`studio_panes*.rs`, `pane_grid`): editor, chats, terminales y actividad se arrastran, dividen, redimensionan y maximizan. La disposición aún no se guarda entre sesiones.
+- Memoria (`integrations/process_memory.rs`, `MEMORIA.md`): devolución al sistema, `MALLOC_ARENA_MAX`, recortes en el chat, RAM en la barra de estado.
+- Ruta de aprendizaje en Inicio (`studio_learning.rs`).
+- Sin probar con un agente real desde la ventana: permisos en vivo, preguntas, liberación de contexto.
+
 ## Studio Rust: diseño verificado y Windows (2026-11-14)
 
 - El diseño del Studio Rust (menú, barra de herramientas, explorador, héroe de Inicio) existe en `origin/migracion-rust`; la copia local de Fedora estaba 14 commits atrasada y además `chxchx-studio` del PATH es el lanzador del Studio Qt. Se actualizó y se verificó con captura: coincide con las capturas de Windows. Abrir siempre con `scripts/studio-rust.sh` (Linux/macOS) o `scripts/studio-rust.ps1` (Windows).

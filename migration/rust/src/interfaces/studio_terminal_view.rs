@@ -1,10 +1,10 @@
-//! What the terminal looks like: the tab strip and the character grid.
+//! What the terminal looks like: the character grid of one session.
 use super::terminal_surface::Surface;
 use super::*;
 use crate::integrations::terminal::{Color as TermColor, Run, Snapshot};
 use iced::font::{Style as FontStyle, Weight};
 use iced::widget::text::{LineHeight, Span, Wrapping};
-use iced::widget::{column, rich_text, span, tooltip};
+use iced::widget::{column, rich_text, span};
 use iced::{Color, Font, Pixels};
 
 /// The 16 ANSI colors, tuned for the dark surface (index 0-7 normal, 8-15 bright).
@@ -96,9 +96,18 @@ fn grid<'a>(snapshot: &Snapshot, focused: bool) -> Element<'a, Message> {
     lines.into()
 }
 
-pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Message> {
+pub(in crate::interfaces::studio) fn view(
+    state: &Dashboard,
+    id: Option<u64>,
+) -> Element<'_, Message> {
     let terminal = &state.terminal;
-    let Some(tab) = terminal.active_tab() else {
+    let Some((index, tab)) = id.and_then(|id| {
+        terminal
+            .tabs
+            .iter()
+            .enumerate()
+            .find(|(_, tab)| tab.id == id)
+    }) else {
         let hint = if terminal.opening {
             "Iniciando…"
         } else {
@@ -120,95 +129,27 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
         }
         return container(empty).center(Fill).into();
     };
+    let focused = terminal.focused && terminal.active == index;
+    let tab_id = tab.id;
     let surface = Surface::new(
-        iced::widget::Id::new(SURFACE),
-        container(grid(&tab.snapshot, terminal.focused))
+        surface_id(tab_id),
+        container(grid(&tab.snapshot, focused))
             .padding(PADDING)
             .width(Fill)
             .height(Fill)
             .clip(true)
             .style(styles::well),
-        terminal.focused,
-        |focused| Message::Terminal(Event::Focus(focused)),
-        |key| Message::Terminal(Event::Key(key)),
-        |lines| Message::Terminal(Event::Scroll(lines)),
-        |size| Message::Terminal(Event::Resized(size)),
+        focused,
+        move |focused| Message::Terminal(Event::Focus(tab_id, focused)),
+        move |key| Message::Terminal(Event::Key(tab_id, key)),
+        move |lines| Message::Terminal(Event::Scroll(tab_id, lines)),
+        move |size| Message::Terminal(Event::Resized(tab_id, size)),
     );
-    container(column![tab_strip(state), Element::from(surface)].spacing(6))
-        .padding(iced::Padding {
-            top: 0.0,
-            right: 10.0,
-            bottom: 8.0,
-            left: 10.0,
-        })
+    container(Element::from(surface))
+        .padding(6)
         .width(Fill)
         .height(Fill)
         .into()
-}
-
-fn tab_strip(state: &Dashboard) -> Element<'_, Message> {
-    let terminal = &state.terminal;
-    let mut strip = row![].spacing(4).align_y(iced::Center);
-    for (index, tab) in terminal.tabs.iter().enumerate() {
-        let active = index == terminal.active;
-        let (icon, tint) = match tab.kind {
-            Kind::Shell => ("terminal", design::MUTED),
-            Kind::Agent(_) => ("sparkle", design::ACCENT),
-        };
-        let mut label = row![
-            icons::icon(icon, if active { tint } else { design::FAINT }, 12.0),
-            text(&tab.title).size(11).font(design::UI_BOLD),
-        ]
-        .spacing(5)
-        .align_y(iced::Center);
-        if tab.exited {
-            label = label.push(text("terminó").size(10).color(design::WARNING));
-        }
-        strip = strip.push(
-            container(
-                row![
-                    button(label)
-                        .padding([4, 8])
-                        .style(styles::ghost(active))
-                        .on_press(Message::Terminal(Event::Select(index))),
-                    styles::tip(
-                        button(icons::icon("close", design::FAINT, 10.0))
-                            .padding(3)
-                            .style(styles::ghost(false))
-                            .on_press(Message::Terminal(Event::CloseTab(index))),
-                        "Cerrar esta sesión",
-                        tooltip::Position::Top,
-                    ),
-                ]
-                .align_y(iced::Center),
-            )
-            .style(styles::chip_surface(active)),
-        );
-    }
-    strip = strip.push(styles::tip(
-        button(icons::icon("plus", design::MUTED, 12.0))
-            .padding(5)
-            .style(styles::ghost(false))
-            .on_press(Message::Terminal(Event::Open)),
-        "Nuevo shell",
-        tooltip::Position::Top,
-    ));
-    strip.into()
-}
-
-/// Session controls shown in the dock header while the terminal tab is active.
-pub(in crate::interfaces::studio) fn toolbar(state: &Dashboard) -> Element<'_, Message> {
-    if !state.terminal.has_sessions() {
-        return Space::new().into();
-    }
-    styles::tip(
-        button(icons::icon("stop", design::MUTED, 13.0))
-            .padding(5)
-            .style(styles::ghost(false))
-            .on_press(Message::Terminal(Event::Interrupt)),
-        "Interrumpir (Ctrl+C)",
-        tooltip::Position::Top,
-    )
 }
 
 #[cfg(test)]

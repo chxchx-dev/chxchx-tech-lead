@@ -6,7 +6,6 @@ use iced::{Point, Subscription, keyboard, mouse};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Split {
     Explorer,
-    Dock,
 }
 
 /// What the left sidebar shows.
@@ -31,6 +30,9 @@ pub(super) struct State {
     pub side: Side,
     drag: Option<(Split, Option<Point>)>,
     last_dock: DockTab,
+    /// Resident memory of Studio, read every few seconds.
+    pub memory: Option<u64>,
+    memory_ticks: u32,
 }
 
 impl Default for State {
@@ -41,6 +43,8 @@ impl Default for State {
             side: Side::Explorer,
             drag: None,
             last_dock: DockTab::Terminal,
+            memory: None,
+            memory_ticks: 0,
         }
     }
 }
@@ -61,18 +65,27 @@ pub(super) enum Event {
     ResetLayout,
     About,
     ClearMessage,
+    /// Reads the memory Studio holds and, now and then, hands freed memory back to the system.
+    Memory,
 }
 
-/// The tab shown in the bottom dock, or `None` when the dock is hidden.
-pub(super) fn dock_tab(state: &Dashboard) -> Option<DockTab> {
-    if state.terminal.visible {
-        Some(DockTab::Terminal)
-    } else if state.editor.activity {
-        Some(DockTab::Activity)
-    } else {
-        None
+/// Whether the panes of this dock tab are on screen.
+pub(super) fn dock_visible(state: &Dashboard, tab: DockTab) -> bool {
+    match tab {
+        DockTab::Terminal => state.panes.terminal_panes() > 0,
+        DockTab::Activity => state.panes.has_activity(),
     }
 }
+
+/// The dock tab on screen (terminals first), or `None` when there is none.
+pub(super) fn dock_tab(state: &Dashboard) -> Option<DockTab> {
+    [DockTab::Terminal, DockTab::Activity]
+        .into_iter()
+        .find(|tab| dock_visible(state, *tab))
+}
+
+/// Memory is read every 5 s; every 6th reading (30 s) the freed memory is handed back.
+const MEMORY_TRIM_EVERY: u32 = 6;
 
 pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     match event {
@@ -82,29 +95,26 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             if let Some((split, last)) = &mut shell.drag
                 && let Some(previous) = last.replace(point)
             {
-                let (dx, dy) = (point.x - previous.x, point.y - previous.y);
+                let dx = point.x - previous.x;
                 match split {
                     Split::Explorer => {
                         shell.explorer_width = (shell.explorer_width + dx).clamp(180.0, 520.0);
-                    }
-                    Split::Dock => {
-                        shell.dock_height = (shell.dock_height - dy).clamp(110.0, 560.0);
                     }
                 }
             }
         }
         Event::DragEnd => state.shell.drag = None,
         Event::Dock(tab) => show_dock(state, Some(tab)),
-        Event::ToggleDock => {
-            let next = match dock_tab(state) {
-                Some(_) => None,
-                None => Some(state.shell.last_dock),
-            };
-            show_dock(state, next);
-        }
+        Event::ToggleDock => match dock_tab(state) {
+            Some(_) => show_dock(state, None),
+            None => show_dock(state, Some(state.shell.last_dock)),
+        },
         Event::ToggleTab(tab) => {
-            let next = (dock_tab(state) != Some(tab)).then_some(tab);
-            show_dock(state, next);
+            if dock_visible(state, tab) {
+                hide_dock(state, tab);
+            } else {
+                show_dock(state, Some(tab));
+            }
         }
         Event::ShowSide(side) => return show_side(state, side),
         Event::ToggleSide(side) => {
@@ -117,7 +127,6 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         Event::ResetLayout => {
             let defaults = State::default();
             state.shell.explorer_width = defaults.explorer_width;
-            state.shell.dock_height = defaults.dock_height;
             state.editor.explorer = true;
             show_dock(state, None);
             state.message = "Diseño restablecido.".into();
@@ -129,6 +138,14 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             );
         }
         Event::ClearMessage => state.message.clear(),
+        Event::Memory => {
+            let shell = &mut state.shell;
+            shell.memory = crate::integrations::process_memory::resident_bytes();
+            shell.memory_ticks += 1;
+            if shell.memory_ticks.is_multiple_of(MEMORY_TRIM_EVERY) {
+                crate::integrations::process_memory::give_back_soon();
+            }
+        }
     }
     Task::none()
 }
@@ -149,37 +166,59 @@ pub(super) fn restore_dock(state: &mut Dashboard, tab: Option<DockTab>) {
     show_dock(state, tab);
 }
 
-fn show_dock(state: &mut Dashboard, tab: Option<DockTab>) {
-    if let Some(tab) = tab {
-        state.shell.last_dock = tab;
+fn hide_dock(state: &mut Dashboard, tab: DockTab) {
+    state.shell.last_dock = tab;
+    match tab {
+        DockTab::Terminal => state
+            .panes
+            .hide(|c| matches!(c, panes::Content::Terminal(_))),
+        DockTab::Activity => state.panes.hide(|c| *c == panes::Content::Activity),
     }
-    state.terminal.visible = tab == Some(DockTab::Terminal);
-    state.editor.activity = tab == Some(DockTab::Activity);
 }
 
-/// A draggable gutter between two panels.
+/// Shows a dock tab (its panes are added to the grid) or, with `None`, hides all of them.
+fn show_dock(state: &mut Dashboard, tab: Option<DockTab>) {
+    let Some(tab) = tab else {
+        hide_dock(state, DockTab::Terminal);
+        hide_dock(state, DockTab::Activity);
+        return;
+    };
+    state.shell.last_dock = tab;
+    match tab {
+        DockTab::Terminal => {
+            let ids: Vec<u64> = state.terminal.tabs.iter().map(|t| t.id).collect();
+            if ids.is_empty() {
+                state.panes.show(panes::Content::Terminal(None));
+            }
+            for id in ids {
+                state.panes.show(panes::Content::Terminal(Some(id)));
+            }
+        }
+        DockTab::Activity => {
+            state.panes.show(panes::Content::Activity);
+        }
+    }
+}
+
+/// A draggable gutter between the sidebar and the work area.
 pub(super) fn splitter<'a>(state: &Dashboard, split: Split) -> Element<'a, Message> {
     let active = matches!(state.shell.drag, Some((current, _)) if current == split);
-    let bar = container(Space::new()).style(styles::splitter(active));
-    let (bar, interaction) = if split == Split::Dock {
-        (
-            bar.width(Fill).height(4),
-            mouse::Interaction::ResizingVertically,
-        )
-    } else {
-        (
-            bar.width(4).height(Fill),
-            mouse::Interaction::ResizingHorizontally,
-        )
-    };
-    mouse_area(bar)
-        .on_press(Message::Shell(Event::DragStart(split)))
-        .interaction(interaction)
-        .into()
+    mouse_area(
+        container(Space::new())
+            .style(styles::splitter(active))
+            .width(4)
+            .height(Fill),
+    )
+    .on_press(Message::Shell(Event::DragStart(split)))
+    .interaction(mouse::Interaction::ResizingHorizontally)
+    .into()
 }
 
 pub(super) fn subscription(state: &Dashboard) -> Subscription<Message> {
-    let shortcuts = iced::event::listen_with(shortcut);
+    let shortcuts = Subscription::batch([
+        iced::event::listen_with(shortcut),
+        iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Shell(Event::Memory)),
+    ]);
     if state.shell.drag.is_some() {
         Subscription::batch([shortcuts, iced::event::listen_with(drag)])
     } else {
@@ -257,7 +296,7 @@ mod tests {
         assert_eq!(dock_tab(&state), None);
         let _ = update(&mut state, Event::ToggleDock);
         assert_eq!(dock_tab(&state), Some(DockTab::Activity));
-        assert!(!state.terminal.visible);
+        assert!(!dock_visible(&state, DockTab::Terminal));
     }
 
     #[test]
@@ -276,8 +315,9 @@ mod tests {
         let _ = update(&mut state, Event::ToggleTab(DockTab::Terminal));
         assert_eq!(dock_tab(&state), Some(DockTab::Terminal));
         let _ = update(&mut state, Event::ToggleTab(DockTab::Activity));
-        assert_eq!(dock_tab(&state), Some(DockTab::Activity));
+        assert!(dock_visible(&state, DockTab::Terminal) && dock_visible(&state, DockTab::Activity));
         let _ = update(&mut state, Event::ToggleTab(DockTab::Activity));
+        let _ = update(&mut state, Event::ToggleTab(DockTab::Terminal));
         assert_eq!(dock_tab(&state), None);
 
         state.shell.explorer_width = 400.0;

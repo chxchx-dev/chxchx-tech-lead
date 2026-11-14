@@ -4,6 +4,7 @@ pub mod features {
     pub mod agents;
     pub mod catalog;
     pub mod catalog_view;
+    pub mod chat_model;
     pub mod doctor;
     pub mod git;
     pub mod mcp_diagnostics;

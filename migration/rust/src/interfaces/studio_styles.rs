@@ -2,7 +2,10 @@
 use super::design::*;
 use super::{Element, Message};
 use iced::widget::{button, container, scrollable, text_editor, text_input, tooltip};
+#[path = "studio_styles_panes.rs"]
+mod panes;
 use iced::{Background, Border, Color, Shadow, Theme, Vector, gradient};
+pub(super) use panes::{grid as pane_grid, pane, pane_title};
 
 fn solid(color: Color) -> Option<Background> {
     Some(Background::Color(color))

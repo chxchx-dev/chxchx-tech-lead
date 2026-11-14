@@ -11,6 +11,8 @@ mod agents;
 mod brand;
 #[path = "studio_catalog.rs"]
 mod catalog;
+#[path = "studio_chat.rs"]
+mod chat;
 #[path = "studio_ide_chrome.rs"]
 mod chrome;
 #[path = "studio_design.rs"]
@@ -35,12 +37,16 @@ mod ide;
 mod jobs;
 #[path = "studio_view.rs"]
 mod layout;
+#[path = "studio_learning.rs"]
+mod learning;
 #[path = "studio_menu.rs"]
 mod menu;
 #[path = "studio_pages.rs"]
 mod pages;
 #[path = "studio_ide_panels.rs"]
 mod panels;
+#[path = "studio_panes.rs"]
+mod panes;
 #[path = "studio_plans.rs"]
 mod plans;
 #[path = "studio_review.rs"]
@@ -104,6 +110,8 @@ impl Page {
 use std::path::{Path, PathBuf};
 
 struct Dashboard {
+    panes: panes::State,
+    chat: chat::State,
     terminal: terminal::State,
     agents: agents::State,
     editor: editor::State,
@@ -136,6 +144,8 @@ struct Dashboard {
 enum Message {
     Terminal(terminal::Event),
     Agents(agents::Event),
+    Chat(chat::Event),
+    Panes(panes::Event),
     Editor(editor::Event),
     Shell(shell::Event),
     Catalog(catalog::Event),
@@ -190,6 +200,8 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
             let mut state = Dashboard {
                 terminal: terminal::State::default(),
                 agents: agents::State::default(),
+                chat: chat::State::default(),
+                panes: panes::State::default(),
                 editor: editor::State::new(),
                 shell: shell::State::default(),
                 catalog: catalog::State::default(),
@@ -259,9 +271,34 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
             );
         }
         if state.terminal.has_sessions() {
+            // Hidden sessions are only drained now and then: every tick rebuilds and redraws the window.
+            let period = if state.panes.terminal_panes() > 0 {
+                100
+            } else {
+                500
+            };
             subscriptions.push(
-                iced::time::every(std::time::Duration::from_millis(100))
+                iced::time::every(std::time::Duration::from_millis(period))
                     .map(|_| Message::Terminal(terminal::Event::Tick)),
+            );
+        }
+        if state
+            .chat
+            .chats
+            .iter()
+            .any(|chat| state.panes.has_chat(&chat.agent.id))
+        {
+            subscriptions.push(iced::event::listen_with(|event, _, _| match event {
+                iced::Event::Window(iced::window::Event::FileDropped(path)) => {
+                    Some(Message::Chat(chat::Event::Dropped(path)))
+                }
+                _ => None,
+            }));
+        }
+        if state.chat.busy() {
+            subscriptions.push(
+                iced::time::every(std::time::Duration::from_millis(80))
+                    .map(|_| Message::Chat(chat::Event::Tick)),
             );
         }
         iced::Subscription::batch(subscriptions)

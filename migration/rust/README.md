@@ -187,6 +187,17 @@ terminal, Ctrl+J y Ctrl+Shift+<letra> siguen siendo atajos de Studio; el resto v
 abrió desde un lanzador, los agentes se buscan también en `~/.opencode/bin`, `~/.local/bin`, nvm, Homebrew,
 bun, npm global, etc.
 
+### Chat visual
+
+Cada agente con chat visual (Claude Code, Codex, OpenCode) tiene un botón **Chat** junto a **Terminal**, en el
+panel Agentes y en la página de inicio. Abre una pestaña «Chat · agente» en el área central con la conversación
+(Markdown), tarjetas de herramientas y razonamiento, **permisos en vivo** (permitir, permitir y recordar,
+denegar), preguntas del agente, nivel de acceso (solo lectura, editar, editar y ejecutar, acceso total), red,
+modelo y esfuerzo, **uso de tokens y coste**, contexto con su liberación automática al 90 % y límites del plan.
+La conversación se guarda y se recupera al reabrir; «Nuevo chat» empieza de cero. Studio no reimplementa a los
+agentes: usa `chxchx-tech agent chat --live` del CLI de Python (se busca en `$CHXCHX_TECH_CLI`, el PATH y el
+`.venv` del proyecto). Sin confianza del proyecto no se inicia ningún turno.
+
 ## Windows
 
 Studio de Rust funciona en Windows 10/11 x64 sin instalar nada más que el propio binario

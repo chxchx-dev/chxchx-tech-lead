@@ -102,6 +102,17 @@ pub(super) fn status_bar(state: &Dashboard) -> Element<'_, Message> {
     } else {
         details = details.push(label("Espacio de trabajo"));
     }
+    if let Some(bytes) = state.shell.memory {
+        details = details.push(styles::tip(
+            segment(
+                "activity",
+                design::FAINT,
+                crate::integrations::process_memory::format_bytes(bytes),
+            ),
+            "Memoria que Studio tiene en RAM ahora. Se devuelve al sistema al cerrar chats y terminales, y cada 30 s.",
+            iced::widget::tooltip::Position::Top,
+        ));
+    }
     details = details.push(label(concat!("v", env!("CARGO_PKG_VERSION"))));
     let bar = bar.push(container(details).align_right(Fill).padding([0, 12]));
     container(bar)

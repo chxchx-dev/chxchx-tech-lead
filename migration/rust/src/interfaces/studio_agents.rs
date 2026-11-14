@@ -18,28 +18,34 @@ pub(super) enum Event {
     Refresh,
     /// Opens the agent (by id) in a terminal tab, or goes back to the one it already has.
     Terminal(String),
+    /// Opens the agent's visual chat in the editor area.
+    Chat(String),
 }
 
 pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     match event {
         Event::Refresh => refresh(state),
+        Event::Chat(id) => match find(state, &id) {
+            Some(agent) => Task::done(Message::Chat(chat::Event::Open(agent))),
+            None => Task::none(),
+        },
         Event::Terminal(id) => {
-            let Some(agent) = state
-                .agents
-                .catalog
-                .agents
-                .iter()
-                .find(|agent| agent.id == id)
-                .cloned()
-            else {
+            let Some(agent) = find(state, &id) else {
                 return Task::none();
             };
-            Task::batch([
-                Task::done(Message::Shell(shell::Event::Dock(shell::DockTab::Terminal))),
-                Task::done(Message::Terminal(terminal::Event::OpenAgent(agent))),
-            ])
+            Task::done(Message::Terminal(terminal::Event::OpenAgent(agent)))
         }
     }
+}
+
+fn find(state: &Dashboard, id: &str) -> Option<Agent> {
+    state
+        .agents
+        .catalog
+        .agents
+        .iter()
+        .find(|agent| agent.id == id)
+        .cloned()
 }
 
 /// Reads the configuration and looks for the agents on this machine, off the UI thread.
@@ -79,7 +85,7 @@ fn identity(provider: Provider) -> (iced::Color, &'static str) {
     }
 }
 
-fn avatar<'a>(provider: Provider, size: f32) -> Element<'a, Message> {
+pub(super) fn avatar<'a>(provider: Provider, size: f32) -> Element<'a, Message> {
     let (tint, initial) = identity(provider);
     container(
         text(initial)
@@ -122,7 +128,43 @@ fn status_chip<'a>(standing: &Standing) -> Element<'a, Message> {
         .into()
 }
 
+fn chat_button<'a>(state: &Dashboard, agent: &Agent) -> Element<'a, Message> {
+    let visual = agent.provider.has_visual_chat();
+    let enabled = visual && agent.available() && trusted(state);
+    let open = state.chat.has_chat(&agent.id);
+    let why = if !visual {
+        "Este agente solo se abre en la terminal."
+    } else if !agent.available() {
+        "Instala el agente para poder abrirlo."
+    } else if !trusted(state) {
+        "Concede confianza al proyecto para hablar con agentes."
+    } else {
+        "Conversación visual con permisos, uso de tokens y liberación de contexto."
+    };
+    styles::tip(
+        button(
+            row![
+                icons::icon("sparkle", design::TEXT, 13.0),
+                text(if open { "Ver chat" } else { "Chat" }).size(12)
+            ]
+            .spacing(7)
+            .align_y(iced::Center),
+        )
+        .padding([6, 12])
+        .style(styles::primary)
+        .on_press_maybe(enabled.then(|| Message::Agents(Event::Chat(agent.id.clone())))),
+        why,
+        tooltip::Position::Top,
+    )
+}
+
 fn open_button<'a>(state: &Dashboard, agent: &Agent) -> Element<'a, Message> {
+    row![terminal_button(state, agent), chat_button(state, agent)]
+        .spacing(8)
+        .into()
+}
+
+fn terminal_button<'a>(state: &Dashboard, agent: &Agent) -> Element<'a, Message> {
     let running = state.terminal.agent_tab(&agent.id).is_some();
     let label = if running { "Ver terminal" } else { "Terminal" };
     let enabled = agent.available() && trusted(state) && !state.terminal.opening;
@@ -143,7 +185,7 @@ fn open_button<'a>(state: &Dashboard, agent: &Agent) -> Element<'a, Message> {
             .align_y(iced::Center),
         )
         .padding([6, 12])
-        .style(styles::primary)
+        .style(styles::secondary)
         .on_press_maybe(enabled.then(|| Message::Agents(Event::Terminal(agent.id.clone())))),
         why,
         tooltip::Position::Top,

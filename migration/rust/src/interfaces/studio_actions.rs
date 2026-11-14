@@ -1,7 +1,12 @@
 use super::*;
 
 pub(super) fn update(state: &mut Dashboard, message: Message) -> Task<Message> {
-    let high_frequency = matches!(&message, Message::Terminal(terminal::Event::Tick));
+    let high_frequency = matches!(
+        &message,
+        Message::Terminal(terminal::Event::Tick)
+            | Message::Chat(chat::Event::Tick)
+            | Message::Shell(shell::Event::Memory)
+    );
     let task = dispatch(state, message);
     if !high_frequency {
         session::capture(state);
@@ -12,6 +17,12 @@ pub(super) fn update(state: &mut Dashboard, message: Message) -> Task<Message> {
 fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
     if let Message::Terminal(event) = message {
         return terminal::update(state, event);
+    }
+    if let Message::Panes(event) = message {
+        return panes::update(state, event);
+    }
+    if let Message::Chat(event) = message {
+        return chat::update(state, event);
     }
     if let Message::Agents(event) = message {
         return agents::update(state, event);
@@ -53,6 +64,8 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
         Message::Editor(_)
         | Message::Terminal(_)
         | Message::Agents(_)
+        | Message::Chat(_)
+        | Message::Panes(_)
         | Message::Shell(_)
         | Message::Catalog(_)
         | Message::Session(_)

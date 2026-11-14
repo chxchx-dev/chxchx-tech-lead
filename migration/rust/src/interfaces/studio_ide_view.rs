@@ -5,17 +5,7 @@ use super::*;
 use iced::widget::{column, opaque, stack};
 
 pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
-    let content = if state.editor.home {
-        layout::view(state)
-    } else {
-        tabs::editor_area(state)
-    };
-    let mut center = column![tabs::tab_bar(state), content].height(Fill);
-    if let Some(tab) = shell::dock_tab(state) {
-        center = center
-            .push(shell::splitter(state, Split::Dock))
-            .push(dock::view(state, tab));
-    }
+    let center = panes::view(state);
     let mut work = row![chrome::activity_rail(state)].height(Fill);
     if state.editor.explorer {
         work = work

@@ -7,10 +7,12 @@ use std::sync::{Arc, Mutex};
 
 #[path = "studio_terminal_view.rs"]
 mod view_impl;
-pub(in crate::interfaces::studio) use view_impl::{toolbar, view};
+pub(in crate::interfaces::studio) use view_impl::view;
 
-/// Identifies the terminal surface for focus operations.
-pub(super) const SURFACE: &str = "terminal-surface";
+/// Identifies the surface of a session for focus operations.
+pub(super) fn surface_id(id: u64) -> iced::widget::Id {
+    iced::widget::Id::from(format!("terminal-{id}"))
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Kind {
@@ -20,6 +22,7 @@ pub(super) enum Kind {
 }
 
 pub(super) struct Tab {
+    pub id: u64,
     pub kind: Kind,
     pub title: String,
     pub session: Arc<Mutex<Session>>,
@@ -32,9 +35,9 @@ pub(super) struct State {
     pub tabs: Vec<Tab>,
     pub active: usize,
     pub opening: bool,
-    pub visible: bool,
     pub focused: bool,
     generation: u64,
+    next_id: u64,
     rows: u16,
     cols: u16,
 }
@@ -63,13 +66,12 @@ pub(super) enum Event {
     /// An agent in a tab of its own (or back to the one it already has).
     OpenAgent(Agent),
     Opened(u64, Kind, String, Result<Arc<Mutex<Session>>, String>),
-    Select(usize),
-    CloseTab(usize),
-    Key(keyboard::Event),
+    CloseTab(u64),
+    Key(u64, keyboard::Event),
     Pasted(Option<String>),
-    Scroll(i32),
-    Focus(bool),
-    Resized(iced::Size),
+    Scroll(u64, i32),
+    Focus(u64, bool),
+    Resized(u64, iced::Size),
     Tick,
     Interrupt,
 }
@@ -88,9 +90,10 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         Event::Open => return open(state, Kind::Shell, "Shell".to_owned(), None),
         Event::OpenAgent(agent) => {
             if let Some(index) = state.terminal.agent_tab(&agent.id) {
-                state.terminal.visible = true;
+                let id = state.terminal.tabs[index].id;
                 state.terminal.active = index;
-                return focus_surface();
+                state.panes.show(panes::Content::Terminal(Some(id)));
+                return focus_surface(id);
             }
             let title = agent.label();
             return open(state, Kind::Agent(agent.id.clone()), title, Some(agent));
@@ -109,7 +112,10 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                     }
                     let title = unique_title(&terminal.tabs, title);
                     let snapshot = session.lock().map(|s| s.snapshot()).unwrap_or_default();
+                    let id = terminal.next_id;
+                    terminal.next_id += 1;
                     terminal.tabs.push(Tab {
+                        id,
                         kind,
                         title,
                         session,
@@ -118,22 +124,15 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                     });
                     terminal.active = terminal.tabs.len() - 1;
                     terminal.focused = true;
-                    return focus_surface();
+                    state.panes.attach_terminal(id);
+                    return focus_surface(id);
                 }
                 Err(error) => state.message = error,
             }
         }
-        Event::Select(index) => {
+        Event::CloseTab(id) => {
             let terminal = &mut state.terminal;
-            if index < terminal.tabs.len() {
-                terminal.active = index;
-                refresh(&mut terminal.tabs[index]);
-                return focus_surface();
-            }
-        }
-        Event::CloseTab(index) => {
-            let terminal = &mut state.terminal;
-            if index < terminal.tabs.len() {
+            if let Some(index) = terminal.tabs.iter().position(|tab| tab.id == id) {
                 terminal.tabs.remove(index);
                 terminal.active = terminal.active.min(terminal.tabs.len().saturating_sub(1));
                 if index < terminal.active {
@@ -141,9 +140,14 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                 }
                 terminal.generation += 1;
                 terminal.opening = false;
+                state
+                    .panes
+                    .hide(|c| *c == panes::Content::Terminal(Some(id)));
+                crate::integrations::process_memory::give_back_soon();
             }
         }
-        Event::Key(key) => {
+        Event::Key(id, key) => {
+            select(&mut state.terminal, id);
             if let keyboard::Event::KeyPressed { key, modifiers, .. } = &key
                 && terminal_keys::is_paste(key, *modifiers)
             {
@@ -160,29 +164,49 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                 send(state, &bytes);
             }
         }
-        Event::Scroll(lines) => {
-            if let Some(tab) = state.terminal.tabs.get_mut(state.terminal.active) {
+        Event::Scroll(id, lines) => {
+            if let Some(tab) = state.terminal.tabs.iter_mut().find(|tab| tab.id == id) {
                 if let Ok(mut session) = tab.session.lock() {
                     session.scroll(lines);
                 }
                 refresh(tab);
             }
         }
-        Event::Focus(focused) => state.terminal.focused = focused,
-        Event::Resized(size) => resize(&mut state.terminal, size),
+        Event::Focus(id, focused) => {
+            if focused {
+                select(&mut state.terminal, id);
+            } else if state.terminal.active_tab().is_some_and(|tab| tab.id == id) {
+                state.terminal.focused = false;
+            }
+        }
+        Event::Resized(id, size) => resize(&mut state.terminal, id, size),
         Event::Tick => tick(&mut state.terminal),
         Event::Interrupt => send(state, b"\x03"),
     }
     Task::none()
 }
 
-fn focus_surface() -> Task<Message> {
-    iced::widget::operation::focus(SURFACE)
+fn focus_surface(id: u64) -> Task<Message> {
+    iced::widget::operation::focus(surface_id(id))
+}
+
+/// The session the keyboard goes to: the one whose surface has the focus.
+fn select(terminal: &mut State, id: u64) {
+    if let Some(index) = terminal.tabs.iter().position(|tab| tab.id == id) {
+        terminal.active = index;
+        terminal.focused = true;
+    }
+}
+
+/// A click on the pane of a session: its surface takes the keyboard.
+pub(super) fn focus_tab(state: &mut Dashboard, id: u64) -> Task<Message> {
+    select(&mut state.terminal, id);
+    focus_surface(id)
 }
 
 fn open(state: &mut Dashboard, kind: Kind, title: String, agent: Option<Agent>) -> Task<Message> {
+    state.panes.show(panes::Content::Terminal(None));
     let terminal = &mut state.terminal;
-    terminal.visible = true;
     if terminal.opening {
         return Task::none();
     }
@@ -286,18 +310,14 @@ pub(super) fn grid_for(size: iced::Size) -> (u16, u16) {
     )
 }
 
-fn resize(terminal: &mut State, size: iced::Size) {
+fn resize(terminal: &mut State, id: u64, size: iced::Size) {
     let (rows, cols) = grid_for(size);
-    if (rows, cols) == (terminal.rows, terminal.cols) {
-        return;
-    }
-    terminal.rows = rows;
-    terminal.cols = cols;
-    for tab in &mut terminal.tabs {
-        if let Ok(mut session) = tab.session.lock() {
-            let _ = session.resize(rows, cols);
-            tab.snapshot = session.snapshot();
-        }
+    (terminal.rows, terminal.cols) = (rows, cols);
+    if let Some(tab) = terminal.tabs.iter_mut().find(|tab| tab.id == id)
+        && let Ok(mut session) = tab.session.lock()
+    {
+        let _ = session.resize(rows, cols);
+        tab.snapshot = session.snapshot();
     }
 }
 

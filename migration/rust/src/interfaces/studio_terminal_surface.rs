@@ -7,13 +7,13 @@ use iced::advanced::widget::operation::Focusable;
 use iced::advanced::widget::{Id, Operation, Tree, tree};
 use iced::advanced::{Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer};
 use iced::{Border, Element, Event, Length, Rectangle, Size, Vector, keyboard, window};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Read by the global shortcuts: while the terminal has the focus they must not also fire.
-static CAPTURING: AtomicBool = AtomicBool::new(false);
+static CAPTURING: AtomicUsize = AtomicUsize::new(0);
 
 pub(super) fn capturing() -> bool {
-    CAPTURING.load(Ordering::Relaxed)
+    CAPTURING.load(Ordering::Relaxed) > 0
 }
 
 type Callback<'a, Message, Argument> = Box<dyn Fn(Argument) -> Message + 'a>;
@@ -56,12 +56,25 @@ struct State {
     size: Size,
 }
 
-impl Drop for State {
-    /// The surface left the screen (the dock was hidden) while focused: Studio's shortcuts must come back.
-    fn drop(&mut self) {
-        if self.focused {
-            CAPTURING.store(false, Ordering::Relaxed);
+impl State {
+    /// Keeps the count of focused surfaces exact, so one pane losing the focus does not free the keys of another.
+    fn mark(&mut self, focused: bool) {
+        if self.focused == focused {
+            return;
         }
+        self.focused = focused;
+        if focused {
+            CAPTURING.fetch_add(1, Ordering::Relaxed);
+        } else {
+            CAPTURING.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+}
+
+impl Drop for State {
+    /// The surface left the screen (its pane was closed) while focused: Studio's shortcuts must come back.
+    fn drop(&mut self) {
+        self.mark(false);
     }
 }
 
@@ -71,13 +84,11 @@ impl Focusable for State {
     }
 
     fn focus(&mut self) {
-        self.focused = true;
-        CAPTURING.store(true, Ordering::Relaxed);
+        self.mark(true);
     }
 
     fn unfocus(&mut self) {
-        self.focused = false;
-        CAPTURING.store(false, Ordering::Relaxed);
+        self.mark(false);
     }
 }
 
@@ -157,8 +168,7 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for Surface<'_
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let inside = cursor.is_over(bounds);
                 if inside != state.focused {
-                    state.focused = inside;
-                    CAPTURING.store(inside, Ordering::Relaxed);
+                    state.mark(inside);
                     shell.publish((self.on_focus)(inside));
                 }
                 if inside {
