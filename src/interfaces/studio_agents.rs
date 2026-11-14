@@ -202,22 +202,25 @@ fn agent_card<'a>(state: &Dashboard, agent: &Agent) -> Element<'a, Message> {
     let mut body = column![
         row![
             avatar(agent.provider, 30.0),
-            column![
-                text(agent.label()).size(13).font(design::UI_BOLD),
-                text(format!("{} · {origin}", agent.command.join(" ")))
-                    .size(10)
-                    .font(design::MONO)
-                    .color(design::FAINT)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            ]
-            .spacing(2)
-            .width(Fill),
+            text(agent.label())
+                .size(13)
+                .font(design::UI_BOLD)
+                .width(Fill),
             status_chip(&standing),
         ]
         .spacing(10)
         .align_y(iced::Center),
+        container(
+            text(format!("{} · {origin}", agent.command.join(" ")))
+                .size(10)
+                .font(design::MONO)
+                .color(design::FAINT)
+                .wrapping(iced::widget::text::Wrapping::None),
+        )
+        .width(Fill)
+        .clip(true),
     ]
-    .spacing(10);
+    .spacing(8);
     if matches!(standing, Standing::Missing) && !agent.provider.install_hint().is_empty() {
         body = body.push(
             text(format!("Instálalo con: {}", agent.provider.install_hint()))

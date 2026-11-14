@@ -120,7 +120,7 @@ impl Preferences {
         layout.dock_height = clamp(layout.dock_height, 110.0, 560.0, 220.0);
         if !matches!(
             layout.side.as_str(),
-            "explorer" | "search" | "workspace" | "git"
+            "explorer" | "search" | "workspace" | "git" | "agents"
         ) {
             layout.side = "explorer".to_owned();
         }

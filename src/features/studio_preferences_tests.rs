@@ -77,3 +77,17 @@ fn recent_lists_keep_order_uniqueness_and_limit() {
     assert!(is_safe_relative("src/lib.rs"));
     assert!(!is_safe_relative("../x") && !is_safe_relative("/etc/passwd") && !is_safe_relative(""));
 }
+
+#[test]
+fn every_sidebar_view_can_be_restored_and_unknown_ones_fall_back_to_the_explorer() {
+    for side in ["explorer", "search", "git", "agents", "workspace"] {
+        let mut preferences = Preferences::default();
+        preferences.layout.side = side.into();
+        preferences.sanitize();
+        assert_eq!(preferences.layout.side, side);
+    }
+    let mut preferences = Preferences::default();
+    preferences.layout.side = "inventado".into();
+    preferences.sanitize();
+    assert_eq!(preferences.layout.side, "explorer");
+}

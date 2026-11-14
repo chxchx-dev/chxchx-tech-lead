@@ -1,260 +1,190 @@
-# ChxChx Rust product
+<p align="center">
+  <img src="assets/brand/logo-420.png" alt="ChxChx" width="240">
+</p>
 
-Paquete único en desarrollo para la rama `migracion-rust`. La versión local es
-`0.6.0-dev.0`; no se publica ni sustituye la instalación 0.5.x.
+<h1 align="center">ChxChx Tech Lead</h1>
 
-## Capacidades compartidas actuales
+<p align="center">
+  <strong>Prepara, conecta y controla tus proyectos asistidos por agentes de IA, desde un solo lugar.</strong><br>
+  Un control plane local, nativo y ligero: CLI, TUI y un Studio de escritorio, todo en Rust.
+</p>
 
-`project-overview` lee una ruta de proyecto y entrega el mismo DTO a CLI, TUI y
-Studio. Incluye marcadores, stacks, lenguajes, gestores, infraestructura y perfil
-resuelto; lee si el TOML de `.ai/chxchx-tech.toml` se puede parsear, su versión,
-compatibilidad estructural inicial y trust local. Comprueba límites de recursos,
-comandos declarados y que sus directorios de trabajo permanezcan dentro del
-proyecto; no ejecuta comandos. El detector omite carpetas de dependencias/build como
-el legado y carga perfiles incluidos más los locales en
-`$CHXCHX_TECH_HOME/profiles/` (o `~/.chxchx-tech-lead/profiles/`). No valida aún
-el esquema ChxChx completo, inicia procesos ni modifica archivos.
-Su JSON es `chxchx.project-overview` v1 y está en `schemas/`.
+<p align="center">
+  <a href="https://github.com/chxchx-dev/chxchx-tech-lead/actions/workflows/rust-product.yml"><img alt="Build" src="https://github.com/chxchx-dev/chxchx-tech-lead/actions/workflows/rust-product.yml/badge.svg"></a>
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-2024-orange?logo=rust">
+  <img alt="Plataformas" src="https://img.shields.io/badge/Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-informational">
+  <img alt="Versión" src="https://img.shields.io/badge/versi%C3%B3n-0.6.0--dev-blue">
+</p>
 
-`init [PATH]` previsualiza la inicialización completa; `--minimal` prepara solo
-configuración, memoria y registro local. `--apply` aplica el plan mostrado.
-Ambos modos comparten backups, preservan configuración existente, migran TOML
-v1→v2 cuando corresponde y actualizan el registro local. Si Basic Memory está
-instalado, `--apply` asegura que `.ai/memory` esté registrado allí; la vista
-previa no ejecuta su CLI. Si el registro falla, init conserva los cambios
-locales aplicados y muestra un aviso. TUI y Studio aplican en segundo plano.
-El init completo también crea las plantillas administradas y el ejemplo MCP de
-OpenCode; configura clientes MCP solo con `integrate --apply`.
+<p align="center">
+  <img src="assets/screenshots/studio-home.png" alt="ChxChx Studio" width="100%">
+</p>
 
-`integrate [PATH] --client all|claude|codex|opencode` previsualiza la
-configuración MCP compartida por CLI, TUI y Studio. Solo `--apply` invoca los
-CLIs oficiales y asegura el proyecto Basic Memory. `doctor [PATH]` inspecciona
-herramientas y configuraciones sin ejecutar procesos declarados.
+---
 
-`projects list` muestra alias, nombre, perfil, stacks, disponibilidad y ruta;
-`projects current` resuelve el último proyecto disponible. Ambas lecturas usan
-el registro local y están compartidas por CLI, TUI (`p`) y Studio.
-`projects sync` muestra una vista previa; solo `projects sync --apply` escribe
-los bloques administrados en `AGENTS.md` y `CLAUDE.md`. Revisa snapshots del
-registro y archivos, respalda cada proyecto modificado e intenta rollback si una
-escritura falla. Omite proyectos ausentes o inseguros con avisos. CLI, TUI (`s`,
-luego `y`) y Studio usan el mismo caso de uso. `projects switch` espera al runtime
-de workspace/agentes.
+## ¿Qué es?
 
-Skills, Tech Packs y Mods están portados (CLI y Studio). El catálogo del legado
-(21 skills, 13 packs, 23 mods) se empaqueta en el binario al compilar leyendo
-`src/chxchx_tech_lead/`, sin copiarlo. Todo cambio se previsualiza y solo se aplica
-con `--apply` (botón Confirmar en Studio):
+ChxChx prepara un repositorio para trabajar con agentes (Claude Code, Codex, OpenCode) y te da las herramientas
+para usarlos con criterio:
 
-```powershell
-chxchx-tech skills list .                      # ✓ habilitada, ★ recomendada
-chxchx-tech skills enable architecture testing --path . --apply
-chxchx-tech packs apply python-backend --path . --apply   # habilita todas sus skills
-chxchx-tech mods apply --path .                # sin nombres: los recomendados
-chxchx-tech mods remove chxchx-review-before-merge --path . --apply
-```
+- **Prepara** el proyecto: configuración, guías (`AGENTS.md`, `CLAUDE.md`), skills, Tech Packs y Mods, siempre con
+  **vista previa, respaldo y reversión**.
+- **Conecta** tus asistentes con las herramientas del proyecto (MCP) usando sus CLI oficiales.
+- **Controla** lo que cada agente puede hacer: nada se ejecuta sin la **confianza local** que tú concedes.
+- **Trabaja** con ellos sin salir de la aplicación: chat visual con permisos, terminales reales, editor y Git.
 
-Habilitar skills escribe `.ai/chxchx-skills.toml`, regenera `.ai/SKILLS.md` y el
-bloque administrado de `AGENTS.md` (backup previo; el texto manual se conserva).
-Los Mods se instalan como skills de agente en `.claude/skills/` y, si el proyecto
-usa Codex, también en `.agents/skills/`. Un archivo con el mismo nombre que no
-administra ChxChx nunca se sobrescribe ni se retira, y lo reemplazado queda en
-`.ai/backups/claude-mods/`. La TUI aún no ofrece esta capacidad.
+No es un framework de agentes: es el orquestador que los prepara, los lanza y te deja ver y aprobar lo que hacen.
 
-## Interfaz del Studio
+## Tres interfaces, un mismo núcleo
 
-- **Barra de menú** (Archivo, Editar, Ver, Ir, Proyecto, Ayuda): cada comando del
-  Studio tiene su entrada, con el atajo a la derecha. Un menú abierto cambia al pasar
-  el ratón por otro; `Esc` o un clic fuera lo cierra. Los comandos que no aplican
-  (Guardar sin cambios, Deshacer sin archivo) aparecen atenuados, no ausentes.
-- **Barra de herramientas**: Inicio, Guardar, Deshacer, Rehacer, buscar en el archivo,
-  buscar en el proyecto, Preparar, Catálogo, Conectar y Salud. Se resalta la sección
-  actual y lo que no aplica se desactiva; cada botón tiene tooltip con su atajo.
-- **Barra de actividad**: dos grupos con una marca cada uno: la barra lateral izquierda
-  (Explorador, Buscar o Espacio de trabajo) y el panel inferior (Terminal o Actividad).
-  Pulsar el elegido otra vez oculta ese panel. No hay panel derecho: todo el ancho es
-  del editor. El **Espacio de trabajo** agrupa las secciones (Proyecto, Agentes y
-  herramientas, Salud, Continuidad) bajo una tarjeta con el estado del proyecto; también
-  se abren desde el menú Ir y la barra de herramientas. La vista elegida se recuerda.
-- **Buscar en el proyecto** (`Ctrl+Shift+F`): por contenido o por nombre, máximo 200
-  coincidencias, omite carpetas de dependencias, enlaces, binarios y `.env*`. Un clic
-  abre el archivo en la línea y selecciona la coincidencia.
-- Atajos: `Ctrl+B` barra lateral, `Ctrl+J` panel inferior, `Ctrl+Shift+F` buscar,
-  `Ctrl+S` guardar, `Ctrl+W` cerrar pestaña, `Ctrl+F` buscar en el archivo.
+Las tres leen el mismo modelo del proyecto y comparten la lógica, así que ven y hacen lo mismo.
 
-## Git en el Studio
+| | Para qué | Cómo se abre |
+|---|---|---|
+| **Studio** | Escritorio: editor, Git, agentes, chat y terminales en paneles que acomodas | `chxchx-studio` |
+| **TUI** | Un tablero rápido dentro de tu terminal | `chxchx-tech tui .` |
+| **CLI** | Automatización y scripts, con salida JSON versionada | `chxchx-tech <comando>` |
 
-La barra lateral tiene una vista **Git** (rail, menú Git, botón de la barra de
-herramientas y `Git` en la barra de estado). Usa el `git` instalado, sin shell, sin pedir
-credenciales y sin abrir ventanas.
+## Studio
 
-- **Cabecera:** rama, Recibir (`pull --ff-only`; si se separaron ofrece fusionar), Enviar
-  (con confirmación) o Publicar rama, y buscar novedades (`fetch`).
-- **Cambios:** guía paso a paso según el estado (conflictos, listo para guardar, cambios,
-  separadas, por enviar, sin publicar, sin commits, al día), caja de commit
-  (`Ctrl+Intro`), y listas *En conflicto*, *Listos para guardar*, *Cambios* y *Apartados
-  (stash)*. Un clic abre el diff en una pestaña de solo lectura; `+`/`−` preparan o quitan,
-  `↶` descarta tras confirmar y guarda antes una copia (`changes.patch` y archivos nuevos)
-  en `.git/chxchx-backups/` (se conservan las 10 últimas).
-- **Historial:** commits de todas las ramas con grafo, etiquetas de rama y tag; un clic
-  muestra el mensaje y los archivos, y otro abre el diff de ese archivo.
-- **Ramas:** locales y remotas, cambiar, crear y eliminar (confirmación; nunca fuerza).
-- **Explorador:** archivos coloreados y con letra (M, N, D, R, !) y un punto en las carpetas
-  con cambios. El estado se refresca al guardar, tras cada acción y cada 8 s.
-- **Seguridad:** rutas literales (`--literal-pathspecs`), nombres de rama validados con
-  `git check-ref-format`, `core.fsmonitor` desactivado siempre, y en proyectos sin confianza
-  local no se ejecutan los hooks del repositorio. Un solo comando que modifica corre a la
-  vez, para no pelear por `index.lock`.
-- **Sugerir y plan de commits (buenas prácticas):** el botón **Sugerir** mira lo que se va
-  a guardar. Si son varios temas no propone un commit único: reparte los archivos
-  relacionados en commits separados (el plan, abajo). Si es un solo tema, rellena la caja con
-  un mensaje Conventional Commits (`tipo(alcance): descripción` y un cuerpo con los
-  archivos y sus líneas). La caja de mensaje queda fija sobre la lista, que es la que
-  desplaza.
-  **Organizar en commits** «desfragmenta» todo lo pendiente en commits que cuentan una
-  sola historia: clasifica cada archivo (docs, test, ci, build —dependencias primero—,
-  chore, y código como feat, fix o refactor según archivos nuevos, tamaño del cambio,
-  borrados y palabras como *fix/bug/corrige*), agrupa por módulo, subdivide los módulos
-  grandes por carpeta y familia de nombres, y propone un mensaje por grupo. Cada tarjeta
-  permite cambiar el tipo con un clic, editar la descripción y guardar solo ese grupo
-  (`git commit -- <archivos>`: lo demás que estuviera preparado no se toca) o todos en
-  orden. Avisa si el título supera 72 caracteres o no sigue el formato. Es un motor
-  local: no envía nada a ningún servicio y no lee archivos que parecen secretos
-  (`.env`, claves, tokens), que además se señalan con un aviso.
-- **Sin portar aún:** consejo y sugerencia con un agente de IA, diff en dos columnas,
-  recordar «no volver a confirmar el envío», rebase, cherry-pick y blame.
+### Agentes, chat y terminales
 
-## Persistencia del Studio
+Cada agente se abre de dos formas, lado a lado: un **chat visual** y una **terminal real** con su propia interfaz.
 
-El Studio guarda sus preferencias en `<CHXCHX_TECH_HOME>/studio-preferences.json`
-(escritura atómica, diferida 1,5 s tras el último cambio y al cerrar): tamaño de
-ventana, paneles visibles y sus tamaños, panel inferior, hasta 10 proyectos recientes
-y, por proyecto, pestañas abiertas, pestaña activa, carpetas expandidas, sección de
-Inicio y 20 archivos recientes. Los valores se acotan al cargar y las rutas deben
-ser relativas al proyecto. Un archivo dañado se aparta como `.corrupt`; uno de una
-versión más nueva no se sobrescribe. No se guardan secretos, confianza, terminales ni
-agentes, y ninguna ruta guardada concede permisos.
+- **Chat visual** con permisos en vivo (permitir, permitir y recordar, denegar), niveles de acceso (solo lectura,
+  editar, editar y ejecutar, acceso total), red, modelo y esfuerzo a tu elección.
+- **Uso a la vista:** tokens, coste, contexto y límites del plan; el contexto se libera solo al llegar al 90 %.
+- **Imágenes:** pega una captura (`Ctrl+V`), arrástrala o adjúntala; se reduce a lo que el modelo aprovecha y el
+  agente va directo a lo que muestra.
+- **Terminal real:** emulación VT completa con colores, historial, teclado entero y varias sesiones.
+- **Paneles acomodables:** editor, chats, terminales y actividad se arrastran, dividen, redimensionan y
+  maximizan como en un IDE.
 
-## Rendimiento
+<p align="center">
+  <img src="assets/screenshots/studio-agents.png" alt="Panel de agentes" width="100%">
+</p>
 
-La interfaz usa el renderer por software de Iced, optimizado: las dependencias se
-compilan con `opt-level = 3` incluso en dev y el perfil release usa LTO. El trabajo
-de disco (leer el proyecto, previsualizar, diagnosticar, aplicar) corre en hilos de
-fondo y la barra de estado muestra «Procesando…». Se probó el renderer GPU (wgpu): en
-la máquina de pruebas consumió más CPU (3,1×) y memoria (4×) al redibujar, así que
-no se habilita. Para medir, compila con `--release` y no con el build debug.
+### Editor y Git
 
-La migración aún no cubre el cambio de proyectos, instaladores,
-paridad automatizada completa ni QA en macOS/Linux.
+Un editor con resaltado de sintaxis, búsqueda en el archivo y en el proyecto, y guardado con respaldo. Git está
+integrado: cambios por grupos, historial con grafo, ramas, stash y un **plan de commits** que reparte lo
+pendiente en commits claros con mensajes Conventional Commits, sin enviar nada a ningún servicio.
 
-Desde la raíz del repositorio:
+<p align="center">
+  <img src="assets/screenshots/studio-editor.png" alt="Editor" width="49%">
+  <img src="assets/screenshots/studio-git.png" alt="Git" width="49%">
+</p>
+
+### Catálogo del proyecto
+
+Skills, Tech Packs y Mods que guían a tus agentes. Se recomiendan según el stack detectado y cada cambio se
+previsualiza antes de aplicarse.
+
+<p align="center">
+  <img src="assets/screenshots/studio-catalog.png" alt="Catálogo" width="100%">
+</p>
+
+Además: una **ruta de aprendizaje** en la página de inicio que se marca sola según lo que ya hiciste.
+
+## TUI
+
+<p align="center">
+  <img src="assets/screenshots/tui.png" alt="TUI" width="100%">
+</p>
+
+## CLI
+
+Cada comando que modifica archivos muestra primero una vista previa; `--apply` confirma. La salida de `status
+--json` cumple el esquema versionado [`schemas/project-overview-v1.schema.json`](schemas/project-overview-v1.schema.json).
+
+<p align="center">
+  <img src="assets/screenshots/cli.png" alt="CLI" width="100%">
+</p>
+
+| Comando | Qué hace |
+|---|---|
+| `status` | Resume el proyecto sin escribir ni iniciar procesos |
+| `init` | Previsualiza (y con `--apply` crea) configuración y guías |
+| `rollback` | Restaura los archivos administrados desde el último respaldo |
+| `workspace` | Gestiona la confianza local del proyecto |
+| `skills` · `packs` · `mods` | Catálogo de skills, Tech Packs y Mods |
+| `integrate` | Configura servidores MCP para los clientes instalados |
+| `doctor` | Diagnostica herramientas y configuración sin ejecutar comandos |
+| `projects` | Proyectos registrados |
+| `tui` · `studio` | Abren las otras interfaces |
+
+## Instalación
+
+### Windows
+
+Cada push genera el artefacto **`chxchx-rust-windows-x86_64`** (workflow *Rust product builds*) con
+`chxchx-studio.exe` y `chxchx-tech.exe`; no requiere instalar nada más. Para compilar desde el repositorio:
 
 ```powershell
-cargo run --no-default-features --features cli --bin chxchx-tech -- status . --json
-cargo run --no-default-features --features cli --bin chxchx-tech -- init .
-cargo run --no-default-features --features cli --bin chxchx-tech -- init . --apply
-cargo run --no-default-features --features cli,tui --bin chxchx-tech -- tui .
-cargo run --no-default-features --features cli,studio --bin chxchx-tech -- studio open .
-cargo run --no-default-features --features studio --bin chxchx-studio -- .
+./scripts/studio-rust.ps1
 ```
 
-## Verificación de CI
+### Linux y macOS
 
-La suite de flujos compartidos se puede ejecutar sin compilar las interfaces
-gráficas:
+Necesitas [Rust](https://rustup.rs). En Linux, las bibliotecas de ventana:
 
-```powershell
-cargo test --locked --no-default-features --features cli
-python -m pip install --requirement scripts/requirements-rust-schema.txt
-python scripts/validate_project_overview_schema.py
+```bash
+# Debian/Ubuntu
+sudo apt-get install libwayland-dev libx11-dev libxkbcommon-dev libxcb1-dev libxcursor-dev libxi-dev libxrandr-dev
 ```
 
-Las pruebas aplican operaciones solo dentro de directorios temporales. El
-validador ejecuta `status --json` con un home temporal y comprueba la salida real
-contra `schemas/project-overview-v1.schema.json`.
-
-## Agentes y terminal en Studio
-
-El panel **Agentes** (icono de destellos en la barra lateral, menú Ver → Agentes, chip en la barra de estado
-y tarjeta en Inicio) lista los agentes del proyecto —los de `workspace.agents` de `.ai/chxchx-tech.toml` y
-Claude Code, Codex y OpenCode que existan en el equipo— con su estado (disponible, instalado, en terminal) y
-abre cada uno en una pestaña del panel inferior. Requiere confianza local en el proyecto.
-
-La terminal del panel inferior es una terminal de verdad (emulación VT con colores, cursor, scrollback con la
-rueda, teclado completo —flechas, Ctrl+letra, Alt, F1–F12—, pegado con Ctrl+Shift+V o Cmd+V y tamaño que sigue
-a la ventana), así que las interfaces propias de los agentes funcionan dentro de Studio. Con el foco en la
-terminal, Ctrl+J y Ctrl+Shift+<letra> siguen siendo atajos de Studio; el resto va al programa. Si Studio se
-abrió desde un lanzador, los agentes se buscan también en `~/.opencode/bin`, `~/.local/bin`, nvm, Homebrew,
-bun, npm global, etc.
-
-### Chat visual
-
-Cada agente con chat visual (Claude Code, Codex, OpenCode) tiene un botón **Chat** junto a **Terminal**, en el
-panel Agentes y en la página de inicio. Abre una pestaña «Chat · agente» en el área central con la conversación
-(Markdown), tarjetas de herramientas y razonamiento, **permisos en vivo** (permitir, permitir y recordar,
-denegar), preguntas del agente, nivel de acceso (solo lectura, editar, editar y ejecutar, acceso total), red,
-modelo y esfuerzo, **uso de tokens y coste**, contexto con su liberación automática al 90 % y límites del plan.
-La conversación se guarda y se recupera al reabrir; «Nuevo chat» empieza de cero. Studio no reimplementa a los
-agentes: usa `chxchx-tech agent chat --live` del CLI de Python (se busca en `$CHXCHX_TECH_CLI`, el PATH y el
-`.venv` del proyecto). Sin confianza del proyecto no se inicia ningún turno.
-
-## Windows
-
-Studio de Rust funciona en Windows 10/11 x64 sin instalar nada más que el propio binario
-(sin consola: usa el subsistema de ventanas y el icono va incrustado en el `.exe`).
-
-- **Descargar sin compilar:** cada push a la rama genera el artefacto `chxchx-rust-windows-x86_64`
-  (workflow *Rust product builds*, trabajo *windows-package*) con `chxchx-studio.exe`,
-  `chxchx-tech.exe` y `studio-rust.ps1`. Antes de publicarlo, CI abre el Studio 8 segundos sobre un
-  proyecto real y lee `status --json` con el CLI.
-- **Compilar desde el checkout:** `./scripts/studio-rust.ps1 [-Project C:\ruta] [-Debug]` compila
-  y abre el Studio de Rust por su ruta explícita. Importa porque el Studio Qt instala un lanzador
-  con el mismo nombre (`chxchx-studio`) y, si está en el PATH, es el que se abriría.
-- **Si no abre nada:** Studio no tiene consola, así que los errores de arranque y los pánicos se
-  guardan en `%USERPROFILE%\.chxchx-tech-lead\logs\studio-startup.log` (o en
-  `%CHXCHX_TECH_HOME%\logs\`). Ahí está el motivo.
-- Primera compilación local: en una máquina de 8 núcleos tarda unos 40 minutos (las dependencias
-  gráficas se optimizan incluso en `debug`); las siguientes son incrementales.
-
-En la TUI, `i` muestra el plan de init completo, `m` el compacto, `s` muestra
-sync, `y` aplica el plan abierto, `c` abre MCP, `d` ejecuta el diagnóstico y
-`p` muestra proyectos registrados. En el preview de sync, `↑/↓` desplaza y `Esc`
-cancela. `r` actualiza y `q` sale. Studio ofrece botones para init, sync,
-rollback, trust, MCP, proyectos registrados y doctor. El shell de IDE recupera
-la disposición Qt y el tema Medianoche: barra de actividad con iconos, accesos
-rápidos arriba, explorador a la izquierda, archivos en pestañas centrales,
-secciones a la derecha, panel inferior de Terminal/Actividad y barra de estado.
-Las barras y paneles muestran el estado seleccionado y se pueden ocultar.
-
-El editor abre texto UTF-8 hasta 2 MiB, resalta sintaxis, busca dentro del archivo,
-ofrece deshacer/rehacer y guarda con respaldo fuera del repo. Rechaza conflictos
-con cambios externos y pide confirmar antes de descartar ediciones. `Ctrl+S`
-guarda, `Ctrl+F` abre la búsqueda, `Ctrl+Z` deshace y `Ctrl+Y` rehace. Se admiten
-hasta 24 archivos; enlaces y archivos `.env*` quedan fuera del acceso/respaldo.
-También se puede abrir un archivo relativo al iniciar:
-
-```powershell
-cargo run --bin chxchx-studio -- . README.md
+```bash
+cargo build --release
+./target/release/chxchx-studio .         # abre Studio sobre el proyecto actual
+./target/release/chxchx-tech status .    # o usa el CLI
+# o, de una vez: ./scripts/studio-rust.sh
 ```
 
-Terminal abre un shell PTY/ConPTY solo tras conceder confianza local. La entrada
-actual envía líneas y ofrece Ctrl+C; el panel puede ocultarse sin terminar la
-sesión. El parser VT mantiene la pantalla y permite cambiar filas/columnas desde
-el adapter; todavía faltan entrada interactiva completa, colores por celda,
-scrollback navegable y accesibilidad. Al salir se cierra la terminal local.
+> **Nota:** el chat visual usa por ahora el CLI de Python de [`old-version/`](old-version/)
+> (`cd old-version && uv sync`) hasta que `agent chat` se porte a Rust. Studio lo busca solo; también puedes
+> indicar su ruta con `CHXCHX_TECH_CLI`. El resto del producto no lo necesita.
 
-La interfaz de Studio usa la marca ChxChx: `assets/brand/` contiene el isotipo y
-el logo pre-escalados desde `assets/` de la raíz, más el `.ico` que `build.rs`
-incrusta en el ejecutable de Windows (si falta el compilador de recursos, la
-compilación continúa con un aviso). Los tokens de color y tipografía viven en
-`studio_design.rs` y los estilos de widgets en `studio_styles.rs`; usa fuentes
-del sistema, sin fuentes incrustadas. El explorador, el panel de secciones y el
-panel inferior se redimensionan arrastrando su separador. `Ctrl+B` muestra u
-oculta el explorador y `Ctrl+J` el panel inferior (Terminal / Actividad).
+## Seguridad
 
-La paridad de Git visual, agentes/chat, edición avanzada, paneles acoplables y
-preferencias sigue pendiente. Iced usa renderer software; esto sigue siendo un
-port parcial de IDE, con capacidades operativas reales, no un reemplazo completo.
-La compilación local se comprobó en Windows; macOS, Ubuntu y Fedora siguen
-pendientes en CI/QA. La compatibilidad de JSON es una versión nueva e independiente
-del bridge completo `chxchx.project-status` v1 del producto legado.
+- **Confianza local:** ningún agente ni terminal ejecuta procesos configurados sin que concedas confianza al proyecto.
+- **Vista previa y respaldo:** toda modificación muestra el cambio antes y deja una copia para revertir.
+- **Sin secretos:** no se guardan contraseñas, tokens ni `.env`; MCP y el contenido externo se tratan como no confiables.
+- **Directorios acotados:** el directorio de trabajo de un agente no puede salir del proyecto.
+
+## Ligero por diseño
+
+Studio es un binario nativo sin navegador embebido: en reposo ocupa unos 40 MB de RAM. Devuelve al sistema la memoria que
+libera, recorta lo que el chat no necesita y lanza los agentes con ajustes que reducen su huella. La guía
+[MEMORIA.md](MEMORIA.md) explica cada técnica y cómo comprobarla.
+
+## Estructura del repositorio
+
+```
+.
+├── src/            Núcleo y las tres interfaces (features / integrations / interfaces)
+├── tests/          Pruebas de capacidades de extremo a extremo
+├── catalog/        Skills, Tech Packs y Mods que se incrustan en el binario
+├── assets/         Marca, perfiles y capturas
+├── schemas/        Contratos JSON versionados
+├── scripts/        Arranque y validación
+├── MANUAL.md       Manual técnico: capacidades, seguridad y decisiones
+├── MEMORIA.md      Guía de gestión de memoria
+└── old-version/    Versión anterior (Python + C++/Qt), solo consulta hasta eliminarla
+```
+
+## Desarrollo
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+```
+
+El código sigue una separación estricta: las interfaces solo componen pantallas y llaman a casos de uso;
+los procesos e integraciones externas viven en `integrations/`. Más reglas en [AGENTS.md](AGENTS.md).
+
+## Estado
+
+Versión `0.6.0-dev` en la rama `migracion-rust`: no sustituye todavía a la instalación 0.5.x. Pendiente: portar
+`agent chat` a Rust (hoy usa el CLI de Python), guardar la disposición de paneles entre sesiones y completar la QA
+en macOS y Linux.
