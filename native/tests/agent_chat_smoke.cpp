@@ -45,6 +45,20 @@ void emitLine(const QJsonObject &fields)
     std::cout << QJsonDocument(event(fields)).toJson(QJsonDocument::Compact).toStdString() << std::endl;
 }
 
+// Stands in for `chxchx-tech agent chat-state`: serves the saved conversation of the test and logs a reset.
+int fakeChatState(const QStringList &arguments)
+{
+    if (arguments.contains(QStringLiteral("--reset"))) {
+        QFile log(qEnvironmentVariable("CHXCHX_SMOKE_STATE_LOG"));
+        if (log.open(QIODevice::Append)) log.write("reset\n");
+        return 0;
+    }
+    const QByteArray state = qgetenv("CHXCHX_SMOKE_CHAT_STATE");
+    std::cout << (state.isEmpty() ? R"({"schema":"chxchx.chat-state","schema_version":1,"session_id":"","messages":[]})" : state.toStdString())
+              << std::endl;
+    return 0;
+}
+
 // Stands in for `chxchx-tech bridge agent-options`: "claude" is not installed.
 int fakeOptions(const QStringList &arguments)
 {
@@ -445,6 +459,8 @@ int main(int argc, char **argv)
     for (int index = 0; index < argc; ++index) arguments << QString::fromLocal8Bit(argv[index]);
     if (arguments.size() > 2 && arguments.at(1) == QStringLiteral("agent") && arguments.at(2) == QStringLiteral("chat"))
         return fakeCli(arguments);
+    if (arguments.size() > 2 && arguments.at(1) == QStringLiteral("agent") && arguments.at(2) == QStringLiteral("chat-state"))
+        return fakeChatState(arguments);
     if (arguments.size() > 2 && arguments.at(1) == QStringLiteral("bridge"))
         return fakeOptions(arguments);
     QApplication app(argc, argv);
@@ -476,6 +492,40 @@ int main(int argc, char **argv)
     if (withImage.at(withImage.size() - 2).images != QStringList{image}) return 28;
     if (!withImage.constLast().text.contains(QStringLiteral("[1 img, modelo=-]"))) return 29;
     if (chat->model().usage().contextWindow != 200000 || chat->model().usage().primary.usedPercent != 12.0) return 30;
+
+    // Reopening a chat brings its conversation back, resumes its session, and "new chat" forgets it.
+    QTemporaryDir stateLog;
+    qputenv("CHXCHX_SMOKE_STATE_LOG", stateLog.filePath(QStringLiteral("reset.log")).toUtf8());
+    qputenv("CHXCHX_SMOKE_CHAT_STATE", QByteArrayLiteral(R"({"schema":"chxchx.chat-state","schema_version":1,"session_id":"fake-1",
+        "messages":[{"role":"user","text":"antes"},{"role":"assistant","text":"respuesta previa"},{"role":"tool","text":"ignorado"}]})"));
+    auto *reopened = new AgentChatWidget(project.path(), QStringLiteral("codex"), QCoreApplication::applicationFilePath());
+    int restoredMessages = -1;
+    QObject::connect(reopened, &AgentChatWidget::conversationRestored, [&](int count) { restoredMessages = count; });
+    QElapsedTimer restoring;
+    restoring.start();
+    while (restoredMessages < 0 && restoring.elapsed() < 10000) QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    if (restoredMessages != 2) return 100;
+    const auto &back = reopened->model().entries();
+    if (back.size() != 2 || back.at(0).kind != AgentChatModel::Kind::User || back.at(0).text != QStringLiteral("antes")
+        || back.at(1).text != QStringLiteral("respuesta previa") || reopened->model().sessionId() != QStringLiteral("fake-1")) return 101;
+    reopened->sendMessage(QStringLiteral("sigue"));
+    if (!waitIdle(*reopened) || reopened->model().entries().constLast().text != QStringLiteral("reanudado: sigue")) return 102; // --session kept
+    for (auto *button : reopened->findChildren<QPushButton *>()) {
+        if (button->text().contains(QStringLiteral("Nuevo chat"))) button->click();
+    }
+    if (!reopened->model().entries().isEmpty() || !reopened->model().sessionId().isEmpty()) return 103;
+    QElapsedTimer waiting;
+    waiting.start();
+    QFile resetLog(stateLog.filePath(QStringLiteral("reset.log")));
+    while (waiting.elapsed() < 10000 && !(resetLog.exists() && resetLog.size() > 0)) QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    if (!resetLog.exists() || resetLog.size() == 0) return 104;
+    // Nothing saved: the chat opens empty, and a restore that answers late never mixes with a chat already in use.
+    qputenv("CHXCHX_SMOKE_CHAT_STATE", QByteArray());
+    auto *fresh = new AgentChatWidget(project.path(), QStringLiteral("codex"), QCoreApplication::applicationFilePath());
+    QElapsedTimer quiet;
+    quiet.start();
+    while (quiet.elapsed() < 1500) QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    if (!fresh->model().entries().isEmpty()) return 105;
 
     auto *missing = new AgentChatWidget(project.path(), QStringLiteral("claude"), QCoreApplication::applicationFilePath());
     QElapsedTimer loading;

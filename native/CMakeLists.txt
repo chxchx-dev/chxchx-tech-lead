@@ -199,6 +199,8 @@ qt_add_executable(chxchx-studio
     src/integrations/agent_chat_widget.hpp
     src/integrations/agent_chat_settings.cpp
     src/integrations/agent_chat_settings.hpp
+    src/integrations/agent_chat_state.cpp
+    src/integrations/agent_chat_state.hpp
     src/integrations/agent_chat_composer.cpp
     src/integrations/agent_chat_composer.hpp
     src/integrations/agent_chat_markdown.cpp
@@ -372,7 +374,7 @@ if(CHXCHX_BUILD_TESTS)
         src/integrations/agent_chat_model.cpp src/integrations/agent_chat_model.hpp
         src/integrations/agent_chat_image_descriptions.cpp src/integrations/agent_chat_image_descriptions.hpp
         src/integrations/agent_chat_widget.cpp src/integrations/agent_chat_widget.hpp
-        src/integrations/agent_chat_settings.cpp src/integrations/agent_chat_settings.hpp
+        src/integrations/agent_chat_settings.cpp src/integrations/agent_chat_settings.hpp src/integrations/agent_chat_state.cpp
         src/integrations/agent_chat_composer.cpp src/integrations/agent_chat_composer.hpp
         src/integrations/agent_chat_markdown.cpp src/integrations/agent_chat_markdown.hpp
         src/integrations/agent_chat_cards.cpp src/integrations/agent_chat_cards.hpp

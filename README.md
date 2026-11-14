@@ -152,6 +152,10 @@ conversación, la siguiente sesión arranca con él y con los archivos de contex
 cambios para quien lo usa. Evita el consumo y la lentitud de un contexto lleno sin perder el hilo. El traspaso se
 guarda en `.ai/chat-handoffs/` y se borra al usarse; `chxchx-tech agent chat --no-auto-release` lo desactiva.
 
+Esa continuidad no depende de que el chat siga abierto: la conversación (id de sesión y mensajes) se guarda en
+`.ai/chat-state/<agente>.json` después de cada turno y Studio la restaura al abrir el chat; si el agente ya no
+conserva la sesión, la conversación guardada se reenvía en una sesión nueva. «Nuevo chat» empieza de cero.
+
 ### Mods locales (Claude Code, Codex y OpenCode)
 
 El catálogo incluye 22 Mods de instrucciones de proyecto. Generales: asesor de modelo,

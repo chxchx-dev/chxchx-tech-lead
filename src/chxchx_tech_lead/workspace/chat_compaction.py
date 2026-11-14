@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
+
+from ..integrations.explicit_memory import contains_secret
 
 THRESHOLD = 0.90
 _HANDOFF_DIR = Path(".ai") / "chat-handoffs"
@@ -40,7 +43,8 @@ Lo que falta y el siguiente paso.
 ## Datos que no hay que volver a buscar
 Rutas, nombres, identificadores y mensajes de error exactos.
 
-Máximo 1500 palabras. No incluyas secretos ni tokens. Responde solo con el traspaso."""
+Si al empezar esta conversación recibiste un traspaso anterior, incorpora lo que siga vigente: un traspaso sobre otro \
+no debe perder nada. Máximo 1500 palabras. No incluyas secretos ni tokens. Responde solo con el traspaso."""
 
 
 def context_ratio(tokens: int | None, window: int | None) -> float | None:
@@ -60,10 +64,25 @@ def _file(project_root: Path, provider: str, session_id: str) -> Path:
     return project_root / _HANDOFF_DIR / f"{safe}.md"
 
 
+def _without_secrets(text: str) -> str:
+    """The agent was told not to write secrets; a line that looks like one is dropped anyway."""
+    return "\n".join("(línea omitida: posible secreto)" if contains_secret(line) else line for line in text.splitlines())
+
+
 def save_handoff(project_root: Path, provider: str, session_id: str, text: str) -> Path:
     target = _file(project_root, provider, session_id)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(text.strip()[:_MAX_HANDOFF_CHARS] + "\n", encoding="utf-8")
+    content = _without_secrets(text.strip())[:_MAX_HANDOFF_CHARS] + "\n"
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)  # closing or crashing mid-write never leaves a truncated hand-off
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
     return target
 
 
