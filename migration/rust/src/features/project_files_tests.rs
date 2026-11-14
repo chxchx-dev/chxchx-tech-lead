@@ -6,7 +6,16 @@ struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
         // The clock alone can repeat on Windows, so parallel tests need a counter too.
-        let path = std::env::temp_dir().join(format!(
+        // macOS temp folders live under `/var`, a link to `/private/var`: backups refuse paths with links,
+        // so the fixture uses the real path there (Windows keeps its plain paths: `canonicalize` adds `\\?\`).
+        let base = if cfg!(target_os = "macos") {
+            std::env::temp_dir()
+                .canonicalize()
+                .unwrap_or_else(|_| std::env::temp_dir())
+        } else {
+            std::env::temp_dir()
+        };
+        let path = base.join(format!(
             "chxchx-editor-test-{}-{}-{}",
             std::process::id(),
             OffsetDateTime::now_utc().unix_timestamp_nanos(),
