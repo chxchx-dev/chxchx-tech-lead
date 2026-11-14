@@ -27,6 +27,7 @@ pub mod features {
     pub mod project_sync;
     pub mod project_templates;
     pub mod project_trust;
+    pub mod startup_log;
     pub mod studio_preferences;
     #[cfg(feature = "terminal")]
     pub mod workspace_terminal;

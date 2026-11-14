@@ -1,5 +1,13 @@
 # Handoff
 
+
+## Studio Rust: diseño verificado y Windows (2026-11-14)
+
+- El diseño del Studio Rust (menú, barra de herramientas, explorador, héroe de Inicio) existe en `origin/migracion-rust`; la copia local de Fedora estaba 14 commits atrasada y además `chxchx-studio` del PATH es el lanzador del Studio Qt. Se actualizó y se verificó con captura: coincide con las capturas de Windows. Abrir siempre con `scripts/studio-rust.sh` (Linux/macOS) o `scripts/studio-rust.ps1` (Windows).
+- Windows: `features/startup_log.rs` guarda errores de arranque y pánicos en `<home>/logs/studio-startup.log` (sin consola no se veían). CI nuevo `windows-package`: compila release, abre el Studio 8 s, lee `status --json` y sube el `.zip`.
+- Pendiente: la prueba de integración falla en macOS desde `d48490b` (código 101; sin logs accesibles). Primera compilación debug local: ~43 min.
+- El stash `local-before-pulling-origin-2026-11-14` guarda el rediseño anterior (superado) y notas `.ai` compactadas.
+
 ## Sugerencias de commit (2026-11-13)
 
 - Reglas en `suggest_rules.rs` (clasificación, nombres, tipo), `suggest_split.rs`

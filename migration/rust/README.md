@@ -173,6 +173,24 @@ Las pruebas aplican operaciones solo dentro de directorios temporales. El
 validador ejecuta `status --json` con un home temporal y comprueba la salida real
 contra `schemas/project-overview-v1.schema.json`.
 
+## Windows
+
+Studio de Rust funciona en Windows 10/11 x64 sin instalar nada más que el propio binario
+(sin consola: usa el subsistema de ventanas y el icono va incrustado en el `.exe`).
+
+- **Descargar sin compilar:** cada push a la rama genera el artefacto `chxchx-rust-windows-x86_64`
+  (workflow *Rust product builds*, trabajo *windows-package*) con `chxchx-studio.exe`,
+  `chxchx-tech.exe` y `studio-rust.ps1`. Antes de publicarlo, CI abre el Studio 8 segundos sobre un
+  proyecto real y lee `status --json` con el CLI.
+- **Compilar desde el checkout:** `./scripts/studio-rust.ps1 [-Project C:\ruta] [-Debug]` compila
+  y abre el Studio de Rust por su ruta explícita. Importa porque el Studio Qt instala un lanzador
+  con el mismo nombre (`chxchx-studio`) y, si está en el PATH, es el que se abriría.
+- **Si no abre nada:** Studio no tiene consola, así que los errores de arranque y los pánicos se
+  guardan en `%USERPROFILE%\.chxchx-tech-lead\logs\studio-startup.log` (o en
+  `%CHXCHX_TECH_HOME%\logs\`). Ahí está el motivo.
+- Primera compilación local: en una máquina de 8 núcleos tarda unos 40 minutos (las dependencias
+  gráficas se optimizan incluso en `debug`); las siguientes son incrementales.
+
 En la TUI, `i` muestra el plan de init completo, `m` el compacto, `s` muestra
 sync, `y` aplica el plan abierto, `c` abre MCP, `d` ejecuta el diagnóstico y
 `p` muestra proyectos registrados. En el preview de sync, `↑/↓` desplaza y `Esc`
