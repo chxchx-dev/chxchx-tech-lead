@@ -146,12 +146,17 @@ fn header<'a>(chat: &'a Chat) -> Element<'a, Message> {
     ]
     .spacing(10)
     .align_y(iced::Center);
+    let mut tools = row![].spacing(8).align_y(iced::Center);
     if let Some(options) = chat.options.as_ref().filter(|o| !o.models.is_empty()) {
         let ids: Vec<String> = options.models.iter().map(|m| m.id.clone()).collect();
-        top = top.push(
-            pick_list(ids, chat.model_id.clone(), |id| send(Event::Model(id)))
-                .text_size(12)
-                .padding([4, 8]),
+        tools = tools.push(
+            pick_list(ids, chat.model_id.clone(), {
+                let to = super::sender();
+                move |id| to(Event::Model(id))
+            })
+            .text_size(12)
+            .placeholder("Modelo")
+            .padding([4, 8]),
         );
         let efforts = options
             .models
@@ -160,10 +165,14 @@ fn header<'a>(chat: &'a Chat) -> Element<'a, Message> {
             .map(|m| m.efforts.clone())
             .unwrap_or_default();
         if !efforts.is_empty() {
-            top = top.push(
-                pick_list(efforts, chat.effort.clone(), |e| send(Event::Effort(e)))
-                    .text_size(12)
-                    .padding([4, 8]),
+            tools = tools.push(
+                pick_list(efforts, chat.effort.clone(), {
+                    let to = super::sender();
+                    move |e| to(Event::Effort(e))
+                })
+                .text_size(12)
+                .placeholder("Esfuerzo")
+                .padding([4, 8]),
             );
         }
     }
@@ -201,12 +210,12 @@ fn header<'a>(chat: &'a Chat) -> Element<'a, Message> {
     .padding([5, 10])
     .style(styles::secondary)
     .on_press(send(Event::Permissions));
+    tools = tools.push(styles::tip(
+        permissions,
+        "Cambia qué puede hacer el agente sin preguntarte",
+        tooltip::Position::Bottom,
+    ));
     top = top
-        .push(styles::tip(
-            permissions,
-            "Cambia qué puede hacer el agente sin preguntarte",
-            tooltip::Position::Bottom,
-        ))
         .push(
             button(text("Nuevo chat").size(12))
                 .padding([5, 10])
@@ -228,7 +237,14 @@ fn header<'a>(chat: &'a Chat) -> Element<'a, Message> {
                 chat.agent.id.clone(),
             ))),
         );
-    let mut head = column![container(top).padding([8, 16]).width(Fill)];
+    let mut head = column![
+        container(top)
+            .padding(iced::Padding::new(8.0).left(16.0).right(16.0).bottom(4.0))
+            .width(Fill),
+        container(tools)
+            .padding(iced::Padding::new(0.0).left(16.0).right(16.0).bottom(8.0))
+            .width(Fill),
+    ];
     if chat.perms_open {
         head = head.push(perms::panel(chat));
     }

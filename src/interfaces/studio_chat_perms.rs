@@ -78,13 +78,14 @@ pub(super) fn panel(chat: &Chat) -> Element<'_, Message> {
     for (mode, label) in ACCESS {
         levels = levels.push(level(chat, mode, label));
     }
+    let to = super::sender();
     let mut body = column![
         levels,
         checkbox(chat.network)
             .label("Permitir red (descargas, instalar paquetes, consultar la web)")
             .size(14)
             .text_size(12)
-            .on_toggle(|on| send(Event::Network(on))),
+            .on_toggle(move |on| to(Event::Network(on))),
     ]
     .spacing(10);
     if !chat.approved.is_empty() {

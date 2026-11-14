@@ -256,7 +256,7 @@ fn tick(terminal: &mut State) {
             continue;
         };
         // Every session is read so none of them stalls; only the visible one is redrawn.
-        let changed = matches!(session.poll_changed(), Ok(Some(_)));
+        let changed = matches!(session.poll_dirty(), Ok(true));
         tab.exited = session.exited;
         if changed && index == active {
             tab.snapshot = session.snapshot();

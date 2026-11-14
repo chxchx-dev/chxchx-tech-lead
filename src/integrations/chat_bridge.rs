@@ -196,12 +196,14 @@ impl Turn {
         let (sender, events) = channel();
         std::thread::spawn(move || {
             for line in BufReader::new(stdout).split(b'\n').map_while(Result::ok) {
-                if let Ok(value) = serde_json::from_slice::<Value>(&line)
-                    && sender.send(value).is_err()
-                {
-                    break;
+                if let Ok(value) = serde_json::from_slice::<Value>(&line) {
+                    if sender.send(value).is_err() {
+                        break;
+                    }
+                    super::wake::notify();
                 }
             }
+            super::wake::notify_after_end();
         });
         let tail = Arc::new(Mutex::new(VecDeque::new()));
         let collector = tail.clone();

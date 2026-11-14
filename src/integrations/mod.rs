@@ -9,3 +9,4 @@ pub mod mcp_codex;
 pub mod process_memory;
 #[cfg(feature = "terminal")]
 pub mod terminal;
+pub mod wake;

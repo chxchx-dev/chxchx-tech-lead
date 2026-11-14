@@ -95,3 +95,65 @@ fn only_five_images_fit_in_one_message_and_a_failure_is_reported() {
     images::loaded(&mut state, "otro", Ok(vec![]));
     assert!(state.chat.chats[0].images.is_empty());
 }
+
+#[test]
+fn a_widget_that_answers_later_acts_on_the_chat_it_was_drawn_for() {
+    // The view of the second chat is built after the first, so "the chat being drawn" is the
+    // second by the time the person touches a control of the first.
+    super::CURRENT.with(|current| *current.borrow_mut() = "claude".into());
+    let for_claude = super::sender();
+    super::CURRENT.with(|current| *current.borrow_mut() = "codex".into());
+    match for_claude(Event::Model("opus".into())) {
+        Message::Chat(Event::For(id, inner)) => {
+            assert_eq!(id, "claude");
+            assert!(matches!(*inner, Event::Model(model) if model == "opus"));
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn changing_the_model_of_one_chat_leaves_the_others_alone() {
+    let mut state = dashboard();
+    let mut other = state.chat.chats[0].agent.clone();
+    other.id = "codex".into();
+    let _ = open(&mut state, other);
+    for chat in &mut state.chat.chats {
+        chat.preparing = false;
+        chat.model_id = Some("original".into());
+    }
+    let _ = update(
+        &mut state,
+        Event::For("claude".into(), Box::new(Event::Model("sonnet".into()))),
+    );
+    let by_id = |state: &Dashboard, id: &str| {
+        state
+            .chat
+            .chats
+            .iter()
+            .find(|c| c.agent.id == id)
+            .unwrap()
+            .model_id
+            .clone()
+    };
+    assert_eq!(by_id(&state, "claude").as_deref(), Some("sonnet"));
+    assert_eq!(by_id(&state, "codex").as_deref(), Some("original"));
+    let _ = update(
+        &mut state,
+        Event::For("codex".into(), Box::new(Event::Access("read-only".into()))),
+    );
+    let mode = |id: &str| {
+        state
+            .chat
+            .chats
+            .iter()
+            .find(|c| c.agent.id == id)
+            .unwrap()
+            .mode
+            .clone()
+    };
+    assert_eq!(
+        (mode("codex").as_str(), mode("claude").as_str()),
+        ("read-only", "workspace-write")
+    );
+}

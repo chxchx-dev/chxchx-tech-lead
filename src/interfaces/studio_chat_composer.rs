@@ -7,26 +7,27 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
     let running = chat.turn.is_some();
     let has_content = !chat.composer.text().trim().is_empty() || !chat.images.is_empty();
     let ready = has_content && !running && !chat.preparing && chat.problem.is_none();
+    let (to_edit, to_keys) = (super::sender(), super::sender());
     let editor = text_editor(&chat.composer)
         .placeholder(
             "Escribe un mensaje · Intro envía, Mayús+Intro agrega una línea · Ctrl+V pega capturas",
         )
-        .on_action(|action| send(Event::Edit(action)))
+        .on_action(move |action| to_edit(Event::Edit(action)))
         .height(iced::Length::Shrink)
         .min_height(44)
         .max_height(160)
         .padding(10)
         .size(13)
         .style(styles::message_box)
-        .key_binding(|key| {
+        .key_binding(move |key| {
             use iced::keyboard::{Key, key::Named};
             let enter = matches!(key.key.as_ref(), Key::Named(Named::Enter));
             let paste = key.modifiers.command()
                 && matches!(key.key.as_ref(), Key::Character(c) if c.eq_ignore_ascii_case("v"));
             if enter && !key.modifiers.shift() {
-                Some(text_editor::Binding::Custom(send(Event::Send)))
+                Some(text_editor::Binding::Custom(to_keys(Event::Send)))
             } else if paste {
-                Some(text_editor::Binding::Custom(send(Event::Paste)))
+                Some(text_editor::Binding::Custom(to_keys(Event::Paste)))
             } else {
                 text_editor::Binding::from_key_press(key)
             }

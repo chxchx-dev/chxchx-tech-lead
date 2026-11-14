@@ -146,6 +146,8 @@ enum Message {
     Agents(agents::Event),
     Chat(chat::Event),
     Panes(panes::Event),
+    /// A reader thread has data (terminal output, an agent's answer).
+    Wake,
     Editor(editor::Event),
     Shell(shell::Event),
     Catalog(catalog::Event),
@@ -180,6 +182,44 @@ enum Message {
     McpApplied(Result<crate::features::mcp_setup::McpIntegrationResult, String>),
 }
 
+/// Receives the wake-ups of the reader threads (see `integrations::wake`).
+static WAKE_RECEIVER: std::sync::Mutex<
+    Option<iced::futures::channel::mpsc::UnboundedReceiver<()>>,
+> = std::sync::Mutex::new(None);
+/// A wake-up is already on its way: more notifications until it is handled add nothing.
+static WAKE_PENDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn install_wake() {
+    let (sender, receiver) = iced::futures::channel::mpsc::unbounded();
+    if let Ok(mut slot) = WAKE_RECEIVER.lock() {
+        *slot = Some(receiver);
+    }
+    crate::integrations::wake::set_hook(move || {
+        if !WAKE_PENDING.swap(true, std::sync::atomic::Ordering::AcqRel) {
+            let _ = sender.unbounded_send(());
+        }
+    });
+}
+
+fn wake_stream() -> impl iced::futures::Stream<Item = Message> {
+    use iced::futures::{SinkExt, StreamExt};
+    iced::stream::channel(1, async |mut out| {
+        let receiver = WAKE_RECEIVER.lock().ok().and_then(|mut slot| slot.take());
+        let Some(mut receiver) = receiver else {
+            return std::future::pending().await;
+        };
+        while receiver.next().await.is_some() {
+            WAKE_PENDING.store(false, std::sync::atomic::Ordering::Release);
+            if out.send(Message::Wake).await.is_err() {
+                break;
+            }
+            // At most ~30 redraws a second however fast the data arrives.
+            let _ =
+                jobs::offload(|| std::thread::sleep(std::time::Duration::from_millis(33))).await;
+        }
+    })
+}
+
 pub fn run(path: PathBuf) -> Result<(), String> {
     run_with_file(path, None)
 }
@@ -194,6 +234,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
         .map_or(iced::Size::new(1240.0, 640.0), |[width, height]| {
             iced::Size::new(width, height)
         });
+    install_wake();
     iced::application(
         move || {
             let (session, warning) = session::boot(&path, loaded.clone());
@@ -264,22 +305,18 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
             shell::subscription(state),
             session::subscription(state),
         ];
-        if state.git.is_repository() && state.git.unavailable.is_none() {
+        subscriptions.push(iced::Subscription::run(wake_stream));
+        // Polling Git rebuilds and redraws the window: only while it is being looked at, and
+        // faster only when the Git view itself is on screen.
+        if state.git.is_repository() && state.git.unavailable.is_none() && state.shell.focused {
+            let watching = state.editor.explorer && state.shell.side == shell::Side::Git;
             subscriptions.push(
-                iced::time::every(std::time::Duration::from_secs(8))
-                    .map(|_| Message::Git(git::Event::Poll)),
-            );
-        }
-        if state.terminal.has_sessions() {
-            // Hidden sessions are only drained now and then: every tick rebuilds and redraws the window.
-            let period = if state.panes.terminal_panes() > 0 {
-                100
-            } else {
-                500
-            };
-            subscriptions.push(
-                iced::time::every(std::time::Duration::from_millis(period))
-                    .map(|_| Message::Terminal(terminal::Event::Tick)),
+                iced::time::every(std::time::Duration::from_secs(if watching {
+                    8
+                } else {
+                    30
+                }))
+                .map(|_| Message::Git(git::Event::Poll)),
             );
         }
         if state
@@ -296,8 +333,9 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
             }));
         }
         if state.chat.busy() {
+            // Safety net only: the agent's output wakes the window by itself.
             subscriptions.push(
-                iced::time::every(std::time::Duration::from_millis(80))
+                iced::time::every(std::time::Duration::from_secs(2))
                     .map(|_| Message::Chat(chat::Event::Tick)),
             );
         }

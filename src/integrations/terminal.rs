@@ -174,9 +174,11 @@ impl Session {
                             if sender.send(bytes[..count].to_vec()).is_err() {
                                 break;
                             }
+                            super::wake::notify();
                         }
                     }
                 }
+                super::wake::notify_after_end();
             })
         {
             return Err(error.to_string());
@@ -222,6 +224,20 @@ impl Session {
 
     /// Screen text, or `None` when nothing changed since the last poll, so the UI can
     /// skip rebuilding and re-laying out the terminal text.
+    /// Like [`Self::poll_changed`] without building the screen text: the UI only needs to know
+    /// that something changed (it draws from [`Self::snapshot`]), so the copy is skipped.
+    pub fn poll_dirty(&mut self) -> Result<bool, String> {
+        let mut changed = std::mem::take(&mut self.dirty);
+        for bytes in self.output.try_iter().take(256) {
+            self.parser.process(&bytes);
+            changed = true;
+        }
+        if let Some(child) = self.child.as_mut() {
+            self.exited = child.try_wait().map_err(|e| e.to_string())?.is_some();
+        }
+        Ok(changed)
+    }
+
     pub fn poll_changed(&mut self) -> Result<Option<String>, String> {
         let mut changed = std::mem::take(&mut self.dirty);
         for bytes in self.output.try_iter().take(32) {

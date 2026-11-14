@@ -116,14 +116,14 @@ pub(super) fn paste(state: &mut Dashboard) -> Task<Message> {
         },
         move |result| match result {
             Ok(Some(prepared)) => Message::Chat(Event::Loaded(id.clone(), Ok(vec![prepared]))),
-            Ok(None) => Message::Chat(Event::PasteText),
+            Ok(None) => Message::Chat(Event::PasteText(id.clone())),
             Err(error) => Message::Chat(Event::Loaded(id.clone(), Err(error))),
         },
     )
 }
 
-pub(super) fn paste_text() -> Task<Message> {
-    iced::clipboard::read().map(|text| Message::Chat(Event::Pasted(text)))
+pub(super) fn paste_text(id: String) -> Task<Message> {
+    iced::clipboard::read().map(move |text| Message::Chat(Event::Pasted(id.clone(), text)))
 }
 
 pub(super) fn loaded(state: &mut Dashboard, id: &str, result: Loaded) {

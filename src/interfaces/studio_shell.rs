@@ -32,7 +32,10 @@ pub(super) struct State {
     last_dock: DockTab,
     /// Resident memory of Studio, read every few seconds.
     pub memory: Option<u64>,
-    memory_ticks: u32,
+    memory_read: Option<std::time::Instant>,
+    memory_trimmed: std::time::Instant,
+    /// The window has the focus: timers that only keep the screen fresh pause while it does not.
+    pub focused: bool,
 }
 
 impl Default for State {
@@ -44,7 +47,9 @@ impl Default for State {
             drag: None,
             last_dock: DockTab::Terminal,
             memory: None,
-            memory_ticks: 0,
+            memory_read: None,
+            memory_trimmed: std::time::Instant::now(),
+            focused: true,
         }
     }
 }
@@ -65,8 +70,7 @@ pub(super) enum Event {
     ResetLayout,
     About,
     ClearMessage,
-    /// Reads the memory Studio holds and, now and then, hands freed memory back to the system.
-    Memory,
+    WindowFocus(bool),
 }
 
 /// Whether the panes of this dock tab are on screen.
@@ -84,8 +88,27 @@ pub(super) fn dock_tab(state: &Dashboard) -> Option<DockTab> {
         .find(|tab| dock_visible(state, *tab))
 }
 
-/// Memory is read every 5 s; every 6th reading (30 s) the freed memory is handed back.
-const MEMORY_TRIM_EVERY: u32 = 6;
+/// Memory is read at most every 5 s and freed memory is handed back at most every 30 s.
+/// Both ride on messages that already happen: an idle Studio has no timer for them.
+const MEMORY_READ_EVERY: std::time::Duration = std::time::Duration::from_secs(5);
+const MEMORY_TRIM_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
+
+impl State {
+    pub(super) fn refresh_memory(&mut self) {
+        let due = self
+            .memory_read
+            .is_none_or(|at| at.elapsed() >= MEMORY_READ_EVERY);
+        if !due {
+            return;
+        }
+        self.memory_read = Some(std::time::Instant::now());
+        self.memory = crate::integrations::process_memory::resident_bytes();
+        if self.memory_trimmed.elapsed() >= MEMORY_TRIM_EVERY {
+            self.memory_trimmed = std::time::Instant::now();
+            crate::integrations::process_memory::give_back_soon();
+        }
+    }
+}
 
 pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     match event {
@@ -138,12 +161,10 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             );
         }
         Event::ClearMessage => state.message.clear(),
-        Event::Memory => {
-            let shell = &mut state.shell;
-            shell.memory = crate::integrations::process_memory::resident_bytes();
-            shell.memory_ticks += 1;
-            if shell.memory_ticks.is_multiple_of(MEMORY_TRIM_EVERY) {
-                crate::integrations::process_memory::give_back_soon();
+        Event::WindowFocus(focused) => {
+            state.shell.focused = focused;
+            if focused && state.git.is_repository() {
+                return git::update(state, git::Event::Poll);
             }
         }
     }
@@ -217,7 +238,15 @@ pub(super) fn splitter<'a>(state: &Dashboard, split: Split) -> Element<'a, Messa
 pub(super) fn subscription(state: &Dashboard) -> Subscription<Message> {
     let shortcuts = Subscription::batch([
         iced::event::listen_with(shortcut),
-        iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Shell(Event::Memory)),
+        iced::event::listen_with(|event, _, _| match event {
+            iced::Event::Window(iced::window::Event::Focused) => {
+                Some(Message::Shell(Event::WindowFocus(true)))
+            }
+            iced::Event::Window(iced::window::Event::Unfocused) => {
+                Some(Message::Shell(Event::WindowFocus(false)))
+            }
+            _ => None,
+        }),
     ]);
     if state.shell.drag.is_some() {
         Subscription::batch([shortcuts, iced::event::listen_with(drag)])
@@ -323,5 +352,21 @@ mod tests {
         state.shell.explorer_width = 400.0;
         let _ = update(&mut state, Event::ResetLayout);
         assert_eq!(state.shell.explorer_width, 248.0);
+    }
+
+    #[test]
+    fn memory_is_read_at_most_every_few_seconds_and_without_a_timer() {
+        let mut shell = State::default();
+        shell.refresh_memory();
+        let first = shell.memory_read.expect("the first call reads it");
+        shell.refresh_memory();
+        assert_eq!(
+            shell.memory_read,
+            Some(first),
+            "an immediate second call does nothing"
+        );
+        shell.memory_read = Some(std::time::Instant::now() - std::time::Duration::from_secs(6));
+        shell.refresh_memory();
+        assert!(shell.memory_read.unwrap() > first);
     }
 }

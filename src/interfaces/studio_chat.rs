@@ -37,6 +37,14 @@ thread_local! {
     static CURRENT: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
 
+/// Builds messages for the chat being drawn *now*. Widgets that make their message later
+/// (a pick list, a key binding) must take this while the view is built: when they run, the
+/// last chat drawn is another one, and the change would land in the wrong chat.
+pub(super) fn sender() -> impl Fn(Event) -> Message + Clone + 'static {
+    let id = CURRENT.with(|id| id.borrow().clone());
+    move |event| Message::Chat(Event::For(id.clone(), Box::new(event)))
+}
+
 /// The message for an event of the chat being drawn.
 pub(super) fn send(event: Event) -> Message {
     CURRENT.with(|id| Message::Chat(Event::For(id.borrow().clone(), Box::new(event))))
@@ -143,8 +151,8 @@ pub(super) enum Event {
     ),
     RemoveImage(usize),
     Paste,
-    PasteText,
-    Pasted(Option<String>),
+    PasteText(String),
+    Pasted(String, Option<String>),
     /// Opens or closes the permissions panel.
     Permissions,
     /// Forgets an approved rule: (rule, remembered for the chat).
@@ -195,8 +203,8 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         Event::Loaded(id, result) => images::loaded(state, &id, result),
         Event::RemoveImage(index) => with_chat(state, |chat| images::remove(chat, index)),
         Event::Paste => return images::paste(state),
-        Event::PasteText => return images::paste_text(),
-        Event::Pasted(text) => with_chat(state, |chat| {
+        Event::PasteText(id) => return images::paste_text(id),
+        Event::Pasted(id, text) => with_agent(state, &id, |chat| {
             if let Some(text) = text {
                 chat.composer
                     .perform(text_editor::Action::Edit(text_editor::Edit::Paste(
@@ -240,6 +248,12 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         Event::NewChat => new_chat(state),
     }
     Task::none()
+}
+
+fn with_agent(state: &mut Dashboard, id: &str, apply: impl FnOnce(&mut Chat)) {
+    if let Some(chat) = state.chat.chats.iter_mut().find(|c| c.agent.id == id) {
+        apply(chat);
+    }
 }
 
 fn with_chat(state: &mut Dashboard, apply: impl FnOnce(&mut Chat)) {
