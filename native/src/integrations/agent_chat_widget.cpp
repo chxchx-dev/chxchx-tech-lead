@@ -2,6 +2,7 @@
 #include "agent_chat_composer.hpp"
 #include "agent_chat_image_descriptions.hpp"
 #include "agent_chat_settings.hpp"
+#include "agent_chat_state.hpp"
 #include "agent_chat_style.hpp"
 #include "agent_chat_usage.hpp"
 #include "agent_chat_view.hpp"
@@ -15,6 +16,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QStyle>
+#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -26,6 +28,15 @@ QJsonObject localEvent(const QString &type, const QString &message)
 {
     return {{QStringLiteral("schema"), QStringLiteral("chxchx.agent-event")}, {QStringLiteral("schema_version"), 1},
         {QStringLiteral("type"), type}, {QStringLiteral("message"), message}};
+}
+
+// An event of the same shape `agent chat` prints, for what a restored chat replays.
+QJsonObject savedEvent(const QString &type, QJsonObject fields)
+{
+    fields.insert(QStringLiteral("schema"), QStringLiteral("chxchx.agent-event"));
+    fields.insert(QStringLiteral("schema_version"), 1);
+    fields.insert(QStringLiteral("type"), type);
+    return fields;
 }
 
 QString providerGuess(const QString &agentId)
@@ -172,6 +183,29 @@ AgentChatWidget::AgentChatWidget(QString projectPath, QString agentId, QString c
         setRunning(false);
         render();
     });
+    // Reopening the chat (a new tab, or Studio started again) brings the conversation back.
+    QTimer::singleShot(0, this, &AgentChatWidget::restoreConversation);
+}
+
+void AgentChatWidget::restoreConversation()
+{
+    loadChatState(m_cliProgram, m_projectPath, m_agentId, this, [this](const ChatSavedState &saved) {
+        // Something already happened in this chat (the person typed fast): never mix it with the old one.
+        if (isRunning() || !m_model.entries().isEmpty() || !m_model.sessionId().isEmpty()) return;
+        for (const auto &message : saved.messages) {
+            if (message.first == QLatin1String("user")) {
+                m_model.addUserMessage(message.second);
+            } else {
+                m_model.apply(savedEvent(QStringLiteral("message"), {{QStringLiteral("role"), QStringLiteral("assistant")},
+                    {QStringLiteral("text"), message.second}}));
+            }
+        }
+        if (!saved.sessionId.isEmpty()) {
+            m_model.apply(savedEvent(QStringLiteral("session"), {{QStringLiteral("session_id"), saved.sessionId}}));
+        }
+        render();
+        emit conversationRestored(int(saved.messages.size()));
+    });
 }
 
 bool AgentChatWidget::supportsProgram(const QString &program)
@@ -257,6 +291,7 @@ void AgentChatWidget::startNewChat()
     m_onceMode.clear();
     m_onceNetwork = false;
     m_model.clear();
+    resetChatState(m_cliProgram, m_projectPath, m_agentId);
     render();
     focusInput();
 }

@@ -55,8 +55,12 @@ public:
     // Full access asks before it is enabled; tests replace the question.
     void setFullAccessConfirmation(std::function<bool()> confirm) { m_confirmFullAccess = std::move(confirm); }
 
+    // Brings back the conversation saved by the last turn (started once when the widget is created).
+    void restoreConversation();
+
 signals:
     void runningStateChanged(bool running);
+    void conversationRestored(int messages);
 
 private:
     void stop();

@@ -163,3 +163,17 @@ def test_removal_retires_every_copy_with_a_backup_and_never_touches_foreign_file
     with pytest.raises(ValueError, match="no se sobrescribió"):
         apply_mods(tmp_path, ("chxchx-test-strategy",))
     assert foreign.read_text(encoding="utf-8") == "mío"
+
+
+def test_the_json_listing_studio_reads_is_never_wrapped(tmp_path: Path) -> None:
+    """A console wraps long lines at 80 columns, even inside the strings of a JSON document."""
+    import json
+
+    from typer.testing import CliRunner
+
+    from chxchx_tech_lead.cli import app
+
+    result = CliRunner().invoke(app, ["mod", "list", "--path", str(tmp_path), "--json"])
+
+    assert result.stdout.count("\n") == 1
+    assert len(json.loads(result.stdout)["mods"]) >= 20

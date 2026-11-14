@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from chxchx_tech_lead.workspace import agent_chat
+from chxchx_tech_lead.workspace import agent_chat, chat_release
 
 
 def _service(root: Path):
@@ -96,7 +96,7 @@ def test_a_failed_turn_or_a_one_off_question_is_never_released(tmp_path: Path, f
 
 
 def test_a_failed_hand_off_keeps_the_conversation_going(tmp_path: Path, fake_bin, monkeypatch) -> None:
-    monkeypatch.setattr(agent_chat, "HANDOFF_PROMPT", "FALLA siempre: liberar tu ventana de contexto")
+    monkeypatch.setattr(chat_release, "HANDOFF_PROMPT", "FALLA siempre: liberar tu ventana de contexto")
 
     _, code, events = _turn(tmp_path, "hola", 960, monkeypatch=monkeypatch)
 

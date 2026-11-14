@@ -22,7 +22,7 @@ def mod_list(
             "schema": "chxchx.mods",
             "schema_version": 1,
             "mods": project_mod_status(path),
-        }, ensure_ascii=False), markup=False)
+        }, ensure_ascii=False), markup=False, soft_wrap=True)  # a console would wrap the line inside the JSON strings
         return
     recommended = {item.mod.name: item for item in ModRegistry().recommendations(path)}
     table = Table(title="Mods · locales al proyecto (Claude Code, Codex y OpenCode)")

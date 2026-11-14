@@ -65,7 +65,7 @@ def status_command(
     except (OSError, ValueError) as exc:
         _fail(str(exc))
     if as_json:
-        console.print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), markup=False)
+        console.print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), markup=False, soft_wrap=True)
         return
     table = Table(title="ChxChx · CD a VPS")
     table.add_column("Elemento")
