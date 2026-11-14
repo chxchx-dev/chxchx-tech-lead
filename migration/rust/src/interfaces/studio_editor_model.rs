@@ -181,6 +181,7 @@ pub(in crate::interfaces::studio) fn fixture() -> Dashboard {
     Dashboard {
         editor: State::new(),
         terminal: Default::default(),
+        agents: Default::default(),
         shell: Default::default(),
         catalog: Default::default(),
         session: session::fixture(),

@@ -13,6 +13,9 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
     if let Message::Terminal(event) = message {
         return terminal::update(state, event);
     }
+    if let Message::Agents(event) = message {
+        return agents::update(state, event);
+    }
     if let Message::Editor(event) = message {
         return editor::update(state, event);
     }
@@ -49,6 +52,7 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
     match message {
         Message::Editor(_)
         | Message::Terminal(_)
+        | Message::Agents(_)
         | Message::Shell(_)
         | Message::Catalog(_)
         | Message::Session(_)

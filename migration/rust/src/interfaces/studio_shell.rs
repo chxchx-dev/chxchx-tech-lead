@@ -15,6 +15,7 @@ pub(super) enum Side {
     Explorer,
     Search,
     Git,
+    Agents,
     Workspace,
 }
 
@@ -138,6 +139,7 @@ fn show_side(state: &mut Dashboard, side: Side) -> Task<Message> {
     match side {
         Side::Search => iced::widget::operation::focus(search::INPUT),
         Side::Git => git::refresh(state),
+        Side::Agents => agents::refresh(state),
         _ => Task::none(),
     }
 }
@@ -212,6 +214,10 @@ fn shortcut(
         return Some(Message::Menu(menu::Event::Close));
     }
     if !modifiers.command() || modifiers.alt() {
+        return None;
+    }
+    // The terminal owns Ctrl+<letter> while it has the focus (Ctrl+C, Ctrl+R…); only Studio's reserved ones remain.
+    if super::terminal_surface::capturing() && !super::terminal_keys::reserved(&key, modifiers) {
         return None;
     }
     // Keys the focused editor or input already handled must not fire twice.

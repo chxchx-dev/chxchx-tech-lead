@@ -23,6 +23,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
                 shell::Side::Explorer => panels::explorer(state),
                 shell::Side::Search => search::view(state),
                 shell::Side::Git => git_view::view(state),
+                shell::Side::Agents => agents::view(state),
                 shell::Side::Workspace => workspace::view(state),
             })
             .push(shell::splitter(state, Split::Explorer));

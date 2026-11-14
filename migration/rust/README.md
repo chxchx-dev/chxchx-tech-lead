@@ -173,6 +173,20 @@ Las pruebas aplican operaciones solo dentro de directorios temporales. El
 validador ejecuta `status --json` con un home temporal y comprueba la salida real
 contra `schemas/project-overview-v1.schema.json`.
 
+## Agentes y terminal en Studio
+
+El panel **Agentes** (icono de destellos en la barra lateral, menú Ver → Agentes, chip en la barra de estado
+y tarjeta en Inicio) lista los agentes del proyecto —los de `workspace.agents` de `.ai/chxchx-tech.toml` y
+Claude Code, Codex y OpenCode que existan en el equipo— con su estado (disponible, instalado, en terminal) y
+abre cada uno en una pestaña del panel inferior. Requiere confianza local en el proyecto.
+
+La terminal del panel inferior es una terminal de verdad (emulación VT con colores, cursor, scrollback con la
+rueda, teclado completo —flechas, Ctrl+letra, Alt, F1–F12—, pegado con Ctrl+Shift+V o Cmd+V y tamaño que sigue
+a la ventana), así que las interfaces propias de los agentes funcionan dentro de Studio. Con el foco en la
+terminal, Ctrl+J y Ctrl+Shift+<letra> siguen siendo atajos de Studio; el resto va al programa. Si Studio se
+abrió desde un lanzador, los agentes se buscan también en `~/.opencode/bin`, `~/.local/bin`, nvm, Homebrew,
+bun, npm global, etc.
+
 ## Windows
 
 Studio de Rust funciona en Windows 10/11 x64 sin instalar nada más que el propio binario

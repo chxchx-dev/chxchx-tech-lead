@@ -17,6 +17,29 @@ fn label<'a>(value: impl text::IntoFragment<'a>) -> Element<'a, Message> {
     text(value).size(11).color(design::MUTED).into()
 }
 
+/// "Agentes: 2 de 3" (clicable) and, when one is open in the terminal, its name.
+fn agents_segment(state: &Dashboard) -> Element<'_, Message> {
+    let (available, total) = agents::counts(state);
+    let running = state.terminal.tabs.iter().find_map(|tab| match &tab.kind {
+        terminal::Kind::Agent(_) if !tab.exited => Some(tab.title.clone()),
+        _ => None,
+    });
+    let (tint, label) = match (running, state.agents.loaded, total) {
+        (Some(title), _, _) => (design::SUCCESS, format!("{title} activo")),
+        (None, false, _) => (design::FAINT, "Agentes…".to_owned()),
+        (None, true, 0) => (design::FAINT, "Sin agentes".to_owned()),
+        (None, true, _) => (design::MUTED, format!("Agentes {available}/{total}")),
+    };
+    styles::tip(
+        button(segment("sparkle", tint, label))
+            .padding([0, 4])
+            .style(styles::ghost(false))
+            .on_press(Message::Shell(shell::Event::ShowSide(shell::Side::Agents))),
+        "Abrir el panel de agentes",
+        iced::widget::tooltip::Position::Top,
+    )
+}
+
 pub(super) fn status_bar(state: &Dashboard) -> Element<'_, Message> {
     let overview = state.overview.as_ref().ok();
     let trusted = overview.is_some_and(|project| project.workspace.trusted);
@@ -60,6 +83,7 @@ pub(super) fn status_bar(state: &Dashboard) -> Element<'_, Message> {
     } else {
         segment("warning", design::WARNING, "Permisos por revisar".into())
     });
+    bar = bar.push(agents_segment(state));
     let mut details = row![].spacing(14).align_y(iced::Center);
     if let Some(tab) = tabs::selected_tab(state) {
         let cursor = tab.content.cursor().position;

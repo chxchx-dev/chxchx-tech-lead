@@ -5,6 +5,8 @@ use iced::{Element, Fill, Task};
 
 #[path = "studio_actions.rs"]
 mod actions;
+#[path = "studio_agents.rs"]
+mod agents;
 #[path = "studio_brand.rs"]
 mod brand;
 #[path = "studio_catalog.rs"]
@@ -57,6 +59,10 @@ mod styles;
 mod tabs;
 #[path = "studio_terminal.rs"]
 mod terminal;
+#[path = "studio_terminal_keys.rs"]
+mod terminal_keys;
+#[path = "studio_terminal_surface.rs"]
+mod terminal_surface;
 #[path = "studio_toolbar.rs"]
 mod toolbar;
 #[path = "studio_workspace.rs"]
@@ -99,6 +105,7 @@ use std::path::{Path, PathBuf};
 
 struct Dashboard {
     terminal: terminal::State,
+    agents: agents::State,
     editor: editor::State,
     shell: shell::State,
     catalog: catalog::State,
@@ -128,6 +135,7 @@ struct Dashboard {
 #[derive(Clone, Debug)]
 enum Message {
     Terminal(terminal::Event),
+    Agents(agents::Event),
     Editor(editor::Event),
     Shell(shell::Event),
     Catalog(catalog::Event),
@@ -181,6 +189,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
             let (session, warning) = session::boot(&path, loaded.clone());
             let mut state = Dashboard {
                 terminal: terminal::State::default(),
+                agents: agents::State::default(),
                 editor: editor::State::new(),
                 shell: shell::State::default(),
                 catalog: catalog::State::default(),
@@ -210,6 +219,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 editor::list(path.clone(), PathBuf::new()),
                 session::restore(&state),
                 plans::refresh(&mut state),
+                agents::refresh(&mut state),
                 git::refresh(&mut state),
                 file.as_ref()
                     .map(|file| editor::load(path.clone(), file.clone()))
@@ -248,7 +258,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                     .map(|_| Message::Git(git::Event::Poll)),
             );
         }
-        if state.terminal.session.is_some() {
+        if state.terminal.has_sessions() {
             subscriptions.push(
                 iced::time::every(std::time::Duration::from_millis(100))
                     .map(|_| Message::Terminal(terminal::Event::Tick)),

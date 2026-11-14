@@ -4,6 +4,53 @@ use std::io::{Read, Write};
 use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
 
+/// A terminal color as the program asked for it; the interface decides what it looks like.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Color {
+    Default,
+    Indexed(u8),
+    Rgb(u8, u8, u8),
+}
+
+impl From<vt100::Color> for Color {
+    fn from(color: vt100::Color) -> Self {
+        match color {
+            vt100::Color::Default => Color::Default,
+            vt100::Color::Idx(index) => Color::Indexed(index),
+            vt100::Color::Rgb(r, g, b) => Color::Rgb(r, g, b),
+        }
+    }
+}
+
+/// Consecutive cells of one row that share a style.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Run {
+    pub text: String,
+    pub fg: Color,
+    pub bg: Color,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub inverse: bool,
+    /// The cell under the cursor (always a run of exactly one cell).
+    pub cursor: bool,
+}
+
+/// What is on screen: styled rows, the cursor and the modes keys depend on.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Snapshot {
+    pub rows: Vec<Vec<Run>>,
+    pub cols: u16,
+    /// `(row, column)`; `None` when the program hid it or the view is scrolled back.
+    pub cursor: Option<(u16, u16)>,
+    /// Arrow keys send `ESC O A` instead of `ESC [ A` (full-screen programs ask for it).
+    pub application_cursor: bool,
+    /// Pasted text must be wrapped in `ESC [200~ … ESC [201~`.
+    pub bracketed_paste: bool,
+    /// Lines of history the view is scrolled back by.
+    pub scrollback: usize,
+}
+
 pub struct Session {
     master: Option<Box<dyn MasterPty + Send>>,
     writer: Option<Arc<Mutex<Box<dyn Write + Send>>>>,
@@ -20,6 +67,73 @@ impl std::fmt::Debug for Session {
             .field("exited", &self.exited)
             .finish_non_exhaustive()
     }
+}
+
+/// The screen as styled runs. Wide characters keep their cell; their blank continuation is skipped.
+pub fn snapshot_of(screen: &vt100::Screen) -> Snapshot {
+    let (rows, cols) = screen.size();
+    let scrollback = screen.scrollback();
+    let cursor = (!screen.hide_cursor() && scrollback == 0).then(|| screen.cursor_position());
+    let mut lines = Vec::with_capacity(usize::from(rows));
+    for row in 0..rows {
+        let mut runs: Vec<Run> = Vec::new();
+        for col in 0..cols {
+            let Some(cell) = screen.cell(row, col) else {
+                continue;
+            };
+            if cell.is_wide_continuation() {
+                continue;
+            }
+            let text = if cell.has_contents() {
+                cell.contents()
+            } else {
+                " "
+            };
+            let next = Run {
+                text: text.to_owned(),
+                fg: Color::from(cell.fgcolor()),
+                bg: Color::from(cell.bgcolor()),
+                bold: cell.bold(),
+                italic: cell.italic(),
+                underline: cell.underline(),
+                inverse: cell.inverse(),
+                cursor: cursor == Some((row, col)),
+            };
+            match runs.last_mut() {
+                Some(run) if same_style(run, &next) => run.text.push_str(text),
+                _ => runs.push(next),
+            }
+        }
+        lines.push(runs);
+    }
+    Snapshot {
+        rows: lines,
+        cols,
+        cursor,
+        application_cursor: screen.application_cursor(),
+        bracketed_paste: screen.bracketed_paste(),
+        scrollback,
+    }
+}
+
+fn same_style(a: &Run, b: &Run) -> bool {
+    (
+        a.fg,
+        a.bg,
+        a.bold,
+        a.italic,
+        a.underline,
+        a.inverse,
+        a.cursor,
+    ) == (
+        b.fg,
+        b.bg,
+        b.bold,
+        b.italic,
+        b.underline,
+        b.inverse,
+        b.cursor,
+    )
 }
 
 impl Session {
@@ -90,6 +204,10 @@ impl Session {
         if bytes.len() > 8192 {
             return Err("La entrada supera 8 KiB".into());
         }
+        if self.parser.screen().scrollback() > 0 {
+            self.parser.screen_mut().set_scrollback(0);
+            self.dirty = true;
+        }
         let mut writer = self
             .writer
             .as_ref()
@@ -121,6 +239,19 @@ impl Session {
             Some(contents) => contents,
             None => self.parser.screen().contents(),
         })
+    }
+
+    /// The screen as styled runs (see [`snapshot_of`]).
+    pub fn snapshot(&self) -> Snapshot {
+        snapshot_of(self.parser.screen())
+    }
+
+    /// Scrolls the view back (`lines > 0`) or forward through the history; typing returns to the bottom.
+    pub fn scroll(&mut self, lines: i32) {
+        let screen = self.parser.screen_mut();
+        let current = screen.scrollback() as i64;
+        screen.set_scrollback((current + i64::from(lines)).clamp(0, 1000) as usize);
+        self.dirty = true;
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) -> Result<(), String> {
@@ -163,6 +294,111 @@ impl Drop for Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn screen(rows: u16, cols: u16, bytes: &[u8]) -> Snapshot {
+        let mut parser = vt100::Parser::new(rows, cols, 100);
+        parser.process(bytes);
+        snapshot_of(parser.screen())
+    }
+
+    #[test]
+    fn colors_and_styles_become_separate_runs_of_one_row() {
+        let shot = screen(
+            3,
+            20,
+            b"plano \x1b[31mrojo\x1b[0m \x1b[1;4;42mnegrita\x1b[0m",
+        );
+
+        let row = &shot.rows[0];
+        let texts: Vec<_> = row.iter().map(|run| run.text.as_str()).collect();
+        assert_eq!(&texts[..4], ["plano ", "rojo", " ", "negrita"]);
+        assert_eq!(row[1].fg, Color::Indexed(1));
+        assert!(row[3].bold && row[3].underline && row[3].bg == Color::Indexed(2));
+        assert!(!row[0].bold && row[0].fg == Color::Default);
+        assert_eq!(shot.rows.len(), 3);
+        assert!(shot.rows[1].iter().all(|run| run.text.trim().is_empty()));
+    }
+
+    #[test]
+    fn truecolor_and_inverse_are_kept_as_asked() {
+        let shot = screen(2, 10, b"\x1b[38;2;10;20;30mA\x1b[7mB");
+
+        assert_eq!(shot.rows[0][0].fg, Color::Rgb(10, 20, 30));
+        assert!(shot.rows[0][1].inverse && !shot.rows[0][0].inverse);
+    }
+
+    #[test]
+    fn the_cursor_modes_and_wide_characters_are_reported() {
+        let shot = screen(3, 10, "日本x\x1b[?1h\x1b[?2004h".as_bytes());
+
+        assert_eq!(shot.cursor, Some((0, 5))); // two wide cells take 4 columns, then `x`
+        // The cell under the cursor is a run of its own, so the interface can draw it.
+        let on_cursor: Vec<_> = shot.rows[0].iter().filter(|run| run.cursor).collect();
+        assert_eq!(on_cursor.len(), 1);
+        assert_eq!(on_cursor[0].text, " ");
+        assert!(shot.application_cursor && shot.bracketed_paste);
+        let first: String = shot.rows[0].iter().map(|run| run.text.as_str()).collect();
+        assert!(
+            first.starts_with("日本x"),
+            "wide characters are one cell each: {first:?}"
+        );
+        let hidden = screen(2, 10, b"x\x1b[?25l");
+        assert_eq!(hidden.cursor, None);
+    }
+
+    #[test]
+    fn scrolling_back_shows_history_and_hides_the_cursor() {
+        let mut parser = vt100::Parser::new(2, 10, 100);
+        parser.process(b"uno\r\ndos\r\ntres\r\ncuatro");
+        parser.screen_mut().set_scrollback(2);
+
+        let shot = snapshot_of(parser.screen());
+
+        assert_eq!(shot.scrollback, 2);
+        assert_eq!(shot.cursor, None);
+        assert!(shot.rows[0][0].text.starts_with("uno"));
+    }
+
+    /// A real program in a real PTY: it paints in color, waits for a line, and the screen shows both.
+    #[cfg(unix)]
+    #[test]
+    fn a_program_can_be_driven_through_the_pty_and_its_screen_read_back_with_colors() {
+        let mut command = CommandBuilder::new("/bin/sh");
+        command.args([
+            "-c",
+            r#"printf '\033[31mrojo\033[0m listo\n'; read linea; printf 'recibido:%s\n' "$linea"; sleep 0.2"#,
+        ]);
+        command.env("TERM", "xterm-256color");
+        let mut session = Session::spawn(command).expect("the PTY starts");
+
+        let wait = |session: &mut Session, wanted: &str| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while std::time::Instant::now() < deadline {
+                let _ = session.poll_changed();
+                let shot = session.snapshot();
+                let screen: String = shot
+                    .rows
+                    .iter()
+                    .flat_map(|row| row.iter().map(|run| run.text.as_str()))
+                    .collect();
+                if screen.contains(wanted) {
+                    return shot;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            panic!("the screen never showed {wanted:?}");
+        };
+
+        let first = wait(&mut session, "rojo");
+        let colored = first.rows[0]
+            .iter()
+            .find(|run| run.text.starts_with("rojo"))
+            .unwrap();
+        assert_eq!(colored.fg, Color::Indexed(1));
+        session.send(b"hola mundo\r").unwrap();
+        let second = wait(&mut session, "recibido:hola mundo");
+        assert_eq!(second.cols, 100);
+    }
 
     #[test]
     fn native_pty_reads_a_short_lived_shell_and_resizes() {

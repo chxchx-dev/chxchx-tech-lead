@@ -278,7 +278,7 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             if editor.saving {
                 state.message = "Espera a que termine el guardado.".into();
             } else if editor.tabs.iter().any(|tab| tab.dirty)
-                || state.terminal.session.is_some()
+                || state.terminal.has_sessions()
                 || state.terminal.opening
             {
                 editor.exiting = true;

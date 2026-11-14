@@ -4,16 +4,17 @@ use super::*;
 use iced::widget::{column, stack, tooltip};
 
 pub(super) fn view(state: &Dashboard, current: DockTab) -> Element<'_, Message> {
+    let sessions = state.terminal.tabs.len();
     let terminal_label = if state.terminal.opening {
-        "Terminal · iniciando"
-    } else if state.terminal.session.is_some() {
-        "Terminal · activa"
+        "Terminal · iniciando".to_owned()
+    } else if sessions > 0 {
+        format!("Terminal · {sessions}")
     } else {
-        "Terminal"
+        "Terminal".to_owned()
     };
     let mut header = row![
         tab(terminal_label, "terminal", current, DockTab::Terminal),
-        tab("Actividad", "bell", current, DockTab::Activity),
+        tab("Actividad".to_owned(), "bell", current, DockTab::Activity),
         Space::new().width(Fill),
     ]
     .spacing(4)
@@ -41,7 +42,7 @@ pub(super) fn view(state: &Dashboard, current: DockTab) -> Element<'_, Message> 
 }
 
 fn tab<'a>(
-    label: &'a str,
+    label: String,
     icon: &'static str,
     current: DockTab,
     target: DockTab,

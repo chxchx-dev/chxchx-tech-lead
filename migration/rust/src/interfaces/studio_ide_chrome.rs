@@ -111,6 +111,7 @@ pub(super) fn activity_rail(state: &Dashboard) -> Element<'_, Message> {
             Message::Shell(ShellEvent::ToggleSide(Side::Search)),
         ),
         git_action(state),
+        agents_action(state),
         rail_action(
             "projects",
             "Espacio de trabajo: secciones del proyecto",
@@ -165,6 +166,33 @@ fn rail_action<'a>(
         label,
         tooltip::Position::Right,
     )
+}
+
+/// Rail button for the agents; a dot says one is running in the terminal.
+fn agents_action(state: &Dashboard) -> Element<'_, Message> {
+    let active = state.editor.explorer && state.shell.side == Side::Agents;
+    let base = rail_action(
+        "sparkle",
+        "Agentes: abrir Claude Code, Codex u OpenCode",
+        active,
+        Message::Shell(ShellEvent::ToggleSide(Side::Agents)),
+    );
+    let running = state
+        .terminal
+        .tabs
+        .iter()
+        .any(|tab| matches!(tab.kind, terminal::Kind::Agent(_)) && !tab.exited);
+    if !running {
+        return base;
+    }
+    iced::widget::stack![
+        base,
+        container(icons::icon("dot", design::SUCCESS, 10.0))
+            .align_right(Fill)
+            .align_top(Fill)
+            .padding([6, 8])
+    ]
+    .into()
 }
 
 /// Rail button for Git, with the number of changed files on it.

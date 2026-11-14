@@ -92,6 +92,7 @@ pub(super) fn apply(state: &mut Dashboard) {
         "search" => shell::Side::Search,
         "workspace" => shell::Side::Workspace,
         "git" => shell::Side::Git,
+        "agents" => shell::Side::Agents,
         _ => shell::Side::Explorer,
     };
     match layout.dock.as_deref() {
@@ -164,6 +165,7 @@ pub(super) fn capture(state: &mut Dashboard) {
         explorer: editor.explorer,
         side: match state.shell.side {
             shell::Side::Git => "git",
+            shell::Side::Agents => "agents",
             shell::Side::Explorer => "explorer",
             shell::Side::Search => "search",
             shell::Side::Workspace => "workspace",

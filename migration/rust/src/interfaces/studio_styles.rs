@@ -105,6 +105,15 @@ pub(super) fn chip(color: Color) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
+/// A session tab: the active one is raised, the others only keep their outline.
+pub(super) fn chip_surface(active: bool) -> impl Fn(&Theme) -> container::Style {
+    move |_| container::Style {
+        background: solid(if active { BG_ACTIVE } else { BG_PANEL }),
+        border: outline(if active { BORDER_STRONG } else { BORDER }, 7.0),
+        ..Default::default()
+    }
+}
+
 pub(super) fn tooltip_box(_: &Theme) -> container::Style {
     container::Style {
         background: solid(BG_HOVER),

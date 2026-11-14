@@ -104,6 +104,11 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
                 Message::Shell(ShellEvent::ShowSide(Side::Search)),
             ),
             item(
+                "Agentes",
+                "",
+                Message::Shell(ShellEvent::ShowSide(Side::Agents)),
+            ),
+            item(
                 "Espacio de trabajo",
                 "",
                 Message::Shell(ShellEvent::ShowSide(Side::Workspace)),
