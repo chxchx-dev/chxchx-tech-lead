@@ -6,7 +6,7 @@
 //! agent is one click away. Nothing here starts a process.
 use crate::integrations::executable_search::{agent_path, find_in};
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Provider {
@@ -181,9 +181,20 @@ fn configured(root: &Path) -> Result<Vec<(String, Vec<String>, PathBuf)>, String
             .get("cwd")
             .and_then(toml::Value::as_str)
             .unwrap_or(".");
-        // A configured directory outside the project is ignored: agents start inside it.
-        let cwd = if cwd.split(['/', '\\']).any(|part| part == "..") || Path::new(cwd).is_absolute()
-        {
+        // A configured directory outside the project is ignored: agents start inside it. `/etc` is not
+        // "absolute" on Windows (no drive) but it still escapes, so the components are what count.
+        let bytes = cwd.as_bytes();
+        let drive = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
+        let escapes = drive
+            || cwd.starts_with(['/', '\\'])
+            || cwd.split(['/', '\\']).any(|part| part == "..")
+            || Path::new(cwd).components().any(|part| {
+                matches!(
+                    part,
+                    Component::ParentDir | Component::RootDir | Component::Prefix(_)
+                )
+            });
+        let cwd = if escapes {
             root.to_path_buf()
         } else {
             root.join(cwd)
@@ -320,5 +331,30 @@ mod tests {
         let catalog = list_with(&root, &OsString::new());
 
         assert!(catalog.agents.iter().all(|agent| agent.cwd == root));
+    }
+
+    #[test]
+    fn drive_and_rooted_paths_do_not_escape_on_any_platform() {
+        let root = project(
+            "escape-windows",
+            Some(
+                "[[workspace.agents]]\nid = \"c\"\ncommand = [\"opencode\"]\ncwd = 'C:\\Windows'\n\n[[workspace.agents]]\nid = \"d\"\ncommand = [\"opencode\"]\ncwd = '\\raiz'\n\n[[workspace.agents]]\nid = \"e\"\ncommand = [\"opencode\"]\ncwd = 'sub\\..\\..\\fuera'\n\n[[workspace.agents]]\nid = \"ok\"\ncommand = [\"opencode\"]\ncwd = 'sub'\n",
+            ),
+        );
+        let catalog = list_with(&root, &OsString::new());
+
+        let cwd = |id: &str| {
+            catalog
+                .agents
+                .iter()
+                .find(|a| a.id == id)
+                .unwrap()
+                .cwd
+                .clone()
+        };
+        assert_eq!(cwd("c"), root);
+        assert_eq!(cwd("d"), root);
+        assert_eq!(cwd("e"), root);
+        assert_eq!(cwd("ok"), root.join("sub"));
     }
 }
