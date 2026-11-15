@@ -11,6 +11,8 @@ use iced::widget::{column, tooltip};
 pub(super) struct State {
     pub catalog: AgentCatalog,
     pub loaded: bool,
+    /// An agent whose chat opens as soon as the agents are known (`CHXCHX_STUDIO_CHAT`).
+    pub auto_chat: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -57,7 +59,10 @@ pub(super) fn refresh(state: &mut Dashboard) -> Task<Message> {
         |state, found| {
             state.agents.catalog = found;
             state.agents.loaded = true;
-            Task::none()
+            match state.agents.auto_chat.take() {
+                Some(id) => Task::done(Message::Agents(Event::Chat(id))),
+                None => Task::none(),
+            }
         },
     )
 }

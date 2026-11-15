@@ -58,19 +58,19 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
                 TitleBar::new(tab_strip(state, pane, group, focused))
                     .controls(pane_grid::Controls::new(controls))
                     .always_show_controls()
-                    .padding([3, 6])
+                    .padding([2, 8])
                     .style(styles::pane_title(focused)),
             )
             .style(styles::pane(focused))
     })
-    .spacing(6)
+    .spacing(8)
     .min_size(120)
     .on_click(|pane| Message::Panes(Event::Focus(pane)))
     .on_drag(|drag| Message::Panes(Event::Dragged(drag)))
     .on_resize(8, |resize| Message::Panes(Event::Resized(resize)))
     .style(styles::pane_grid);
     container(grid)
-        .padding(6)
+        .padding(8)
         .width(Fill)
         .height(Fill)
         .style(styles::surface(design::BG_DEEP))
@@ -131,7 +131,17 @@ fn tab_strip<'a>(
         let active = index == group.active;
         let (icon, tint, title) = describe(state, content);
         let mut tab = row![
-            icons::icon(icon, if active { tint } else { design::FAINT }, 13.0),
+            icons::icon(
+                icon,
+                if active && focused {
+                    design::ACCENT
+                } else if active {
+                    tint
+                } else {
+                    design::FAINT
+                },
+                13.0,
+            ),
             text(title)
                 .size(11)
                 .font(design::UI_BOLD)
@@ -156,7 +166,7 @@ fn tab_strip<'a>(
         }
         strip = strip.push(
             button(tab)
-                .padding([4, 8])
+                .padding([5, 9])
                 .style(styles::ghost(active))
                 .on_press(Message::Panes(Event::Select(pane, index))),
         );

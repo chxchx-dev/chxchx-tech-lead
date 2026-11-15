@@ -240,7 +240,12 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
             let (session, warning) = session::boot(&path, loaded.clone());
             let mut state = Dashboard {
                 terminal: terminal::State::default(),
-                agents: agents::State::default(),
+                agents: agents::State {
+                    auto_chat: std::env::var("CHXCHX_STUDIO_CHAT")
+                        .ok()
+                        .filter(|id| !id.is_empty()),
+                    ..agents::State::default()
+                },
                 chat: chat::State::default(),
                 panes: panes::State::default(),
                 editor: editor::State::new(),

@@ -5,6 +5,9 @@ use iced::widget::{button, container, scrollable, text_editor, text_input, toolt
 #[path = "studio_styles_panes.rs"]
 mod panes;
 use iced::{Background, Border, Color, Shadow, Theme, Vector, gradient};
+#[path = "studio_styles_chat.rs"]
+mod chat_styles;
+pub(super) use chat_styles::{composer_card, composer_editor};
 pub(super) use panes::{grid as pane_grid, pane, pane_title};
 
 fn solid(color: Color) -> Option<Background> {
@@ -38,7 +41,7 @@ pub(super) fn surface(color: Color) -> impl Fn(&Theme) -> container::Style {
 pub(super) fn card(_: &Theme) -> container::Style {
     container::Style {
         background: solid(BG_RAISED),
-        border: outline(BORDER, 10.0),
+        border: Border::default().rounded(12.0),
         ..Default::default()
     }
 }
@@ -46,7 +49,7 @@ pub(super) fn card(_: &Theme) -> container::Style {
 pub(super) fn well(_: &Theme) -> container::Style {
     container::Style {
         background: solid(BG_DEEP),
-        border: outline(BORDER, 8.0),
+        border: Border::default().rounded(10.0),
         ..Default::default()
     }
 }
@@ -54,7 +57,7 @@ pub(super) fn well(_: &Theme) -> container::Style {
 pub(super) fn hero(_: &Theme) -> container::Style {
     container::Style {
         background: Some(brand_gradient(hex_mix(BRAND_DEEP, 0.34), BG_RAISED)),
-        border: outline(alpha(BRAND_BLUE, 0.45), 14.0),
+        border: outline(alpha(BRAND_BLUE, 0.22), 16.0),
         ..Default::default()
     }
 }
@@ -73,7 +76,7 @@ fn hex_mix(color: Color, amount: f32) -> Color {
 pub(super) fn tinted(color: Color) -> impl Fn(&Theme) -> container::Style {
     move |_| container::Style {
         background: solid(hex_mix(color, 0.12)),
-        border: outline(hex_mix(color, 0.5), 10.0),
+        border: outline(hex_mix(color, 0.28), 10.0),
         ..Default::default()
     }
 }
@@ -83,7 +86,11 @@ pub(super) fn message_box(_: &Theme, status: text_editor::Status) -> text_editor
     let focused = matches!(status, text_editor::Status::Focused { .. });
     text_editor::Style {
         background: Background::Color(BG_DEEP),
-        border: outline(if focused { BRAND_BLUE } else { BORDER }, 6.0),
+        border: if focused {
+            outline(alpha(BRAND_BLUE, 0.7), 10.0)
+        } else {
+            Border::default().rounded(10.0)
+        },
         placeholder: FAINT,
         value: TEXT,
         selection: alpha(BRAND_BLUE, 0.4),
@@ -111,8 +118,8 @@ pub(super) fn chip(color: Color) -> impl Fn(&Theme) -> container::Style {
 /// A session tab: the active one is raised, the others only keep their outline.
 pub(super) fn chip_surface(active: bool) -> impl Fn(&Theme) -> container::Style {
     move |_| container::Style {
-        background: solid(if active { BG_ACTIVE } else { BG_PANEL }),
-        border: outline(if active { BORDER_STRONG } else { BORDER }, 7.0),
+        background: solid(if active { BG_ACTIVE } else { BG_RAISED }),
+        border: Border::default().rounded(8.0),
         ..Default::default()
     }
 }
@@ -215,7 +222,7 @@ pub(super) fn primary(_: &Theme, status: button::Status) -> button::Style {
     button::Style {
         background: Some(brand_gradient(from, to)),
         text_color: Color::WHITE,
-        border: Border::default().rounded(7.0),
+        border: Border::default().rounded(8.0),
         ..Default::default()
     }
 }
@@ -223,9 +230,13 @@ pub(super) fn primary(_: &Theme, status: button::Status) -> button::Style {
 pub(super) fn secondary(_: &Theme, status: button::Status) -> button::Style {
     let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
     button::Style {
-        background: solid(if hovered { BG_HOVER } else { BG_PANEL }),
+        background: solid(if hovered { BG_HOVER } else { BG_RAISED }),
         text_color: TEXT,
-        border: outline(if hovered { BRAND_BLUE } else { BORDER_STRONG }, 7.0),
+        border: if hovered {
+            outline(alpha(BRAND_BLUE, 0.6), 8.0)
+        } else {
+            Border::default().rounded(8.0)
+        },
         ..Default::default()
     }
 }
@@ -235,7 +246,7 @@ pub(super) fn danger(_: &Theme, status: button::Status) -> button::Style {
     button::Style {
         background: solid(hex_mix(DANGER, if hovered { 0.30 } else { 0.14 })),
         text_color: DANGER,
-        border: outline(hex_mix(DANGER, 0.55), 7.0),
+        border: Border::default().rounded(8.0),
         ..Default::default()
     }
 }
@@ -244,7 +255,11 @@ pub(super) fn input(_: &Theme, status: text_input::Status) -> text_input::Style 
     let focused = matches!(status, text_input::Status::Focused { .. });
     text_input::Style {
         background: Background::Color(BG_DEEP),
-        border: outline(if focused { BRAND_BLUE } else { BORDER }, 6.0),
+        border: if focused {
+            outline(alpha(BRAND_BLUE, 0.7), 8.0)
+        } else {
+            Border::default().rounded(8.0)
+        },
         icon: MUTED,
         placeholder: FAINT,
         value: TEXT,

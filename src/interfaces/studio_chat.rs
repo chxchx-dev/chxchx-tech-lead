@@ -18,6 +18,8 @@ mod asks;
 mod cards;
 #[path = "studio_chat_composer.rs"]
 mod composer;
+#[path = "studio_chat_models.rs"]
+mod models;
 #[path = "studio_chat_perms.rs"]
 mod perms;
 #[path = "studio_chat_prepare.rs"]
@@ -85,6 +87,12 @@ pub(super) struct Chat {
     pub sent: Vec<(usize, Vec<Image>)>,
     /// The permissions panel is open.
     pub perms_open: bool,
+    /// The model picker is open, and what the person typed to filter it.
+    pub models_open: bool,
+    pub model_query: String,
+    /// When the running turn started, and how long each answered turn took: (entry, seconds).
+    pub turn_started: Option<std::time::Instant>,
+    pub durations: Vec<(usize, u64)>,
     /// Tool and reasoning cards the person expanded.
     pub expanded: Vec<usize>,
     /// Rendered Markdown of each entry (keyed by the text length it was built from).
@@ -155,6 +163,11 @@ pub(super) enum Event {
     Pasted(String, Option<String>),
     /// Opens or closes the permissions panel.
     Permissions,
+    /// Opens or closes the model picker.
+    ModelMenu,
+    ModelQuery(String),
+    /// Sends the last message again.
+    Retry,
     /// Forgets an approved rule: (rule, remembered for the chat).
     Revoke(String, bool),
     /// Expands or collapses a card.
@@ -212,7 +225,17 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                     )));
             }
         }),
-        Event::Permissions => with_chat(state, |chat| chat.perms_open = !chat.perms_open),
+        Event::Permissions => with_chat(state, |chat| {
+            chat.perms_open = !chat.perms_open;
+            chat.models_open = false;
+        }),
+        Event::ModelMenu => with_chat(state, |chat| {
+            chat.models_open = !chat.models_open;
+            chat.perms_open = false;
+            chat.model_query.clear();
+        }),
+        Event::ModelQuery(query) => with_chat(state, |chat| chat.model_query = query),
+        Event::Retry => turns::retry(state),
         Event::Revoke(rule, remembered) => with_chat(state, |chat| {
             let list = if remembered {
                 &mut chat.approved
@@ -243,6 +266,7 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                 .map(|m| m.default_effort.clone())
                 .filter(|e| !e.is_empty());
             chat.model_id = Some(id);
+            chat.models_open = false;
         }),
         Event::Effort(effort) => with_chat(state, |chat| chat.effort = Some(effort)),
         Event::NewChat => new_chat(state),
@@ -276,6 +300,15 @@ fn tick(state: &mut Dashboard) {
             let code = turn.exit.unwrap_or(0);
             let stderr = turn.stderr_tail();
             chat.turn = None;
+            if let Some(started) = chat.turn_started.take()
+                && let Some(last) = chat
+                    .model
+                    .entries
+                    .iter()
+                    .rposition(|e| e.kind == Kind::Assistant)
+            {
+                chat.durations.push((last, started.elapsed().as_secs()));
+            }
             crate::integrations::process_memory::give_back_soon();
             images::cleanup(chat);
             chat.model.expire_live_requests();

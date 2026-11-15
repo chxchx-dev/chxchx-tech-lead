@@ -9,16 +9,14 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
     let ready = has_content && !running && !chat.preparing && chat.problem.is_none();
     let (to_edit, to_keys) = (super::sender(), super::sender());
     let editor = text_editor(&chat.composer)
-        .placeholder(
-            "Escribe un mensaje · Intro envía, Mayús+Intro agrega una línea · Ctrl+V pega capturas",
-        )
+        .placeholder("Escribe un mensaje o pega una captura…")
         .on_action(move |action| to_edit(Event::Edit(action)))
         .height(iced::Length::Shrink)
-        .min_height(44)
-        .max_height(160)
-        .padding(10)
+        .min_height(40)
+        .max_height(180)
+        .padding([10, 12])
         .size(13)
-        .style(styles::message_box)
+        .style(styles::composer_editor)
         .key_binding(move |key| {
             use iced::keyboard::{Key, key::Named};
             let enter = matches!(key.key.as_ref(), Key::Named(Named::Enter));
@@ -33,30 +31,31 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
             }
         });
     let attach = styles::tip(
-        button(icons::icon("plus", design::TEXT, 14.0))
-            .padding([8, 10])
-            .style(styles::secondary)
+        button(icons::icon("plus", design::MUTED, 15.0))
+            .padding(6)
+            .style(styles::ghost(false))
             .on_press(send(Event::Attach)),
         "Adjuntar imágenes (también puedes arrastrarlas o pegarlas)",
         tooltip::Position::Top,
     );
     let action = if running {
-        button(
-            row![
-                icons::icon("stop", design::TEXT, 13.0),
-                text("Detener").size(12)
-            ]
-            .spacing(6)
-            .align_y(iced::Center),
+        styles::tip(
+            button(icons::icon("stop", design::TEXT, 14.0))
+                .padding(8)
+                .style(styles::danger)
+                .on_press(send(Event::Stop)),
+            "Detener al agente",
+            tooltip::Position::Top,
         )
-        .padding([8, 14])
-        .style(styles::danger)
-        .on_press(send(Event::Stop))
     } else {
-        button(text("Enviar").size(12).font(design::UI_BOLD))
-            .padding([8, 14])
-            .style(styles::primary)
-            .on_press_maybe(ready.then(|| send(Event::Send)))
+        styles::tip(
+            button(icons::icon("arrow-up", iced::Color::WHITE, 14.0))
+                .padding(8)
+                .style(styles::primary)
+                .on_press_maybe(ready.then(|| send(Event::Send))),
+            "Enviar (Intro)",
+            tooltip::Position::Top,
+        )
     };
     let mut body = column![].spacing(8);
     if !chat.images.is_empty() {
@@ -98,14 +97,27 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
             ),
         );
     }
+    let footer = row![
+        attach,
+        text("Intro envía · Mayús+Intro, nueva línea")
+            .size(10)
+            .color(design::FAINT),
+        Space::new().width(Fill),
+        action,
+    ]
+    .spacing(8)
+    .align_y(iced::Center);
     body = body.push(
-        row![attach, editor, action]
-            .spacing(10)
-            .align_y(iced::alignment::Vertical::Bottom),
+        container(
+            column![editor, footer]
+                .spacing(2)
+                .padding(iced::Padding::new(6.0).top(0.0)),
+        )
+        .style(styles::composer_card),
     );
     container(body)
-        .padding([10, 16])
+        .padding([8, 16])
         .width(Fill)
-        .style(styles::surface(design::BG_PANEL))
+        .style(styles::surface(design::BG_BASE))
         .into()
 }

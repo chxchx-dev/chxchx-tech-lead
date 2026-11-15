@@ -68,6 +68,7 @@ fn start_turn(state: &mut Dashboard, prompt: &str, show: bool) -> bool {
                 }
             }
             chat.turn = Some(turn);
+            chat.turn_started = Some(std::time::Instant::now());
             sync(chat);
             true
         }
@@ -232,4 +233,22 @@ pub(super) fn with_images_for_tests(prompt: &str, count: usize) -> String {
 #[cfg(test)]
 pub(super) fn shown_for_tests(prompt: &str, count: usize) -> String {
     shown(prompt, count)
+}
+
+/// Sends the last message the person wrote again (after an error or a poor answer).
+pub(super) fn retry(state: &mut Dashboard) {
+    let last = state.chat.active_chat().and_then(|chat| {
+        chat.model
+            .entries
+            .iter()
+            .rev()
+            .find(|e| e.kind == model::Kind::User)
+            .map(|e| e.text.clone())
+    });
+    if let Some(text) = last
+        && !text.trim().is_empty()
+        && text != "Imágenes adjuntas"
+    {
+        start_turn(state, &text, true);
+    }
 }

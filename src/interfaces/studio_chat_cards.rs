@@ -52,6 +52,38 @@ pub(super) fn thumb<'a>(image: &'a super::Image, side: f32) -> Element<'a, Messa
     .into()
 }
 
+/// "8 s", "2 min 5 s".
+fn took(seconds: u64) -> String {
+    if seconds < 60 {
+        format!("{seconds} s")
+    } else {
+        format!("{} min {} s", seconds / 60, seconds % 60)
+    }
+}
+
+/// An icon for what the tool does, so a long run reads at a glance.
+fn tool_icon(kind: &str) -> &'static str {
+    let kind = kind.to_lowercase();
+    if ["bash", "shell", "command", "exec", "terminal"]
+        .iter()
+        .any(|k| kind.contains(k))
+    {
+        "terminal"
+    } else if ["search", "grep", "glob", "find"]
+        .iter()
+        .any(|k| kind.contains(k))
+    {
+        "search"
+    } else if ["edit", "write", "patch", "read", "file"]
+        .iter()
+        .any(|k| kind.contains(k))
+    {
+        "file-text"
+    } else {
+        "code"
+    }
+}
+
 fn assistant<'a>(chat: &'a Chat, index: usize, entry: &'a Entry) -> Element<'a, Message> {
     let body: Element<'a, Message> = match chat.rendered.get(index) {
         Some((_, content)) => markdown::view(
@@ -65,10 +97,17 @@ fn assistant<'a>(chat: &'a Chat, index: usize, entry: &'a Entry) -> Element<'a, 
         agents::avatar(chat.agent.provider, 26.0),
         column![
             row![
-                text(chat.agent.label())
-                    .size(11)
-                    .font(design::UI_BOLD)
-                    .color(design::MUTED),
+                text(
+                    match chat.durations.iter().find(|(entry, _)| *entry == index) {
+                        Some((_, seconds)) => {
+                            format!("{} · {}", chat.agent.label(), took(*seconds))
+                        }
+                        None => chat.agent.label(),
+                    }
+                )
+                .size(11)
+                .font(design::UI_BOLD)
+                .color(design::MUTED),
                 Space::new().width(Fill),
                 styles::tip(
                     button(icons::icon("file-text", design::FAINT, 12.0))
@@ -168,6 +207,7 @@ fn tool<'a>(chat: &Chat, index: usize, entry: &'a Entry) -> Element<'a, Message>
     };
     let head = row![
         icons::icon(icon, tint, 13.0),
+        icons::icon(tool_icon(&entry.tool_kind), design::FAINT, 12.0),
         text(&entry.text)
             .size(12)
             .font(design::MONO)
@@ -200,4 +240,18 @@ fn tail(output: &str, max: usize) -> String {
     }
     let skipped: String = output.chars().skip(count - max).collect();
     format!("…{skipped}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn durations_and_tool_icons_read_at_a_glance() {
+        assert_eq!((took(8).as_str(), took(125).as_str()), ("8 s", "2 min 5 s"));
+        assert_eq!(tool_icon("Bash"), "terminal");
+        assert_eq!(tool_icon("grep"), "search");
+        assert_eq!(tool_icon("MultiEdit"), "file-text");
+        assert_eq!(tool_icon("whatever"), "code");
+    }
 }
