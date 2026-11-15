@@ -92,6 +92,7 @@ fn describe<'a>(state: &'a Dashboard, content: &'a Content) -> (&'static str, ic
     match content {
         Content::Editor => ("code", design::BRAND_CYAN, "Editor".to_owned()),
         Content::Activity => ("bell", design::MUTED, "Actividad".to_owned()),
+        Content::Local => ("cpu", design::TINT_GREEN, "Modelos locales".to_owned()),
         Content::Chat(id) => {
             let label = state
                 .chat
@@ -180,6 +181,7 @@ fn body<'a>(state: &'a Dashboard, content: &'a Content) -> Element<'a, Message> 
         Content::Chat(id) => chat::view(state, id),
         Content::Terminal(id) => terminal::view(state, *id),
         Content::Activity => dock::activity(state),
+        Content::Local => local::view(state),
     }
 }
 

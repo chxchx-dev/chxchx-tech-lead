@@ -60,6 +60,7 @@ pub(super) fn refresh(state: &mut Dashboard) -> Task<Message> {
             state.agents.catalog = found;
             state.agents.loaded = true;
             match state.agents.auto_chat.take() {
+                Some(id) if id == "local" => Task::done(Message::Local(local::Event::Open)),
                 Some(id) => Task::done(Message::Agents(Event::Chat(id))),
                 None => Task::none(),
             }
@@ -81,7 +82,7 @@ fn trusted(state: &Dashboard) -> bool {
 }
 
 /// Color and initial that make each provider recognizable at a glance.
-fn identity(provider: Provider) -> (iced::Color, &'static str) {
+pub(super) fn identity(provider: Provider) -> (iced::Color, &'static str) {
     match provider {
         Provider::Claude => (design::TINT_ORANGE, "C"),
         Provider::Codex => (design::TINT_GREEN, "X"),
@@ -243,6 +244,49 @@ fn agent_card<'a>(state: &Dashboard, agent: &Agent) -> Element<'a, Message> {
         .into()
 }
 
+/// The way into local models: runs on this machine through Ollama.
+fn local_card<'a>(state: &Dashboard) -> Element<'a, Message> {
+    let open = state.panes.find(|c| *c == panes::Content::Local).is_some();
+    container(
+        column![
+            row![
+                container(icons::icon("cpu", design::TINT_GREEN, 16.0))
+                    .center(30)
+                    .width(30)
+                    .height(30)
+                    .style(styles::chip(design::TINT_GREEN)),
+                column![
+                    text("Modelos locales").size(13).font(design::UI_BOLD),
+                    text("Ollama · en tu equipo").size(10).color(design::FAINT),
+                ]
+                .spacing(1)
+                .width(Fill),
+            ]
+            .spacing(10)
+            .align_y(iced::Center),
+            text("Diagnostica tu PC, mira qué modelos caben y conéctalos a OpenCode, sin internet ni costo por uso.")
+                .size(11)
+                .color(design::MUTED),
+            button(
+                row![
+                    icons::icon("cpu", design::TEXT, 13.0),
+                    text(if open { "Ver modelos locales" } else { "Explorar" }).size(12)
+                ]
+                .spacing(7)
+                .align_y(iced::Center),
+            )
+            .padding([6, 12])
+            .style(styles::secondary)
+            .on_press(Message::Local(local::Event::Open)),
+        ]
+        .spacing(8),
+    )
+    .padding(12)
+    .width(Fill)
+    .style(styles::card)
+    .into()
+}
+
 /// The sidebar panel.
 pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     let mut list = column![].spacing(8);
@@ -311,6 +355,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     for agent in agents {
         list = list.push(agent_card(state, agent));
     }
+    list = list.push(local_card(state));
     // Known agents that are not installed: the way to get them.
     let missing: Vec<_> = Provider::KNOWN
         .iter()

@@ -157,3 +157,84 @@ fn changing_the_model_of_one_chat_leaves_the_others_alone() {
         ("read-only", "workspace-write")
     );
 }
+
+fn with_commands(state: &mut Dashboard) {
+    use crate::integrations::slash_commands::Found;
+    state.chat.chats[0].commands = vec![Found {
+        name: "revisar".into(),
+        description: "Revisa cambios".into(),
+        kind: "skill",
+    }];
+}
+
+fn type_in(state: &mut Dashboard, text: &str) {
+    state.chat.chats[0].composer = text_editor::Content::with_text(text);
+}
+
+#[test]
+fn the_menu_opens_on_a_slash_and_filters_while_typing() {
+    let mut state = dashboard();
+    with_commands(&mut state);
+    type_in(&mut state, "hola");
+    assert!(slash::typing(&state.chat.chats[0]).is_none());
+    type_in(&mut state, "/rev");
+    let query = slash::typing(&state.chat.chats[0]).unwrap();
+    let names: Vec<_> = slash::items(&state.chat.chats[0], &query)
+        .into_iter()
+        .map(|i| i.name)
+        .collect();
+    assert_eq!(names, ["revisar", "reintentar"].map(String::from)[..1]);
+    type_in(&mut state, "/revisar con calma");
+    assert!(slash::typing(&state.chat.chats[0]).is_none());
+}
+
+#[test]
+fn enter_completes_a_partial_command_and_leaves_a_complete_one_to_send() {
+    let mut state = dashboard();
+    with_commands(&mut state);
+    type_in(&mut state, "/rev");
+    assert!(slash::enter(&mut state));
+    assert_eq!(state.chat.chats[0].composer.text().trim_end(), "/revisar");
+    type_in(&mut state, "/revisar");
+    assert!(!slash::enter(&mut state));
+}
+
+#[test]
+fn a_project_command_reaches_claude_as_typed_and_other_agents_as_an_instruction() {
+    let mut state = dashboard();
+    with_commands(&mut state);
+    let found = state.chat.chats[0].commands[0].clone();
+    assert_eq!(
+        slash::prompt_for("claude", &found, " ahora "),
+        "/revisar ahora"
+    );
+    let other = slash::prompt_for("codex", &found, "");
+    assert!(other.contains("«revisar»") && other.contains(".agents/skills/revisar/SKILL.md"));
+    match slash::resolve(&mut state, "/revisar src") {
+        slash::Outcome::Send(prompt, shown) => {
+            assert_eq!(
+                (prompt.as_str(), shown.as_str()),
+                ("/revisar src", "/revisar src")
+            );
+        }
+        _ => panic!("a project command is sent to the agent"),
+    }
+    assert!(matches!(
+        slash::resolve(&mut state, "/desconocido"),
+        slash::Outcome::Plain
+    ));
+}
+
+#[test]
+fn chat_commands_act_on_the_chat_and_never_reach_the_agent() {
+    let mut state = dashboard();
+    with_commands(&mut state);
+    type_in(&mut state, "/skills");
+    let _ = submit(&mut state);
+    let chat = &state.chat.chats[0];
+    assert!(chat.turn.is_none() && chat.composer.text().trim().is_empty());
+    assert!(chat.model.entries.last().unwrap().text.contains("/revisar"));
+    type_in(&mut state, "/modelo");
+    let _ = submit(&mut state);
+    assert!(state.chat.chats[0].models_open);
+}

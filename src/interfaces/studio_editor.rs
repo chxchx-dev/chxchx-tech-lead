@@ -5,6 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[path = "studio_editor_model.rs"]
 mod model;
+#[path = "studio_editor_tools.rs"]
+pub(super) mod tools;
 pub(super) use model::*;
 
 #[derive(Clone, Debug)]
@@ -28,7 +30,18 @@ pub(super) enum Event {
     Search,
     Query(String),
     FindNext,
+    /// Ctrl+S: formats first when the project asks for it, then saves.
     Save,
+    SaveNow,
+    /// Formats the open file with the project's tool.
+    Format,
+    Formatted(
+        PathBuf,
+        String,
+        Option<Result<(&'static str, String), String>>,
+        bool,
+    ),
+    Mode(tools::ViewMode),
     Saved(PathBuf, Result<Document, String>),
     Close(usize),
     Discard,
@@ -213,6 +226,24 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             }
         }
         Event::Save => {
+            let dirty = editor
+                .selected
+                .and_then(|i| editor.tabs.get(i))
+                .is_some_and(|t| t.dirty);
+            if editor.saving || editor.home || !dirty {
+                return Task::none();
+            }
+            if tools::required(state) {
+                return tools::format(state, true, false);
+            }
+            return update(state, Event::SaveNow);
+        }
+        Event::Format => return tools::format(state, false, true),
+        Event::Formatted(path, original, outcome, save) => {
+            return tools::formatted(state, &path, &original, outcome, save);
+        }
+        Event::Mode(mode) => tools::set_mode(editor, mode),
+        Event::SaveNow => {
             if editor.saving || editor.home {
                 return Task::none();
             }
@@ -292,6 +323,7 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             return iced::exit();
         }
     }
+    tools::refresh_preview(&mut state.editor);
     Task::none()
 }
 

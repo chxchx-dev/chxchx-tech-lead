@@ -1,5 +1,5 @@
 //! Editor group: tab strip, breadcrumbs, in-file search and the code editor.
-use super::editor::{Event, Tab};
+use super::editor::{Event, Tab, tools};
 use super::*;
 use iced::widget::{column, stack, text_editor, text_input, tooltip};
 
@@ -130,7 +130,7 @@ pub(super) fn editor_area(state: &Dashboard) -> Element<'_, Message> {
     if state.editor.search {
         area = area.push(search_bar(state));
     }
-    area.push(
+    let code = || {
         text_editor(&tab.content)
             .on_action(|action| Message::Editor(Event::Edit(action)))
             .style(styles::editor)
@@ -140,12 +140,50 @@ pub(super) fn editor_area(state: &Dashboard) -> Element<'_, Message> {
             .padding([10, 18])
             .height(Fill)
             .highlight(syntax, iced::highlighter::Theme::Base16Ocean)
-            .key_binding(key_binding),
-    )
-    .into()
+            .key_binding(key_binding)
+    };
+    let preview = || -> Element<'_, Message> {
+        let body: Element<'_, Message> = match &state.editor.preview {
+            Some((_, _, content)) => iced::widget::markdown::view(
+                content.items(),
+                iced::widget::markdown::Settings::with_text_size(14, design::theme()),
+            )
+            .map(|_| Message::Chat(super::chat::Event::Link)),
+            None => text("").into(),
+        };
+        styles::vscroll(
+            container(body)
+                .padding([14, 28])
+                .max_width(860)
+                .center_x(Fill),
+        )
+        .height(Fill)
+        .into()
+    };
+    match tools::mode_of(&state.editor, &tab.document.relative) {
+        tools::ViewMode::Code => area.push(code()).into(),
+        tools::ViewMode::Preview => area.push(preview()).into(),
+        tools::ViewMode::Split => area
+            .push(
+                row![
+                    container(code()).width(iced::Length::FillPortion(1)),
+                    container(preview())
+                        .width(iced::Length::FillPortion(1))
+                        .style(styles::surface(design::BG_PANEL)),
+                ]
+                .height(Fill),
+            )
+            .into(),
+    }
 }
 
 fn key_binding(key: text_editor::KeyPress) -> Option<text_editor::Binding<Message>> {
+    if key.modifiers.alt()
+        && key.modifiers.shift()
+        && matches!(key.key.as_ref(), iced::keyboard::Key::Character(c) if c.eq_ignore_ascii_case("f"))
+    {
+        return Some(text_editor::Binding::Custom(Message::Editor(Event::Format)));
+    }
     if !key.modifiers.command() {
         return text_editor::Binding::from_key_press(key);
     }
@@ -191,10 +229,59 @@ fn breadcrumbs<'a>(state: &'a Dashboard, tab: &'a Tab) -> Element<'a, Message> {
     } else {
         "Guardar (Ctrl+S)"
     };
+    let kind = file_types::of(&tab.document.relative);
+    let badge = container(
+        row![
+            icons::icon(kind.icon, kind.tint, 12.0),
+            text(kind.language).size(11).color(kind.tint),
+        ]
+        .spacing(5)
+        .align_y(iced::Center),
+    )
+    .padding([2, 8])
+    .style(styles::chip(kind.tint));
+    let mut views = row![].spacing(1).align_y(iced::Center);
+    if tools::is_markdown(&tab.document.relative) {
+        let current = tools::mode_of(&state.editor, &tab.document.relative);
+        for (mode, icon, tip) in [
+            (tools::ViewMode::Code, "code", "Ver el código"),
+            (tools::ViewMode::Preview, "eye", "Ver la vista previa"),
+            (
+                tools::ViewMode::Split,
+                "columns",
+                "Código y vista previa lado a lado",
+            ),
+        ] {
+            views = views.push(styles::tip(
+                button(icons::icon(
+                    icon,
+                    if mode == current {
+                        design::ACCENT
+                    } else {
+                        design::MUTED
+                    },
+                    15.0,
+                ))
+                .padding(5)
+                .style(styles::ghost(mode == current))
+                .on_press(Message::Editor(Event::Mode(mode))),
+                tip,
+                tooltip::Position::Bottom,
+            ));
+        }
+    }
     container(
         row![
             trail,
+            badge,
             Space::new().width(Fill),
+            views,
+            tool(
+                "wand",
+                "Formatear (Alt+Mayús+F)",
+                design::MUTED,
+                Event::Format
+            ),
             tool("save", save_label, save_tint, Event::Save),
             tool("undo", "Deshacer (Ctrl+Z)", design::MUTED, Event::Undo),
             tool("redo", "Rehacer (Ctrl+Y)", design::MUTED, Event::Redo),
@@ -209,7 +296,7 @@ fn breadcrumbs<'a>(state: &'a Dashboard, tab: &'a Tab) -> Element<'a, Message> {
                 Event::Search
             ),
         ]
-        .spacing(2)
+        .spacing(6)
         .align_y(iced::Center),
     )
     .padding([3, 12])

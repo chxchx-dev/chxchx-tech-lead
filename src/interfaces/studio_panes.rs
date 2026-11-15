@@ -17,6 +17,8 @@ pub(super) enum Content {
     /// A terminal session by tab id; `None` is the placeholder before one exists.
     Terminal(Option<u64>),
     Activity,
+    /// The local models tab (Ollama).
+    Local,
 }
 
 /// The tabs of one pane and which of them shows.

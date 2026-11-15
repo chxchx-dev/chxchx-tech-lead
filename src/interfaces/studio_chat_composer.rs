@@ -1,6 +1,6 @@
 //! The message box of a chat: attachments, text and the send/stop button.
 use super::super::*;
-use super::{Chat, Event, cards, images, send};
+use super::{Chat, Event, cards, images, send, slash};
 use iced::widget::{column, text_editor, tooltip};
 
 pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
@@ -8,8 +8,9 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
     let has_content = !chat.composer.text().trim().is_empty() || !chat.images.is_empty();
     let ready = has_content && !running && !chat.preparing && chat.problem.is_none();
     let (to_edit, to_keys) = (super::sender(), super::sender());
+    let menu_open = slash::menu(chat).is_some();
     let editor = text_editor(&chat.composer)
-        .placeholder("Escribe un mensaje o pega una captura…")
+        .placeholder("Escribe un mensaje, / para comandos, o pega una captura…")
         .on_action(move |action| to_edit(Event::Edit(action)))
         .height(iced::Length::Shrink)
         .min_height(40)
@@ -23,7 +24,11 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
             let paste = key.modifiers.command()
                 && matches!(key.key.as_ref(), Key::Character(c) if c.eq_ignore_ascii_case("v"));
             if enter && !key.modifiers.shift() {
-                Some(text_editor::Binding::Custom(to_keys(Event::Send)))
+                Some(text_editor::Binding::Custom(to_keys(if menu_open {
+                    Event::SlashEnter
+                } else {
+                    Event::Send
+                })))
             } else if paste {
                 Some(text_editor::Binding::Custom(to_keys(Event::Paste)))
             } else {
@@ -58,6 +63,9 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
         )
     };
     let mut body = column![].spacing(8);
+    if let Some(menu) = slash::menu(chat) {
+        body = body.push(menu);
+    }
     if !chat.images.is_empty() {
         let mut strip = row![].spacing(8);
         for (index, image) in chat.images.iter().enumerate() {

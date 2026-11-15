@@ -3,10 +3,16 @@ pub mod chat_bridge;
 #[cfg(feature = "studio")]
 pub mod chat_images;
 pub mod executable_search;
+#[cfg(feature = "studio")]
+pub mod formatter;
 pub mod git;
+#[cfg(feature = "studio")]
+pub mod local_models;
 pub mod mcp_clients;
 pub mod mcp_codex;
 pub mod process_memory;
+#[cfg(feature = "studio")]
+pub mod slash_commands;
 #[cfg(feature = "terminal")]
 pub mod terminal;
 pub mod wake;

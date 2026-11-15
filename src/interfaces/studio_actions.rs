@@ -3,7 +3,10 @@ use super::*;
 pub(super) fn update(state: &mut Dashboard, message: Message) -> Task<Message> {
     let high_frequency = matches!(
         &message,
-        Message::Terminal(terminal::Event::Tick) | Message::Chat(chat::Event::Tick) | Message::Wake
+        Message::Terminal(terminal::Event::Tick)
+            | Message::Chat(chat::Event::Tick)
+            | Message::Local(local::Event::Tick)
+            | Message::Wake
     );
     let task = dispatch(state, message);
     state.shell.refresh_memory();
@@ -18,6 +21,7 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
         return Task::batch([
             terminal::update(state, terminal::Event::Tick),
             chat::update(state, chat::Event::Tick),
+            local::update(state, local::Event::Tick),
         ]);
     }
     if let Message::Terminal(event) = message {
@@ -29,10 +33,20 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
     if let Message::Chat(event) = message {
         return chat::update(state, event);
     }
+    if let Message::Local(event) = message {
+        return local::update(state, event);
+    }
     if let Message::Agents(event) = message {
         return agents::update(state, event);
     }
     if let Message::Editor(event) = message {
+        // A file opens in the editor tab, which may be hidden behind a chat or terminal tab.
+        if matches!(
+            event,
+            editor::Event::Open(_) | editor::Event::OpenAt(..) | editor::Event::OpenText(..)
+        ) {
+            state.panes.show(panes::Content::Editor);
+        }
         return editor::update(state, event);
     }
     if let Message::Shell(event) = message {
@@ -70,6 +84,7 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
         | Message::Terminal(_)
         | Message::Agents(_)
         | Message::Chat(_)
+        | Message::Local(_)
         | Message::Panes(_)
         | Message::Wake
         | Message::Shell(_)

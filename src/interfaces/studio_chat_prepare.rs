@@ -1,5 +1,6 @@
 //! Opening a chat: finding the CLI, the saved conversation and the agent's models.
 use super::*;
+use crate::integrations::slash_commands;
 
 pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
     panes::show_chat(state, &agent.id);
@@ -31,6 +32,7 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
         rendered: Vec::new(),
         picks: Vec::new(),
         problem: None,
+        commands: Vec::new(),
     });
     state.chat.active = state.chat.chats.len() - 1;
     let root = state.root.clone();
@@ -45,8 +47,14 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
                         Some(cli.clone()),
                         bridge::restore_chat(cli, &root, &agent.id),
                         bridge::agent_options(cli, &root, &agent.id),
+                        slash_commands::discover(&root, &agent.id),
                     ),
-                    None => (None, Err(bridge::missing_cli_hint()), Err(String::new())),
+                    None => (
+                        None,
+                        Err(bridge::missing_cli_hint()),
+                        Err(String::new()),
+                        slash_commands::discover(&root, &agent.id),
+                    ),
                 }
             })
             .await
@@ -55,6 +63,7 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
                     None,
                     Err("No se pudo preparar el chat".into()),
                     Err(String::new()),
+                    Vec::new(),
                 )
             })
         },
@@ -68,7 +77,7 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
 }
 
 pub(super) fn prepared_for(state: &mut Dashboard, id: &str, prepared: &Prepared) {
-    let (cli, saved, options) = prepared;
+    let (cli, saved, options, commands) = prepared;
     if cli.is_some() {
         state.chat.cli = cli.clone();
     }
@@ -76,6 +85,7 @@ pub(super) fn prepared_for(state: &mut Dashboard, id: &str, prepared: &Prepared)
         return;
     };
     chat.preparing = false;
+    chat.commands = commands.clone();
     match saved {
         Ok(saved) => {
             chat.model.session_id = saved.session_id.clone();

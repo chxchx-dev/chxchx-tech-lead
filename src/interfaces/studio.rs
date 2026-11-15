@@ -39,6 +39,8 @@ mod jobs;
 mod layout;
 #[path = "studio_learning.rs"]
 mod learning;
+#[path = "studio_local.rs"]
+mod local;
 #[path = "studio_menu.rs"]
 mod menu;
 #[path = "studio_pages.rs"]
@@ -112,6 +114,7 @@ use std::path::{Path, PathBuf};
 struct Dashboard {
     panes: panes::State,
     chat: chat::State,
+    local: local::State,
     terminal: terminal::State,
     agents: agents::State,
     editor: editor::State,
@@ -145,6 +148,7 @@ enum Message {
     Terminal(terminal::Event),
     Agents(agents::Event),
     Chat(chat::Event),
+    Local(local::Event),
     Panes(panes::Event),
     /// A reader thread has data (terminal output, an agent's answer).
     Wake,
@@ -247,6 +251,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                     ..agents::State::default()
                 },
                 chat: chat::State::default(),
+                local: local::State::default(),
                 panes: panes::State::default(),
                 editor: editor::State::new(),
                 shell: shell::State::default(),
@@ -336,6 +341,12 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 }
                 _ => None,
             }));
+        }
+        if state.local.busy() {
+            subscriptions.push(
+                iced::time::every(std::time::Duration::from_secs(2))
+                    .map(|_| Message::Local(local::Event::Tick)),
+            );
         }
         if state.chat.busy() {
             // Safety net only: the agent's output wakes the window by itself.

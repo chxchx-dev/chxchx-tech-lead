@@ -74,3 +74,14 @@ fn closing_tabs_keeps_the_editor_and_drops_groups_that_end_up_empty() {
     assert_eq!(state.grid.get(pane).unwrap().tabs, [Content::Editor]);
     assert_eq!(state.grid.get(pane).unwrap().active, 0);
 }
+
+#[test]
+fn showing_the_editor_brings_it_back_over_a_chat_tab() {
+    let mut state = State::default();
+    state.show(chat("claude"));
+    let pane = state.show(Content::Editor);
+    assert_eq!(
+        state.grid.get(pane).unwrap().current(),
+        Some(&Content::Editor)
+    );
+}

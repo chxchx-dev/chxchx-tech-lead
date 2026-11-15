@@ -5,7 +5,7 @@ fn trusted(state: &Dashboard) -> bool {
     state.overview.as_ref().is_ok_and(|p| p.workspace.trusted)
 }
 
-pub(super) fn submit(state: &mut Dashboard) {
+pub(super) fn submit(state: &mut Dashboard) -> Task<Message> {
     let text = state
         .chat
         .active_chat()
@@ -16,15 +16,26 @@ pub(super) fn submit(state: &mut Dashboard) {
         .active_chat()
         .is_some_and(|c| !c.images.is_empty());
     if text.is_empty() && !has_images {
-        return;
+        return Task::none();
     }
-    if start_turn(state, &text, true) {
+    let (prompt, display) = match slash::resolve(state, &text) {
+        slash::Outcome::Done(task) => return task,
+        slash::Outcome::Send(prompt, display) => (prompt, Some(display)),
+        slash::Outcome::Plain => (text, None),
+    };
+    if start_turn_as(state, &prompt, display.as_deref(), true) {
         with_chat(state, |chat| chat.composer = text_editor::Content::new());
     }
+    Task::none()
 }
 
 /// Starts a turn with `prompt`; false when it could not start (the reason is shown).
 fn start_turn(state: &mut Dashboard, prompt: &str, show: bool) -> bool {
+    start_turn_as(state, prompt, None, show)
+}
+
+/// Like `start_turn`, with the text the transcript shows when it differs from what the agent reads.
+fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, show: bool) -> bool {
     if !trusted(state) {
         state.message = "Concede confianza al proyecto para hablar con un agente.".into();
         return false;
@@ -62,7 +73,8 @@ fn start_turn(state: &mut Dashboard, prompt: &str, show: bool) -> bool {
     match Turn::start(&cli, &spec) {
         Ok(turn) => {
             if show {
-                chat.model.add_user(shown(prompt, attached.len()));
+                chat.model
+                    .add_user(shown(display.unwrap_or(prompt), attached.len()));
                 if !attached.is_empty() {
                     chat.sent.push((chat.model.entries.len() - 1, attached));
                 }

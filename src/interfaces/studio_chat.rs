@@ -12,6 +12,8 @@ use std::path::PathBuf;
 #[path = "studio_chat_images.rs"]
 mod images;
 use images::Image;
+#[path = "studio_chat_art.rs"]
+mod art;
 #[path = "studio_chat_asks.rs"]
 mod asks;
 #[path = "studio_chat_cards.rs"]
@@ -24,6 +26,8 @@ mod models;
 mod perms;
 #[path = "studio_chat_prepare.rs"]
 mod prepare;
+#[path = "studio_chat_slash.rs"]
+mod slash;
 #[path = "studio_chat_usage.rs"]
 mod usage;
 use prepare::{open, prepared_for, sync};
@@ -101,6 +105,8 @@ pub(super) struct Chat {
     pub picks: Vec<(usize, usize, String)>,
     /// Why the chat cannot talk to the agent (no CLI, no trust…).
     pub problem: Option<String>,
+    /// Skills and commands the project gives this agent (`/name`).
+    pub commands: Vec<crate::integrations::slash_commands::Found>,
 }
 
 #[derive(Default)]
@@ -128,6 +134,7 @@ type Prepared = (
     Option<PathBuf>,
     Result<SavedChat, String>,
     Result<AgentOptions, String>,
+    Vec<crate::integrations::slash_commands::Found>,
 );
 
 #[derive(Clone, Debug)]
@@ -165,6 +172,10 @@ pub(super) enum Event {
     Permissions,
     /// Opens or closes the model picker.
     ModelMenu,
+    /// A `/command` picked in the menu.
+    Slash(String),
+    /// Enter while the `/` menu is open.
+    SlashEnter,
     ModelQuery(String),
     /// Sends the last message again.
     Retry,
@@ -197,7 +208,13 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             return update(state, *inner);
         }
         Event::Tick => tick(state),
-        Event::Send => submit(state),
+        Event::Send => return submit(state),
+        Event::Slash(name) => with_chat(state, |chat| slash::complete(chat, &name)),
+        Event::SlashEnter => {
+            if !slash::enter(state) {
+                return submit(state);
+            }
+        }
         Event::Stop => with_chat(state, |chat| {
             if let Some(turn) = chat.turn.as_mut() {
                 turn.cancel();

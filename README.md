@@ -56,6 +56,8 @@ Cada agente se abre de dos formas, lado a lado: un **chat visual** y una **termi
 - **Uso a la vista:** tokens, coste, contexto y límites del plan; el contexto se libera solo al llegar al 90 %.
 - **Imágenes:** pega una captura (`Ctrl+V`), arrástrala o adjúntala; se reduce a lo que el modelo aprovecha y el
   agente va directo a lo que muestra.
+- **Modelos locales (Ollama):** una pestaña que diagnostica tu equipo (memoria, GPU, disco), recomienda los modelos
+  que caben y los instala y conecta a OpenCode con progreso, vista previa y respaldo.
 - **Terminal real:** emulación VT completa con colores, historial, teclado entero y varias sesiones.
 - **Pestañas y paneles, como en VS Code:** chats, terminales y el editor conviven como pestañas de un mismo grupo;
   saca una pestaña a su propio panel con un clic, o arrastra un panel al borde de otro para dividir y al centro

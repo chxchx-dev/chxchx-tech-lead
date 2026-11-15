@@ -21,7 +21,7 @@ pub const CLI_ENV: &str = "CHXCHX_TECH_CLI";
 /// What a CLI must print for `agent chat --help` to be the one that speaks the chat protocol.
 const PROTOCOL_MARK: &str = "--live";
 
-fn command(cli: &Path) -> Command {
+pub(super) fn command(cli: &Path) -> Command {
     let mut command = Command::new(cli);
     // Python writes the console's code page to a pipe on Windows; the protocol is UTF-8.
     command
@@ -38,7 +38,7 @@ fn command(cli: &Path) -> Command {
 }
 
 /// Runs a short command and returns its stdout, giving up after `limit`.
-fn run_short(mut process: Command, limit: Duration) -> Result<(i32, String), String> {
+pub(super) fn run_short(mut process: Command, limit: Duration) -> Result<(i32, String), String> {
     let mut child = process
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

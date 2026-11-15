@@ -256,3 +256,15 @@ fn model_options_and_saved_chats_are_read_from_the_cli_output() {
     );
     assert!(parse_saved_chat(r#"{"schema":"otro"}"#).is_err());
 }
+
+#[test]
+#[ignore = "needs the real CLI and agents installed"]
+fn real_options_load() {
+    let root = std::env::current_dir().unwrap();
+    let cli = find_cli(&root).expect("cli");
+    for agent in ["opencode", "claude", "codex"] {
+        let options = agent_options(&cli, &root, agent);
+        eprintln!("{agent}: {:?}", options.as_ref().map(|o| o.models.len()));
+        assert!(options.is_ok(), "{agent}: {options:?}");
+    }
+}

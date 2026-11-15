@@ -1,7 +1,9 @@
 //! The chat page: header with the controls, transcript, usage bar and composer.
 use super::super::agents;
 use super::super::*;
-use super::{ACCESS, Chat, Event, VISIBLE_ENTRIES, cards, composer, models, perms, send, usage};
+use super::{
+    ACCESS, Chat, Event, VISIBLE_ENTRIES, art, cards, composer, models, perms, send, usage,
+};
 use iced::widget::{column, tooltip};
 
 pub(in crate::interfaces::studio) fn view<'a>(
@@ -121,9 +123,9 @@ fn welcome(chat: &Chat) -> Element<'_, Message> {
         );
     }
     column![
-        agents::avatar(chat.agent.provider, 40.0),
+        art::banner(chat.agent.provider, chat.agent.label()),
         text(format!("Chat con {}", chat.agent.label()))
-            .size(20)
+            .size(14)
             .font(design::UI_BOLD),
         text("Escribe, pega una captura (Ctrl+V) o arrastra imágenes aquí. El agente te pedirá permiso en este chat antes de hacer algo que tu nivel de acceso no cubra, y puedes cambiarlo cuando quieras en «Permisos».")
             .size(12)
@@ -175,8 +177,14 @@ fn chip<'a>(
             .spacing(6)
             .align_y(iced::Center),
         )
-        .padding([4, 9])
-        .style(styles::ghost(open))
+        .padding([5, 10])
+        .style(move |theme, status| {
+            if open {
+                styles::ghost(true)(theme, status)
+            } else {
+                styles::secondary(theme, status)
+            }
+        })
         .on_press(message),
         tip,
         tooltip::Position::Bottom,
@@ -245,10 +253,22 @@ fn header<'a>(chat: &'a Chat) -> Element<'a, Message> {
             send(Event::ModelMenu),
             "Elegir modelo y esfuerzo",
         ));
-        if let Some(effort) = &chat.effort {
+        let has_efforts = chat
+            .options
+            .as_ref()
+            .and_then(|o| {
+                o.models
+                    .iter()
+                    .find(|m| Some(&m.id) == chat.model_id.as_ref())
+            })
+            .is_some_and(|m| !m.efforts.is_empty());
+        if has_efforts || chat.effort.is_some() {
             chips = chips.push(chip(
                 "activity",
-                effort.clone(),
+                format!(
+                    "Esfuerzo: {}",
+                    chat.effort.as_deref().unwrap_or("automático")
+                ),
                 chat.models_open,
                 false,
                 send(Event::ModelMenu),

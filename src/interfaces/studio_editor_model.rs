@@ -26,6 +26,9 @@ pub(in crate::interfaces::studio) struct State {
     pub exiting: bool,
     /// Match to select once the file requested by a search result has loaded.
     pub pending_cursor: Option<(PathBuf, usize, usize, usize)>,
+    /// Code or Preview of each Markdown file, and the parsed preview of the open one.
+    pub modes: BTreeMap<PathBuf, super::tools::ViewMode>,
+    pub preview: Option<(PathBuf, u64, iced::widget::markdown::Content)>,
 }
 
 impl State {
@@ -44,6 +47,8 @@ impl State {
             closing: None,
             exiting: false,
             pending_cursor: None,
+            modes: BTreeMap::new(),
+            preview: None,
         }
     }
 }
@@ -181,6 +186,7 @@ pub(in crate::interfaces::studio) fn fixture() -> Dashboard {
         terminal: Default::default(),
         agents: Default::default(),
         chat: Default::default(),
+        local: Default::default(),
         panes: Default::default(),
         shell: Default::default(),
         catalog: Default::default(),
