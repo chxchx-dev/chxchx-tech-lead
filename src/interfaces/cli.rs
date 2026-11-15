@@ -1,15 +1,43 @@
-use crate::features::project_overview::inspect_project;
+use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[path = "cli_catalog.rs"]
 mod catalog;
+#[path = "cli_style.rs"]
+mod style;
+#[path = "cli_view.rs"]
+mod view;
+
+use style::Ui;
+
+/// Colors of `--help` (clap only paints them when the output is a terminal that wants color).
+const HELP_STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+    .usage(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+    .literal(AnsiColor::Green.on_default().effects(Effects::BOLD))
+    .placeholder(AnsiColor::Blue.on_default())
+    .valid(AnsiColor::Green.on_default())
+    .invalid(AnsiColor::Red.on_default().effects(Effects::BOLD))
+    .error(AnsiColor::Red.on_default().effects(Effects::BOLD));
+
+const EXAMPLES: &str = "Ejemplos:
+  chxchx-tech status .             Resume el proyecto sin escribir nada
+  chxchx-tech init . --apply       Prepara el proyecto (antes, sin --apply, solo la vista previa)
+  chxchx-tech workspace trust .    Decide si los agentes pueden ejecutar procesos aquí
+  chxchx-tech skills list .        Skills recomendadas para tu stack
+  chxchx-tech doctor .             Qué herramientas faltan
+  chxchx-tech tui .                El mismo panel en una terminal interactiva
+
+Todo cambio muestra una vista previa; `--apply` la confirma. `status --json` imprime el contrato versionado.";
 
 #[derive(Debug, Parser)]
 #[command(
     name = "chxchx-tech",
     version,
-    about = "Control plane local para proyectos de desarrollo asistido"
+    about = "Control plane local para proyectos de desarrollo asistido",
+    styles = HELP_STYLES,
+    after_help = EXAMPLES
 )]
 struct Arguments {
     #[command(subcommand)]
@@ -151,36 +179,43 @@ enum ProjectsCommand {
     },
 }
 
+/// Prints a failure the way the terminal can show it: `Error: …`, in red when it can.
+pub fn report_error(error: &str) {
+    let ui = Ui::stderr();
+    eprintln!("{} {error}", ui.strong(style::Tone::Red, "Error:"));
+}
+
 pub fn run() -> Result<(), String> {
     let args = Arguments::parse();
+    let ui = Ui::stdout();
     match args.command {
-        Command::Status { path, json } => show_status(&path, json),
+        Command::Status { path, json } => view::status(&ui, &path, json),
         Command::Init {
             path,
             dry_run,
             apply,
             minimal,
-        } => show_init(&path, apply && !dry_run, minimal),
-        Command::Rollback { path, apply } => show_rollback(&path, apply),
+        } => view::init(&ui, &path, apply && !dry_run, minimal),
+        Command::Rollback { path, apply } => view::rollback(&ui, &path, apply),
         Command::Workspace { command } => match command {
-            WorkspaceCommand::Trust { path, apply } => show_trust(&path, true, apply),
-            WorkspaceCommand::Untrust { path, apply } => show_trust(&path, false, apply),
+            WorkspaceCommand::Trust { path, apply } => view::trust(&ui, &path, true, apply),
+            WorkspaceCommand::Untrust { path, apply } => view::trust(&ui, &path, false, apply),
         },
         Command::Projects { command } => match command {
-            ProjectsCommand::List => show_projects_list(),
-            ProjectsCommand::Current => show_current_project(),
-            ProjectsCommand::Sync { apply } => show_projects_sync(apply),
+            ProjectsCommand::List => view::projects_list(&ui),
+            ProjectsCommand::Current => view::projects_current(&ui),
+            ProjectsCommand::Sync { apply } => view::projects_sync(&ui, apply),
         },
         Command::Integrate {
             path,
             client,
             refresh,
             apply,
-        } => show_integrate(&path, &client, refresh, apply),
-        Command::Skills { command } => catalog::skills(command),
-        Command::Packs { command } => catalog::packs(command),
-        Command::Mods { command } => catalog::mods(command),
-        Command::Doctor { path } => show_doctor(&path),
+        } => view::integrate(&ui, &path, &client, refresh, apply),
+        Command::Skills { command } => catalog::skills(&ui, command),
+        Command::Packs { command } => catalog::packs(&ui, command),
+        Command::Mods { command } => catalog::mods(&ui, command),
+        Command::Doctor { path } => view::doctor(&ui, &path),
         #[cfg(feature = "tui")]
         Command::Tui { path } => crate::interfaces::tui::run(path),
         #[cfg(feature = "studio")]
@@ -188,351 +223,8 @@ pub fn run() -> Result<(), String> {
             StudioCommand::Open { path } => crate::interfaces::studio::run(path),
         },
         Command::Version => {
-            println!("ChxChx Tech {}", env!("CARGO_PKG_VERSION"));
+            view::version(&ui);
             Ok(())
         }
-    }
-}
-
-fn show_doctor(path: &std::path::Path) -> Result<(), String> {
-    let report = crate::features::doctor::diagnose_project(path)?;
-    println!("{}", report.render());
-    Ok(())
-}
-
-fn show_projects_list() -> Result<(), String> {
-    let catalog = crate::features::project_catalog::inspect_registered_projects()?;
-    if catalog.projects.is_empty() {
-        println!("No hay proyectos registrados.");
-        return Ok(());
-    }
-    println!("Alias | Nombre | Perfil | Stacks | Estado | Ruta");
-    for project in catalog.projects {
-        let state = match (project.available, project.is_current) {
-            (true, true) => "disponible · último",
-            (true, false) => "disponible",
-            (false, _) => "no encontrado",
-        };
-        println!(
-            "{} | {} | {} | {} | {} | {}",
-            project.alias,
-            project.name,
-            project.profile,
-            if project.stacks.is_empty() {
-                "ninguno".to_owned()
-            } else {
-                project.stacks.join(", ")
-            },
-            state,
-            project.path.as_deref().unwrap_or("<ruta ausente>")
-        );
-    }
-    Ok(())
-}
-
-fn show_current_project() -> Result<(), String> {
-    let catalog = crate::features::project_catalog::inspect_registered_projects()?;
-    if let Some(project) = catalog.current {
-        println!("✓ {}: {}", project.alias, project.path);
-    } else {
-        println!("No hay un último proyecto disponible.");
-    }
-    Ok(())
-}
-
-fn show_projects_sync(apply: bool) -> Result<(), String> {
-    let plan = crate::features::project_sync::plan_projects_sync()?;
-    println!("Sincronización de proyectos registrados:");
-    for entry in &plan.entries {
-        println!("\n{} · {}", entry.alias, entry.project_root);
-        if let Some(reason) = &entry.blocked_reason {
-            println!("  Omitido: {reason}");
-        } else if entry.changes.is_empty() {
-            println!("  Sin cambios.");
-        } else {
-            for action in &entry.changes {
-                println!("  • {action}");
-            }
-        }
-    }
-    if !apply {
-        for warning in &plan.warnings {
-            println!("Aviso: {warning}");
-        }
-    }
-    if !apply {
-        if plan.entries.iter().any(|entry| !entry.changes.is_empty()) {
-            println!("\nVista previa: vuelve a ejecutar con `projects sync --apply`.");
-        } else {
-            println!("\nNo hay cambios aplicables.");
-        }
-        return Ok(());
-    }
-
-    let result = crate::features::project_sync::apply_projects_sync(&plan)?;
-    if result.outcomes.is_empty() && result.warnings.is_empty() {
-        println!("No hay cambios aplicables.");
-    }
-    for outcome in result.outcomes {
-        if outcome.changed_files.is_empty() {
-            println!("✓ {} · sin cambios", outcome.project_root);
-        } else {
-            println!("✓ {} · sincronizado", outcome.project_root);
-            for file in outcome.changed_files {
-                println!("  • {file}");
-            }
-            if let Some(backup) = outcome.backup {
-                println!("  Backup: {backup}");
-            }
-        }
-    }
-    for warning in &result.warnings {
-        println!("Aviso: {warning}");
-    }
-    if !result.warnings.is_empty() {
-        return Err("La sincronización terminó parcialmente; revisa los avisos".to_owned());
-    }
-    Ok(())
-}
-
-fn show_integrate(
-    path: &std::path::Path,
-    client: &str,
-    refresh: bool,
-    apply: bool,
-) -> Result<(), String> {
-    let clients = crate::features::mcp_setup::McpClient::parse(client)?;
-    let plan = crate::features::mcp_setup::plan_mcp_integration(path, &clients, refresh)?;
-    println!("Integración MCP: {}", plan.project_root);
-    println!("Clientes: {}", plan.client_labels.join(", "));
-    for action in &plan.actions {
-        println!("• {action}");
-    }
-    if !apply {
-        for warning in &plan.warnings {
-            println!("Aviso: {warning}");
-        }
-    }
-    if let Some(reason) = &plan.blocked_reason {
-        println!("No se puede aplicar: {reason}");
-        if apply {
-            return Err("Integración MCP bloqueada; no se aplicaron cambios".to_owned());
-        }
-        return Ok(());
-    }
-    if !apply {
-        println!(
-            "\nVista previa: usa `integrate {} --client {client}{} --apply` para configurar.",
-            path.display(),
-            if refresh { " --refresh" } else { "" }
-        );
-        return Ok(());
-    }
-    let result = crate::features::mcp_setup::apply_mcp_integration(&plan)?;
-    for action in result.completed {
-        println!("✓ {action}");
-    }
-    for warning in &result.warnings {
-        println!("Aviso: {warning}");
-    }
-    if !result.warnings.is_empty() {
-        return Err("La integración MCP se aplicó parcialmente; revisa los avisos".to_owned());
-    }
-    Ok(())
-}
-
-fn show_trust(path: &std::path::Path, desired: bool, apply: bool) -> Result<(), String> {
-    let plan = crate::features::project_trust::plan_project_trust(path, desired)?;
-    let operation = if desired { "Trust" } else { "Revocar trust" };
-    println!("{operation}: {}", plan.project_root);
-    println!(
-        "Estado actual: {}",
-        if plan.currently_trusted {
-            "confiable"
-        } else {
-            "no confiable"
-        }
-    );
-    for action in &plan.actions {
-        println!("• {action}");
-    }
-    if let Some(reason) = &plan.blocked_reason {
-        println!("No se puede aplicar: {reason}");
-        if apply {
-            return Err("Cambio de confianza bloqueado; no se aplicaron cambios".to_owned());
-        }
-        return Ok(());
-    }
-    if apply {
-        let changed = plan.changes_state;
-        let backup = crate::features::project_trust::apply_project_trust(&plan)?;
-        if changed {
-            println!("\nDecisión de confianza guardada explícitamente.");
-        } else {
-            println!("\nSin cambios; la confianza ya estaba en ese estado.");
-        }
-        if let Some(backup) = backup {
-            println!("Backup: {backup}");
-        }
-    } else {
-        let action = if desired { "trust" } else { "untrust" };
-        println!(
-            "\nVista previa: usa `workspace {action} {} --apply` para guardar.",
-            path.display()
-        );
-    }
-    Ok(())
-}
-
-fn show_rollback(path: &std::path::Path, apply: bool) -> Result<(), String> {
-    let plan = crate::features::project_rollback::plan_project_rollback(path)?;
-    println!("Rollback del proyecto: {}", plan.project_root);
-    println!("Backup seleccionado: {}", plan.backup_path);
-    for action in &plan.actions {
-        println!("• {action}");
-    }
-    if let Some(reason) = &plan.blocked_reason {
-        println!("No se puede aplicar: {reason}");
-        if apply {
-            return Err("Rollback bloqueado; no se aplicaron cambios".to_owned());
-        }
-        return Ok(());
-    }
-    if apply {
-        let (actions, safety_backup) =
-            crate::features::project_rollback::apply_project_rollback(&plan)?;
-        println!("\nCambios aplicados:");
-        for action in actions {
-            println!("✓ {action}");
-        }
-        if let Some(backup) = safety_backup {
-            println!("Backup de seguridad: {backup}");
-        }
-    } else {
-        println!(
-            "\nVista previa: usa `rollback {} --apply` para restaurar.",
-            path.display()
-        );
-    }
-    Ok(())
-}
-
-fn show_init(path: &std::path::Path, apply: bool, minimal: bool) -> Result<(), String> {
-    let plan = crate::features::project_setup::plan_project_init(path, minimal)?;
-    let mode = if minimal { "compacta" } else { "completa" };
-    println!("Inicialización {mode}: {}", plan.project_root);
-    for action in &plan.actions {
-        println!("• {action}");
-    }
-    if !apply {
-        for warning in &plan.warnings {
-            println!("Aviso: {warning}");
-        }
-    }
-    if let Some(reason) = &plan.blocked_reason {
-        println!("No se puede aplicar: {reason}");
-        if apply {
-            return Err("Init bloqueado; no se aplicaron cambios".to_owned());
-        }
-        return Ok(());
-    }
-    if apply {
-        let application = crate::features::project_setup::apply_project_init(&plan)?;
-        println!("\nCambios aplicados:");
-        for action in application.completed_actions {
-            println!("✓ {action}");
-        }
-        for backup in application.backups {
-            println!("Backup: {backup}");
-        }
-        for warning in application.warnings {
-            println!("Aviso: {warning}");
-        }
-    } else {
-        let minimal_flag = if minimal { " --minimal" } else { "" };
-        println!(
-            "\nVista previa: usa `init {}{minimal_flag} --apply` para aplicar el plan.",
-            path.display(),
-        );
-    }
-    Ok(())
-}
-
-fn show_status(path: &std::path::Path, json: bool) -> Result<(), String> {
-    let overview = inspect_project(path)?;
-    if json {
-        let payload = serde_json::to_string_pretty(&overview)
-            .map_err(|error| format!("No se pudo generar el resumen JSON: {error}"))?;
-        println!("{payload}");
-    } else {
-        println!("Proyecto: {}", overview.project.name);
-        println!("Ruta: {}", overview.project.root);
-        println!("Git: {}", yes_no(overview.project.git_repository));
-        println!("Configuración: {}", config_summary(&overview));
-        println!("Confianza local: {}", yes_no(overview.workspace.trusted));
-        println!(
-            "Guías: AGENTS.md {}; CLAUDE.md {}",
-            yes_no(overview.project.has_agents_guide),
-            yes_no(overview.project.has_claude_guide)
-        );
-        println!(
-            "Marcadores: {}",
-            if overview.project.detected_markers.is_empty() {
-                "ninguno detectado".to_owned()
-            } else {
-                overview.project.detected_markers.join(", ")
-            }
-        );
-        println!("Stacks: {}", list_or_none(&overview.detection.stacks));
-        println!("Lenguajes: {}", list_or_none(&overview.detection.languages));
-        println!(
-            "Gestores de paquetes: {}",
-            list_or_none(&overview.detection.package_managers)
-        );
-        println!(
-            "Infraestructura: {}",
-            list_or_none(&overview.detection.infrastructure)
-        );
-        println!("Perfil: {}", overview.detection.profile);
-        for rule in &overview.detection.profile_rules {
-            println!("Regla del perfil: {rule}");
-        }
-        if let Some(error) = &overview.workspace.config_validation_error {
-            println!("Validación de configuración: {error}");
-        }
-    }
-    Ok(())
-}
-
-fn config_summary(overview: &crate::ProjectOverview) -> String {
-    match (
-        overview.workspace.config_exists,
-        overview.workspace.config_parseable,
-        overview.workspace.config_supported,
-    ) {
-        (false, _, _) => "sin inicializar".to_owned(),
-        (true, Some(false), _) => "TOML mal formado".to_owned(),
-        (true, Some(true), Some(false)) => "TOML legible, configuración no compatible".to_owned(),
-        (true, Some(true), Some(true)) => format!(
-            "compatible (versión {})",
-            overview
-                .workspace
-                .config_version
-                .map_or_else(|| "desconocida".to_owned(), |version| version.to_string())
-        ),
-        (true, Some(true), None) => "TOML legible, no se pudo validar".to_owned(),
-        (true, None, _) => "no se pudo leer".to_owned(),
-    }
-}
-
-fn yes_no(value: bool) -> &'static str {
-    if value { "sí" } else { "no" }
-}
-
-fn list_or_none(values: &[String]) -> String {
-    if values.is_empty() {
-        "ninguno detectado".to_owned()
-    } else {
-        values.join(", ")
     }
 }

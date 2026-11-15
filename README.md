@@ -109,11 +109,16 @@ de cambiar nada. Abre con `chxchx-tech tui .`.
 
 ## CLI
 
-Cada comando que modifica archivos muestra primero una vista previa; `--apply` confirma. La salida de `status
+Cada comando que modifica archivos muestra primero una vista previa; `--apply` confirma. En una terminal la salida va con color,
+símbolos y tablas; si la rediriges o usas `NO_COLOR`, sigue siendo el texto plano de siempre, listo para scripts. La salida de `status
 --json` cumple el esquema versionado [`schemas/project-overview-v1.schema.json`](schemas/project-overview-v1.schema.json).
 
 <p align="center">
-  <img src="assets/screenshots/cli.png" alt="CLI" width="100%">
+  <img src="assets/screenshots/cli.png" alt="CLI: estado y vista previa" width="100%">
+</p>
+<p align="center">
+  <img src="assets/screenshots/cli-doctor.png" alt="CLI: doctor" width="49%">
+  <img src="assets/screenshots/cli-catalog.png" alt="CLI: skills y Tech Packs" width="49%">
 </p>
 
 | Comando | Qué hace |

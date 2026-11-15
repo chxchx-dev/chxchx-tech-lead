@@ -277,3 +277,132 @@ fn a_project_goes_from_empty_to_prepared_and_back_with_previews_and_backups() {
     )));
     assert_eq!(status_json(&sandbox)["workspace"]["trusted"], true);
 }
+
+fn project(sandbox: &Sandbox) -> String {
+    sandbox.project.display().to_string()
+}
+
+impl Sandbox {
+    /// Runs the CLI as a terminal would, with extra environment variables. The color variables of
+    /// the machine running the tests are cleared first so the result does not depend on them.
+    fn cli_with(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chxchx-tech"));
+        command
+            .args(args)
+            .env_remove("NO_COLOR")
+            .env_remove("CLICOLOR_FORCE")
+            .env_remove("FORCE_COLOR")
+            .env("TERM", "xterm-256color")
+            .env("CHXCHX_TECH_HOME", &self.home)
+            .env("PATH", &self.bin);
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        command.output().expect("run the Rust CLI")
+    }
+}
+
+#[test]
+fn output_is_plain_when_piped_and_colored_only_when_a_terminal_asks_for_it() {
+    let sandbox = Sandbox::new();
+    assert_success(&sandbox.cli(command(&["init", "--apply"], &sandbox.project)));
+
+    // Piped (what scripts and these tests see): no escape codes, the lines they always read.
+    let plain = text(&sandbox.cli_with(&["status", &project(&sandbox)], &[]));
+    assert!(!plain.contains('\x1b'), "{plain:?}");
+    assert!(
+        plain.contains("Proyecto: ") && plain.contains("Confianza local: no"),
+        "{plain}"
+    );
+
+    // A terminal that wants color gets the richer layout with the same facts.
+    let rich = text(&sandbox.cli_with(&["status", &project(&sandbox)], &[("CLICOLOR_FORCE", "1")]));
+    assert!(rich.contains('\x1b'), "{rich:?}");
+    for fact in ["Tecnología", "Confianza local", "Perfil", "Siguiente paso"] {
+        assert!(rich.contains(fact), "{fact:?} missing from {rich}");
+    }
+
+    // NO_COLOR always wins, and JSON is never decorated.
+    let refused = text(&sandbox.cli_with(
+        &["status", &project(&sandbox)],
+        &[("CLICOLOR_FORCE", "1"), ("NO_COLOR", "1")],
+    ));
+    assert!(!refused.contains('\x1b'));
+    let json = text(&sandbox.cli_with(
+        &["status", "--json", &project(&sandbox)],
+        &[("CLICOLOR_FORCE", "1")],
+    ));
+    assert!(!json.contains('\x1b') && json.contains("chxchx.project-overview"));
+}
+
+#[test]
+fn previews_and_failures_keep_their_words_with_color() {
+    let sandbox = Sandbox::new();
+    let preview =
+        text(&sandbox.cli_with(&["init", &project(&sandbox)], &[("CLICOLOR_FORCE", "1")]));
+    assert!(
+        preview.contains("Inicialización completa") && preview.contains("Vista previa: usa `init"),
+        "{preview}"
+    );
+    assert!(
+        !sandbox.path(".ai").exists(),
+        "a colored preview still writes nothing"
+    );
+
+    // The same command with `--apply` repeats the plan and then reports what it did.
+    let applied = text(&sandbox.cli_with(
+        &["init", "--apply", &project(&sandbox)],
+        &[("CLICOLOR_FORCE", "1")],
+    ));
+    assert!(applied.contains("Cambios aplicados"), "{applied}");
+
+    let version = text(
+        &sandbox
+            .cli_with(&["version"], &[("CLICOLOR_FORCE", "1")])
+            .clone(),
+    );
+    assert!(
+        version.contains("Tech ") && version.contains('╗'),
+        "the banner: {version}"
+    );
+    let plain_version = text(&sandbox.cli_with(&["version"], &[]));
+    assert_eq!(
+        plain_version.trim(),
+        format!("ChxChx Tech {}", env!("CARGO_PKG_VERSION"))
+    );
+
+    // Errors are colored on stderr but still start with the word scripts look for.
+    let bad = sandbox.cli_with(
+        &[
+            "skills",
+            "enable",
+            "no-existe",
+            "--path",
+            &project(&sandbox),
+        ],
+        &[("CLICOLOR_FORCE", "1")],
+    );
+    assert!(!bad.status.success());
+    assert!(text(&bad).contains("Error:"), "{}", text(&bad));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_closed_pipe_ends_the_command_quietly_instead_of_panicking() {
+    use std::process::Stdio;
+    let sandbox = Sandbox::new();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_chxchx-tech"))
+        .args(["skills", "list"])
+        .arg(&sandbox.project)
+        .env("CHXCHX_TECH_HOME", &sandbox.home)
+        .env("PATH", &sandbox.bin)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start the CLI");
+    // `... | head -0`: nobody reads what the command prints.
+    drop(child.stdout.take());
+    let output = child.wait_with_output().expect("wait for the CLI");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("panicked"), "{stderr}");
+}
