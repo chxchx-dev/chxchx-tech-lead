@@ -225,8 +225,13 @@ jobs:
         run: |
           set -euo pipefail
           cd dist/release
-          tar -tzf chxchx-studio-ubuntu-x86_64.tar.gz | grep -q '/bin/chxchx-studio$'
-          unzip -l chxchx-studio-windows-x86_64.zip | grep -q 'bin/chxchx-studio.exe'
+          # The listings go to variables: `grep -q` closes the pipe at the first match and, with
+          # pipefail, the listing program would then fail with a write error.
+          linux=$(tar -tzf chxchx-studio-ubuntu-x86_64.tar.gz)
+          grep -q '/bin/chxchx-studio$' <<<"$linux" || { echo "El paquete Linux no trae bin/chxchx-studio"; exit 1; }
+          grep -q '/bin/chxchx-tech$' <<<"$linux" || { echo "El paquete Linux no trae bin/chxchx-tech"; exit 1; }
+          windows=$(unzip -l chxchx-studio-windows-x86_64.zip)
+          grep -q 'bin/chxchx-studio.exe' <<<"$windows" || { echo "El paquete Windows no trae bin/chxchx-studio.exe"; exit 1; }
           ls chxchx-studio-macos-arm64.dmg chxchx-studio-macos-x86_64.dmg chxchx_tech_lead-*.whl
       - uses: actions/upload-artifact@v4
         with:
