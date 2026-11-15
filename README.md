@@ -175,8 +175,8 @@ cargo build --release
 **Ayuda → Buscar actualizaciones…** consulta el canal que sigue tu instalación (`stable` o `dev`), descarga el
 paquete, verifica su SHA-256 y lo instala; tus proyectos y ajustes no cambian. Mantiene **una sola instalación por
 canal** (la nueva y, hasta la siguiente actualización, la que estaba abierta): no se acumulan `ChxChx Studio 0.5.2`,
-`0.5.3`… una junto a otra. Publicar: Actions → *Studio release (Rust)* → *Run workflow*, eligiendo el canal (`dev` o `stable`)
-(con `publish` desmarcado solo arma y revisa los paquetes). Las novedades de cada versión están en [CHANGELOG.md](CHANGELOG.md).
+`0.5.3`… una junto a otra. Cada push a `dev` renueva la vista previa `studio-dev-preview` (canal `dev`). Publicar la versión estable: subir un tag `vX.Y.Z` (`git tag v0.6.0 && git push origin v0.6.0`) publica esa versión estable; o Actions →
+*Studio release (Rust)* → *Run workflow* para elegir el canal (`dev` o `stable`) y, con `publish` desmarcado, solo armar y revisar los paquetes. Las novedades de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
 ## Seguridad
 
