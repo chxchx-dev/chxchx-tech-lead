@@ -35,15 +35,21 @@ para usarlos con criterio:
 
 No es un framework de agentes: es el orquestador que los prepara, los lanza y te deja ver y aprobar lo que hacen.
 
-## Tres interfaces, un mismo núcleo
+## Un solo comando, tres interfaces
 
-Las tres leen el mismo modelo del proyecto y comparten la lógica, así que ven y hacen lo mismo.
+`chxchx-tech` (o su nombre corto `chxchx`) abre todo: **sin argumentos** abre Studio si hay escritorio y, si no, el TUI;
+con una carpeta (`chxchx-tech ~/mi-proyecto`) abre ese proyecto. De ahí salen las tres interfaces, que leen el mismo modelo
+del proyecto y comparten la lógica:
 
 | | Para qué | Cómo se abre |
 |---|---|---|
-| **Studio** | Escritorio: editor, Git, agentes, chat y terminales en paneles que acomodas | `chxchx-studio` |
-| **TUI** | Un tablero rápido dentro de tu terminal | `chxchx-tech tui .` |
+| **Studio** | Escritorio: editor, Git, agentes, chat y terminales en paneles que acomodas | `chxchx-tech studio .` · `gui` |
+| **TUI** | Un tablero rápido dentro de tu terminal | `chxchx-tech tui .` · `t` |
 | **CLI** | Automatización y scripts, con salida JSON versionada | `chxchx-tech <comando>` |
+
+Atajos: `st` (status) · `dr` (doctor) · `sk` (skills) · `ws` (workspace) · `pr` (projects). Los comandos que aún viven en el
+CLI de Python (`agent`, `bridge`, `local-models`, `run`, `ci`, `deploy`…) también se escriben con `chxchx-tech`: los ejecuta
+el CLI que acompaña a la instalación, así que no hay que recordar dos programas.
 
 ## Studio
 
@@ -131,7 +137,7 @@ símbolos y tablas; si la rediriges o usas `NO_COLOR`, sigue siendo el texto pla
 | `integrate` | Configura servidores MCP para los clientes instalados |
 | `doctor` | Diagnostica herramientas y configuración sin ejecutar comandos |
 | `projects` | Proyectos registrados |
-| `tui` · `studio` | Abren las otras interfaces |
+| `tui` · `studio` | Abren las otras interfaces (también `chxchx-tech` a secas) |
 
 ## Instalación
 

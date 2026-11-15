@@ -2,6 +2,12 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Un solo comando `chxchx-tech` (2026-11-15)
+
+- `chxchx-tech` sin argumentos abre Studio (escritorio, sin SSH) o el TUI (terminal) o la ayuda (tubería); `chxchx-tech <carpeta>` abre esa carpeta. Alias: `st dr sk ws pr t gui`, y `skill/pack/mod` en singular como el CLI de Python. `chxchx` es el mismo binario (`src/bin/chxchx.rs`).
+- Lo que aún es del CLI de Python (`agent`, `bridge`, `local-models`, `run`, `ci`…) se delega (`interfaces/cli_launch.rs`, `chat_bridge::legacy_cli`): `CHXCHX_TECH_CLI` primero, luego un `.venv`, y nunca el propio ejecutable; `CHXCHX_DELEGATED=1` corta cualquier bucle.
+- Instalación: el shim `chxchx-tech` (y el nuevo `chxchx`) apunta al binario Rust del paquete (`bin/chxchx-tech`, `Contents/MacOS/chxchx-tech`) y exporta `CHXCHX_TECH_CLI` con el Python como ayudante. Parcheados `install.sh`, `install.ps1` y `studio_update_launcher._rewrite_shim` (con tests); la prueba del bash se hizo con una instalación simulada, **`install.ps1` no se ha ejecutado** (sin PowerShell aquí) ni nada en macOS/Windows.
+
 ## CLI con color y diseño (2026-11-15)
 
 - `interfaces/cli_style.rs` (`Ui`: color, glifos, banner) y `cli_view.rs` (lo que imprime cada comando; antes estaba en `cli.rs`). **Salida redirigida, `NO_COLOR` o `TERM=dumb` = el texto plano de siempre** (byte a byte); `CLICOLOR_FORCE`/`FORCE_COLOR` fuerzan el color. Truecolor si `COLORTERM`, si no los 16 colores; en Windows activa el modo VT o cae a plano.

@@ -406,3 +406,92 @@ fn a_closed_pipe_ends_the_command_quietly_instead_of_panicking() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!stderr.contains("panicked"), "{stderr}");
 }
+
+/// A terminal-less run on a machine with no desktop: nothing may open a window in a test.
+fn headless(sandbox: &Sandbox, program: &str, args: &[&str], env: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .env_remove("DISPLAY")
+        .env_remove("WAYLAND_DISPLAY")
+        .env("SSH_CONNECTION", "test")
+        .env("CHXCHX_TECH_HOME", &sandbox.home)
+        .env("PATH", &sandbox.bin);
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    command.output().expect("run the CLI")
+}
+
+#[test]
+fn one_command_serves_everything_and_a_pipe_gets_the_help() {
+    let sandbox = Sandbox::new();
+    let tech = env!("CARGO_BIN_EXE_chxchx-tech");
+    let help = text(&headless(&sandbox, tech, &[], &[]));
+    for word in [
+        "Con un solo comando",
+        "chxchx-tech ~/mi-proyecto",
+        "Atajos: st",
+    ] {
+        assert!(help.contains(word), "{word:?} missing from {help}");
+    }
+    // The short name is the same program.
+    let short = text(&headless(
+        &sandbox,
+        env!("CARGO_BIN_EXE_chxchx"),
+        &["--version"],
+        &[],
+    ));
+    assert!(short.contains(env!("CARGO_PKG_VERSION")), "{short}");
+    // Short names and the singular spellings of the old CLI.
+    let project = sandbox.project.display().to_string();
+    for words in [
+        vec!["st", &project],
+        vec!["skill", "list", &project],
+        vec!["pack", "list", &project],
+    ] {
+        let out = headless(&sandbox, tech, &words, &[]);
+        assert!(out.status.success(), "{words:?}: {}", text(&out));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn commands_of_the_legacy_cli_are_handed_over_with_their_arguments_and_exit_code() {
+    use std::os::unix::fs::PermissionsExt;
+    let sandbox = Sandbox::new();
+    let legacy = sandbox.root.join("legacy-cli");
+    fs::write(
+        &legacy,
+        "#!/bin/sh\necho \"legacy: $* (delegated=$CHXCHX_DELEGATED)\"\nexit 3\n",
+    )
+    .unwrap();
+    fs::set_permissions(&legacy, fs::Permissions::from_mode(0o755)).unwrap();
+    let tech = env!("CARGO_BIN_EXE_chxchx-tech");
+    let env = [("CHXCHX_TECH_CLI", legacy.to_str().unwrap())];
+
+    let out = headless(&sandbox, tech, &["agent", "chat", "claude", "--live"], &env);
+    assert_eq!(out.status.code(), Some(3), "the legacy exit code is ours");
+    assert!(
+        text(&out).contains("legacy: agent chat claude --live (delegated=1)"),
+        "{}",
+        text(&out)
+    );
+
+    // A legacy CLI that sends the command back must not start a loop.
+    let looped = headless(
+        &sandbox,
+        tech,
+        &["agent"],
+        &[
+            ("CHXCHX_DELEGATED", "1"),
+            ("CHXCHX_TECH_CLI", legacy.to_str().unwrap()),
+        ],
+    );
+    assert_eq!(looped.status.code(), Some(1));
+    assert!(
+        text(&looped).contains("no es un comando de ChxChx"),
+        "{}",
+        text(&looped)
+    );
+}

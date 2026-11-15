@@ -115,7 +115,9 @@ do_uninstall() {
   for link in "$LOCAL_BIN/chxchx-studio" "$LOCAL_BIN/chxchx-studio-dev"; do
     if is_managed_file "$link" CHXCHX_STUDIO_LAUNCHER CHXCHX_STUDIO_DEV_LAUNCHER; then remove_path "$link"; fi
   done
-  if is_managed_file "$LOCAL_BIN/chxchx-tech" CHXCHX_CLI_SHIM; then remove_path "$LOCAL_BIN/chxchx-tech"; fi
+  for shim in "$LOCAL_BIN/chxchx-tech" "$LOCAL_BIN/chxchx"; do
+    if is_managed_file "$shim" CHXCHX_CLI_SHIM; then remove_path "$shim"; fi
+  done
   for link in "$DATA_HOME/applications/chxchx-studio.desktop" "$DATA_HOME/applications/chxchx-studio-dev.desktop"; do
     if is_managed_file "$link" CHXCHX_STUDIO_DESKTOP; then remove_path "$link"; fi
   done
@@ -272,6 +274,7 @@ else
 fi
 LAUNCHER="$LOCAL_BIN/$LAUNCHER_NAME"
 SHIM="$LOCAL_BIN/chxchx-tech"
+SHORT_SHIM="$LOCAL_BIN/chxchx"
 
 # ---------- Rutas de la instalación --------------------------------------------------------------
 APP_LINK=""
@@ -284,6 +287,9 @@ else
   APP_PARENT="$OPT_STUDIO"; APP_ROOT="$APP_PARENT/$ID"; CLI_ROOT="$APP_ROOT"; APP_BINARY="$APP_ROOT/bin/chxchx-studio"
 fi
 CLI_BINARY="$CLI_ROOT/.venv/bin/chxchx-tech"
+# El paquete del producto Rust trae su propio `chxchx-tech`: ese es el comando de la instalación
+# y el CLI de Python queda como su ayudante (chat, puente, modelos locales).
+if [[ "$OS" == "Darwin" ]]; then RUST_REL="Contents/MacOS/chxchx-tech"; else RUST_REL="bin/chxchx-tech"; fi
 
 # ---------- Comprobaciones previas (no se pisa nada ajeno) ----------------------------------------
 if [[ "$CLI_ONLY" == false ]]; then
@@ -455,13 +461,34 @@ exec \"\$APP_ROOT/bin/chxchx-studio\" \"\$@\""
   fi
 fi
 
+# El comando va al binario Rust cuando el paquete lo trae; si no, al CLI de Python como siempre.
+TECH_HOME="${APP_LINK:-$APP_ROOT}"
+write_shim() { # destino
+  if [[ "$CLI_ONLY" == false && -x "$APP_ROOT/$RUST_REL" ]]; then
+    local cli="$CLI_BINARY"
+    [[ -z "$APP_LINK" ]] || cli="$APP_LINK/Contents/.venv/bin/chxchx-tech"
+    write_script "$1" "#!/usr/bin/env bash
+# CHXCHX_CLI_SHIM
+export CHXCHX_TECH_CLI=\"${cli}\"
+exec \"${TECH_HOME}/${RUST_REL}\" \"\$@\""
+  else
+    write_script "$1" "#!/usr/bin/env bash
+# CHXCHX_CLI_SHIM
+exec \"${CLI_BINARY}\" \"\$@\""
+  fi
+}
+
 SHIM_NOTE=""
 if [[ -L "$SHIM" ]] || { [[ -e "$SHIM" ]] && ! is_managed_file "$SHIM" CHXCHX_CLI_SHIM; }; then
   SHIM_NOTE="Ya existe $SHIM y no es de ChxChx (quizá instalado con uv); no lo reemplacé. El comando de esta instalación está en $CLI_BINARY"
 else
-  write_script "$SHIM" "#!/usr/bin/env bash
-# CHXCHX_CLI_SHIM
-exec \"${CLI_BINARY}\" \"\$@\""
+  write_shim "$SHIM"
+fi
+# `chxchx` es el nombre corto del mismo comando; si es de otro programa se respeta.
+if [[ -L "$SHORT_SHIM" ]] || { [[ -e "$SHORT_SHIM" ]] && ! is_managed_file "$SHORT_SHIM" CHXCHX_CLI_SHIM; }; then
+  SHIM_NOTE="${SHIM_NOTE:+$SHIM_NOTE }Ya existe $SHORT_SHIM y no es de ChxChx; el nombre corto no se instaló."
+else
+  write_shim "$SHORT_SHIM"
 fi
 
 if [[ "$OS" == "Linux" && "$CLI_ONLY" == false ]]; then

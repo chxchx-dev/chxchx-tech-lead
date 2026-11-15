@@ -101,13 +101,38 @@ fn candidates(project: &Path, path: &OsString) -> Vec<PathBuf> {
             found.push(old(root));
         }
     }
+    // Never ourselves: `chxchx-tech` on the PATH may be this very program, which hands the
+    // legacy commands to the CLI this function is looking for.
+    let own = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.canonicalize().ok());
     let mut unique: Vec<PathBuf> = Vec::new();
     for candidate in found {
-        if candidate.is_file() && !unique.contains(&candidate) {
+        let is_own = own
+            .as_ref()
+            .is_some_and(|own| candidate.canonicalize().ok().as_ref() == Some(own));
+        if candidate.is_file() && !is_own && !unique.contains(&candidate) {
             unique.push(candidate);
         }
     }
     unique
+}
+
+/// The legacy CLI that serves the commands not ported yet, without probing it.
+pub fn legacy_cli(project: &Path) -> Option<PathBuf> {
+    let found = candidates(project, &agent_path());
+    // The one the installer names, then an environment of its own (`.venv`), and only then
+    // whatever `chxchx-tech` the PATH offers, which may be a shim that leads back here.
+    let explicit = std::env::var_os(CLI_ENV).map(PathBuf::from);
+    explicit
+        .filter(|path| found.contains(path))
+        .or_else(|| {
+            found
+                .iter()
+                .find(|c| c.components().any(|part| part.as_os_str() == ".venv"))
+                .cloned()
+        })
+        .or_else(|| found.into_iter().next())
 }
 
 /// The first CLI that speaks the chat protocol, or `None`.

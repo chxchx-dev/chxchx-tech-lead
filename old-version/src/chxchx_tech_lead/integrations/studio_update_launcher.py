@@ -96,18 +96,40 @@ def _write_posix(path: Path, marks: str, app_root: str, *, mac: bool) -> None:
 
 
 def _rewrite_shim(system: str, directory: Path, cli_root: Path) -> None:
-    """Keep `chxchx-tech` on the new version, but only if ChxChx wrote that shim."""
+    """Keep `chxchx-tech` (and its short name `chxchx`) on the new version, but only the shims ChxChx wrote.
+
+    A package that carries the Rust product has its own `chxchx-tech`: the command goes there and
+    the Python CLI stays as its helper (chat, bridge, local models).
+    """
     windows = system == "Windows"
-    shim = directory / ("chxchx-tech.cmd" if windows else "chxchx-tech")
-    if shim.is_symlink() or not shim.is_file() or SHIM_MARK not in shim.read_text(encoding="utf-8", errors="replace"):
+    suffix = ".cmd" if windows else ""
+    main = directory / f"chxchx-tech{suffix}"
+    if not _is_our_shim(main):
         return
-    binary = cli_root / ".venv" / ("Scripts/chxchx-tech.exe" if windows else "bin/chxchx-tech")
+    venv = cli_root / ".venv" / ("Scripts/chxchx-tech.exe" if windows else "bin/chxchx-tech")
+    rust = cli_root / ("MacOS/chxchx-tech" if system == "Darwin" else "bin/chxchx-tech.exe" if windows else "bin/chxchx-tech")
+    for shim in (main, directory / f"chxchx{suffix}"):
+        # The short name is created on the first update that knows it; a foreign file is respected.
+        if shim.exists() or shim.is_symlink():
+            if not _is_our_shim(shim):
+                continue
+        _write_shim(shim, windows=windows, venv=venv, rust=rust if rust.is_file() else None)
+
+
+def _is_our_shim(shim: Path) -> bool:
+    return not shim.is_symlink() and shim.is_file() and SHIM_MARK in shim.read_text(encoding="utf-8", errors="replace")
+
+
+def _write_shim(shim: Path, *, windows: bool, venv: Path, rust: Path | None) -> None:
     temporary = shim.with_name(shim.name + f".tmp-{os.getpid()}")
     try:
         if windows:
-            temporary.write_text(f'@echo off\r\nrem {SHIM_MARK}\r\n"{binary}" %*\r\n', encoding="ascii")
+            lines = ["@echo off", f"rem {SHIM_MARK}"]
+            lines += [f'set "CHXCHX_TECH_CLI={venv}"', f'"{rust}" %*'] if rust else [f'"{venv}" %*']
+            temporary.write_text("\r\n".join(lines) + "\r\n", encoding="ascii")
         else:
-            temporary.write_text(f'#!/usr/bin/env bash\n# {SHIM_MARK}\nexec "{binary}" "$@"\n', encoding="utf-8")
+            body = f'export CHXCHX_TECH_CLI="{venv}"\nexec "{rust}" "$@"\n' if rust else f'exec "{venv}" "$@"\n'
+            temporary.write_text(f"#!/usr/bin/env bash\n# {SHIM_MARK}\n{body}", encoding="utf-8")
             temporary.chmod(0o755)
         os.replace(temporary, shim)
     finally:

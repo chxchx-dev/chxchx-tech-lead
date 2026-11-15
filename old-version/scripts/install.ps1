@@ -144,8 +144,10 @@ function Invoke-Uninstall {
         if (Test-ManagedFile $Path @('CHXCHX_STUDIO_LAUNCHER', 'CHXCHX_STUDIO_DEV_LAUNCHER')) { Remove-Managed $Path }
     }
     if (Test-ManagedFile $LegacyLauncher @('CHXCHX_STUDIO_DEV_LAUNCHER')) { Remove-Managed $LegacyLauncher }
-    $Shim = Join-Path $ShimDir 'chxchx-tech.cmd'
-    if (Test-ManagedFile $Shim @('CHXCHX_CLI_SHIM')) { Remove-Managed $Shim }
+    foreach ($Name in @('chxchx-tech.cmd', 'chxchx.cmd')) {
+        $Shim = Join-Path $ShimDir $Name
+        if (Test-ManagedFile $Shim @('CHXCHX_CLI_SHIM')) { Remove-Managed $Shim }
+    }
     foreach ($Name in @('ChxChx Studio.lnk', 'ChxChx Studio Dev.lnk')) {
         $Link = Join-Path $StartMenuDir $Name
         if (Test-Path -LiteralPath $Link -PathType Leaf) {
@@ -259,6 +261,8 @@ try {
     if ($CliOnly) { $AppRoot = Join-Path $CliParent $Id } else { $AppRoot = Join-Path $AppParent $Id }
     $Launcher = Join-Path $ShimDir $LauncherName
     $Shim = Join-Path $ShimDir 'chxchx-tech.cmd'
+    $ShortShim = Join-Path $ShimDir 'chxchx.cmd'
+    $RustBinary = Join-Path $AppRoot 'bin\chxchx-tech.exe'
     $StartMenu = Join-Path $StartMenuDir "$AppLabel.lnk"
     $CliBinary = Join-Path $AppRoot '.venv\Scripts\chxchx-tech.exe'
     $Python = Join-Path $AppRoot '.venv\Scripts\python.exe'
@@ -401,11 +405,25 @@ try {
             'set "CHXCHX_TECH_CLI=%APP_ROOT%\.venv\Scripts\chxchx-tech.exe"',
             '"%APP_ROOT%\bin\chxchx-studio.exe" %*'))
     }
+    # El comando va al binario Rust cuando el paquete lo trae; si no, al CLI de Python como siempre.
+    function Write-Shim([string]$Path) {
+        if ((-not $CliOnly) -and (Test-Path -LiteralPath $RustBinary -PathType Leaf)) {
+            Write-Cmd $Path @('@echo off', 'rem CHXCHX_CLI_SHIM', "set `"CHXCHX_TECH_CLI=$CliBinary`"", "`"$RustBinary`" %*")
+        } else {
+            Write-Cmd $Path @('@echo off', 'rem CHXCHX_CLI_SHIM', "`"$CliBinary`" %*")
+        }
+    }
     $ShimNote = ''
     if ((Test-Path -LiteralPath $Shim) -and -not (Test-ManagedFile $Shim @('CHXCHX_CLI_SHIM'))) {
         $ShimNote = "Ya existe $Shim y no es de ChxChx; no lo reemplacé. El comando de esta instalación está en $CliBinary"
     } else {
-        Write-Cmd $Shim @('@echo off', 'rem CHXCHX_CLI_SHIM', "`"$CliBinary`" %*")
+        Write-Shim $Shim
+    }
+    # `chxchx` es el nombre corto del mismo comando; si es de otro programa se respeta.
+    if ((Test-Path -LiteralPath $ShortShim) -and -not (Test-ManagedFile $ShortShim @('CHXCHX_CLI_SHIM'))) {
+        $ShimNote = ("$ShimNote Ya existe $ShortShim y no es de ChxChx; el nombre corto no se instaló.").Trim()
+    } else {
+        Write-Shim $ShortShim
     }
     Add-UserPath $ShimDir
 
