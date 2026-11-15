@@ -121,8 +121,10 @@ mod imp {
     }
 
     pub fn resident_bytes() -> Option<u64> {
-        let mut counters = Counters::default();
-        counters.size = std::mem::size_of::<Counters>() as u32;
+        let mut counters = Counters {
+            size: std::mem::size_of::<Counters>() as u32,
+            ..Counters::default()
+        };
         // SAFETY: `counters` is a valid, correctly sized PROCESS_MEMORY_COUNTERS for this call.
         let ok =
             unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.size) };
