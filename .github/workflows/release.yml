@@ -7,6 +7,9 @@ name: Studio release (Rust)
 # `v<version>` that every installed Studio on the stable channel updates to. Run it by hand:
 # Actions > this workflow > Run workflow (with `publish` off it only builds and stages).
 on:
+  # Pushing a tag `vX.Y.Z` publishes that stable release (`git tag v0.6.0 && git push origin v0.6.0`).
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       channel:
@@ -31,6 +34,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: The tag names this version
+        if: ${{ github.ref_type == 'tag' }}
+        run: |
+          version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
+          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "El tag $GITHUB_REF_NAME no coincide con la versión $version de Cargo.toml."; exit 1; }
       - name: Compare versions
         run: |
           python3 - <<'PY'
@@ -41,7 +49,7 @@ jobs:
           normalized = re.sub(r"-(alpha|beta|rc)\.?(\d+)", lambda m: {"alpha": "a", "beta": "b", "rc": "rc"}[m[1]] + m[2], cargo)
           if normalized != py:
               raise SystemExit(f"Cargo.toml ({cargo}) y pyproject.toml ({py}) no son la misma versión.")
-          if "${{ inputs.channel }}" == "stable" and not re.fullmatch(r"\d+\.\d+\.\d+", cargo):
+          if "${{ inputs.channel || 'stable' }}" == "stable" and not re.fullmatch(r"\d+\.\d+\.\d+", cargo):
               raise SystemExit(f"Una versión estable debe ser X.Y.Z; Cargo.toml dice {cargo}.")
           print("Versión del producto:", cargo)
           PY
@@ -199,7 +207,7 @@ jobs:
         with: { name: cli-wheel, path: dist/downloads/cli-wheel }
       - name: Write the manifest and checksums
         run: |
-          if [ "${{ inputs.channel }}" = "stable" ]; then
+          if [ "${{ inputs.channel || 'stable' }}" = "stable" ]; then
             version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
             channel=stable; tag="v$version"
           else
@@ -227,11 +235,11 @@ jobs:
 
   publish:
     name: Publish the release
-    if: ${{ inputs.publish }}
+    if: ${{ github.event_name == 'push' || inputs.publish }}
     needs: stage
     runs-on: ubuntu-latest
     concurrency:
-      group: chxchx-studio-release-${{ inputs.channel }}
+      group: chxchx-studio-release-${{ inputs.channel || 'stable' }}
       cancel-in-progress: false
     permissions:
       contents: write
@@ -240,7 +248,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: release-assets, path: dist/release }
       - name: Replace the rolling preview tag
-        if: ${{ inputs.channel == 'dev' }}
+        if: ${{ (inputs.channel || 'stable') == 'dev' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -251,14 +259,14 @@ jobs:
           fi
       - name: Name the stable release
         id: stable
-        if: ${{ inputs.channel == 'stable' }}
+        if: ${{ (inputs.channel || 'stable') == 'stable' }}
         run: |
           version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
           # The notes of this version: its section of CHANGELOG.md.
           awk -v v="## $version" 'index($0, v)==1 {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
       - name: Publish the dev preview
-        if: ${{ inputs.channel == 'dev' }}
+        if: ${{ (inputs.channel || 'stable') == 'dev' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: studio-dev-preview
@@ -274,7 +282,7 @@ jobs:
           overwrite_files: true
           files: dist/release/*
       - name: Publish the stable release
-        if: ${{ inputs.channel == 'stable' }}
+        if: ${{ (inputs.channel || 'stable') == 'stable' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.stable.outputs.tag }}
