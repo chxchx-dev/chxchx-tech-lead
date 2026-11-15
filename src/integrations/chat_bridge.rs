@@ -37,6 +37,26 @@ pub(super) fn command(cli: &Path) -> Command {
     command
 }
 
+/// What a finished process printed last. The process can be gone before the thread that reads
+/// its output has passed the final lines on, so this waits for that thread to end (its sender
+/// drops at end of output), for a second at most in case something else keeps the pipe open.
+pub(super) fn drain_after_exit(events: &Receiver<Value>) -> Vec<Value> {
+    let mut found = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        match events.recv_timeout(Duration::from_millis(20)) {
+            Ok(event) => found.push(event),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                if Instant::now() >= deadline {
+                    break;
+                }
+            }
+        }
+    }
+    found
+}
+
 /// Runs a short command and returns its stdout, giving up after `limit`.
 pub(super) fn run_short(mut process: Command, limit: Duration) -> Result<(i32, String), String> {
     let mut child = process
@@ -261,7 +281,7 @@ impl Turn {
         {
             self.exit = Some(status.code().unwrap_or(-1));
             // Whatever was printed right before exiting.
-            found.extend(self.events.try_iter());
+            found.extend(drain_after_exit(&self.events));
         }
         found
     }

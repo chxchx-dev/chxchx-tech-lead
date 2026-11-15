@@ -1,14 +1,21 @@
-name: Studio dev preview (Rust)
+name: Studio release (Rust)
 
 # Builds the Rust product for every platform in the layout the installed updater expects
 # (bin/chxchx-studio, a macOS .app, a Windows zip, plus the CLI wheel) and, only when asked,
 # replaces the rolling `studio-dev-preview` release that machines on the `dev` channel read.
-# It never touches the stable channel. Run it by hand: Actions > this workflow > Run workflow.
+# `dev` replaces the rolling `studio-dev-preview` prerelease; `stable` publishes the release
+# `v<version>` that every installed Studio on the stable channel updates to. Run it by hand:
+# Actions > this workflow > Run workflow (with `publish` off it only builds and stages).
 on:
   workflow_dispatch:
     inputs:
+      channel:
+        description: "Channel to publish to"
+        type: choice
+        options: [dev, stable]
+        default: dev
       publish:
-        description: "Publish the rolling dev preview (false = build and stage only, to inspect the assets)"
+        description: "Publish it (false = build and stage only, to inspect the assets)"
         type: boolean
         default: false
 
@@ -34,6 +41,8 @@ jobs:
           normalized = re.sub(r"-(alpha|beta|rc)\.?(\d+)", lambda m: {"alpha": "a", "beta": "b", "rc": "rc"}[m[1]] + m[2], cargo)
           if normalized != py:
               raise SystemExit(f"Cargo.toml ({cargo}) y pyproject.toml ({py}) no son la misma versión.")
+          if "${{ inputs.channel }}" == "stable" and not re.fullmatch(r"\d+\.\d+\.\d+", cargo):
+              raise SystemExit(f"Una versión estable debe ser X.Y.Z; Cargo.toml dice {cargo}.")
           print("Versión del producto:", cargo)
           PY
 
@@ -190,8 +199,14 @@ jobs:
         with: { name: cli-wheel, path: dist/downloads/cli-wheel }
       - name: Write the manifest and checksums
         run: |
+          if [ "${{ inputs.channel }}" = "stable" ]; then
+            version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
+            channel=stable; tag="v$version"
+          else
+            channel=dev; tag=studio-dev-preview
+          fi
           python3 old-version/scripts/release_assets.py --root old-version \
-            --channel dev --tag studio-dev-preview --commit "$GITHUB_SHA" \
+            --channel "$channel" --tag "$tag" --commit "$GITHUB_SHA" \
             --downloads dist/downloads --output dist/release \
             --skip windows-setup --skip windows-arm64
           ls -l dist/release
@@ -211,19 +226,21 @@ jobs:
           compression-level: 0
 
   publish:
-    name: Publish the rolling dev preview
+    name: Publish the release
     if: ${{ inputs.publish }}
     needs: stage
     runs-on: ubuntu-latest
     concurrency:
-      group: chxchx-studio-dev-preview
+      group: chxchx-studio-release-${{ inputs.channel }}
       cancel-in-progress: false
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { name: release-assets, path: dist/release }
       - name: Replace the rolling preview tag
+        if: ${{ inputs.channel == 'dev' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -232,17 +249,38 @@ jobs:
           elif gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/studio-dev-preview" >/dev/null 2>&1; then
             gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/studio-dev-preview"
           fi
-      - uses: softprops/action-gh-release@v2
+      - name: Name the stable release
+        id: stable
+        if: ${{ inputs.channel == 'stable' }}
+        run: |
+          version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          # The notes of this version: its section of CHANGELOG.md.
+          awk -v v="## $version" 'index($0, v)==1 {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+      - name: Publish the dev preview
+        if: ${{ inputs.channel == 'dev' }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: studio-dev-preview
           target_commitish: ${{ github.sha }}
-          name: ChxChx Studio · dev preview (Rust alpha)
+          name: ChxChx Studio · dev preview (Rust)
           body: |
             Rolling preview of the Rust product built from commit `${{ github.sha }}`.
             Only machines on the `dev` channel receive it; the stable channel is untouched.
             Assets: Linux x86_64, Windows x86_64 and macOS (Apple Silicon and Intel).
-            Alpha: not signed or notarized, and not for your only copy of important data.
+            Not signed or notarized.
           prerelease: true
           make_latest: false
           overwrite_files: true
+          files: dist/release/*
+      - name: Publish the stable release
+        if: ${{ inputs.channel == 'stable' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.stable.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ChxChx ${{ steps.stable.outputs.tag }}
+          body_path: notes.md
+          prerelease: false
+          make_latest: true
           files: dist/release/*

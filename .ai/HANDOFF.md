@@ -2,6 +2,11 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## 0.6.0 y limpieza de old-version (2026-11-15)
+
+- Versión `0.6.0` (Cargo y pyproject/wheel); `CHANGELOG.md` tiene la sección 0.6.0 (conserva el historial 0.5.x). Decisión del dueño: publicar 0.6.0 para que las instalaciones la bajen (reemplaza la alpha/dev planeada). Pendiente de él: lanzar a mano Actions → *Studio release (Rust)* (`release.yml`) con `channel=stable` (primero `publish` desmarcado para revisar). El stable publica el tag `v0.6.0` con las notas del changelog y `make_latest`. **El workflow nunca se ha ejecutado**; no se probó en macOS/Windows.
+- `old-version/`: dejó de versionarse todo lo obsoleto (`native/` C++/Qt, `assets/`, `ci.yml.disabled`, scripts de su instalación, pruebas del TUI de Python y del paquete Qt), con entradas en `.gitignore`; sigue en disco de quien lo tenía. Se conserva lo que el producto usa: el CLI de Python, sus pruebas (515 pasan en un clon limpio), `install.sh`, `install.ps1` y `release_assets.py`. El wheel se construye bien desde ese árbol.
+
 ## Un solo comando `chxchx-tech` (2026-11-15)
 
 - `chxchx-tech` sin argumentos abre Studio (escritorio, sin SSH) o el TUI (terminal) o la ayuda (tubería); `chxchx-tech <carpeta>` abre esa carpeta. Alias: `st dr sk ws pr t gui`, y `skill/pack/mod` en singular como el CLI de Python. `chxchx` es el mismo binario (`src/bin/chxchx.rs`).
@@ -24,7 +29,7 @@
 ## Alpha Rust en el canal dev y actualizaciones (2026-11-15)
 
 - Versión `0.6.0-alpha.1` (Cargo) = `0.6.0a1` (pyproject/wheel). Decisión del dueño: alpha **solo en el canal `dev`**, según `.ai/RELEASE-ROADMAP.md`; ningún tag estable ni release publicado todavía.
-- Publicar: Actions → *Studio dev preview (Rust)* (`release-dev.yml`, solo `workflow_dispatch`). Con `publish` desmarcado arma y deja los paquetes en el artefacto `release-assets` para revisarlos; marcado reemplaza el release rodante `studio-dev-preview`. **El workflow no se ha ejecutado nunca** (macOS/Windows sin probar); el staging y el manifiesto sí se probaron en local contra el actualizador instalado.
+- Publicar: Actions → *Studio release (Rust)* (`release.yml`, solo `workflow_dispatch`, canal `dev` o `stable`). Con `publish` desmarcado arma y deja los paquetes en el artefacto `release-assets` para revisarlos; marcado reemplaza el release rodante `studio-dev-preview`. **El workflow no se ha ejecutado nunca** (macOS/Windows sin probar); el staging y el manifiesto sí se probaron en local contra el actualizador instalado.
 - Los paquetes siguen el formato del actualizador de las instalaciones 0.5.x (`bin/chxchx-studio`, `.app`, zip, wheel del CLI de Python), así que «Actualizar» de esas apps instala el Studio Rust. Solo lo reciben las máquinas en el canal `dev`.
 - Actualizador (`old-version/.../studio_update_prune.py`): tras actualizar deja una sola instalación por canal (la nueva y la que estaba abierta). Arregla los `ChxChx Studio-0.5.2/0.5.3/0.5.4.app` acumulados en macOS; llega a cada equipo con el wheel de esta versión, no con las apps ya instaladas.
 - Studio Rust: Ayuda → *Buscar actualizaciones…* (`studio_update.rs`, `integrations/studio_update.rs`) usa `bridge studio-update [--apply]`; en una compilación local explica que no es una instalación administrada.

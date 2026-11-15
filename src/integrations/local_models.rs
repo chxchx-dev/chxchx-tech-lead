@@ -216,7 +216,7 @@ impl Job {
             && let Ok(Some(status)) = child.try_wait()
         {
             self.exit = Some(status.code().unwrap_or(-1));
-            found.extend(self.events.try_iter());
+            found.extend(super::chat_bridge::drain_after_exit(&self.events));
         }
         found
     }
