@@ -1,6 +1,49 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — el producto pasa a Rust
+
+Reescritura completa del producto en Rust: un solo comando, tres interfaces y mucho menos consumo.
+La instalación 0.5.x se actualiza desde **Ayuda → Buscar actualizaciones…** (o con `install.sh` / `install.ps1`).
+
+### Un solo comando
+- `chxchx-tech` (y su nombre corto `chxchx`) abre todo: Studio si hay escritorio, el TUI en una terminal, la ayuda en
+  una tubería. `chxchx-tech ~/mi-proyecto` abre esa carpeta.
+- Atajos `st`, `dr`, `sk`, `ws`, `pr`, `t`, `gui`; los comandos del CLI anterior (`agent`, `bridge`, `local-models`…)
+  también se escriben con `chxchx-tech`.
+
+### Studio (escritorio, nativo)
+- **Chat visual** con Claude Code, Codex y OpenCode: permisos en vivo, niveles de acceso, imágenes (`Ctrl+V`),
+  selector de modelos con buscador, esfuerzo, tokens/coste/contexto y comandos `/` (acciones del chat y skills del proyecto).
+- **Modelos locales (Ollama):** diagnostica tu equipo, recomienda lo que cabe, instala y conecta a OpenCode con progreso,
+  y se usan como cualquier agente (chat o terminal).
+- **Paneles y pestañas** como en VS Code: chats, terminales y editor se arrastran, dividen y unen.
+- **Terminal real** (pantalla VT completa, teclado, varias sesiones).
+- **Editor** con tipo de archivo, vista previa de Markdown, y formateo con la herramienta del proyecto (Prettier,
+  rustfmt, ruff, gofmt), obligatorio al guardar solo si el proyecto lo pide.
+- **Git** con historial dibujado, plan de commits y ramas; **catálogo** de skills, packs y mods.
+- Ruta de aprendizaje en Inicio, diseño minimalista y banners ASCII por agente.
+- **Ayuda → Buscar actualizaciones…** actualiza sin duplicar instalaciones.
+
+### TUI rediseñado
+- Ocho páginas (Inicio, Preparar, Catálogo, Agentes, Git, Conectar, Salud, Proyectos) con pestañas, clic y ayuda.
+- Toda acción abre primero una vista previa; `Intro` en un agente lo abre en la misma terminal.
+
+### CLI con color
+- En una terminal: tarjetas, tablas y símbolos; redirigido o con `NO_COLOR`, el texto plano de siempre. `--json` nunca se decora.
+
+### Rendimiento y memoria
+- ~40 MB de RAM en reposo, sin temporizadores fijos: duerme hasta que hay algo que hacer. Ver [MEMORIA.md](MEMORIA.md).
+
+### Instalación y actualización
+- Una sola instalación por canal: al actualizar se retiran las anteriores (ya no se acumulan `ChxChx Studio 0.5.x`).
+- Los instaladores y el actualizador dejan `chxchx-tech` y `chxchx` apuntando al producto nuevo.
+
+### Para quien contribuye
+- La versión anterior (Python + C++/Qt) sale del repositorio; queda solo el CLI de Python que aún sirve el chat, los modelos
+  locales y el actualizador, hasta que se porten a Rust.
+- Pruebas de extremo a extremo del CLI y de Studio, y del TUI con una pantalla en memoria.
+
+## Sin publicar antes de 0.6.0 (incluido en 0.6.0)
 
 - **El chat visual conserva la conversación al cerrar.** Después de cada turno (y al empezar, para no perder tu mensaje si cierras a mitad), `agent chat` guarda en `.ai/chat-state/<agente>.json` el id de sesión y los últimos 80 mensajes de texto, sin secretos. Al abrir el chat, Studio los restaura con `agent chat-state --restore` y sigue con `--session`; «Nuevo chat» olvida el estado (`--reset`). Si el agente ya no conserva esa sesión, se comprueba una vez y la conversación guardada viaja en el primer mensaje de una sesión nueva, así el hilo no se pierde. Un traspaso de la liberación de contexto sobrevive a cerrar antes del siguiente mensaje (se usa al reabrir y se borra solo cuando la sesión nueva ya existe).
 - El traspaso de contexto se escribe de forma atómica (un cierre a mitad no lo deja truncado), sin líneas que parezcan secretos, y el agente debe incorporar el traspaso anterior para que encadenar liberaciones no pierda datos.

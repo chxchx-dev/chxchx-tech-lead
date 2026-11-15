@@ -84,3 +84,18 @@ Thumbs.db
 # Mods instalados por `chxchx-tech mod apply` (se regeneran en cada PC; no se versionan).
 /.claude/skills/
 /.agents/skills/
+
+# Versión anterior (C++/Qt y scripts de su instalación): ya no se versiona ni se descarga, pero
+# puede seguir en el disco de quien la tenía. De old-version/ solo se versiona lo que el producto
+# actual todavía usa: el CLI de Python (chat, modelos locales, actualizador), sus pruebas y
+# los instaladores que se publican con cada release.
+/old-version/native/
+/old-version/assets/
+/old-version/ngrok
+/old-version/ci.yml.disabled
+/old-version/scripts/*
+!/old-version/scripts/install.sh
+!/old-version/scripts/install.ps1
+!/old-version/scripts/release_assets.py
+/old-version/tests/tui/
+/old-version/tests/test_studio_package.py

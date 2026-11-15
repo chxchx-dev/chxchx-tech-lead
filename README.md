@@ -13,7 +13,7 @@
   <a href="https://github.com/chxchx-dev/chxchx-tech-lead/actions/workflows/rust-product.yml"><img alt="Build" src="https://github.com/chxchx-dev/chxchx-tech-lead/actions/workflows/rust-product.yml/badge.svg"></a>
   <img alt="Rust" src="https://img.shields.io/badge/Rust-2024-orange?logo=rust">
   <img alt="Plataformas" src="https://img.shields.io/badge/Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-informational">
-  <img alt="Versión" src="https://img.shields.io/badge/versi%C3%B3n-0.6.0--dev-blue">
+  <img alt="Versión" src="https://img.shields.io/badge/versi%C3%B3n-0.6.0-blue">
 </p>
 
 <p align="center">
@@ -175,8 +175,8 @@ cargo build --release
 **Ayuda → Buscar actualizaciones…** consulta el canal que sigue tu instalación (`stable` o `dev`), descarga el
 paquete, verifica su SHA-256 y lo instala; tus proyectos y ajustes no cambian. Mantiene **una sola instalación por
 canal** (la nueva y, hasta la siguiente actualización, la que estaba abierta): no se acumulan `ChxChx Studio 0.5.2`,
-`0.5.3`… una junto a otra. Publicar una alpha: Actions → *Studio dev preview (Rust)* → *Run workflow*
-(con `publish` desmarcado solo arma y revisa los paquetes).
+`0.5.3`… una junto a otra. Publicar: Actions → *Studio release (Rust)* → *Run workflow*, eligiendo el canal (`dev` o `stable`)
+(con `publish` desmarcado solo arma y revisa los paquetes). Las novedades de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
 ## Seguridad
 
@@ -203,7 +203,7 @@ libera, recorta lo que el chat no necesita y lanza los agentes con ajustes que r
 ├── scripts/        Arranque y validación
 ├── MANUAL.md       Manual técnico: capacidades, seguridad y decisiones
 ├── MEMORIA.md      Guía de gestión de memoria
-└── old-version/    Versión anterior (Python + C++/Qt), solo consulta hasta eliminarla
+└── old-version/    Solo el CLI de Python que aún sirve el chat, los modelos locales y el actualizador
 ```
 
 ## Desarrollo
@@ -219,6 +219,6 @@ los procesos e integraciones externas viven en `integrations/`. Más reglas en [
 
 ## Estado
 
-Versión `0.6.0-alpha.1` en la rama `migracion-rust`: se ofrece solo en el canal `dev` (opt-in) y no sustituye la instalación estable 0.5.x. Pendiente: portar
+Versión `0.6.0`, el producto en Rust. Pendiente: portar `agent chat` y los modelos locales a Rust (hoy los sirve el CLI de Python de `old-version/`), guardar la disposición de paneles entre sesiones y completar la QA en macOS y Linux.
 `agent chat` a Rust (hoy usa el CLI de Python), guardar la disposición de paneles entre sesiones y completar la QA
 en macOS y Linux.

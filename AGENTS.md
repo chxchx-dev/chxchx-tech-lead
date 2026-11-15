@@ -7,7 +7,7 @@ Este repositorio construye un bootstrapper cross-platform para preparar reposito
 ## Estructura del repositorio
 
 - La raíz es el producto **Rust** (`Cargo.toml`, `src/`, `tests/`, `assets/`, `catalog/`, `build.rs`): CLI, TUI y Studio (Iced).
-- `old-version/` guarda el producto anterior (Python, C++/Qt, sus tests, scripts y su CI deshabilitado en `ci.yml.disabled`). Es solo de consulta hasta eliminarlo; no se desarrolla ahí. Una excepción temporal: el chat visual de Studio usa el CLI de Python de `old-version/` (`uv sync` dentro de esa carpeta) hasta portar `agent chat`.
+- `old-version/` conserva solo el CLI de Python que el producto aún usa (chat visual, modelos locales, actualizador y los instaladores `install.sh`/`install.ps1` que se publican con cada release): `uv sync` dentro de esa carpeta. Todo lo demás del producto anterior (C++/Qt, scripts de su instalación, su CI) ya no se versiona: puede seguir en el disco de quien lo tenía y está en `.gitignore`. No se desarrolla ahí salvo para portar lo que falta a Rust.
 
 ## Cómo se guía a la IA
 
