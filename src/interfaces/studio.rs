@@ -73,6 +73,8 @@ mod terminal_keys;
 mod terminal_surface;
 #[path = "studio_toolbar.rs"]
 mod toolbar;
+#[path = "studio_update.rs"]
+mod update;
 #[path = "studio_workspace.rs"]
 mod workspace;
 
@@ -115,6 +117,7 @@ struct Dashboard {
     panes: panes::State,
     chat: chat::State,
     local: local::State,
+    update: update::State,
     terminal: terminal::State,
     agents: agents::State,
     editor: editor::State,
@@ -149,6 +152,7 @@ enum Message {
     Agents(agents::Event),
     Chat(chat::Event),
     Local(local::Event),
+    Update(update::Event),
     Panes(panes::Event),
     /// A reader thread has data (terminal output, an agent's answer).
     Wake,
@@ -252,6 +256,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 },
                 chat: chat::State::default(),
                 local: local::State::default(),
+                update: update::State::default(),
                 panes: panes::State::default(),
                 editor: editor::State::new(),
                 shell: shell::State::default(),

@@ -1,7 +1,7 @@
 # Manual técnico de ChxChx
 
 Detalle de capacidades, seguridad y decisiones del producto. Para una visión general, empieza por el [README](README.md).
-La versión local es `0.6.0-dev.0`; no se publica ni sustituye la instalación 0.5.x.
+La versión es `0.6.0-alpha.1`: se publica solo en el canal `dev` y no sustituye la instalación estable 0.5.x.
 
 ## Capacidades compartidas actuales
 

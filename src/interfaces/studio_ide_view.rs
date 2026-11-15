@@ -31,6 +31,9 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     if state.editor.closing.is_some() || state.editor.exiting {
         layers = layers.push(confirm(state));
     }
+    if let Some(dialog) = update::dialog(state) {
+        layers = layers.push(dialog);
+    }
     layers.into()
 }
 

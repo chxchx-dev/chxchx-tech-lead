@@ -90,6 +90,7 @@ def stage(
     tag: str,
     commit: str,
     require: set[str] | None = None,
+    skip: frozenset[str] = frozenset(),
 ) -> Path:
     """Copy the assets into `output` and write the manifest. Returns the manifest path."""
     if channel not in {"stable", "dev", "ci"}:
@@ -107,7 +108,7 @@ def stage(
     wanted = require if require is not None else set(PACKAGES)
     for key, (directory, pattern, name) in PACKAGES.items():
         folder = downloads / directory
-        if (key in OPTIONAL_PACKAGES or key not in wanted) and not folder.exists():
+        if key in skip or ((key in OPTIONAL_PACKAGES or key not in wanted) and not folder.exists()):
             continue
         source = _single(folder, pattern, f"paquete {key}")
         shutil.copy2(source, output / name)
@@ -144,6 +145,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--channel", choices=("stable", "dev", "ci"), required=True)
     parser.add_argument("--tag", required=True)
+    parser.add_argument("--skip", action="append", default=[], choices=sorted(PACKAGES),
+                        help="Package key a release does not ship (for example windows-setup).")
     parser.add_argument("--check-version", action="store_true", help="Only check that the tag matches pyproject.toml.")
     parser.add_argument("--commit")
     parser.add_argument("--downloads", type=Path)
@@ -157,7 +160,8 @@ def main(argv: list[str] | None = None) -> int:
         if not (args.commit and args.downloads and args.output):
             parser.error("--commit, --downloads y --output son obligatorios.")
         manifest = stage(root=args.root, downloads=args.downloads, output=args.output,
-                         channel=args.channel, tag=args.tag, commit=args.commit)
+                         channel=args.channel, tag=args.tag, commit=args.commit,
+                         skip=frozenset(args.skip))
     except ReleaseError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

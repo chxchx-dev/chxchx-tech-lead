@@ -259,6 +259,11 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
             ),
             Separator,
             item(
+                "Buscar actualizaciones…",
+                "",
+                Message::Update(update::Event::Open),
+            ),
+            item(
                 "Acerca de ChxChx Studio",
                 "",
                 Message::Shell(ShellEvent::About),

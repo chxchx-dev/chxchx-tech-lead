@@ -13,6 +13,8 @@ pub mod mcp_codex;
 pub mod process_memory;
 #[cfg(feature = "studio")]
 pub mod slash_commands;
+#[cfg(feature = "studio")]
+pub mod studio_update;
 #[cfg(feature = "terminal")]
 pub mod terminal;
 pub mod wake;

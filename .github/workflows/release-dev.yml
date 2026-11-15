@@ -1,0 +1,248 @@
+name: Studio dev preview (Rust)
+
+# Builds the Rust product for every platform in the layout the installed updater expects
+# (bin/chxchx-studio, a macOS .app, a Windows zip, plus the CLI wheel) and, only when asked,
+# replaces the rolling `studio-dev-preview` release that machines on the `dev` channel read.
+# It never touches the stable channel. Run it by hand: Actions > this workflow > Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the rolling dev preview (false = build and stage only, to inspect the assets)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-version:
+    name: Cargo and the CLI wheel report the same version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare versions
+        run: |
+          python3 - <<'PY'
+          import re, tomllib
+          cargo = tomllib.load(open("Cargo.toml", "rb"))["package"]["version"]
+          py = tomllib.load(open("old-version/pyproject.toml", "rb"))["project"]["version"]
+          # 0.6.0-alpha.1 (semver) is 0.6.0a1 (PEP 440).
+          normalized = re.sub(r"-(alpha|beta|rc)\.?(\d+)", lambda m: {"alpha": "a", "beta": "b", "rc": "rc"}[m[1]] + m[2], cargo)
+          if normalized != py:
+              raise SystemExit(f"Cargo.toml ({cargo}) y pyproject.toml ({py}) no son la misma versión.")
+          print("Versión del producto:", cargo)
+          PY
+
+  linux:
+    name: Linux x86_64 package
+    needs: check-version
+    # glibc 2.35: the oldest the installer accepts.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install window build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libwayland-dev libx11-dev libx11-xcb-dev libxcb1-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev
+      - run: cargo build --locked --release
+      - name: Package (bin/chxchx-studio inside one folder)
+        run: |
+          set -euo pipefail
+          root=chxchx-studio-linux
+          mkdir -p "$root/bin"
+          cp target/release/chxchx-studio target/release/chxchx-tech "$root/bin/"
+          "$root/bin/chxchx-tech" --version
+          tar -czf chxchx-studio-linux-x86_64.tar.gz "$root"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-package
+          path: chxchx-studio-linux-x86_64.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  windows:
+    name: Windows x86_64 package
+    needs: check-version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked --release
+      - name: Package (bin/chxchx-studio.exe inside one folder)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = 'chxchx-studio-windows'
+          New-Item -ItemType Directory -Force "$root/bin" | Out-Null
+          Copy-Item target/release/chxchx-studio.exe, target/release/chxchx-tech.exe "$root/bin/"
+          & "$root/bin/chxchx-tech.exe" --version
+          Compress-Archive -Path $root -DestinationPath chxchx-studio-windows-x86_64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-package
+          path: chxchx-studio-windows-x86_64.zip
+          if-no-files-found: error
+          compression-level: 0
+
+  macos:
+    name: macOS ${{ matrix.name }} app
+    needs: check-version
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: arm64, target: aarch64-apple-darwin }
+          - { name: x86_64, target: x86_64-apple-darwin }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Build for ${{ matrix.target }}
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo build --locked --release --target ${{ matrix.target }}
+      - name: Make the .app bundle and the DMG
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"].split("-")[0])')
+          app="ChxChx Studio.app"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+          cp target/${{ matrix.target }}/release/chxchx-studio target/${{ matrix.target }}/release/chxchx-tech "$app/Contents/MacOS/"
+          # Icon from the brand mark.
+          icons=$(mktemp -d)/chxchx.iconset
+          mkdir -p "$icons"
+          for size in 16 32 64 128 256; do
+            sips -z $size $size assets/brand/mark-256.png --out "$icons/icon_${size}x${size}.png" >/dev/null
+          done
+          iconutil -c icns "$icons" -o "$app/Contents/Resources/chxchx.icns"
+          cat > "$app/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>chxchx-studio</string>
+            <key>CFBundleIdentifier</key><string>dev.chxchx.studio</string>
+            <key>CFBundleName</key><string>ChxChx Studio</string>
+            <key>CFBundleDisplayName</key><string>ChxChx Studio</string>
+            <key>CFBundleIconFile</key><string>chxchx</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>${version}</string>
+            <key>CFBundleVersion</key><string>${version}</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+          # Ad-hoc signature: Apple Silicon refuses unsigned code. (Not notarized.)
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
+          mkdir dmg && cp -R "$app" dmg/
+          hdiutil create -volname "ChxChx Studio" -srcfolder dmg -ov -format UDZO "chxchx-studio-macos-${{ matrix.name }}.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.name }}-package
+          path: chxchx-studio-macos-${{ matrix.name }}.dmg
+          if-no-files-found: error
+          compression-level: 0
+
+  cli-wheel:
+    name: CLI wheel (chat, local models and the updater)
+    needs: check-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build --wheel --out-dir dist
+        working-directory: old-version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-wheel
+          path: old-version/dist/*.whl
+          if-no-files-found: error
+
+  stage:
+    name: Stage the assets and the manifest
+    needs: [linux, windows, macos, cli-wheel]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The Linux build serves both package families the manifest lists.
+      - uses: actions/download-artifact@v4
+        with: { name: linux-package, path: dist/downloads/linux-ubuntu-x86_64 }
+      - uses: actions/download-artifact@v4
+        with: { name: linux-package, path: dist/downloads/linux-fedora-x86_64 }
+      - uses: actions/download-artifact@v4
+        with: { name: windows-package, path: dist/downloads/windows-x86_64 }
+      - uses: actions/download-artifact@v4
+        with: { name: macos-arm64-package, path: dist/downloads/macos-arm64 }
+      - uses: actions/download-artifact@v4
+        with: { name: macos-x86_64-package, path: dist/downloads/macos-x86_64 }
+      - uses: actions/download-artifact@v4
+        with: { name: cli-wheel, path: dist/downloads/cli-wheel }
+      - name: Write the manifest and checksums
+        run: |
+          python3 old-version/scripts/release_assets.py --root old-version \
+            --channel dev --tag studio-dev-preview --commit "$GITHUB_SHA" \
+            --downloads dist/downloads --output dist/release \
+            --skip windows-setup --skip windows-arm64
+          ls -l dist/release
+          cat dist/release/studio-manifest.txt
+      - name: Check each package has what the installed updater looks for
+        run: |
+          set -euo pipefail
+          cd dist/release
+          tar -tzf chxchx-studio-ubuntu-x86_64.tar.gz | grep -q '/bin/chxchx-studio$'
+          unzip -l chxchx-studio-windows-x86_64.zip | grep -q 'bin/chxchx-studio.exe'
+          ls chxchx-studio-macos-arm64.dmg chxchx-studio-macos-x86_64.dmg chxchx_tech_lead-*.whl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/release/*
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    name: Publish the rolling dev preview
+    if: ${{ inputs.publish }}
+    needs: stage
+    runs-on: ubuntu-latest
+    concurrency:
+      group: chxchx-studio-dev-preview
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: release-assets, path: dist/release }
+      - name: Replace the rolling preview tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view studio-dev-preview --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete studio-dev-preview --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          elif gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/studio-dev-preview" >/dev/null 2>&1; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/studio-dev-preview"
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: studio-dev-preview
+          target_commitish: ${{ github.sha }}
+          name: ChxChx Studio · dev preview (Rust alpha)
+          body: |
+            Rolling preview of the Rust product built from commit `${{ github.sha }}`.
+            Only machines on the `dev` channel receive it; the stable channel is untouched.
+            Assets: Linux x86_64, Windows x86_64 and macOS (Apple Silicon and Intel).
+            Alpha: not signed or notarized, and not for your only copy of important data.
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          files: dist/release/*

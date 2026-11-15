@@ -147,6 +147,14 @@ cargo build --release
 > (`cd old-version && uv sync`) hasta que `agent chat` se porte a Rust. Studio lo busca solo; también puedes
 > indicar su ruta con `CHXCHX_TECH_CLI`. El resto del producto no lo necesita.
 
+## Actualizaciones
+
+**Ayuda → Buscar actualizaciones…** consulta el canal que sigue tu instalación (`stable` o `dev`), descarga el
+paquete, verifica su SHA-256 y lo instala; tus proyectos y ajustes no cambian. Mantiene **una sola instalación por
+canal** (la nueva y, hasta la siguiente actualización, la que estaba abierta): no se acumulan `ChxChx Studio 0.5.2`,
+`0.5.3`… una junto a otra. Publicar una alpha: Actions → *Studio dev preview (Rust)* → *Run workflow*
+(con `publish` desmarcado solo arma y revisa los paquetes).
+
 ## Seguridad
 
 - **Confianza local:** ningún agente ni terminal ejecuta procesos configurados sin que concedas confianza al proyecto.
@@ -188,6 +196,6 @@ los procesos e integraciones externas viven en `integrations/`. Más reglas en [
 
 ## Estado
 
-Versión `0.6.0-dev` en la rama `migracion-rust`: no sustituye todavía a la instalación 0.5.x. Pendiente: portar
+Versión `0.6.0-alpha.1` en la rama `migracion-rust`: se ofrece solo en el canal `dev` (opt-in) y no sustituye la instalación estable 0.5.x. Pendiente: portar
 `agent chat` a Rust (hoy usa el CLI de Python), guardar la disposición de paneles entre sesiones y completar la QA
 en macOS y Linux.

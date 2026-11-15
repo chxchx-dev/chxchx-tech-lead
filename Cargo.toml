@@ -1,6 +1,6 @@
 [package]
 name = "chxchx-tech"
-version = "0.6.0-dev.0"
+version = "0.6.0-alpha.1"
 edition = "2024"
 publish = false
 description = "ChxChx local development control plane"
