@@ -1,0 +1,5 @@
+name = "nestjs-api"
+description = "Composición para APIs NestJS con validación y límites de módulos."
+stacks = ["nestjs"]
+languages = []
+skills = ["nestjs", "typescript-engineering", "api-design", "testing", "security-review"]

@@ -1,0 +1,5 @@
+name = "python-backend"
+description = "Base curada para servicios y herramientas Python."
+stacks = ["python"]
+languages = ["python"]
+skills = ["python-engineering", "api-design", "testing", "security-review", "code-review"]

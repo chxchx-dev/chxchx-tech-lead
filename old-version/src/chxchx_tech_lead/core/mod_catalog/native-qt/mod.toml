@@ -1,0 +1,4 @@
+name = "chxchx-native-qt"
+description = "Guía C++20/Qt 6 para aplicaciones nativas multiplataforma, CMake y empaquetado."
+stacks = ["cpp", "qt"]
+languages = ["cpp"]

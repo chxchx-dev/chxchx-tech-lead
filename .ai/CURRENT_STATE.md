@@ -2,41 +2,109 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
-## Alta de agentes sin init y registro de fallos (2026-11-10)
+## Ajustes de Git: scroll y Sugerir (2026-11-13)
 
-- `agent add` ya no falla si falta `.ai/chxchx-tech.toml`: ejecuta `init --minimal` (solo toml + `.ai/memory`, con backup) y añade el agente; `--dry-run` solo previsualiza. Código en `workspace/agent_autoinit.py`. Tras añadirlo hay que volver a confiar el proyecto.
-- Inicio muestra «Siguiente paso recomendado» (`native/src/main_window_guidance.cpp`): lista preparar → confiar → agente → skills → abrir, marca lo hecho según el estado real y un botón ejecuta el paso actual con los flujos de vista previa existentes. Compila y arranca offscreen; 11 smoke pasan; no se ha visto en ventana real.
-- Studio registra fallos de arranque de agentes (`bridge report-error`, operación `studio:agent-start:<id>`), visibles en Más → Errores. Studio, tras confirmar `agent add`, abre solo la vista previa de trust (la config cambia el hash); el trust sigue siendo una confirmación explícita. Pendiente: probar en Studio real; los cambios siguen sin commit en `dev`. Suite: 510+1 passed tras el ajuste de test_cli.
+- El editor de mensaje de commit dentro del área con scroll mostraba texto corrupto al
+  desplazar (el renderer por software no recorta un `text_editor` dentro de un
+  `scrollable`). Ahora la caja está fuera del scroll (`studio_git_changes.rs`). Regla: no
+  poner `text_editor` dentro de un `scrollable`; los `text_input` de las tarjetas del plan
+  sí se recortan bien (comprobado desplazando la lista en pantalla).
+- Sugerir ya no propone un commit único cuando hay varios temas: abre el plan con los
+  archivos relacionados repartidos y solo rellena la caja cuando hay un único tema.
 
-## Abrir carpeta de proyecto en Studio (2026-11-09)
+## Sugerencias y plan de commits en Git (2026-11-13, Windows)
 
-- **Archivo → Abrir carpeta de proyecto…** (`Ctrl+Shift+O`) y **Archivo → Proyectos recientes** (hasta 10, en `QSettings`). Abren la carpeta en una ventana nueva de Studio (`QProcess::startDetached` del propio ejecutable), sin tocar terminales/agentes del proyecto actual; Inicio ofrece `Preparar y entrar` y el trust sigue explícito. Código en `native/src/main_window_projects.cpp`. Compila y arranca offscreen; no se ha probado con la ventana real ni en macOS/Windows.
+- El Studio Qt pedía el mensaje y el plan a un agente. En Rust se hizo un motor local y
+  determinista (`features/git/suggest*.rs`, `plan.rs`): clasifica archivos, agrupa por
+  módulo/sub-módulo/familia, decide el tipo Conventional Commits y redacta el mensaje.
+  UI: botón Sugerir, tarjeta «Organizar en commits» y tarjetas editables
+  (`studio_git_suggest.rs`, `studio_git_plan_view.rs`, `studio_git_compose.rs`).
+- Ejecutar un grupo usa `Repository::commit_paths` (`git add` + `git commit -- rutas`), así
+  que no arrastra lo que ya estaba preparado; se verificó en un repositorio real.
+- Visual: guía plegable, chips ↑/↓ en la rama, divisores entre secciones, columna fija del
+  grafo del historial y avisos de tres tonos (ok, aviso, error).
+- Verificado: 58 pruebas (49 unitarias, 6 de catálogo, 3 de producto), Clippy, formato y
+  capturas con este repositorio (100+ cambios: 12 commits propuestos).
+- Límites: es heurístico (el tipo puede no ser el correcto: se edita con un clic) y no
+  entiende la intención del código como un agente. No se probó el botón «Guardar todos»
+  contra un historial real del usuario (sí `commit_paths` en repositorios temporales).
 
-## Release 0.5.3 publicado (2026-11-08)
+## Git en la barra lateral del Studio Rust (2026-11-13, Windows)
 
-- Versión estable fijada en `pyproject.toml` y `uv.lock`. Suite Python: 511 passed, 1 skipped, 10 deselected; compilación de Studio y `chxchx-agent-chat-smoke` pasan con Qt 6.11. El binario local informa `ChxChx Studio 0.5.3`; el tag coincide con la versión.
-- Incluye el diagnóstico/registro local de errores de OpenCode y el pegado de imágenes con caché Markdown descritos abajo. El primer CI encontró un ajuste de línea de Rich en Ubuntu/Python 3.13; `soft_wrap=True` lo corrige. El run 42507440204 pasó las matrices, builds nativos y smoke de instaladores; release `v0.5.3` publicado con 11 assets. Falta QA visual con un modelo de visión real.
+- Port del panel Git del Studio Qt: dominio en `features/git/` (tipos, parseo de
+  `status --porcelain=v2`, grafo de carriles, guía, errores amigables, operaciones) y
+  adaptador `integrations/git.rs` (sin shell, `LC_ALL=C`, sin ventana, límite de salida y
+  timeout, un escritor a la vez). UI: `studio_git*.rs` (estado, comandos, marco, cambios,
+  filas, historial/ramas, avisos). Diffs en pestañas de solo lectura (`Tab.readonly`, no se
+  guardan en la sesión). Explorador y barra de estado muestran el estado Git.
+- Seguridad: proyecto sin trust => hooks del repositorio desactivados
+  (`core.hooksPath` vacío); `core.fsmonitor` siempre desactivado; descartar guarda copia en
+  `.git/chxchx-backups/`; enviar, descartar, eliminar rama/stash y cancelar fusión piden
+  confirmación en línea.
+- Corregido de paso: 10 sitios del Studio hacían `thread::spawn(..).join()` dentro de código
+  asíncrono, bloqueando hilos del ejecutor (`jobs::offload` lo hace sin bloquear).
+  También se corrigió el grafo cuando dos líneas apuntan al mismo commit.
+- Verificado: 40 pruebas unitarias (13 de Git sobre repositorios reales, incluida la de
+  hooks), Clippy, formato y capturas con este repositorio (90+ cambios): cabecera, guía,
+  lista, Historial con commit abierto y diff coloreado. No verificado: clics reales sobre
+  los botones Git (publicar, enviar, fusionar contra un remoto real), conflictos de merge de
+  extremo a extremo, repositorio anidado (prefijo) en la GUI, macOS/Linux.
+- No portado: asistente con agentes (sugerir mensaje, «Pedir consejo»), diff en columnas,
+  confirmación recordada de push, rebase/cherry-pick/blame. Ver HANDOFF.
 
-## Pegado de imágenes en Studio (2026-11-08)
+## Espacio de trabajo en la barra lateral (2026-11-13, Windows)
 
-- El compositor acepta imágenes `image/*` aunque Qt no las marque con `hasImage()`, y archivos de imagen copiados como URL local. **✦** genera una descripción con el agente actual en `--lean`, solo lectura y sin sesión; la guarda atómicamente por SHA-256 en `.ai/cache/image-descriptions/` (30 días, máximo 200). Al reutilizarla, manda el Markdown en lugar de la imagen; conserva la opción de enviar el original cuando existe. Elimina la copia del portapapeles solo después de persistir la descripción; no toca imágenes fuente del usuario. Los turnos `--lean` limpian sus copias de `.ai/chat-attachments` al terminar.
-- Smoke Qt cubre generación, caché, reutilización, envío de imagen original, borrado de la copia pegada, vencimiento y MIME crudo; OpenCode 1.x/2.x cubiertos con E2E. Suite completa: 511 passed, 1 skipped, 10 deselected; `compileall`, build de Studio y smoke Qt pasan. Falta probarlo desde una ventana real de Studio con un modelo de visión.
+- Se eliminó el panel derecho «Secciones» para dar todo el ancho al editor. Las secciones
+  viven en la tercera vista de la barra lateral izquierda (`studio_workspace.rs`,
+  `shell::Side::Workspace`), agrupadas y con una tarjeta de estado del proyecto. La vista
+  activa se guarda en `layout.side`; `sections` y `sections_width` salieron de las
+  preferencias (los archivos antiguos siguen cargando: se ignoran claves desconocidas).
+- Verificado: Clippy, 23 pruebas unitarias y captura del arranque real con la vista
+  restaurada desde las preferencias. Sin QA de ratón en esta vista ni de macOS/Linux.
 
-## OpenCode y registro de errores (2026-11-08)
+## UX del Studio: menú, barra de herramientas y búsqueda (2026-11-13, Windows)
 
-- `agent add opencode` identifica la ruta del TOML faltante y muestra la inicialización con `--dry-run`. ChxChx registra errores de alta, preflight y chat en la caché local; `chxchx-tech workspace errors <PATH>` permite consultarlos, igual que `Más → Errores` en TUI/Studio. La caché redacta credenciales habituales.
-- Para usar OpenCode en un proyecto sin configuración, inicialízalo primero y vuelve a añadir OpenCode; después vuelve a confiar el proyecto porque cambia el hash de configuración.
-- Suite completa verificada: 511 passed, 1 skipped, 10 deselected. `python -m compileall src` y `git diff --check` también pasan.
+- Reporte del usuario: el rail dejaba varias marcas activas a la vez y la lupa no
+  mostraba nada sin un archivo abierto (solo buscaba dentro del archivo). Se rehízo:
+  rail con selección única por grupo (`shell::Side` y `DockTab`), búsqueda real de
+  proyecto (`features/project_search.rs`, `studio_search.rs`), barra de menú
+  (`studio_menu*.rs`) y barra de herramientas (`studio_toolbar.rs`) con estados
+  desactivados y tooltips. Atajos globales nuevos: `Ctrl+Shift+F`, `Ctrl+S`, `Ctrl+W`,
+  `Esc`. Los resultados abren el archivo en la línea y seleccionan la coincidencia.
+- Hallazgo de render: la sombra difuminada de un panel que se superpone a otros widgets
+  la pinta el renderer por software ENCIMA del propio panel. El menú usa un estilo sin
+  sombra (`styles::menu_panel`); el diálogo modal conserva su sombra porque cubre toda
+  la ventana. No añadir sombras a overlays parciales sin comprobarlo en pantalla.
+- Verificado: 32 pruebas (23 unitarias, 6 de catálogo, 3 de producto), Clippy, formato y capturas del arranque real a 880
+  px, del menú Proyecto abierto, de la búsqueda con resultados y de abrir en una línea.
+  No verificado: clics reales de ratón en menú y barra (se probó la lógica por pruebas
+  unitarias y el estado forzado en un build temporal), tooltips y navegación por teclado
+  dentro de los menús (flechas), macOS/Linux.
 
-> Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
+## Rendimiento, catálogo y persistencia del Studio Rust (2026-11-13, Windows)
 
-## Chat visual: seguridad y acceso (ADR 0014)
-
-- `agent_access.py` (niveles → banderas por CLI), `agent_permissions.py` (evento `permission`), `agent chat --network/--allow`. Studio: selector de 4 niveles, botón 🌐 Red, `ChatPermissionCard`, confirmación de acceso total, concesiones «una vez» / «en este chat» (`AgentChatWidget::answerPermission`).
-- Fase 2 (Claude en vivo): `agent_live.py` (`LiveClaude`: control_request ↔ control_response), `agent chat --live`, `ChatQuestionCard`, `answerPermission`/`answerQuestion` escriben JSON por stdin. Probado con un `claude` falso que espera al host (`tests/e2e/test_claude_live_flow.py`, 3 mutaciones) y con Claude real.
-- Codex en vivo: `agent_codex_live.py` (`LiveCodex`, cliente JSON-RPC de `codex app-server`), `codex_server_settings` (nivel → sandbox/aprobación), `answer` con `scope`. Probado con un `codex app-server` falso (`tests/e2e/test_codex_live_flow.py`, 4 mutaciones) y con Codex real (aprobar fuera del sandbox, denegar).
-- OpenCode en vivo: `agent_opencode_live.py` (`LiveOpenCode`: `opencode serve` + SSE + replies HTTP, con contraseña por turno), `agent_chat._json_lines/_live_driver`. Probado con un `opencode serve` falso (`tests/e2e/test_opencode_live_flow.py`, 5 mutaciones) y con OpenCode real (permiso permitido y denegado, pregunta; sin procesos huérfanos).
-- Pruebas: `tests/integrations/test_agent_access.py`, e2e de OpenCode, `agent_chat_smoke` (3 mutaciones detectadas). Verificado con claude/opencode/codex reales salvo `bypassPermissions` y `danger-full-access`.
+- Rendimiento medido (120 redibujados, mismo equipo): build debug anterior 18,6 s de CPU
+  y arranque de 2,1 s; release software 1,2 s de CPU, 117 ms y 49 MB; release con GPU
+  (wgpu) 3,75 s de CPU y 203 MB. El «pegado» era sobre todo el build debug. Decisión:
+  renderer por software, sin wgpu; `[profile.dev.package."*"] opt-level = 3` y release
+  con LTO. Además, arranque, previews, doctor, proyectos, rollback y trust salen del
+  hilo de UI (`studio_jobs`/`studio_plans`) y la terminal solo reconstruye su texto si
+  llegó salida (`poll_changed`).
+- Catálogo portado (R3.3 parcial): `catalog`, `catalog_view`, `project_skills`,
+  `project_mods`, `project_mod_agents` y `project_changes` (transacción compartida:
+  snapshot, backup, escritura atómica, rollback). Datos del legado (21 skills, 13
+  packs, 23 mods) embebidos por `build.rs` desde `src/chxchx_tech_lead/`. CLI
+  `skills|packs|mods` y página «Catálogo» en Studio con vista previa y confirmación.
+- Persistencia: `features/studio_preferences.rs` + `studio_session.rs`; ver README de
+  `migration/rust`. Verificado reabriendo la app: restaura ventana, paneles, página,
+  pestañas, pestaña activa y carpetas, y descarta archivos desaparecidos.
+- Verificado en Windows: formato, Clippy all-targets con warnings denegados, 25 pruebas
+  (16 unitarias, 6 de catálogo, 3 de producto) y checks por feature (cli, tui, studio).
+  Se corrigió una prueba intermitente previa (`project_files_tests`: carpetas temporales
+  con el mismo nombre por la resolución del reloj en Windows).
+- No verificado: clics reales en la página Catálogo (aplicar/retirar desde la GUI; sí
+  lo cubren las pruebas CLI del mismo caso de uso), atajos y arrastre de separadores
+  con ratón, TUI del catálogo (no existe), macOS/Linux y CI remoto.
 
 ## Estado actual
 

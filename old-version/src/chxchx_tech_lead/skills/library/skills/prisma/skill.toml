@@ -1,0 +1,6 @@
+name = "prisma"
+description = "Prisma guidance for schema changes, generated clients, and migrations."
+stacks = ["prisma"]
+languages = ["typescript", "javascript"]
+tags = ["prisma", "postgres", "database", "migrations"]
+origin = "chxchx"

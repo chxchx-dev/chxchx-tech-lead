@@ -1,0 +1,7 @@
+name = "code-review"
+description = "Review changes for correctness, regressions, security, and missing coverage."
+stacks = []
+languages = []
+tags = ["review", "quality", "regression"]
+always_recommend = true
+origin = "chxchx"

@@ -1,0 +1,6 @@
+name = "nextjs"
+description = "Next.js guidance for routing, rendering boundaries, and server interactions."
+stacks = ["nextjs"]
+languages = ["typescript", "javascript"]
+tags = ["nextjs", "react", "routing", "frontend"]
+origin = "chxchx"

@@ -1,0 +1,4 @@
+name = "chxchx-rust-safety"
+description = "Rust idiomático: errores explícitos, propiedad clara y `unsafe` justificado."
+stacks = ["rust"]
+languages = ["rust"]

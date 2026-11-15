@@ -1,0 +1,5 @@
+name = "react-native-mobile"
+description = "Guías para producto móvil React Native en iOS y Android."
+stacks = ["react-native"]
+languages = []
+skills = ["react-native", "react", "ui-ux-design", "typescript-engineering", "testing", "security-review"]
