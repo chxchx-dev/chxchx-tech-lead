@@ -73,13 +73,13 @@ fn decide(is_terminal: bool, var: impl Fn(&str) -> Option<String>) -> Ui {
 impl Ui {
     /// Rich only when stdout is a terminal that wants color.
     pub fn stdout() -> Self {
-        let ui = decide(std::io::stdout().is_terminal(), |n| std::env::var(n).ok());
-        ui.enabled_on_this_console()
+        let terminal = std::io::stdout().is_terminal();
+        decide(terminal, |n| std::env::var(n).ok()).enabled_on_this_console(terminal, false)
     }
 
     pub fn stderr() -> Self {
-        let ui = decide(std::io::stderr().is_terminal(), |n| std::env::var(n).ok());
-        ui.enabled_on_this_console()
+        let terminal = std::io::stderr().is_terminal();
+        decide(terminal, |n| std::env::var(n).ok()).enabled_on_this_console(terminal, true)
     }
 
     /// Always plain: what a pipe or a script sees.
@@ -100,16 +100,17 @@ impl Ui {
     }
 
     #[cfg(windows)]
-    fn enabled_on_this_console(mut self) -> Self {
+    fn enabled_on_this_console(mut self, terminal: bool, stderr: bool) -> Self {
         // Older Windows consoles print the escape codes as text unless asked to understand them.
-        if self.rich && !windows_vt::enable() {
+        // Only a real console needs that: forced color into a pipe is the reader's business.
+        if self.rich && terminal && !windows_vt::enable(stderr) {
             self.rich = false;
         }
         self
     }
 
     #[cfg(not(windows))]
-    fn enabled_on_this_console(self) -> Self {
+    fn enabled_on_this_console(self, _terminal: bool, _stderr: bool) -> Self {
         self
     }
 
@@ -301,13 +302,18 @@ mod windows_vt {
     }
 
     const STD_OUTPUT_HANDLE: u32 = -11_i32 as u32;
+    const STD_ERROR_HANDLE: u32 = -12_i32 as u32;
     const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
 
     /// Turns on escape-code processing for this console; false when it cannot.
-    pub fn enable() -> bool {
+    pub fn enable(stderr: bool) -> bool {
         // SAFETY: plain console calls on the process's own standard output handle.
         unsafe {
-            let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+            let handle = GetStdHandle(if stderr {
+                STD_ERROR_HANDLE
+            } else {
+                STD_OUTPUT_HANDLE
+            });
             let mut mode = 0;
             if handle.is_null() || GetConsoleMode(handle, &mut mode) == 0 {
                 return false;
