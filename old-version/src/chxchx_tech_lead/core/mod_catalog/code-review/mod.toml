@@ -1,0 +1,3 @@
+name = "chxchx-review-before-merge"
+description = "Revisa cambios por errores, regresiones, seguridad y cobertura antes de integrar."
+always_recommend = true

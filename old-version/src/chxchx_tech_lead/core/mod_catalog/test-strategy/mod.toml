@@ -1,0 +1,3 @@
+name = "chxchx-test-strategy"
+description = "Pruebas que protegen comportamiento: qué cubrir, cómo y cuándo."
+always_recommend = true

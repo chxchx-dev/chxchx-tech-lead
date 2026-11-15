@@ -1,0 +1,4 @@
+name = "chxchx-web-react"
+description = "Interfaces React/Next.js accesibles, tipadas y con estado y datos bien separados."
+stacks = ["react", "react-vite", "nextjs"]
+languages = ["typescript", "javascript"]

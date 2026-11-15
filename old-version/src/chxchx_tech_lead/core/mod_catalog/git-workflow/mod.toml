@@ -1,0 +1,3 @@
+name = "chxchx-git-workflow"
+description = "Prepara commits y pull requests claros, revisables y coherentes con el estado real del repositorio."
+always_recommend = true

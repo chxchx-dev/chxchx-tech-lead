@@ -2,42 +2,84 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
-## Alta de agentes sin init y registro de fallos (2026-11-10)
+## Un solo comando `chxchx-tech` (2026-11-15)
 
-- `agent add` ya no falla si falta `.ai/chxchx-tech.toml`: ejecuta `init --minimal` (solo toml + `.ai/memory`, con backup) y añade el agente; `--dry-run` solo previsualiza. Código en `workspace/agent_autoinit.py`. Tras añadirlo hay que volver a confiar el proyecto.
-- Inicio muestra «Siguiente paso recomendado» (`native/src/main_window_guidance.cpp`): lista preparar → confiar → agente → skills → abrir, marca lo hecho según el estado real y un botón ejecuta el paso actual con los flujos de vista previa existentes. Compila y arranca offscreen; 11 smoke pasan; no se ha visto en ventana real.
-- Studio registra fallos de arranque de agentes (`bridge report-error`, operación `studio:agent-start:<id>`), visibles en Más → Errores. Studio, tras confirmar `agent add`, abre solo la vista previa de trust (la config cambia el hash); el trust sigue siendo una confirmación explícita. Pendiente: probar en Studio real; los cambios siguen sin commit en `dev`. Suite: 510+1 passed tras el ajuste de test_cli.
+- `chxchx-tech` sin argumentos abre Studio (escritorio, sin SSH) o el TUI (terminal) o la ayuda (tubería); `chxchx-tech <carpeta>` abre esa carpeta. Alias: `st dr sk ws pr t gui`, y `skill/pack/mod` en singular como el CLI de Python. `chxchx` es el mismo binario (`src/bin/chxchx.rs`).
+- Lo que aún es del CLI de Python (`agent`, `bridge`, `local-models`, `run`, `ci`…) se delega (`interfaces/cli_launch.rs`, `chat_bridge::legacy_cli`): `CHXCHX_TECH_CLI` primero, luego un `.venv`, y nunca el propio ejecutable; `CHXCHX_DELEGATED=1` corta cualquier bucle.
+- Instalación: el shim `chxchx-tech` (y el nuevo `chxchx`) apunta al binario Rust del paquete (`bin/chxchx-tech`, `Contents/MacOS/chxchx-tech`) y exporta `CHXCHX_TECH_CLI` con el Python como ayudante. Parcheados `install.sh`, `install.ps1` y `studio_update_launcher._rewrite_shim` (con tests); la prueba del bash se hizo con una instalación simulada, **`install.ps1` no se ha ejecutado** (sin PowerShell aquí) ni nada en macOS/Windows.
 
-## Abrir carpeta de proyecto (2026-11-09)
+## CLI con color y diseño (2026-11-15)
 
-- Implementado sin commit en `dev`. Pendiente: probar a mano el diálogo y la ventana nueva (Fedora, macOS, Windows; en macOS el ejecutable dentro del .app debe relanzarse bien), añadir smoke Qt si se quiere cobertura y documentar el atajo en README/EDITOR-PARITY. `main_window.cpp` sigue sobre 300 líneas (excepción previa).
-- Tip de entorno: con `LD_LIBRARY_PATH` apuntando a la instalación stable de Studio, el build falla con `Qt_6.11 not found`; compilar con `env -u LD_LIBRARY_PATH`.
+- `interfaces/cli_style.rs` (`Ui`: color, glifos, banner) y `cli_view.rs` (lo que imprime cada comando; antes estaba en `cli.rs`). **Salida redirigida, `NO_COLOR` o `TERM=dumb` = el texto plano de siempre** (byte a byte); `CLICOLOR_FORCE`/`FORCE_COLOR` fuerzan el color. Truecolor si `COLORTERM`, si no los 16 colores; en Windows activa el modo VT o cae a plano.
+- Con color: `status` como tarjeta con etiquetas, `doctor` por áreas con resumen, listas de skills/packs/mods alineadas, `version` con banner, errores en rojo, `--help` con colores y ejemplos. `--json` nunca se decora.
+- Arreglo: `chxchx-tech … | head` ya no entra en pánico por tubería cerrada (SIGPIPE por defecto en `main.rs`).
 
-## Release 0.5.3 publicado (2026-11-08)
+## TUI rediseñado (2026-11-15)
 
-- Versión estable y lock sincronizados. Validación local: 511 passed, 1 skipped, 10 deselected; Studio y smoke nativo compilados, smoke nativo y `--version` correctos. El CI del tag pasó todas las matrices/builds y `installer-smoke` en Ubuntu, Windows y macOS; el release `v0.5.3` se publicó con 11 assets. Su primer intento reveló el ajuste de Rich en Ubuntu/Python 3.13, corregido con `soft_wrap=True`.
-- Pendiente fuera de CI: probar el botón ✦ desde una ventana de Studio con un modelo de visión real.
+- `interfaces/tui*.rs` (antes un solo archivo de 680 líneas): ocho páginas (Inicio, Preparar, Catálogo, Agentes, Git, Conectar, Salud, Proyectos) con pestañas, clic, ayuda (`?`) y la misma paleta que Studio. Cada cambio pasa por `tui_preview.rs` (vista previa + `y`), y aplicar corre en un hilo.
+- Agentes: `Intro` entrega la terminal al agente y vuelve (`features/agent_launch.rs`, misma regla de confianza que Studio).
+- Pruebas: pantalla en memoria (`tui_tests.rs`, `TestBackend`) con teclas y clics reales. Aplicar una vista previa no se prueba ahí (escribiría en el home real); lo cubre el e2e del CLI.
+- `CHXCHX_TUI_PAGE=1..8` abre en esa página (demos y capturas). Pendiente: Salud no tiene filtro, Git es solo lectura, sin chat ni terminal embebidos (están en Studio).
 
-## Imágenes pegadas y caché de descripciones (2026-11-08)
+## Alpha Rust en el canal dev y actualizaciones (2026-11-15)
 
-- Implementado **✦ Describir y guardar** a demanda con el agente/modelo actual en `--lean`. Genera Markdown con OCR, distribución, observaciones, inferencias e incertidumbres; lo guarda por SHA-256, caduca a los 30 días y limita a 200 entradas. Al readjuntar, el Markdown se usa por defecto; mientras el original esté disponible, el botón permite volver a enviarlo. La copia temporal del portapapeles y las copias de staging de consultas `--lean` se eliminan solo tras completar el guardado/turno; los archivos originales elegidos por el usuario se conservan.
-- Smoke nativo cubre generación simulada, reutilización, vencimiento y eliminación solo de copias del portapapeles; la suite Python pasó (511 passed, 1 skipped, 10 deselected), `compileall` y el build completo de Studio también pasan. Pendiente: probar el botón con un agente/modelo de visión real en Studio y revisar la caché bajo `.ai/cache/image-descriptions/`.
+- Versión `0.6.0-alpha.1` (Cargo) = `0.6.0a1` (pyproject/wheel). Decisión del dueño: alpha **solo en el canal `dev`**, según `.ai/RELEASE-ROADMAP.md`; ningún tag estable ni release publicado todavía.
+- Publicar: Actions → *Studio dev preview (Rust)* (`release-dev.yml`, solo `workflow_dispatch`). Con `publish` desmarcado arma y deja los paquetes en el artefacto `release-assets` para revisarlos; marcado reemplaza el release rodante `studio-dev-preview`. **El workflow no se ha ejecutado nunca** (macOS/Windows sin probar); el staging y el manifiesto sí se probaron en local contra el actualizador instalado.
+- Los paquetes siguen el formato del actualizador de las instalaciones 0.5.x (`bin/chxchx-studio`, `.app`, zip, wheel del CLI de Python), así que «Actualizar» de esas apps instala el Studio Rust. Solo lo reciben las máquinas en el canal `dev`.
+- Actualizador (`old-version/.../studio_update_prune.py`): tras actualizar deja una sola instalación por canal (la nueva y la que estaba abierta). Arregla los `ChxChx Studio-0.5.2/0.5.3/0.5.4.app` acumulados en macOS; llega a cada equipo con el wheel de esta versión, no con las apps ya instaladas.
+- Studio Rust: Ayuda → *Buscar actualizaciones…* (`studio_update.rs`, `integrations/studio_update.rs`) usa `bridge studio-update [--apply]`; en una compilación local explica que no es una instalación administrada.
+- Pendiente: probar el workflow y una actualización real en macOS/Windows/Linux; firma y notarización de macOS; el `.app` va firmado ad-hoc.
 
-## OpenCode y registro de errores (2026-11-08)
+## Studio Rust: chat visual, paneles, memoria y ruta de aprendizaje (2026-11-14)
 
-- Causa confirmada del mensaje mostrado: `agent add` necesita `.ai/chxchx-tech.toml`; sin ese archivo OpenCode todavía no está registrado en el workspace.
-- Para habilitarlo en el proyecto afectado: `chxchx-tech init <PATH> --dry-run`, revisar y repetir sin `--dry-run`; luego `chxchx-tech agent add opencode --path <PATH>` o usar Añadir agente en Studio, y volver a confiar el proyecto.
-- Errores de alta, preflight y chat quedan en la caché local. Consultar con `chxchx-tech workspace errors <PATH>` o `Más → Errores` en TUI/Studio. Suite completa: 511 passed, 1 skipped, 10 deselected.
+- Chat visual (`interfaces/studio_chat*.rs`, `integrations/chat_bridge.rs`, `features/chat_model.rs`): usa `chxchx-tech agent chat --live` del CLI de Python; permisos en vivo, niveles de acceso, imágenes (`integrations/chat_images.rs`, se reducen a 1568 px), tokens/contexto/plan.
+- Paneles acomodables (`studio_panes*.rs`, `pane_grid`): editor, chats, terminales y actividad se arrastran, dividen, redimensionan y maximizan. La disposición aún no se guarda entre sesiones.
+- Memoria (`integrations/process_memory.rs`, `MEMORIA.md`): devolución al sistema, `MALLOC_ARENA_MAX`, recortes en el chat, RAM en la barra de estado.
+- Ruta de aprendizaje en Inicio (`studio_learning.rs`).
+- Sin probar con un agente real desde la ventana: permisos en vivo, preguntas, liberación de contexto.
 
-> Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
+## Studio Rust: diseño verificado y Windows (2026-11-14)
 
-## Chat visual: aprobaciones en vivo (Claude, Codex y OpenCode hechos)
+- El diseño del Studio Rust (menú, barra de herramientas, explorador, héroe de Inicio) existe en `origin/migracion-rust`; la copia local de Fedora estaba 14 commits atrasada y además `chxchx-studio` del PATH es el lanzador del Studio Qt. Se actualizó y se verificó con captura: coincide con las capturas de Windows. Abrir siempre con `scripts/studio-rust.sh` (Linux/macOS) o `scripts/studio-rust.ps1` (Windows).
+- Windows: `features/startup_log.rs` guarda errores de arranque y pánicos en `<home>/logs/studio-startup.log` (sin consola no se veían). CI nuevo `windows-package`: compila release, abre el Studio 8 s, lee `status --json` y sube el `.zip`.
+- Pendiente: la prueba de integración falla en macOS desde `d48490b` (código 101; sin logs accesibles). Primera compilación debug local: ~43 min.
+- El stash `local-before-pulling-origin-2026-11-14` guarda el rediseño anterior (superado) y notas `.ai` compactadas.
 
-- Hecho con Claude (ADR 0014): permisos y `AskUserQuestion` en vivo. Probar a mano en Studio con el Claude real: aprobar, «en este chat», denegar, preguntas con varias opciones/selección múltiple, detener mientras espera, y cerrar la pestaña con una solicitud abierta.
-- Resuelto: el contexto del chat nuevo se inyecta en el prompt (`inline_project_context`), así que ya no hay permiso para leerlo. Los archivos grandes se recortan (12 KB c/u, 36 KB en total).
-- Hecho con Codex (`app-server`): probar a mano en Studio con el Codex real (comando fuera del sandbox, archivo fuera del proyecto, denegar, pregunta `request_user_input`), y vigilar cambios del protocolo experimental. El proceso es por turno; un proceso por chat permitiría «permitir en este chat».
-- Hecho con OpenCode (`serve`): probar a mano en Studio con el OpenCode real (aprobar, «en este chat» con patrón, denegar —detiene el turno—, pregunta, cancelar con una solicitud abierta) y comprobar que no quedan procesos `opencode serve` tras cerrar la pestaña.
-- Pendiente: carpetas adicionales (`--add-dir`). El reintento automático de la fase 1 ya conserva el borrador del cuadro de texto.
+## Sugerencias de commit (2026-11-13)
+
+- Reglas en `suggest_rules.rs` (clasificación, nombres, tipo), `suggest_split.rs`
+  (módulos grandes), `suggest_checks.rs` (secretos, formato). Para ajustar una regla,
+  añadir un caso en `suggest_tests.rs`. Cuando existan agentes (R4) se puede ofrecer una
+  sugerencia con IA además de esta, con consentimiento y sin enviar archivos sensibles.
+
+## Git (2026-11-13)
+
+- Pedido: Git completo en la barra izquierda, como el Studio Qt, con recomendaciones.
+  Hecho salvo lo listado como «No portado» en `.ai/CURRENT_STATE.md`.
+- Las pruebas de `features/git/tests.rs` crean repositorios temporales con el `git` real y
+  se omiten si no existe. Usan `core.autocrlf=false` para ser deterministas en Windows.
+- Siguiente paso natural: el asistente (sugerir mensaje / consejo) cuando se porten los
+  agentes (R4); hoy la guía es determinista y local.
+- Un repositorio con el proyecto en una subcarpeta usa `Repository::prefix`: los archivos
+  fuera de la carpeta no se muestran en el explorador y no se pueden abrir desde el panel.
+
+## Espacio de trabajo a la izquierda (2026-11-13)
+
+- Pedido del usuario: mover «Espacio de trabajo» del lado derecho al menú izquierdo para
+  ganar pantalla. Hecho; detalle en `.ai/CURRENT_STATE.md`. Para añadir una sección,
+  una entrada en `GROUPS` de `studio_workspace.rs`, la página en `Page` y su menú/atajo.
+
+## UX del Studio (2026-11-13, Windows)
+
+- Pedido: que no se sienta bugueado ni pegado, con barra de menú y de herramientas.
+  Detalle y hallazgos en `.ai/CURRENT_STATE.md`.
+- El rail ya no contiene páginas; navegar secciones es por menú Ir, barra de
+  herramientas y panel derecho. Para añadir un comando: una entrada en
+  `studio_menu_items.rs` y, si es frecuente, un botón en `studio_toolbar.rs`; los que
+  inician un plan se encadenan con `Message::Sequence` para abrir antes su sección.
+- Pendiente: navegación con flechas dentro de los menús, buscar y reemplazar,
+  búsqueda con regex/mayúsculas, numeración de líneas, y QA de ratón real.
+- Estado del código del Studio: todos los módulos bajo 300 líneas.
 
 ## Último cambio
 

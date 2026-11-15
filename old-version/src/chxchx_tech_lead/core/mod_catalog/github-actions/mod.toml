@@ -1,0 +1,3 @@
+name = "chxchx-github-actions"
+description = "Flujos de GitHub Actions seguros, rápidos y fáciles de depurar."
+infrastructure = ["github-actions"]

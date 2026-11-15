@@ -1,0 +1,4 @@
+name = "chxchx-python-quality"
+description = "Calidad en Python: entornos con uv, tipos, pytest y empaquetado reproducible."
+stacks = ["python"]
+languages = ["python"]

@@ -1,0 +1,7 @@
+name = "security-review"
+description = "Review trust boundaries, secrets, subprocess use, and external project content."
+stacks = []
+languages = []
+tags = ["security", "trust", "secrets"]
+always_recommend = true
+origin = "chxchx"

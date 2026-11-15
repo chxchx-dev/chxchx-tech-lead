@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **El chat visual conserva la conversación al cerrar.** Después de cada turno (y al empezar, para no perder tu mensaje si cierras a mitad), `agent chat` guarda en `.ai/chat-state/<agente>.json` el id de sesión y los últimos 80 mensajes de texto, sin secretos. Al abrir el chat, Studio los restaura con `agent chat-state --restore` y sigue con `--session`; «Nuevo chat» olvida el estado (`--reset`). Si el agente ya no conserva esa sesión, se comprueba una vez y la conversación guardada viaja en el primer mensaje de una sesión nueva, así el hilo no se pierde. Un traspaso de la liberación de contexto sobrevive a cerrar antes del siguiente mensaje (se usa al reabrir y se borra solo cuando la sesión nueva ya existe).
+- El traspaso de contexto se escribe de forma atómica (un cierre a mitad no lo deja truncado), sin líneas que parezcan secretos, y el agente debe incorporar el traspaso anterior para que encadenar liberaciones no pierda datos.
+- Corrección: `mod list --json`, que lee la pantalla de Mods de Studio, partía el JSON en varias líneas dentro de las cadenas cuando era largo (la consola ajusta a 80 columnas). Igual en `ci` y `deploy`.
+
 - **Aprobaciones y preguntas en vivo con OpenCode 2.x.** El chat visual vuelve a pausarse y preguntar al instante también con la 2.x, con un controlador nuevo sobre su API local (`/api/session`, `/prompt`, eventos `/api/event`, respuestas de permisos y formularios). Mismas tarjetas que con la 1.x: «permitir esta vez», «permitir `git *` en este chat» (se vuelve la regla `bash:git *`), denegar (el paso se interrumpe, sin mostrarlo como error) y preguntas con opciones, selección múltiple y respuesta libre. La sesión se reanuda por id, el modelo y el esfuerzo viajan en la referencia del modelo y el nivel de acceso entra como configuración del servidor del turno. Se elige por la versión instalada (1.x sigue con su controlador). Verificado con OpenCode 2.2.6 real (aprobar, denegar, pregunta, regla pre-aprobada, reanudar, cancelar sin procesos sueltos) y con un servidor falso de la 2.x (6 mutaciones, 6 detectadas).
 
 ## 0.5.4 - 2026-11-10

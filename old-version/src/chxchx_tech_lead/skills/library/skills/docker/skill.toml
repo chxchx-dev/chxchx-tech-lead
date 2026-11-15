@@ -1,0 +1,6 @@
+name = "docker"
+description = "Docker guidance for reproducible, secure development and deployment images."
+stacks = ["docker"]
+languages = []
+tags = ["docker", "containers", "deployment"]
+origin = "chxchx"

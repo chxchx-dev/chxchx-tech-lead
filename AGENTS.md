@@ -4,6 +4,11 @@
 
 Este repositorio construye un bootstrapper cross-platform para preparar repositorios de desarrollo asistido por agentes.
 
+## Estructura del repositorio
+
+- La raíz es el producto **Rust** (`Cargo.toml`, `src/`, `tests/`, `assets/`, `catalog/`, `build.rs`): CLI, TUI y Studio (Iced).
+- `old-version/` guarda el producto anterior (Python, C++/Qt, sus tests, scripts y su CI deshabilitado en `ci.yml.disabled`). Es solo de consulta hasta eliminarlo; no se desarrolla ahí. Una excepción temporal: el chat visual de Studio usa el CLI de Python de `old-version/` (`uv sync` dentro de esa carpeta) hasta portar `agent chat`.
+
 ## Cómo se guía a la IA
 
 La orientación del trabajo sigue una cadena explícita y visible:
@@ -59,8 +64,9 @@ Antes de cerrar:
 Antes de cerrar cambios:
 
 ```bash
-python -m compileall src
-pytest
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
 ```
 
 ## Organización del código

@@ -1,0 +1,7 @@
+name = "cross-platform-native"
+description = "Diseño y entrega de software nativo para Windows, macOS y Linux."
+stacks = ["cpp", "qt"]
+languages = []
+tags = ["cross-platform", "desktop", "windows", "macos", "linux", "distribution"]
+always_recommend = false
+origin = "chxchx"

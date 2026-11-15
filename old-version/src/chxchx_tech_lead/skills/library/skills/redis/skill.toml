@@ -1,0 +1,6 @@
+name = "redis"
+description = "Redis guidance for cache correctness, key design, and expiration."
+stacks = ["redis"]
+languages = []
+tags = ["redis", "cache", "queues"]
+origin = "chxchx"

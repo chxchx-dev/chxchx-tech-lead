@@ -1,0 +1,3 @@
+name = "chxchx-safe-refactor"
+description = "Reduce riesgo al refactorizar: identifica contratos, referencias y límites antes de mover código."
+always_recommend = true

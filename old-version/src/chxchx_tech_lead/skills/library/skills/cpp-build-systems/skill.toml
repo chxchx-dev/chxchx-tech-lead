@@ -1,0 +1,7 @@
+name = "cpp-build-systems"
+description = "Builds reproducibles de C++ y Qt con CMake, dependencias y empaquetado portable."
+stacks = ["cpp", "qt"]
+languages = []
+tags = ["cmake", "build", "ninja", "toolchain", "packaging", "ci"]
+always_recommend = false
+origin = "chxchx"

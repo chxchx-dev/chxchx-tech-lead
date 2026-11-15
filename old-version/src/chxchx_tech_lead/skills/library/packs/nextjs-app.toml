@@ -1,0 +1,5 @@
+name = "nextjs-app"
+description = "Guías para aplicaciones Next.js con límites server/client claros."
+stacks = ["nextjs"]
+languages = []
+skills = ["nextjs", "react", "ui-ux-design", "typescript-engineering", "api-design", "testing", "security-review"]

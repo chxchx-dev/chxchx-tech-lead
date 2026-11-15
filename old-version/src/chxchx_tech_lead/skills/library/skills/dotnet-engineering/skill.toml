@@ -1,0 +1,6 @@
+name = "dotnet-engineering"
+description = ".NET and C# practices for maintainable services and applications."
+stacks = ["dotnet"]
+languages = ["csharp"]
+tags = ["dotnet", "csharp", "backend"]
+origin = "chxchx"
