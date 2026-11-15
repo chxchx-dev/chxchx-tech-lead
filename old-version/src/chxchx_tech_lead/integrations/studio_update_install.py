@@ -22,12 +22,23 @@ from .studio_update_feed import (
 )
 from .studio_channels import CHANNELS, root_name
 from .studio_update_launcher import switch_launcher
+from .studio_update_prune import prune_stale_installs
 
 
 def update_status() -> dict[str, object]:
     current = installed_commit()
-    latest = fetch_release(installed_channel())
+    channel = installed_channel()
+    _prune(installed_app_root(), channel.name)
+    latest = fetch_release(channel)
     return _payload(current, latest)
+
+
+def _prune(running: Path, channel: str) -> None:
+    """Best effort: leftovers of earlier updates must never make an update fail."""
+    try:
+        prune_stale_installs(running, channel, keep=(running,))
+    except OSError:
+        pass
 
 
 def apply_update() -> dict[str, object]:
@@ -44,7 +55,9 @@ def apply_update() -> dict[str, object]:
             wheel = work / release.wheel
             download_asset(release.package, release.package_sha256, package, base=base)
             download_asset(release.wheel, release.wheel_sha256, wheel, base=base)
+            running = installed_app_root()
             _install_package(release, package, wheel)
+            _prune(running, release.channel)
     except Exception as exc:
         if isinstance(exc, ValueError):
             raise
