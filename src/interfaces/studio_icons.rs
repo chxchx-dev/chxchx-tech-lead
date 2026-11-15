@@ -40,10 +40,6 @@ const ICONS: &[(&str, &str)] = &[
         "eye",
         r#"<path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12Z"/><circle cx="12" cy="12" r="2.800"/>"#,
     ),
-    (
-        "columns",
-        r#"<rect x="3" y="4.500" width="18" height="15" rx="1.500"/><path d="M12 4.500v15"/>"#,
-    ),
     ("minus", r#"<path d="M5 12h14"/>"#),
     (
         "archive",
@@ -183,4 +179,85 @@ pub(super) fn icon<'a>(name: &str, color: Color, size: f32) -> svg::Svg<'a, Them
         .width(size)
         .height(size)
         .style(move |_: &Theme, _| svg::Style { color: Some(color) })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn names() -> BTreeSet<&'static str> {
+        ICONS.iter().map(|(name, _)| *name).collect()
+    }
+
+    /// Icon names written in the sources: `icon("x"`, `icon_button("x"`, `tool("x"` and the
+    /// `("x", design::TINT)` rows of the file types.
+    fn used() -> BTreeSet<String> {
+        let mut found = BTreeSet::new();
+        let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/interfaces");
+        for entry in std::fs::read_dir(folder).unwrap().flatten() {
+            let path = entry.path();
+            if !path
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with("studio_"))
+                || path.to_string_lossy().ends_with("_tests.rs")
+                || path.ends_with("studio_icons.rs")
+            {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).unwrap();
+            // Strings inside the tests of a file are not icons.
+            let text = source.split("#[cfg(test)]").next().unwrap_or("");
+            for call in ["icons::icon(", "icon_button(", "tool("] {
+                for (at, _) in text.match_indices(call) {
+                    let rest = text[at + call.len()..].trim_start();
+                    if let Some(rest) = rest.strip_prefix('"')
+                        && let Some(end) = rest.find('"')
+                        && rest[..end]
+                            .chars()
+                            .all(|c| c.is_ascii_lowercase() || c == '-')
+                        && end > 0
+                    {
+                        found.insert(rest[..end].to_owned());
+                    }
+                }
+            }
+            for (at, _) in text.match_indices("(\"") {
+                let rest = &text[at + 2..];
+                if let Some(end) = rest.find('"')
+                    && end > 0
+                    && rest[..end]
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c == '-')
+                    && rest[end..].starts_with("\", design::")
+                {
+                    found.insert(rest[..end].to_owned());
+                }
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn every_icon_the_interface_asks_for_exists() {
+        let known = names();
+        assert!(
+            used().len() > 25,
+            "the scan found too few icons to be trusted"
+        );
+        let missing: Vec<_> = used()
+            .into_iter()
+            .filter(|n| !known.contains(n.as_str()))
+            .collect();
+        // An unknown name draws nothing: a silent hole in the screen.
+        assert!(
+            missing.is_empty(),
+            "icons used but not defined: {missing:?}"
+        );
+    }
+
+    #[test]
+    fn icon_names_are_unique() {
+        assert_eq!(names().len(), ICONS.len());
+    }
 }

@@ -122,20 +122,37 @@ fn welcome(chat: &Chat) -> Element<'_, Message> {
                 .on_press(send(Event::Starter(prompt.to_owned()))),
         );
     }
-    column![
+    let mut intro = column![
         art::banner(chat.agent.provider, chat.agent.label()),
         text(format!("Chat con {}", chat.agent.label()))
             .size(14)
             .font(design::UI_BOLD),
-        text("Escribe, pega una captura (Ctrl+V) o arrastra imágenes aquí. El agente te pedirá permiso en este chat antes de hacer algo que tu nivel de acceso no cubra, y puedes cambiarlo cuando quieras en «Permisos».")
-            .size(12)
-            .color(design::MUTED),
-        iced::widget::scrollable(starters).direction(iced::widget::scrollable::Direction::Horizontal(
-            iced::widget::scrollable::Scrollbar::new().width(3).scroller_width(3),
-        )),
     ]
-    .spacing(10)
-    .into()
+    .spacing(10);
+    if chat
+        .model_id
+        .as_deref()
+        .is_some_and(|id| id.starts_with("ollama/"))
+    {
+        intro = intro.push(
+            row![
+                icons::icon("cpu", design::SUCCESS, 13.0),
+                text("Este modelo corre en tu equipo: tus mensajes no salen a internet.")
+                    .size(12)
+                    .color(design::SUCCESS),
+            ]
+            .spacing(6)
+            .align_y(iced::Center),
+        );
+    }
+    intro
+        .push(text("Escribe, pega una captura (Ctrl+V) o arrastra imágenes aquí. El agente te pedirá permiso en este chat antes de hacer algo que tu nivel de acceso no cubra, y puedes cambiarlo cuando quieras en «Permisos».")
+            .size(12)
+            .color(design::MUTED))
+        .push(iced::widget::scrollable(starters).direction(iced::widget::scrollable::Direction::Horizontal(
+            iced::widget::scrollable::Scrollbar::new().width(3).scroller_width(3),
+        )))
+        .into()
 }
 
 fn access_label(mode: &str) -> &'static str {
@@ -245,9 +262,17 @@ fn header<'a>(chat: &'a Chat) -> Element<'a, Message> {
             || "Modelo por defecto".to_owned(),
             |id| models::short_name(id).to_owned(),
         );
+        let local = chat
+            .model_id
+            .as_deref()
+            .is_some_and(|id| id.starts_with("ollama/"));
         chips = chips.push(chip(
-            "sparkle",
-            model,
+            if local { "cpu" } else { "sparkle" },
+            if local {
+                format!("{model} · local")
+            } else {
+                model
+            },
             chat.models_open,
             false,
             send(Event::ModelMenu),

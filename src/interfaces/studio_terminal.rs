@@ -65,6 +65,8 @@ pub(super) enum Event {
     Open,
     /// An agent in a tab of its own (or back to the one it already has).
     OpenAgent(Agent),
+    /// Like `OpenAgent`, with its own tab title (an agent started with a local model).
+    OpenAgentAs(Agent, String),
     Opened(u64, Kind, String, Result<Arc<Mutex<Session>>, String>),
     CloseTab(u64),
     Key(u64, keyboard::Event),
@@ -89,13 +91,16 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     match event {
         Event::Open => return open(state, Kind::Shell, "Shell".to_owned(), None),
         Event::OpenAgent(agent) => {
+            let title = agent.label();
+            return update(state, Event::OpenAgentAs(agent, title));
+        }
+        Event::OpenAgentAs(agent, title) => {
             if let Some(index) = state.terminal.agent_tab(&agent.id) {
                 let id = state.terminal.tabs[index].id;
                 state.terminal.active = index;
                 state.panes.show(panes::Content::Terminal(Some(id)));
                 return focus_surface(id);
             }
-            let title = agent.label();
             return open(state, Kind::Agent(agent.id.clone()), title, Some(agent));
         }
         Event::Opened(generation, kind, title, result) => {

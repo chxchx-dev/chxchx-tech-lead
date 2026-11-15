@@ -238,3 +238,37 @@ fn chat_commands_act_on_the_chat_and_never_reach_the_agent() {
     let _ = submit(&mut state);
     assert!(state.chat.chats[0].models_open);
 }
+
+#[test]
+fn a_model_chosen_before_the_chat_is_ready_survives_its_preparation() {
+    let mut state = dashboard();
+    state.chat.chats[0].preparing = true;
+    use_model(&mut state.chat.chats[0], "ollama/qwen2.5-coder:7b-ctx32k");
+    let options = bridge::AgentOptions {
+        available: true,
+        default_model: "sonnet".into(),
+        models: vec![bridge::ModelOption {
+            id: "sonnet".into(),
+            label: "sonnet".into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    prepared_for(
+        &mut state,
+        "claude",
+        &(None, Err(String::new()), Ok(options), Vec::new()),
+    );
+    let chat = &state.chat.chats[0];
+    assert_eq!(
+        chat.model_id.as_deref(),
+        Some("ollama/qwen2.5-coder:7b-ctx32k")
+    );
+    let listed = chat.options.as_ref().unwrap();
+    assert!(
+        listed
+            .models
+            .iter()
+            .any(|m| m.id == "ollama/qwen2.5-coder:7b-ctx32k")
+    );
+}

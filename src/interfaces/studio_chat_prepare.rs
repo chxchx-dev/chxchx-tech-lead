@@ -111,11 +111,36 @@ pub(super) fn prepared_for(state: &mut Dashboard, id: &str, prepared: &Prepared)
                 options.install_hint
             ));
         }
-        chat.effort = Some(options.default_effort.clone()).filter(|e| !e.is_empty());
-        chat.model_id = Some(options.default_model.clone()).filter(|m| !m.is_empty());
+        // A model chosen before the chat was ready (a local one) wins over the agent's default.
+        if chat.model_id.is_none() {
+            chat.effort = Some(options.default_effort.clone()).filter(|e| !e.is_empty());
+            chat.model_id = Some(options.default_model.clone()).filter(|m| !m.is_empty());
+        }
         chat.options = Some(options.clone());
+        ensure_listed(chat);
     }
     sync(chat);
+}
+
+/// Chooses `id` for the next messages of the chat.
+pub(super) fn use_model(chat: &mut Chat, id: &str) {
+    chat.model_id = Some(id.to_owned());
+    chat.effort = None;
+    ensure_listed(chat);
+}
+
+/// The model in use appears in the picker even when the agent's own list does not know it yet
+/// (a local model connected a moment ago).
+fn ensure_listed(chat: &mut Chat) {
+    if let (Some(id), Some(options)) = (chat.model_id.clone(), chat.options.as_mut())
+        && !options.models.iter().any(|m| m.id == id)
+    {
+        options.models.push(bridge::ModelOption {
+            label: id.clone(),
+            id,
+            ..Default::default()
+        });
+    }
 }
 
 /// Keeps the rendered Markdown of every assistant message up to date.

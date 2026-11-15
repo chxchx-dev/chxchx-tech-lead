@@ -30,7 +30,7 @@ mod prepare;
 mod slash;
 #[path = "studio_chat_usage.rs"]
 mod usage;
-use prepare::{open, prepared_for, sync};
+use prepare::{open, prepared_for, sync, use_model};
 #[path = "studio_chat_turns.rs"]
 mod turns;
 use turns::{decide, new_chat, pick, reply, submit};
@@ -140,6 +140,8 @@ type Prepared = (
 #[derive(Clone, Debug)]
 pub(super) enum Event {
     Open(Agent),
+    /// Opens the agent's chat with this model already chosen (a local model).
+    OpenWith(Agent, String),
     Prepared(String, PreparedBox),
     /// An event of the chat shown in the pane of this agent.
     For(String, Box<Event>),
@@ -200,6 +202,12 @@ pub(super) struct PreparedBox(pub std::sync::Arc<Prepared>);
 pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     match event {
         Event::Open(agent) => return open(state, agent),
+        Event::OpenWith(agent, model) => {
+            let id = agent.id.clone();
+            let task = open(state, agent);
+            with_agent(state, &id, |chat| use_model(chat, &model));
+            return task;
+        }
         Event::Prepared(id, prepared) => prepared_for(state, &id, &prepared.0),
         Event::For(id, inner) => {
             if let Some(index) = state.chat.chats.iter().position(|c| c.agent.id == id) {

@@ -244,6 +244,50 @@ fn agent_card<'a>(state: &Dashboard, agent: &Agent) -> Element<'a, Message> {
         .into()
 }
 
+/// The local models already connected to OpenCode, each one a click from its chat or terminal.
+fn connected_models<'a>(state: &Dashboard) -> Element<'a, Message> {
+    let mut list = column![].spacing(6);
+    for name in state
+        .local
+        .snapshot
+        .iter()
+        .flat_map(|snapshot| snapshot.configured.iter())
+    {
+        let tool = |icon: &'static str, tip: &'static str, event: local::Event| {
+            styles::tip(
+                button(icons::icon(icon, design::TEXT, 13.0))
+                    .padding(6)
+                    .style(styles::secondary)
+                    .on_press(Message::Local(event)),
+                tip,
+                tooltip::Position::Top,
+            )
+        };
+        list = list.push(
+            row![
+                icons::icon("dot", design::SUCCESS, 9.0),
+                text(local::short(name).to_owned())
+                    .size(11)
+                    .width(Fill)
+                    .wrapping(iced::widget::text::Wrapping::None),
+                tool(
+                    "terminal",
+                    "Abrir en una terminal",
+                    local::Event::Terminal(name.clone())
+                ),
+                tool(
+                    "sparkle",
+                    "Abrir el chat visual",
+                    local::Event::Chat(name.clone())
+                ),
+            ]
+            .spacing(6)
+            .align_y(iced::Center),
+        );
+    }
+    list.into()
+}
+
 /// The way into local models: runs on this machine through Ollama.
 fn local_card<'a>(state: &Dashboard) -> Element<'a, Message> {
     let open = state.panes.find(|c| *c == panes::Content::Local).is_some();
@@ -267,6 +311,7 @@ fn local_card<'a>(state: &Dashboard) -> Element<'a, Message> {
             text("Diagnostica tu PC, mira qué modelos caben y conéctalos a OpenCode, sin internet ni costo por uso.")
                 .size(11)
                 .color(design::MUTED),
+            connected_models(state),
             button(
                 row![
                     icons::icon("cpu", design::TEXT, 13.0),

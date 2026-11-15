@@ -46,6 +46,10 @@ pub(super) enum Event {
     Remove(String),
     Cancel,
     ToggleDefault,
+    /// The visual chat of OpenCode with this connected model (its name in `opencode.json`).
+    Chat(String),
+    /// OpenCode in a terminal with this connected model.
+    Terminal(String),
     Copy(String),
     Tick,
 }
@@ -86,10 +90,74 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             }
         }
         Event::ToggleDefault => state.local.set_default = !state.local.set_default,
+        Event::Chat(name) => match opencode(state) {
+            Some(agent) => {
+                return Task::done(Message::Chat(chat::Event::OpenWith(
+                    agent,
+                    model_ref(&name),
+                )));
+            }
+            None => state.message = NEEDS_OPENCODE.into(),
+        },
+        Event::Terminal(name) => match opencode(state) {
+            Some(agent) => {
+                let title = format!("{} · local", short(&name));
+                let local = with_model(&agent, &name);
+                return Task::done(Message::Terminal(terminal::Event::OpenAgentAs(
+                    local, title,
+                )));
+            }
+            None => state.message = NEEDS_OPENCODE.into(),
+        },
         Event::Copy(text) => return iced::clipboard::write(text),
         Event::Tick => return tick(state),
     }
     Task::none()
+}
+
+const NEEDS_OPENCODE: &str =
+    "Los modelos locales se usan a través de OpenCode: instálalo desde el panel Agentes.";
+
+/// How OpenCode names a model served by Ollama.
+pub(super) fn model_ref(name: &str) -> String {
+    format!("ollama/{name}")
+}
+
+/// `qwen2.5-coder:7b-ctx32k` -> `qwen2.5-coder:7b`.
+pub(super) fn short(name: &str) -> &str {
+    name.rsplit_once("-ctx").map_or(name, |(base, _)| base)
+}
+
+fn opencode(state: &Dashboard) -> Option<crate::features::agents::Agent> {
+    state
+        .agents
+        .catalog
+        .agents
+        .iter()
+        .find(|a| a.provider == crate::features::agents::Provider::OpenCode && a.available())
+        .cloned()
+}
+
+/// OpenCode started with a local model: its own tab, distinct from the plain OpenCode one.
+fn with_model(
+    agent: &crate::features::agents::Agent,
+    name: &str,
+) -> crate::features::agents::Agent {
+    let mut local = agent.clone();
+    local.id = format!("{}:local:{name}", agent.id);
+    local
+        .command
+        .extend(["--model".to_owned(), model_ref(name)]);
+    local
+}
+
+/// The name under which a catalog model is connected in `opencode.json`, if it is.
+pub(super) fn connected_name(snapshot: &Snapshot, tag: &str) -> Option<String> {
+    snapshot
+        .configured
+        .iter()
+        .find(|name| name.as_str() == tag || short(name) == tag)
+        .cloned()
 }
 
 fn refresh(state: &mut Dashboard) -> Task<Message> {

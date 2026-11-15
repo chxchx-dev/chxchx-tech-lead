@@ -171,6 +171,7 @@ fn model_row<'a>(local: &State, snapshot: &Snapshot, model: &'a Candidate) -> El
         title = title.push(chip("Descargado".into(), design::MUTED));
     }
     let mut actions = row![].spacing(6).align_y(iced::Center);
+    let connected = super::connected_name(snapshot, &model.tag);
     if model.downloaded || model.configured {
         actions = actions.push(
             button(text("Quitar").size(11))
@@ -182,21 +183,54 @@ fn model_row<'a>(local: &State, snapshot: &Snapshot, model: &'a Candidate) -> El
                 ),
         );
     }
-    let label = if model.configured {
-        "Reconectar"
-    } else if model.downloaded {
-        "Conectar a OpenCode"
-    } else {
-        "Instalar y conectar"
-    };
-    actions = actions.push(
-        button(text(label).size(11))
-            .padding([5, 12])
-            .style(styles::primary)
-            .on_press_maybe(
-                (ready && fits && model.disk_ok).then(|| msg(Event::Install(model.tag.clone()))),
-            ),
-    );
+    match connected {
+        // Connected: use it like any other agent, in the visual chat or a terminal.
+        Some(name) => {
+            actions = actions
+                .push(
+                    button(
+                        row![
+                            icons::icon("terminal", design::TEXT, 12.0),
+                            text("Terminal").size(11)
+                        ]
+                        .spacing(6)
+                        .align_y(iced::Center),
+                    )
+                    .padding([5, 10])
+                    .style(styles::secondary)
+                    .on_press(msg(Event::Terminal(name.clone()))),
+                )
+                .push(
+                    button(
+                        row![
+                            icons::icon("sparkle", design::TEXT, 12.0),
+                            text("Chat").size(11)
+                        ]
+                        .spacing(6)
+                        .align_y(iced::Center),
+                    )
+                    .padding([5, 12])
+                    .style(styles::primary)
+                    .on_press(msg(Event::Chat(name))),
+                );
+        }
+        None => {
+            let label = if model.downloaded {
+                "Conectar a OpenCode"
+            } else {
+                "Instalar y conectar"
+            };
+            actions = actions.push(
+                button(text(label).size(11))
+                    .padding([5, 12])
+                    .style(styles::primary)
+                    .on_press_maybe(
+                        (ready && fits && model.disk_ok)
+                            .then(|| msg(Event::Install(model.tag.clone()))),
+                    ),
+            );
+        }
+    }
     container(
         row![
             column![

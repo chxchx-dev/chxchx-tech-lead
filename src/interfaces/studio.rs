@@ -19,6 +19,9 @@ mod chrome;
 mod design;
 #[path = "studio_ide_dock.rs"]
 mod dock;
+#[cfg(all(test, unix))]
+#[path = "studio_e2e_tests.rs"]
+mod e2e_tests;
 #[path = "studio_editor.rs"]
 mod editor;
 #[path = "studio_file_types.rs"]

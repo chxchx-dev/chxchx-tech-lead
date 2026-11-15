@@ -83,6 +83,7 @@ pub(super) fn banner<'a>(provider: Provider, name: String) -> Element<'a, Messag
                 text(*line)
                     .size(SIZE)
                     .font(design::MONO)
+                    .line_height(1.0)
                     .color(color)
                     .wrapping(iced::widget::text::Wrapping::None),
             );
@@ -91,4 +92,35 @@ pub(super) fn banner<'a>(provider: Provider, name: String) -> Element<'a, Messag
     })
     .height(iced::Length::Shrink)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_banner_is_a_clean_rectangle_of_monospace_cells() {
+        for provider in [
+            Provider::Claude,
+            Provider::Codex,
+            Provider::OpenCode,
+            Provider::Other,
+        ] {
+            let lines = art(provider);
+            let width = lines[0].chars().count();
+            assert!(width > 20, "{provider:?}");
+            for line in lines {
+                assert_eq!(line.chars().count(), width, "{provider:?}: {line:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_color_fades_from_the_agent_to_the_brand() {
+        let a = iced::Color::from_rgb(1.0, 0.0, 0.0);
+        let b = iced::Color::from_rgb(0.0, 0.0, 1.0);
+        assert_eq!(mix(a, b, 0.0), a);
+        assert_eq!(mix(a, b, 1.0), b);
+        assert!((mix(a, b, 0.5).r - 0.5).abs() < 1e-6);
+    }
 }

@@ -79,3 +79,30 @@ pub(super) fn of(path: &Path) -> FileType {
         language,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn language(path: &str) -> &'static str {
+        of(Path::new(path)).language
+    }
+
+    #[test]
+    fn the_type_comes_from_the_extension_in_any_case() {
+        assert_eq!(language("src/main.rs"), "Rust");
+        assert_eq!(language("LEEME.MD"), "Markdown");
+        assert_eq!(language("a/b/c.tsx"), "TypeScript");
+        assert_eq!(language("datos.csv"), "Datos");
+        assert_eq!(language("sin-extension"), "Texto plano");
+    }
+
+    #[test]
+    fn some_files_are_known_by_their_whole_name() {
+        assert_eq!(language("Dockerfile"), "Dockerfile");
+        assert_eq!(language("sub/Makefile"), "Makefile");
+        assert_eq!(language(".gitignore"), "Git");
+        assert_eq!(language("CMakeLists.txt"), "CMake");
+        assert_eq!(language("notas.txt"), "Texto");
+    }
+}

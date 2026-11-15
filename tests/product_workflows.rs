@@ -173,3 +173,107 @@ fn project_catalog_treats_missing_as_empty_and_preserves_invalid_json() {
     assert!(text(&result).contains("JSON inválido"));
     assert_eq!(fs::read(registry).unwrap(), malformed);
 }
+
+fn read(path: &Path) -> String {
+    fs::read_to_string(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+}
+
+fn status_json(sandbox: &Sandbox) -> serde_json::Value {
+    let output = sandbox.cli(command(&["status", "--json"], &sandbox.project));
+    serde_json::from_str(&assert_success(&output)).expect("status --json prints JSON")
+}
+
+/// A person's whole first hour with a project: look, prepare, edit, enable skills, break the
+/// managed block, and get back to the previous state, with a preview before every change.
+#[test]
+fn a_project_goes_from_empty_to_prepared_and_back_with_previews_and_backups() {
+    let sandbox = Sandbox::new();
+
+    // An empty folder: nothing configured, nothing trusted, nothing written by looking.
+    let overview = status_json(&sandbox);
+    assert_eq!(overview["schema"], "chxchx.project-overview");
+    assert_eq!(overview["workspace"]["config_exists"], false);
+    assert_eq!(overview["workspace"]["trusted"], false);
+    assert!(!sandbox.path(".ai").exists());
+
+    // Preparing it previews first, then writes the guides and the managed config.
+    assert_success(&sandbox.cli(command(&["init"], &sandbox.project)));
+    assert!(
+        !sandbox.path("AGENTS.md").exists(),
+        "a preview writes nothing"
+    );
+    assert_success(&sandbox.cli(command(&["init", "--apply"], &sandbox.project)));
+    for file in [
+        "AGENTS.md",
+        "CLAUDE.md",
+        ".ai/PROJECT.md",
+        ".ai/chxchx-tech.toml",
+    ] {
+        assert!(sandbox.path(file).is_file(), "{file} was not created");
+    }
+    let overview = status_json(&sandbox);
+    assert_eq!(overview["workspace"]["config_exists"], true);
+    assert_eq!(overview["workspace"]["config_supported"], true);
+
+    // What the person wrote next to the managed block survives a new init, which then changes nothing.
+    let agents = sandbox.path("AGENTS.md");
+    fs::write(&agents, format!("{}\n# Mi nota propia\n", read(&agents))).unwrap();
+    let again = assert_success(&sandbox.cli(command(&["init", "--apply"], &sandbox.project)));
+    assert!(read(&agents).contains("# Mi nota propia"), "{again}");
+    assert!(again.contains("sin cambios locales"), "{again}");
+
+    // Enabling a skill previews, then applies with a backup and regenerates the context.
+    let enable = |apply: bool| {
+        let mut args: Vec<OsString> = ["skills", "enable", "architecture", "--path"]
+            .into_iter()
+            .map(OsString::from)
+            .collect();
+        args.push(sandbox.project.clone().into_os_string());
+        if apply {
+            args.push("--apply".into());
+        }
+        sandbox.cli(args)
+    };
+    assert_success(&enable(false));
+    assert!(!sandbox.path(".ai/SKILLS.md").exists());
+    let applied = assert_success(&enable(true));
+    assert!(applied.contains("Backup:"), "{applied}");
+    assert!(read(&sandbox.path(".ai/SKILLS.md")).contains("architecture"));
+
+    // Someone damages the managed block: init repairs it (keeping a backup)...
+    let healthy = read(&agents);
+    fs::write(
+        &agents,
+        healthy.replace("Perfil detectado:", "Perfil TAMPERED:"),
+    )
+    .unwrap();
+    assert!(read(&agents).contains("TAMPERED"));
+    assert_success(&sandbox.cli(command(&["init", "--apply"], &sandbox.project)));
+    assert!(
+        !read(&agents).contains("TAMPERED"),
+        "init must repair the managed block"
+    );
+
+    // ...and rollback goes back to the previous saved state, previewing before it touches anything.
+    let preview = assert_success(&sandbox.cli(command(&["rollback"], &sandbox.project)));
+    assert!(preview.contains("restaurar AGENTS.md"), "{preview}");
+    assert!(
+        !read(&agents).contains("TAMPERED"),
+        "a preview must not restore"
+    );
+    let restored =
+        assert_success(&sandbox.cli(command(&["rollback", "--apply"], &sandbox.project)));
+    assert!(restored.contains("Backup de seguridad"), "{restored}");
+    assert!(
+        read(&agents).contains("TAMPERED"),
+        "the backup held the damaged state"
+    );
+
+    // Trust is its own explicit decision.
+    assert_eq!(status_json(&sandbox)["workspace"]["trusted"], false);
+    assert_success(&sandbox.cli(command(
+        &["workspace", "trust", "--apply"],
+        &sandbox.project,
+    )));
+    assert_eq!(status_json(&sandbox)["workspace"]["trusted"], true);
+}
