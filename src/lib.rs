@@ -1,6 +1,7 @@
 //! Shared Rust product. Interfaces parse input and render these capabilities.
 
 pub mod features {
+    pub mod agent_launch;
     pub mod agents;
     pub mod catalog;
     pub mod catalog_view;

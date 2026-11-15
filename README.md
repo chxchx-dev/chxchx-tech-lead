@@ -91,6 +91,18 @@ Además: una **ruta de aprendizaje** en la página de inicio que se marca sola s
 
 ## TUI
 
+El mismo producto dentro de tu terminal, con ocho páginas (`Tab` o `1`-`8`, también con clic) y siempre vista previa antes
+de cambiar nada. Abre con `chxchx-tech tui .`.
+
+- **Inicio:** el proyecto, su estado, la tecnología detectada y los primeros pasos con una barra de progreso.
+- **Preparar** y **Conectar:** preparar el proyecto, dar o revocar la confianza, restaurar un respaldo y conectar MCP; cada
+  acción abre una vista previa y `y` la aplica.
+- **Catálogo:** skills, Tech Packs y Mods con las recomendadas para tu stack (★); `Intro` activa o quita, `a` aplica las
+  recomendadas.
+- **Agentes:** Claude Code, Codex y OpenCode; `Intro` abre el agente en esta misma terminal y vuelves al panel al salir.
+- **Git:** rama, adelantos, cambios y el historial reciente.
+- **Salud** y **Proyectos:** el diagnóstico del entorno y los proyectos registrados, con sincronización en un paso.
+
 <p align="center">
   <img src="assets/screenshots/tui.png" alt="TUI" width="100%">
 </p>
