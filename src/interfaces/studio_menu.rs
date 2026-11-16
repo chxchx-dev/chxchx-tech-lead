@@ -50,7 +50,7 @@ impl Menu {
     }
 
     fn width(self) -> f32 {
-        self.label().chars().count() as f32 * 7.0 + 24.0
+        self.label().chars().count() as f32 * 6.6 + 18.0
     }
 
     fn offset(self) -> f32 {
@@ -119,7 +119,7 @@ pub(super) fn bar(state: &Dashboard) -> Element<'_, Message> {
                 button(container(text(menu.label()).size(12)).center_x(Fill))
                     .width(menu.width())
                     .padding([4, 0])
-                    .style(styles::ghost(open))
+                    .style(styles::tool(open))
                     .on_press(Message::Menu(Event::Toggle(menu))),
             )
             .on_enter(Message::Menu(Event::Hover(menu))),
@@ -184,7 +184,7 @@ fn entry_view(entry: &Entry, open_sub: Option<&'static str>) -> Element<'static,
             let content = row![
                 text(*label).size(12),
                 Space::new().width(Fill),
-                text(*hint).size(11).color(design::faint())
+                text(hint.clone()).size(11).color(design::faint())
             ]
             .align_y(iced::Center);
             let mut item = button(content)

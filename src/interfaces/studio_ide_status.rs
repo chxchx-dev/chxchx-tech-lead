@@ -13,6 +13,22 @@ fn segment<'a>(icon: &'static str, tint: iced::Color, label: String) -> Element<
     .into()
 }
 
+/// A segment that takes you where its information lives.
+fn link<'a>(
+    content: Element<'a, Message>,
+    hint: &'a str,
+    message: Message,
+) -> Element<'a, Message> {
+    styles::tip(
+        button(content)
+            .padding([0, 4])
+            .style(styles::ghost(false))
+            .on_press(message),
+        hint,
+        iced::widget::tooltip::Position::Top,
+    )
+}
+
 fn label<'a>(value: impl text::IntoFragment<'a>) -> Element<'a, Message> {
     text(value).size(11).color(design::muted()).into()
 }
@@ -55,7 +71,7 @@ pub(super) fn status_bar(state: &Dashboard) -> Element<'_, Message> {
     .height(HEIGHT)
     .align_y(iced::Center)
     .style(styles::brand_fill);
-    let mut bar = row![brand].spacing(14).align_y(iced::Center);
+    let mut bar = row![brand].spacing(10).align_y(iced::Center);
     if overview.is_some_and(|project| project.project.git_repository) {
         let label = match &state.git.status {
             Some(status) => {
@@ -73,16 +89,24 @@ pub(super) fn status_bar(state: &Dashboard) -> Element<'_, Message> {
             }
             None => "Git".to_owned(),
         };
-        bar = bar.push(segment("branch", design::muted(), label));
+        bar = bar.push(link(
+            segment("branch", design::muted(), label),
+            "Abrir Git: cambios, historial y ramas",
+            Message::Shell(shell::Event::ShowSide(shell::Side::Git)),
+        ));
     }
     if state.pending > 0 {
         bar = bar.push(segment("refresh", design::accent(), "Procesando…".into()));
     }
-    bar = bar.push(if trusted {
-        segment("shield", design::success(), "Proyecto de confianza".into())
-    } else {
-        segment("warning", design::warning(), "Permisos por revisar".into())
-    });
+    bar = bar.push(link(
+        if trusted {
+            segment("shield", design::success(), "Proyecto de confianza".into())
+        } else {
+            segment("warning", design::warning(), "Permisos por revisar".into())
+        },
+        "Abrir Proyecto y permisos",
+        Message::Navigate(Page::Setup),
+    ));
     bar = bar.push(agents_segment(state));
     let mut details = row![].spacing(14).align_y(iced::Center);
     if let Some(tab) = tabs::selected_tab(state) {

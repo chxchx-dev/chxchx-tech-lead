@@ -289,7 +289,7 @@ fn accent_card<'a>(state: &'a Dashboard, current: Option<&'a str>) -> Element<'a
             .padding(3)
             .style(styles::ghost(selected))
             .on_press(Message::Settings(Event::Accent(Some(hex)))),
-            name,
+            *name,
             iced::widget::tooltip::Position::Top,
         ));
     }

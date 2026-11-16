@@ -189,6 +189,26 @@ pub(super) fn ghost(active: bool) -> impl Fn(&Theme, button::Status) -> button::
     }
 }
 
+/// A toolbar button: quiet until hovered; the active one only brightens (its marker is a line).
+pub(super) fn tool(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_, status| {
+        let disabled = matches!(status, button::Status::Disabled);
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        button::Style {
+            background: (hovered && !disabled).then(|| Background::Color(bg_hover())),
+            text_color: if disabled {
+                faint()
+            } else if active || hovered {
+                fg()
+            } else {
+                muted()
+            },
+            border: Border::default().rounded(6.0),
+            ..Default::default()
+        }
+    }
+}
+
 /// A row of a dropdown menu; disabled rows stay dim and do not react to the pointer.
 pub(super) fn menu_item(_: &Theme, status: button::Status) -> button::Style {
     let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
@@ -326,7 +346,7 @@ pub(super) fn hscroll<'a>(
 /// Wraps `content` with a short text tooltip.
 pub(super) fn tip<'a>(
     content: impl Into<Element<'a, Message>>,
-    label: &'a str,
+    label: impl iced::widget::text::IntoFragment<'a>,
     position: tooltip::Position,
 ) -> Element<'a, Message> {
     tooltip(content, iced::widget::text(label).size(11), position)

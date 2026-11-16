@@ -9,6 +9,7 @@
 - **Modelos**: Claude muestra también las versiones concretas (`claude-fable-5-2`, `claude-opus-5-5`…) y los modelos que ya usas; OpenCode espera más a `opencode models` y añade los modelos de tu `opencode.json`.
 - **Agentes**: los botones *Terminal* y *Chat* ya no se cortan en las tarjetas.
 - **Scroll de páginas más ligero** (Inicio, Agentes, Ajustes…): unos 8 ms de CPU por paso de rueda en lugar de unos 16 (−50 %). Las tarjetas altas con esquinas redondeadas solo suavizan las esquinas, la máscara de recorte se reescribe solo donde cambia y los degradados de botones y de la tarjeta de bienvenida son ahora un color liso.
+- **Barras renovadas**: la barra de herramientas se agrupa en secciones (con subrayado en la activa), archivo y búsqueda, con Ajustes y Actualizar a la derecha; los tooltips y los atajos del menú siguen tus atajos personalizados; en la barra de estado, la rama abre Git y los permisos abren Proyecto y permisos.
 - **Conectores MCP**: catálogo de servidores para Excel, Power BI, Word, Google Sheets, PostgreSQL y SQLite, más servidores propios. `chxchx-tech connectors list|add|remove|custom`, la página *Conectar* del TUI y la sección *Herramientas / MCP* de Studio. Se escriben en los archivos del proyecto de cada agente (`.mcp.json`, `.codex/config.toml`, `opencode.json`) con vista previa exacta, respaldo de lo que existía y sin guardar claves.
 
 ## 0.6.2 — Scroll más ligero
