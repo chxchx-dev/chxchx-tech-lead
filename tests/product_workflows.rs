@@ -548,11 +548,13 @@ fn connectors_are_previewed_then_written_for_every_agent_and_removed_without_tou
         "--apply",
     ]));
     assert!(applied.contains("Respaldo"), "{applied}");
+    // Windows runs `npx` through `cmd /c`, so the program differs by platform.
+    let launcher = if cfg!(windows) { "cmd" } else { "npx" };
     let claude: serde_json::Value =
         serde_json::from_str(&read(&sandbox.path(".mcp.json"))).unwrap();
     assert!(
         claude["mcpServers"]["mio"].is_object()
-            && claude["mcpServers"]["excel"]["command"] == "npx"
+            && claude["mcpServers"]["excel"]["command"] == launcher
     );
     let opencode: serde_json::Value =
         serde_json::from_str(&read(&sandbox.path("opencode.json"))).unwrap();
@@ -560,7 +562,7 @@ fn connectors_are_previewed_then_written_for_every_agent_and_removed_without_tou
     let codex: toml::Value = toml::from_str(&read(&sandbox.path(".codex/config.toml"))).unwrap();
     assert_eq!(
         codex["mcp_servers"]["excel"]["command"].as_str(),
-        Some("npx")
+        Some(launcher)
     );
     let backups = sandbox.home.join("backups-mcp");
     assert!(
