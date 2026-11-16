@@ -118,21 +118,21 @@ pub(super) fn dialog(state: &Dashboard) -> Option<Element<'_, Message>> {
             Phase::Closed => return None,
             Phase::Checking => (
                 "refresh",
-                design::ACCENT,
+                design::accent(),
                 "Buscando actualizaciones…",
                 "Consultando la versión publicada en tu canal.".into(),
                 Space::new().into(),
             ),
             Phase::UpToDate(info) => (
                 "check",
-                design::SUCCESS,
+                design::success(),
                 "Studio está al día",
                 format!("Tienes la versión {}.", version(info)),
                 close().into(),
             ),
             Phase::Available(info) => (
                 "arrow-down",
-                design::ACCENT,
+                design::accent(),
                 "Hay una versión nueva",
                 format!(
                     "Tienes {} y está disponible {}. Se descarga, se verifica y se instala en lugar de la actual; tus proyectos y ajustes no cambian. Al terminar, reinicia Studio.",
@@ -151,7 +151,7 @@ pub(super) fn dialog(state: &Dashboard) -> Option<Element<'_, Message>> {
             ),
             Phase::Applying(info) => (
                 "refresh",
-                design::ACCENT,
+                design::accent(),
                 "Actualizando Studio…",
                 format!(
                     "Instalando {}. No cierres Studio hasta que termine.",
@@ -161,7 +161,7 @@ pub(super) fn dialog(state: &Dashboard) -> Option<Element<'_, Message>> {
             ),
             Phase::Done(info) => (
                 "check",
-                design::SUCCESS,
+                design::success(),
                 "Studio se actualizó",
                 format!(
                     "Quedó instalada la versión {}. Cierra Studio y ábrelo de nuevo para usarla; la anterior se conserva hasta la próxima actualización.",
@@ -171,7 +171,7 @@ pub(super) fn dialog(state: &Dashboard) -> Option<Element<'_, Message>> {
             ),
             Phase::Failed(error) => (
                 "warning",
-                design::WARNING,
+                design::warning(),
                 "No se pudo actualizar",
                 format!("{error} La versión que tienes sigue intacta."),
                 close().into(),
@@ -185,7 +185,7 @@ pub(super) fn dialog(state: &Dashboard) -> Option<Element<'_, Message>> {
             ]
             .spacing(10)
             .align_y(iced::Center),
-            text(detail).size(13).color(design::MUTED),
+            text(detail).size(13).color(design::muted()),
             row![Space::new().width(Fill), buttons],
         ]
         .spacing(16),
@@ -194,7 +194,7 @@ pub(super) fn dialog(state: &Dashboard) -> Option<Element<'_, Message>> {
     .width(460)
     .style(styles::modal);
     Some(iced::widget::opaque(container(card).center(Fill).style(
-        styles::surface(design::alpha(design::BG_DEEP, 0.72)),
+        styles::surface(design::alpha(design::bg_deep(), 0.72)),
     )))
 }
 

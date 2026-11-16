@@ -7,7 +7,7 @@ use iced::widget::column;
 pub(super) fn permission(index: usize, entry: &Entry) -> Element<'_, Message> {
     let mut body = column![
         row![
-            icons::icon("shield", design::WARNING, 15.0),
+            icons::icon("shield", design::warning(), 15.0),
             text("El agente pide permiso")
                 .size(12)
                 .font(design::UI_BOLD),
@@ -18,13 +18,13 @@ pub(super) fn permission(index: usize, entry: &Entry) -> Element<'_, Message> {
     ]
     .spacing(8);
     if !entry.output.is_empty() {
-        body = body.push(text(&entry.output).size(11).color(design::MUTED));
+        body = body.push(text(&entry.output).size(11).color(design::muted()));
     }
     if !entry.certain {
         body = body.push(
             text("No estoy seguro de qué se bloqueó: revisa antes de aceptar.")
                 .size(11)
-                .color(design::WARNING),
+                .color(design::warning()),
         );
     }
     if entry.decision.is_empty() {
@@ -56,13 +56,13 @@ pub(super) fn permission(index: usize, entry: &Entry) -> Element<'_, Message> {
         body = body.push(
             text(format!("Respuesta: {}", entry.decision))
                 .size(11)
-                .color(design::MUTED),
+                .color(design::muted()),
         );
     }
     container(body)
         .padding(12)
         .width(Fill)
-        .style(styles::tinted(design::WARNING))
+        .style(styles::tinted(design::warning()))
         .into()
 }
 
@@ -109,12 +109,12 @@ pub(super) fn question<'a>(chat: &'a Chat, index: usize, entry: &'a Entry) -> El
         body = body.push(
             text(format!("Respuesta: {}", entry.decision))
                 .size(11)
-                .color(design::MUTED),
+                .color(design::muted()),
         );
     }
     container(body)
         .padding(12)
         .width(Fill)
-        .style(styles::tinted(design::ACCENT))
+        .style(styles::tinted(design::accent()))
         .into()
 }

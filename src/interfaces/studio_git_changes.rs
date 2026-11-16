@@ -42,12 +42,12 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         list = list.push(
             button(
                 row![
-                    icons::icon("sparkle", design::ACCENT, 14.0),
+                    icons::icon("sparkle", design::accent(), 14.0),
                     column![
                         text("Organizar en commits").size(12).font(design::UI_BOLD),
                         text("Agrupa por tipo (feat, fix, docs…) y módulo")
                             .size(10)
-                            .color(design::FAINT),
+                            .color(design::faint()),
                     ]
                     .spacing(1),
                 ]
@@ -63,7 +63,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     if !conflicts.is_empty() {
         list = list.push(section(
             "warning",
-            design::DANGER,
+            design::danger(),
             "En conflicto",
             conflicts.len(),
             Vec::new(),
@@ -77,7 +77,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         let paths: Vec<String> = staged.iter().map(|entry| entry.path.clone()).collect();
         list = list.push(section(
             "git-commit",
-            design::BRAND_CYAN,
+            design::brand_cyan(),
             "Listos para guardar",
             staged.len(),
             vec![bulk(
@@ -96,7 +96,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         let entries: Vec<GitEntry> = changed.iter().map(|entry| (*entry).clone()).collect();
         list = list.push(section(
             "file-text",
-            design::MUTED,
+            design::muted(),
             "Cambios",
             changed.len(),
             vec![
@@ -126,12 +126,12 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
                 let index = stash.index;
                 container(
                     row![
-                        badge('S', design::TINT_PURPLE),
+                        badge('S', design::tint_purple()),
                         column![
                             text(&stash.message)
                                 .size(11)
                                 .wrapping(iced::widget::text::Wrapping::None),
-                            text(ago(stash.time)).size(10).color(design::FAINT),
+                            text(ago(stash.time)).size(10).color(design::faint()),
                         ]
                         .width(Fill),
                         small(
@@ -160,7 +160,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
             .collect();
         list = list.push(section(
             "archive",
-            design::TINT_PURPLE,
+            design::tint_purple(),
             "Apartados (stash)",
             git.stashes.len(),
             Vec::new(),

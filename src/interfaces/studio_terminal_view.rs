@@ -40,14 +40,14 @@ pub(super) fn resolve(color: TermColor, default: Color) -> Color {
 
 /// `(foreground, background)` of a run; `None` background means the terminal's own.
 pub(super) fn colors(run: &Run, focused: bool) -> (Color, Option<Color>) {
-    let fg = resolve(run.fg, design::TEXT);
+    let fg = resolve(run.fg, design::fg());
     let bg = match run.bg {
         TermColor::Default => None,
-        other => Some(resolve(other, design::BG_DEEP)),
+        other => Some(resolve(other, design::bg_deep())),
     };
     // The cursor is a block while the terminal has the focus; the program's own reverse video flips it back.
     if run.inverse != (run.cursor && focused) {
-        (bg.unwrap_or(design::BG_DEEP), Some(fg))
+        (bg.unwrap_or(design::bg_deep()), Some(fg))
     } else {
         (fg, bg)
     }
@@ -114,8 +114,8 @@ pub(in crate::interfaces::studio) fn view(
             "Abre un shell del proyecto o un agente. Se requiere confianza local."
         };
         let mut empty = column![
-            icons::icon("terminal", design::FAINT, 28.0),
-            text(hint).size(12).color(design::MUTED),
+            icons::icon("terminal", design::faint(), 28.0),
+            text(hint).size(12).color(design::muted()),
         ]
         .spacing(10)
         .align_x(iced::Center);
@@ -178,10 +178,10 @@ mod tests {
         assert_eq!(ansi(232), Color::from_rgb8(8, 8, 8));
         assert_eq!(ansi(255), Color::from_rgb8(238, 238, 238));
         assert_eq!(
-            resolve(TermColor::Rgb(1, 2, 3), design::TEXT),
+            resolve(TermColor::Rgb(1, 2, 3), design::fg()),
             Color::from_rgb8(1, 2, 3)
         );
-        assert_eq!(resolve(TermColor::Default, design::TEXT), design::TEXT);
+        assert_eq!(resolve(TermColor::Default, design::fg()), design::fg());
     }
 
     #[test]
@@ -191,15 +191,18 @@ mod tests {
                 &run(TermColor::Default, TermColor::Default, false, false),
                 true
             ),
-            (design::TEXT, None)
+            (design::fg(), None)
         );
     }
 
     #[test]
     fn the_cursor_is_a_block_only_while_the_terminal_has_the_focus() {
         let cursor = run(TermColor::Default, TermColor::Default, false, true);
-        assert_eq!(colors(&cursor, true), (design::BG_DEEP, Some(design::TEXT)));
-        assert_eq!(colors(&cursor, false), (design::TEXT, None));
+        assert_eq!(
+            colors(&cursor, true),
+            (design::bg_deep(), Some(design::fg()))
+        );
+        assert_eq!(colors(&cursor, false), (design::fg(), None));
     }
 
     #[test]

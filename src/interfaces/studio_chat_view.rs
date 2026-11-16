@@ -12,13 +12,13 @@ pub(in crate::interfaces::studio) fn view<'a>(
 ) -> Element<'a, Message> {
     super::CURRENT.with(|current| *current.borrow_mut() = id.to_owned());
     let Some(chat) = state.chat.chats.iter().find(|c| c.agent.id == id) else {
-        return container(text("Abre un agente desde el panel Agentes.").color(design::MUTED))
+        return container(text("Abre un agente desde el panel Agentes.").color(design::muted()))
             .center(Fill)
             .into();
     };
     let mut transcript = column![].spacing(12).padding([16, 24]).max_width(900);
     if chat.preparing {
-        transcript = transcript.push(text("Preparando el chat…").size(12).color(design::MUTED));
+        transcript = transcript.push(text("Preparando el chat…").size(12).color(design::muted()));
     }
     if let Some(problem) = &chat.problem {
         transcript = transcript.push(cards_note(problem));
@@ -34,7 +34,7 @@ pub(in crate::interfaces::studio) fn view<'a>(
                 "{skipped} mensajes anteriores ocultos para mantener el chat fluido."
             ))
             .size(11)
-            .color(design::FAINT),
+            .color(design::faint()),
         );
     }
     for (index, entry) in chat.model.entries.iter().enumerate().skip(skipped) {
@@ -53,7 +53,7 @@ pub(in crate::interfaces::studio) fn view<'a>(
         transcript = transcript.push(row![
             button(
                 row![
-                    icons::icon("refresh", design::MUTED, 12.0),
+                    icons::icon("refresh", design::muted(), 12.0),
                     text("Reintentar").size(11)
                 ]
                 .spacing(6)
@@ -65,7 +65,7 @@ pub(in crate::interfaces::studio) fn view<'a>(
         ]);
     }
     if chat.turn.is_some() && !chat.model.awaiting_answer() {
-        transcript = transcript.push(text("Trabajando…").size(11).color(design::ACCENT));
+        transcript = transcript.push(text("Trabajando…").size(11).color(design::accent()));
     }
     let body = styles::vscroll(container(transcript).center_x(Fill))
         .anchor_bottom()
@@ -81,7 +81,7 @@ pub(in crate::interfaces::studio) fn view<'a>(
     )
     .width(Fill)
     .height(Fill)
-    .style(styles::surface(design::BG_BASE))
+    .style(styles::surface(design::bg_base()))
     .into()
 }
 
@@ -89,7 +89,7 @@ fn cards_note(problem: &str) -> Element<'_, Message> {
     container(text(problem).size(12))
         .padding([8, 12])
         .width(Fill)
-        .style(styles::tinted(design::WARNING))
+        .style(styles::tinted(design::warning()))
         .into()
 }
 
@@ -136,10 +136,10 @@ fn welcome(chat: &Chat) -> Element<'_, Message> {
     {
         intro = intro.push(
             row![
-                icons::icon("cpu", design::SUCCESS, 13.0),
+                icons::icon("cpu", design::success(), 13.0),
                 text("Este modelo corre en tu equipo: tus mensajes no salen a internet.")
                     .size(12)
-                    .color(design::SUCCESS),
+                    .color(design::success()),
             ]
             .spacing(6)
             .align_y(iced::Center),
@@ -148,7 +148,7 @@ fn welcome(chat: &Chat) -> Element<'_, Message> {
     intro
         .push(text("Escribe, pega una captura (Ctrl+V) o arrastra imágenes aquí. El agente te pedirá permiso en este chat antes de hacer algo que tu nivel de acceso no cubra, y puedes cambiarlo cuando quieras en «Permisos».")
             .size(12)
-            .color(design::MUTED))
+            .color(design::muted()))
         .push(iced::widget::scrollable(starters).direction(iced::widget::scrollable::Direction::Horizontal(
             iced::widget::scrollable::Scrollbar::new().width(3).scroller_width(3),
         )))
@@ -171,13 +171,21 @@ fn chip<'a>(
     message: Message,
     tip: &'static str,
 ) -> Element<'a, Message> {
-    let tint = if warn { design::WARNING } else { design::TEXT };
+    let tint = if warn {
+        design::warning()
+    } else {
+        design::fg()
+    };
     styles::tip(
         button(
             row![
                 icons::icon(
                     icon,
-                    if warn { design::WARNING } else { design::MUTED },
+                    if warn {
+                        design::warning()
+                    } else {
+                        design::muted()
+                    },
                     12.0
                 ),
                 text(label).size(11).color(tint),
@@ -187,7 +195,7 @@ fn chip<'a>(
                     } else {
                         "chevron-right"
                     },
-                    design::FAINT,
+                    design::faint(),
                     10.0
                 ),
             ]
@@ -214,7 +222,7 @@ fn icon_button<'a>(
     message: Message,
 ) -> Element<'a, Message> {
     styles::tip(
-        button(icons::icon(icon, design::MUTED, 14.0))
+        button(icons::icon(icon, design::muted(), 14.0))
             .padding(6)
             .style(styles::ghost(false))
             .on_press(message),
@@ -225,13 +233,13 @@ fn icon_button<'a>(
 
 fn header<'a>(chat: &'a Chat) -> Element<'a, Message> {
     let (status, tint) = if chat.preparing {
-        ("Preparando…", design::MUTED)
+        ("Preparando…", design::muted())
     } else if chat.model.awaiting_answer() {
-        ("Espera tu respuesta", design::WARNING)
+        ("Espera tu respuesta", design::warning())
     } else if chat.turn.is_some() {
-        ("Trabajando…", design::ACCENT)
+        ("Trabajando…", design::accent())
     } else {
-        ("Listo", design::SUCCESS)
+        ("Listo", design::success())
     };
     let top = row![
         agents::avatar(chat.agent.provider, 28.0),
@@ -325,6 +333,6 @@ fn header<'a>(chat: &'a Chat) -> Element<'a, Message> {
     }
     container(head)
         .width(Fill)
-        .style(styles::surface(design::BG_PANEL))
+        .style(styles::surface(design::bg_panel()))
         .into()
 }

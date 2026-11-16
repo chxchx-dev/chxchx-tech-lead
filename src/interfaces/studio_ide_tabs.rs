@@ -42,7 +42,7 @@ pub(super) fn tab_bar(state: &Dashboard) -> Element<'_, Message> {
     container(styles::hscroll(tabs))
         .width(Fill)
         .height(TAB_HEIGHT)
-        .style(styles::surface(design::BG_PANEL))
+        .style(styles::surface(design::bg_panel()))
         .into()
 }
 
@@ -68,10 +68,10 @@ fn tab<'a>(
     if let Some((dirty, message)) = close {
         // A dot marks unsaved changes; the cross is always available to close.
         if dirty {
-            content = content.push(icons::icon("dot", design::WARNING, 10.0));
+            content = content.push(icons::icon("dot", design::warning(), 10.0));
         }
         content = content.push(
-            button(icons::icon("close", design::MUTED, 12.0))
+            button(icons::icon("close", design::muted(), 12.0))
                 .padding(3)
                 .style(styles::ghost(false))
                 .on_press(message),
@@ -82,15 +82,15 @@ fn tab<'a>(
         .height(TAB_HEIGHT)
         .align_y(iced::Center)
         .style(styles::surface(if active {
-            design::BG_BASE
+            design::bg_base()
         } else {
-            design::BG_PANEL
+            design::bg_panel()
         }));
     let marker = container(Space::new())
         .width(Fill)
         .height(2)
         .style(styles::surface(if active {
-            design::ACCENT
+            design::accent()
         } else {
             iced::Color::TRANSPARENT
         }));
@@ -99,7 +99,7 @@ fn tab<'a>(
         container(Space::new())
             .width(1)
             .height(TAB_HEIGHT)
-            .style(styles::surface(design::BG_DEEP))
+            .style(styles::surface(design::bg_deep()))
     ]
     .into()
 }
@@ -111,13 +111,13 @@ pub(super) fn editor_area(state: &Dashboard) -> Element<'_, Message> {
                 brand::mark(96.0).opacity(0.35_f32),
                 text("Abre un archivo desde el explorador")
                     .size(13)
-                    .color(design::MUTED),
+                    .color(design::muted()),
             ]
             .spacing(16)
             .align_x(iced::Center),
         )
         .center(Fill)
-        .style(styles::surface(design::BG_BASE))
+        .style(styles::surface(design::bg_base()))
         .into();
     };
     let syntax = tab
@@ -169,7 +169,7 @@ pub(super) fn editor_area(state: &Dashboard) -> Element<'_, Message> {
                     container(code()).width(iced::Length::FillPortion(1)),
                     container(preview())
                         .width(iced::Length::FillPortion(1))
-                        .style(styles::surface(design::BG_PANEL)),
+                        .style(styles::surface(design::bg_panel())),
                 ]
                 .height(Fill),
             )
@@ -211,18 +211,18 @@ fn breadcrumbs<'a>(state: &'a Dashboard, tab: &'a Tab) -> Element<'a, Message> {
     let last = parts.len().saturating_sub(1);
     for (index, part) in parts.into_iter().enumerate() {
         if index > 0 {
-            trail = trail.push(icons::icon("chevron-right", design::FAINT, 11.0));
+            trail = trail.push(icons::icon("chevron-right", design::faint(), 11.0));
         }
         trail = trail.push(text(part).size(12).color(if index == last {
-            design::TEXT
+            design::fg()
         } else {
-            design::MUTED
+            design::muted()
         }));
     }
     let save_tint = if tab.dirty {
-        design::ACCENT
+        design::accent()
     } else {
-        design::MUTED
+        design::muted()
     };
     let save_label = if state.editor.saving {
         "Guardando…"
@@ -256,9 +256,9 @@ fn breadcrumbs<'a>(state: &'a Dashboard, tab: &'a Tab) -> Element<'a, Message> {
                 button(icons::icon(
                     icon,
                     if mode == current {
-                        design::ACCENT
+                        design::accent()
                     } else {
-                        design::MUTED
+                        design::muted()
                     },
                     15.0,
                 ))
@@ -279,19 +279,19 @@ fn breadcrumbs<'a>(state: &'a Dashboard, tab: &'a Tab) -> Element<'a, Message> {
             tool(
                 "wand",
                 "Formatear (Alt+Mayús+F)",
-                design::MUTED,
+                design::muted(),
                 Event::Format
             ),
             tool("save", save_label, save_tint, Event::Save),
-            tool("undo", "Deshacer (Ctrl+Z)", design::MUTED, Event::Undo),
-            tool("redo", "Rehacer (Ctrl+Y)", design::MUTED, Event::Redo),
+            tool("undo", "Deshacer (Ctrl+Z)", design::muted(), Event::Undo),
+            tool("redo", "Rehacer (Ctrl+Y)", design::muted(), Event::Redo),
             tool(
                 "search",
                 "Buscar (Ctrl+F)",
                 if state.editor.search {
-                    design::ACCENT
+                    design::accent()
                 } else {
-                    design::MUTED
+                    design::muted()
                 },
                 Event::Search
             ),
@@ -301,7 +301,7 @@ fn breadcrumbs<'a>(state: &'a Dashboard, tab: &'a Tab) -> Element<'a, Message> {
     )
     .padding([3, 12])
     .width(Fill)
-    .style(styles::surface(design::BG_BASE))
+    .style(styles::surface(design::bg_base()))
     .into()
 }
 
@@ -324,7 +324,7 @@ fn tool<'a>(
 fn search_bar(state: &Dashboard) -> Element<'_, Message> {
     container(
         row![
-            icons::icon("search", design::MUTED, 14.0),
+            icons::icon("search", design::muted(), 14.0),
             text_input("Buscar en este archivo…", &state.editor.query)
                 .on_input(|query| Message::Editor(Event::Query(query)))
                 .on_submit(Message::Editor(Event::FindNext))
@@ -337,7 +337,7 @@ fn search_bar(state: &Dashboard) -> Element<'_, Message> {
                 .style(styles::secondary)
                 .on_press(Message::Editor(Event::FindNext)),
             Space::new().width(Fill),
-            button(icons::icon("close", design::MUTED, 13.0))
+            button(icons::icon("close", design::muted(), 13.0))
                 .padding(5)
                 .style(styles::ghost(false))
                 .on_press(Message::Editor(Event::Search)),
@@ -347,6 +347,6 @@ fn search_bar(state: &Dashboard) -> Element<'_, Message> {
     )
     .padding([6, 12])
     .width(Fill)
-    .style(styles::surface(design::BG_PANEL))
+    .style(styles::surface(design::bg_panel()))
     .into()
 }

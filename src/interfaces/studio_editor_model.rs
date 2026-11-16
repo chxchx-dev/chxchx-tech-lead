@@ -193,6 +193,7 @@ pub(in crate::interfaces::studio) fn fixture() -> Dashboard {
         shell: Default::default(),
         catalog: Default::default(),
         session: session::fixture(),
+        settings: Default::default(),
         menu: Default::default(),
         search: Default::default(),
         git: Default::default(),

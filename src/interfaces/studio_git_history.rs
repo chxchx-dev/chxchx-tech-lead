@@ -10,7 +10,7 @@ pub(super) fn log(state: &Dashboard) -> Element<'_, Message> {
         return container(
             text("Todavía no hay commits.")
                 .size(12)
-                .color(design::MUTED),
+                .color(design::muted()),
         )
         .padding([4, 14])
         .into();
@@ -43,7 +43,7 @@ pub(super) fn log(state: &Dashboard) -> Element<'_, Message> {
             ago(commit.time)
         ))
         .size(10)
-        .color(design::FAINT)
+        .color(design::faint())
         .wrapping(iced::widget::text::Wrapping::None);
         let line = styles::tip(
             button(column![subject, meta].spacing(3).width(Fill))
@@ -83,13 +83,13 @@ pub(super) fn log(state: &Dashboard) -> Element<'_, Message> {
 
 fn ref_chip(name: &str) -> Element<'_, Message> {
     let (label, tint) = if let Some(head) = name.strip_prefix("HEAD -> ") {
-        (head, design::ACCENT)
+        (head, design::accent())
     } else if let Some(tag) = name.strip_prefix("tag: ") {
-        (tag, design::WARNING)
+        (tag, design::warning())
     } else if name.contains('/') {
-        (name, design::TINT_PURPLE)
+        (name, design::tint_purple())
     } else {
-        (name, design::BRAND_BLUE)
+        (name, design::brand_blue())
     };
     container(
         text(label)
@@ -103,7 +103,7 @@ fn ref_chip(name: &str) -> Element<'_, Message> {
 
 fn details<'a>(state: &'a Dashboard, hash: &'a str) -> Element<'a, Message> {
     let Some((message, files)) = &state.git.commit_detail else {
-        return container(text("Leyendo el commit…").size(11).color(design::MUTED))
+        return container(text("Leyendo el commit…").size(11).color(design::muted()))
             .padding([6, 12])
             .into();
     };
@@ -111,10 +111,10 @@ fn details<'a>(state: &'a Dashboard, hash: &'a str) -> Element<'a, Message> {
     for file in files {
         let letter = file.status.chars().next().unwrap_or('M');
         let tint = match letter {
-            'A' => design::SUCCESS,
-            'D' => design::DANGER,
-            'R' | 'C' => design::BRAND_CYAN,
-            _ => design::WARNING,
+            'A' => design::success(),
+            'D' => design::danger(),
+            'R' | 'C' => design::brand_cyan(),
+            _ => design::warning(),
         };
         body = body.push(
             button(
@@ -160,7 +160,7 @@ pub(super) fn branches(state: &Dashboard) -> Element<'_, Message> {
                 .on_input(|name| event(Event::NewBranch(name)))
                 .on_submit(event(Event::CreateBranch)),
             styles::tip(
-                button(icons::icon("plus", design::TEXT, 13.0))
+                button(icons::icon("plus", design::fg(), 13.0))
                     .padding(6)
                     .style(styles::primary)
                     .on_press_maybe(creating.then(|| event(Event::CreateBranch))),
@@ -185,16 +185,16 @@ pub(super) fn branches(state: &Dashboard) -> Element<'_, Message> {
             text(if remote { "REMOTAS" } else { "LOCALES" })
                 .size(10)
                 .font(design::UI_BOLD)
-                .color(design::FAINT),
+                .color(design::faint()),
         );
         for branch in group {
             let mut line = row![
                 icons::icon(
                     "branch",
                     if branch.current {
-                        design::ACCENT
+                        design::accent()
                     } else {
-                        design::MUTED
+                        design::muted()
                     },
                     13.0
                 ),
@@ -213,7 +213,7 @@ pub(super) fn branches(state: &Dashboard) -> Element<'_, Message> {
                         translate(&branch.track)
                     })
                     .size(10)
-                    .color(design::FAINT)
+                    .color(design::faint())
                     .wrapping(iced::widget::text::Wrapping::None),
                 ]
                 .width(Fill),
@@ -224,7 +224,7 @@ pub(super) fn branches(state: &Dashboard) -> Element<'_, Message> {
                 line = line.push(
                     container(text("ACTUAL").size(9).font(design::UI_BOLD))
                         .padding([1, 6])
-                        .style(styles::chip(design::ACCENT)),
+                        .style(styles::chip(design::accent())),
                 );
             } else {
                 let target = event(Event::Switch(branch.name.clone(), branch.remote));
@@ -238,7 +238,7 @@ pub(super) fn branches(state: &Dashboard) -> Element<'_, Message> {
                 ));
                 if !branch.remote {
                     line = line.push(styles::tip(
-                        button(icons::icon("trash", design::MUTED, 13.0))
+                        button(icons::icon("trash", design::muted(), 13.0))
                             .padding(4)
                             .style(styles::ghost(false))
                             .on_press(event(Event::Ask(Confirm::DeleteBranch(

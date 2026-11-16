@@ -58,6 +58,9 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
     if let Message::Shell(event) = message {
         return shell::update(state, event);
     }
+    if let Message::Settings(event) = message {
+        return settings::update(state, event);
+    }
     if let Message::Session(event) = message {
         return session::update(state, event);
     }
@@ -98,6 +101,7 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
         | Message::Shell(_)
         | Message::Catalog(_)
         | Message::Session(_)
+        | Message::Settings(_)
         | Message::Menu(_)
         | Message::Search(_)
         | Message::Git(_)

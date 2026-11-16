@@ -21,10 +21,17 @@ pub(super) fn submit(state: &mut Dashboard) -> Task<Message> {
     let (prompt, display) = match slash::resolve(state, &text) {
         slash::Outcome::Done(task) => return task,
         slash::Outcome::Send(prompt, display) => (prompt, Some(display)),
-        slash::Outcome::Plain => (text, None),
+        slash::Outcome::Plain => (text.clone(), None),
     };
     if start_turn_as(state, &prompt, display.as_deref(), true) {
-        with_chat(state, |chat| chat.composer = text_editor::Content::new());
+        with_chat(state, |chat| {
+            chat.composer = text_editor::Content::new();
+            chat.recall = None;
+            chat.draft.clear();
+            if !text.is_empty() && chat.history.last() != Some(&text) {
+                chat.history.push(text);
+            }
+        });
     }
     Task::none()
 }
@@ -229,6 +236,7 @@ pub(super) fn new_chat(state: &mut Dashboard) {
         chat.approved.clear();
         chat.composer = text_editor::Content::new();
         chat.rendered.clear();
+        chat.selecting.clear();
         chat.picks.clear();
         if let Some(cli) = cli {
             let id = chat.agent.id.clone();
@@ -263,4 +271,26 @@ pub(super) fn retry(state: &mut Dashboard) {
     {
         start_turn(state, &text, true);
     }
+}
+
+/// Brings back an earlier message (`older`) or walks toward the newest and the unsent draft.
+pub(super) fn history_step(chat: &mut Chat, older: bool) {
+    let next = match (chat.recall, older) {
+        (None, true) if !chat.history.is_empty() => {
+            chat.draft = chat.composer.text();
+            Some(chat.history.len() - 1)
+        }
+        (Some(at), true) => Some(at.saturating_sub(1)),
+        (Some(at), false) if at + 1 < chat.history.len() => Some(at + 1),
+        (Some(_), false) => None,
+        _ => return,
+    };
+    let text = match next {
+        Some(at) => chat.history[at].clone(),
+        None => std::mem::take(&mut chat.draft),
+    };
+    chat.recall = next;
+    chat.composer = text_editor::Content::with_text(&text);
+    chat.composer
+        .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
 }

@@ -743,30 +743,102 @@ fn fill_opaque_rounded(
     let left = top_left.max(bottom_left);
     let right = top_right.max(bottom_right);
 
-    // The caps reach 2 logical pixels under the middle so the seam never shows.
+    // Only the corners need anti-aliasing: each is a small cap (its radius tall), and what lies
+    // between the caps of a side is a plain rectangle. A tall card used to fill its whole
+    // 14 px wide side strips as paths on every frame.
     let overlap = 2.0;
-    let mut cap = |x: f32, width: f32, radii: [f32; 4]| {
-        if radii == [0.0; 4] || width <= 0.0 {
+    let plain = tiny_skia::Paint {
+        shader: tiny_skia::Shader::SolidColor(into_color(color)),
+        anti_alias: false,
+        ..tiny_skia::Paint::default()
+    };
+    let fill_plain = |pixels: &mut tiny_skia::PixmapMut<'_>, area: Rectangle| {
+        let area = area * transformation;
+        if let Some(visible) = area.intersection(&clip_bounds) {
+            let (x0, y0) = (visible.x.round(), visible.y.round());
+            let (x1, y1) = (
+                (visible.x + visible.width).round(),
+                (visible.y + visible.height).round(),
+            );
+            if let Some(rect) = tiny_skia::Rect::from_ltrb(x0, y0, x1, y1) {
+                pixels.fill_rect(
+                    rect,
+                    &plain,
+                    tiny_skia::Transform::identity(),
+                    None,
+                );
+            }
+        }
+    };
+    let side = |pixels: &mut tiny_skia::PixmapMut<'_>,
+                    x: f32,
+                    width: f32,
+                    cap_x: f32,
+                    cap_width: f32,
+                    top: f32,
+                    bottom: f32,
+                    left_side: bool| {
+        if width <= 0.0 {
             return;
         }
-        let path = rounded_rectangle(
+        if top > 0.0 {
+            let height = (top + overlap).min(bounds.height);
+            let radii = if left_side {
+                [top, 0.0, 0.0, 0.0]
+            } else {
+                [0.0, top, 0.0, 0.0]
+            };
+            let path = rounded_rectangle(
+                Rectangle {
+                    x: cap_x,
+                    y: bounds.y,
+                    width: cap_width,
+                    height,
+                },
+                radii,
+            );
+            pixels_fill(pixels, &path, &paint, transform, clip_mask);
+        }
+        if bottom > 0.0 {
+            let height = (bottom + overlap).min(bounds.height);
+            let radii = if left_side {
+                [0.0, 0.0, 0.0, bottom]
+            } else {
+                [0.0, 0.0, bottom, 0.0]
+            };
+            let path = rounded_rectangle(
+                Rectangle {
+                    x: cap_x,
+                    y: bounds.y + bounds.height - height,
+                    width: cap_width,
+                    height,
+                },
+                radii,
+            );
+            pixels_fill(pixels, &path, &paint, transform, clip_mask);
+        }
+        fill_plain(
+            pixels,
             Rectangle {
                 x,
-                y: bounds.y,
+                y: bounds.y + top,
                 width,
-                height: bounds.height,
+                height: (bounds.height - top - bottom).max(0.0),
             },
-            radii,
         );
-        pixels_fill(pixels, &path, &paint, transform, clip_mask);
     };
     let left_width = (left + overlap).min(bounds.width);
     let right_width = (right + overlap).min(bounds.width);
-    cap(bounds.x, left_width, [top_left, 0.0, 0.0, bottom_left]);
-    cap(
+    side(pixels, bounds.x, left, bounds.x, left_width, top_left, bottom_left, true);
+    side(
+        pixels,
+        bounds.x + bounds.width - right,
+        right,
         bounds.x + bounds.width - right_width,
         right_width,
-        [0.0, top_right, bottom_right, 0.0],
+        top_right,
+        bottom_right,
+        false,
     );
 
     let middle = Rectangle {
@@ -786,10 +858,7 @@ fn fill_opaque_rounded(
         if let Some(rect) = tiny_skia::Rect::from_ltrb(x0, y0, x1, y1) {
             pixels.fill_rect(
                 rect,
-                &tiny_skia::Paint {
-                    anti_alias: false,
-                    ..paint
-                },
+                &plain,
                 tiny_skia::Transform::identity(),
                 None,
             );
@@ -981,28 +1050,85 @@ fn rounded_box_sdf(
     (x.powf(2.0) + y.powf(2.0)).sqrt() - radius
 }
 
+thread_local! {
+    /// The pixel rows and columns the clip mask has set so far: (left, top, right, bottom).
+    static MASK_DIRTY: std::cell::Cell<(usize, usize, usize, usize)> =
+        const { std::cell::Cell::new((0, 0, 0, 0)) };
+}
+
+/// ChxChx patch: the clip is always a rectangle, so the mask is rewritten only where it was and
+/// will be set, instead of clearing the whole window-sized buffer (and filling a path) for every
+/// clipped widget of every frame.
 pub fn adjust_clip_mask(clip_mask: &mut tiny_skia::Mask, bounds: Rectangle) {
-    clip_mask.clear();
-
-    let path = {
-        let mut builder = tiny_skia::PathBuilder::new();
-        builder.push_rect(
-            tiny_skia::Rect::from_xywh(
-                bounds.x,
-                bounds.y,
-                bounds.width,
-                bounds.height,
-            )
-            .unwrap(),
-        );
-
-        builder.finish().unwrap()
-    };
-
-    clip_mask.fill_path(
-        &path,
-        tiny_skia::FillRule::EvenOdd,
-        false,
-        tiny_skia::Transform::default(),
+    let (width, height) = (clip_mask.width() as usize, clip_mask.height() as usize);
+    let clamp = |value: f32, max: usize| value.round().clamp(0.0, max as f32) as usize;
+    let (left, top) = (clamp(bounds.x, width), clamp(bounds.y, height));
+    let (right, bottom) = (
+        clamp(bounds.x + bounds.width, width),
+        clamp(bounds.y + bounds.height, height),
     );
+
+    let data = clip_mask.data_mut();
+    let (dl, dt, dr, db) = MASK_DIRTY.with(|cell| cell.get());
+    let (dr, db) = (dr.min(width), db.min(height));
+    for row in dt.min(height)..db {
+        let start = row * width + dl.min(width);
+        let end = row * width + dr;
+        if start < end {
+            data[start..end].fill(0);
+        }
+    }
+    for row in top..bottom {
+        if left < right {
+            data[row * width + left..row * width + right].fill(255);
+        }
+    }
+    MASK_DIRTY.with(|cell| cell.set((left, top, right, bottom)));
+}
+
+#[cfg(test)]
+mod chxchx_tests {
+    use super::*;
+
+    /// The split fill (caps plus plain rectangles) must look like one anti-aliased path.
+    #[test]
+    fn opaque_rounded_matches_the_single_path_fill() {
+        let bounds = Rectangle::new(
+            crate::core::Point::new(10.0, 10.0),
+            crate::core::Size::new(70.0, 160.0),
+        );
+        for radii in [[12.0; 4], [12.0, 12.0, 0.0, 0.0], [6.0, 12.0, 12.0, 3.0]] {
+            let mut split = tiny_skia::Pixmap::new(100, 200).unwrap();
+            let mut whole = tiny_skia::Pixmap::new(100, 200).unwrap();
+            let color = Color::from_rgb(0.2, 0.5, 0.9);
+            fill_opaque_rounded(
+                &mut split.as_mut(),
+                bounds,
+                radii,
+                color,
+                Transformation::IDENTITY,
+                tiny_skia::Transform::identity(),
+                None,
+                Rectangle::new(crate::core::Point::ORIGIN, crate::core::Size::new(100.0, 200.0)),
+            );
+            whole.fill_path(
+                &rounded_rectangle(bounds, radii),
+                &tiny_skia::Paint {
+                    shader: tiny_skia::Shader::SolidColor(into_color(color)),
+                    anti_alias: true,
+                    ..tiny_skia::Paint::default()
+                },
+                tiny_skia::FillRule::EvenOdd,
+                tiny_skia::Transform::identity(),
+                None,
+            );
+            let off = split
+                .data()
+                .chunks(4)
+                .zip(whole.data().chunks(4))
+                .filter(|(a, b)| a.iter().zip(*b).any(|(x, y)| x.abs_diff(*y) > 24))
+                .count();
+            assert!(off <= 24, "{radii:?}: {off} pixels differ");
+        }
+    }
 }

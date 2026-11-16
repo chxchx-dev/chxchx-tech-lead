@@ -41,7 +41,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
 fn notice(state: &Dashboard) -> Element<'_, Message> {
     container(
         row![
-            icons::icon("info", design::ACCENT, 14.0),
+            icons::icon("info", design::accent(), 14.0),
             styles::vscroll(text(&state.message).size(12))
                 .height(18)
                 .width(Fill),
@@ -49,7 +49,7 @@ fn notice(state: &Dashboard) -> Element<'_, Message> {
                 .padding([3, 8])
                 .style(styles::ghost(false))
                 .on_press(Message::Shell(shell::Event::Dock(shell::DockTab::Activity))),
-            button(icons::icon("close", design::MUTED, 12.0))
+            button(icons::icon("close", design::muted(), 12.0))
                 .padding(4)
                 .style(styles::ghost(false))
                 .on_press(Message::Shell(shell::Event::ClearMessage)),
@@ -59,7 +59,7 @@ fn notice(state: &Dashboard) -> Element<'_, Message> {
     )
     .padding([4, 12])
     .width(Fill)
-    .style(styles::surface(design::BG_RAISED))
+    .style(styles::surface(design::bg_raised()))
     .into()
 }
 
@@ -83,12 +83,12 @@ fn confirm(state: &Dashboard) -> Element<'_, Message> {
     let dialog = container(
         column![
             row![
-                icons::icon("warning", design::WARNING, 20.0),
+                icons::icon("warning", design::warning(), 20.0),
                 text(title).size(16).font(design::UI_BOLD)
             ]
             .spacing(10)
             .align_y(iced::Center),
-            text(detail).size(13).color(design::MUTED),
+            text(detail).size(13).color(design::muted()),
             row![
                 Space::new().width(Fill),
                 button(text("Volver al editor").size(12))
@@ -110,6 +110,6 @@ fn confirm(state: &Dashboard) -> Element<'_, Message> {
     opaque(
         container(dialog)
             .center(Fill)
-            .style(styles::surface(design::alpha(design::BG_DEEP, 0.72))),
+            .style(styles::surface(design::alpha(design::bg_deep(), 0.72))),
     )
 }

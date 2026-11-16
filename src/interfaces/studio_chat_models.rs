@@ -45,7 +45,7 @@ pub(super) fn panel(chat: &Chat) -> Element<'_, Message> {
                         text(provider.to_uppercase())
                             .size(9)
                             .font(design::UI_BOLD)
-                            .color(design::FAINT),
+                            .color(design::faint()),
                     )
                     .padding(iced::Padding::new(8.0).bottom(2.0)),
                 );
@@ -58,9 +58,9 @@ pub(super) fn panel(chat: &Chat) -> Element<'_, Message> {
                     icons::icon(
                         if selected { "check" } else { "dot" },
                         if selected {
-                            design::ACCENT
+                            design::accent()
                         } else {
-                            design::BORDER_STRONG
+                            design::border_strong()
                         },
                         12.0
                     ),
@@ -75,7 +75,7 @@ pub(super) fn panel(chat: &Chat) -> Element<'_, Message> {
                     } else {
                         text(format!("{} niveles", model.efforts.len()))
                             .size(10)
-                            .color(design::FAINT)
+                            .color(design::faint())
                             .into()
                     },
                 ]
@@ -93,7 +93,7 @@ pub(super) fn panel(chat: &Chat) -> Element<'_, Message> {
         list = list.push(
             text("Ningún modelo coincide.")
                 .size(11)
-                .color(design::MUTED),
+                .color(design::muted()),
         );
     }
     let mut body = column![
@@ -109,7 +109,7 @@ pub(super) fn panel(chat: &Chat) -> Element<'_, Message> {
         .map(|m| m.efforts.clone())
         .unwrap_or_default();
     if !efforts.is_empty() {
-        let mut levels = row![text("Esfuerzo").size(11).color(design::MUTED)]
+        let mut levels = row![text("Esfuerzo").size(11).color(design::muted())]
             .spacing(6)
             .align_y(iced::Center);
         for level in efforts {
@@ -139,13 +139,13 @@ pub(super) fn panel(chat: &Chat) -> Element<'_, Message> {
         body = body.push(
             text("Este agente no informó modelos: usa el suyo por defecto.")
                 .size(11)
-                .color(design::MUTED),
+                .color(design::muted()),
         );
     }
     container(body)
         .padding([12, 16])
         .width(Fill)
-        .style(styles::surface(design::BG_RAISED))
+        .style(styles::surface(design::bg_raised()))
         .into()
 }
 

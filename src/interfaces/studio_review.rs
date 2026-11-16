@@ -5,7 +5,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     let mut content = column![
         text("Comprueba el alcance antes de confirmar.")
             .size(13)
-            .color(design::MUTED)
+            .color(design::muted())
     ]
     .spacing(9);
     if let Some(catalog) = state
@@ -24,9 +24,9 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
                     (false, _) => "no encontrado",
                 };
                 let tint = if project.available {
-                    design::SUCCESS
+                    design::success()
                 } else {
-                    design::WARNING
+                    design::warning()
                 };
                 let stacks = if project.stacks.is_empty() {
                     "ninguno".to_owned()
@@ -37,11 +37,11 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
                     container(
                         column![
                             row![
-                                icons::icon("folder", design::BRAND_BLUE, 15.0),
+                                icons::icon("folder", design::brand_blue(), 15.0),
                                 text(&project.alias).size(13).font(design::UI_BOLD),
                                 text(format!("{} · {} · {stacks}", project.name, project.profile))
                                     .size(12)
-                                    .color(design::MUTED),
+                                    .color(design::muted()),
                                 Space::new().width(Fill),
                                 container(text(status).size(11))
                                     .padding([2, 9])
@@ -52,7 +52,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
                             text(project.path.as_deref().unwrap_or("<ruta ausente>"))
                                 .size(11)
                                 .font(design::MONO)
-                                .color(design::FAINT),
+                                .color(design::faint()),
                         ]
                         .spacing(5),
                     )
@@ -74,17 +74,17 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         if let Some(reason) = &plan.blocked_reason {
             content = content.push(line(
                 "warning",
-                design::DANGER,
+                design::danger(),
                 format!("No se puede aplicar: {reason}"),
             ));
         } else {
             for action in &plan.actions {
-                content = content.push(line("check", design::SUCCESS, action));
+                content = content.push(line("check", design::success(), action));
             }
             for warning in &plan.warnings {
                 content = content.push(line(
                     "warning",
-                    design::WARNING,
+                    design::warning(),
                     format!("Aviso: {warning}"),
                 ));
             }
@@ -108,21 +108,21 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
             if let Some(reason) = &entry.blocked_reason {
                 content = content.push(line(
                     "warning",
-                    design::WARNING,
+                    design::warning(),
                     format!("Omitido: {reason}"),
                 ));
             } else if entry.changes.is_empty() {
                 content = content.push(note("Sin cambios."));
             } else {
                 for action in &entry.changes {
-                    content = content.push(line("check", design::SUCCESS, action));
+                    content = content.push(line("check", design::success(), action));
                 }
             }
         }
         for warning in &plan.warnings {
             content = content.push(line(
                 "warning",
-                design::WARNING,
+                design::warning(),
                 format!("Aviso: {warning}"),
             ));
         }
@@ -138,12 +138,12 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         if let Some(reason) = &plan.blocked_reason {
             content = content.push(line(
                 "warning",
-                design::DANGER,
+                design::danger(),
                 format!("No se puede aplicar: {reason}"),
             ));
         } else {
             for action in &plan.actions {
-                content = content.push(line("check", design::SUCCESS, action));
+                content = content.push(line("check", design::success(), action));
             }
             if plan.changes_state {
                 content = content.push(confirm("Restaurar desde backup", Message::ApplyRollback));
@@ -161,7 +161,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
             }
         )));
         for action in &plan.actions {
-            content = content.push(line("check", design::SUCCESS, action));
+            content = content.push(line("check", design::success(), action));
         }
         content = content.push(note("Guardar confianza no ejecuta procesos."));
         if plan.changes_state {
@@ -179,17 +179,17 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         if let Some(reason) = &plan.blocked_reason {
             content = content.push(line(
                 "warning",
-                design::DANGER,
+                design::danger(),
                 format!("No se puede aplicar: {reason}"),
             ));
         } else {
             for action in &plan.actions {
-                content = content.push(line("check", design::SUCCESS, action));
+                content = content.push(line("check", design::success(), action));
             }
             for warning in &plan.warnings {
                 content = content.push(line(
                     "warning",
-                    design::WARNING,
+                    design::warning(),
                     format!("Aviso: {warning}"),
                 ));
             }
@@ -222,11 +222,11 @@ fn title<'a>(value: impl text::IntoFragment<'a>) -> Element<'a, Message> {
 }
 
 fn note<'a>(value: &'a str) -> Element<'a, Message> {
-    text(value).size(12).color(design::MUTED).into()
+    text(value).size(12).color(design::muted()).into()
 }
 
 fn note_owned<'a>(value: String) -> Element<'a, Message> {
-    text(value).size(12).color(design::MUTED).into()
+    text(value).size(12).color(design::muted()).into()
 }
 
 fn line<'a>(

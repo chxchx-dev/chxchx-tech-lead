@@ -5,10 +5,16 @@ use iced::widget::{column, text_editor, tooltip};
 
 pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
     let running = chat.turn.is_some();
-    let has_content = !chat.composer.text().trim().is_empty() || !chat.images.is_empty();
+    let empty = chat.composer.is_empty();
+    let has_content = !empty || !chat.images.is_empty();
     let ready = has_content && !running && !chat.preparing && chat.problem.is_none();
     let (to_edit, to_keys) = (super::sender(), super::sender());
     let menu_open = slash::menu(chat).is_some();
+    let cursor = chat.composer.cursor();
+    let single_line_start = cursor.position.line == 0 && cursor.selection.is_none();
+    let last_line =
+        cursor.position.line + 1 >= chat.composer.line_count() && cursor.selection.is_none();
+    let browsing = chat.recall.is_some();
     let editor = text_editor(&chat.composer)
         .placeholder("Escribe un mensaje, / para comandos, o pega una captura…")
         .on_action(move |action| to_edit(Event::Edit(action)))
@@ -23,7 +29,14 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
             let enter = matches!(key.key.as_ref(), Key::Named(Named::Enter));
             let paste = key.modifiers.command()
                 && matches!(key.key.as_ref(), Key::Character(c) if c.eq_ignore_ascii_case("v"));
-            if enter && !key.modifiers.shift() {
+            let plain = !key.modifiers.shift() && !key.modifiers.command() && !key.modifiers.alt();
+            let up = plain && matches!(key.key.as_ref(), Key::Named(Named::ArrowUp));
+            let down = plain && matches!(key.key.as_ref(), Key::Named(Named::ArrowDown));
+            if up && !menu_open && (empty || browsing || single_line_start) {
+                Some(text_editor::Binding::Custom(to_keys(Event::HistoryPrev)))
+            } else if down && !menu_open && browsing && last_line {
+                Some(text_editor::Binding::Custom(to_keys(Event::HistoryNext)))
+            } else if enter && !key.modifiers.shift() {
                 Some(text_editor::Binding::Custom(to_keys(if menu_open {
                     Event::SlashEnter
                 } else {
@@ -36,7 +49,7 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
             }
         });
     let attach = styles::tip(
-        button(icons::icon("plus", design::MUTED, 15.0))
+        button(icons::icon("plus", design::muted(), 15.0))
             .padding(6)
             .style(styles::ghost(false))
             .on_press(send(Event::Attach)),
@@ -45,7 +58,7 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
     );
     let action = if running {
         styles::tip(
-            button(icons::icon("stop", design::TEXT, 14.0))
+            button(icons::icon("stop", design::fg(), 14.0))
                 .padding(8)
                 .style(styles::danger)
                 .on_press(send(Event::Stop)),
@@ -79,11 +92,11 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
                                 .wrapping(iced::widget::text::Wrapping::None),
                             text(images::note(image))
                                 .size(10)
-                                .color(design::FAINT)
+                                .color(design::faint())
                                 .wrapping(iced::widget::text::Wrapping::None),
                         ]
                         .spacing(2),
-                        button(icons::icon("close", design::MUTED, 11.0))
+                        button(icons::icon("close", design::muted(), 11.0))
                             .padding(3)
                             .style(styles::ghost(false))
                             .on_press(send(Event::RemoveImage(index))),
@@ -109,7 +122,7 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
         attach,
         text("Intro envía · Mayús+Intro, nueva línea")
             .size(10)
-            .color(design::FAINT),
+            .color(design::faint()),
         Space::new().width(Fill),
         action,
     ]
@@ -126,6 +139,6 @@ pub(super) fn composer(chat: &Chat) -> Element<'_, Message> {
     container(body)
         .padding([8, 16])
         .width(Fill)
-        .style(styles::surface(design::BG_BASE))
+        .style(styles::surface(design::bg_base()))
         .into()
 }

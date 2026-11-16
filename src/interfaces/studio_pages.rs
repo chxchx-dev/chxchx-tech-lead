@@ -6,7 +6,7 @@ pub(super) fn page_actions<'a>(
     mut body: iced::widget::Column<'a, Message>,
 ) -> iced::widget::Column<'a, Message> {
     let cards = match state.page {
-        Page::Home | Page::Catalog => return body,
+        Page::Home | Page::Catalog | Page::Settings => return body,
         Page::Setup => column![
             card(
                 "RECOMENDADO",
@@ -84,14 +84,14 @@ pub(super) fn eyebrow<'a>(label: &'a str) -> iced::widget::Text<'a> {
     text(label)
         .size(10)
         .font(design::UI_BOLD)
-        .color(design::ACCENT)
+        .color(design::accent())
 }
 
 /// Round tinted badge that holds a section icon.
 pub(super) fn badge<'a>(icon: &'static str, size: f32) -> Element<'a, Message> {
-    container(icons::icon(icon, design::BRAND_CYAN, size))
+    container(icons::icon(icon, design::brand_cyan(), size))
         .padding(size * 0.45)
-        .style(styles::chip(design::BRAND_BLUE))
+        .style(styles::chip(design::brand_blue()))
         .into()
 }
 
@@ -155,7 +155,7 @@ fn action_card<'a>(
     let call_to_action = button(
         row![
             text(label).size(12).font(design::UI_BOLD),
-            icons::icon("arrow-right", design::TEXT, 13.0)
+            icons::icon("arrow-right", design::fg(), 13.0)
         ]
         .spacing(8)
         .align_y(iced::Center),
@@ -173,7 +173,7 @@ fn action_card<'a>(
         ]
         .spacing(12)
         .align_y(iced::Center),
-        text(description).size(13).color(design::MUTED),
+        text(description).size(13).color(design::muted()),
         if featured {
             call_to_action.style(styles::primary)
         } else {

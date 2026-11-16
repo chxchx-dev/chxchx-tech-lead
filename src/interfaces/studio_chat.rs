@@ -97,6 +97,13 @@ pub(super) struct Chat {
     /// When the running turn started, and how long each answered turn took: (entry, seconds).
     pub turn_started: Option<std::time::Instant>,
     pub durations: Vec<(usize, u64)>,
+    /// What the person sent in this chat (oldest first), the one `↑` brought back and the text
+    /// they had typed before browsing.
+    pub history: Vec<String>,
+    pub recall: Option<usize>,
+    /// Messages shown as selectable text (the entry and its read-only editor).
+    pub selecting: Vec<(usize, text_editor::Content)>,
+    pub draft: String,
     /// Tool and reasoning cards the person expanded.
     pub expanded: Vec<usize>,
     /// Rendered Markdown of each entry (keyed by the text length it was built from).
@@ -185,7 +192,17 @@ pub(super) enum Event {
     Revoke(String, bool),
     /// Expands or collapses a card.
     Toggle(usize),
-    Copy(String),
+    /// Copies the text of an entry (the view does not clone long answers every frame).
+    CopyEntry(usize),
+    /// Copies the last answer of the agent.
+    CopyLast,
+    /// Switches a message between rendered and selectable text.
+    Select(usize),
+    /// A mouse or key action on a selectable message (never edits it).
+    Selected(usize, text_editor::Action),
+    /// `↑` / `↓` in the message box: earlier messages of this chat.
+    HistoryPrev,
+    HistoryNext,
     /// Puts a starter text in the composer.
     Starter(String),
     Access(String),
@@ -228,7 +245,12 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                 turn.cancel();
             }
         }),
-        Event::Edit(action) => with_chat(state, |chat| chat.composer.perform(action)),
+        Event::Edit(action) => with_chat(state, |chat| {
+            if matches!(action, text_editor::Action::Edit(_)) {
+                chat.recall = None;
+            }
+            chat.composer.perform(action)
+        }),
         Event::Decide(index, choice) => decide(state, index, choice),
         Event::Pick(entry, question, label) => {
             with_chat(state, |chat| pick(chat, entry, question, label))
@@ -277,7 +299,52 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                 None => chat.expanded.push(entry),
             }
         }),
-        Event::Copy(text) => return iced::clipboard::write(text),
+        Event::CopyEntry(index) => {
+            let text = state
+                .chat
+                .active_chat()
+                .and_then(|c| c.model.entries.get(index))
+                .map(|e| e.text.clone());
+            if let Some(text) = text {
+                state.message = "Copiado al portapapeles.".to_owned();
+                return iced::clipboard::write(text);
+            }
+        }
+        Event::CopyLast => {
+            let text = state.chat.active_chat().and_then(|c| {
+                c.model
+                    .entries
+                    .iter()
+                    .rev()
+                    .find(|e| e.kind == Kind::Assistant && !e.text.trim().is_empty())
+                    .map(|e| e.text.clone())
+            });
+            match text {
+                Some(text) => {
+                    state.message = "Última respuesta copiada.".to_owned();
+                    return iced::clipboard::write(text);
+                }
+                None => state.message = "Todavía no hay una respuesta que copiar.".to_owned(),
+            }
+        }
+        Event::Select(index) => with_chat(state, |chat| {
+            if let Some(at) = chat.selecting.iter().position(|(entry, _)| *entry == index) {
+                chat.selecting.remove(at);
+            } else if let Some(entry) = chat.model.entries.get(index) {
+                let content = text_editor::Content::with_text(&entry.text);
+                chat.selecting.push((index, content));
+            }
+        }),
+        Event::Selected(index, action) => with_chat(state, |chat| {
+            // Selecting and copying are allowed; typing into the transcript is not.
+            if !action.is_edit()
+                && let Some((_, content)) = chat.selecting.iter_mut().find(|(e, _)| *e == index)
+            {
+                content.perform(action);
+            }
+        }),
+        Event::HistoryPrev => with_chat(state, |chat| turns::history_step(chat, true)),
+        Event::HistoryNext => with_chat(state, |chat| turns::history_step(chat, false)),
         Event::Starter(text) => with_chat(state, |chat| {
             chat.composer = text_editor::Content::with_text(&text)
         }),

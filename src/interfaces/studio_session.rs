@@ -65,6 +65,21 @@ impl State {
             .unwrap_or_default()
     }
 
+    pub fn preferences(&self) -> &Preferences {
+        &self.preferences
+    }
+
+    /// Changes the preferences and schedules them to be saved.
+    pub fn edit(&mut self, change: impl FnOnce(&mut Preferences)) {
+        change(&mut self.preferences);
+        self.preferences.sanitize();
+        self.dirty = true;
+    }
+
+    pub fn scale(&self) -> f32 {
+        self.preferences.appearance.scale
+    }
+
     pub fn recent_projects(&self) -> &[String] {
         &self.preferences.recent_projects
     }

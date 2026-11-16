@@ -4,6 +4,9 @@ use super::*;
 use iced::widget::column;
 
 pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
+    if state.page == Page::Settings {
+        return settings::view(state);
+    }
     let mut body = column![].spacing(16).max_width(960);
     body = body.push(match state.page {
         Page::Home => home::hero(),
@@ -20,7 +23,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
             if let Some(error) = &project.workspace.config_validation_error {
                 body = body.push(banner(
                     "warning",
-                    design::WARNING,
+                    design::warning(),
                     format!("Revisa la configuración: {error}"),
                 ));
             }
@@ -57,14 +60,14 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         Err(_) if state.overview_loading => {
             body = body.push(banner(
                 "refresh",
-                design::ACCENT,
+                design::accent(),
                 "Leyendo el proyecto…".to_owned(),
             ));
         }
         Err(error) => {
             body = body.push(banner(
                 "warning",
-                design::DANGER,
+                design::danger(),
                 format!("No se pudo leer el proyecto: {error}"),
             ));
         }
@@ -75,7 +78,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
             container(
                 column![
                     row![
-                        icons::icon("shield", design::ACCENT, 18.0),
+                        icons::icon("shield", design::accent(), 18.0),
                         text("Revisa antes de continuar")
                             .size(16)
                             .font(design::UI_BOLD),
@@ -103,7 +106,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     )
     .width(Fill)
     .height(Fill)
-    .style(styles::surface(design::BG_BASE))
+    .style(styles::surface(design::bg_base()))
     .into()
 }
 
@@ -126,6 +129,7 @@ fn page_header<'a>(page: Page) -> Element<'a, Message> {
             "Conecta tus herramientas",
             "Configura la conexión con tus asistentes de desarrollo.",
         ),
+        Page::Settings => ("settings", "Ajustes", ""),
         Page::Diagnostics => (
             "diagnostics",
             "Diagnóstico",
@@ -136,7 +140,7 @@ fn page_header<'a>(page: Page) -> Element<'a, Message> {
         badge(icon, 22.0),
         column![
             text(title).size(22).font(design::UI_BOLD),
-            text(subtitle).size(13).color(design::MUTED)
+            text(subtitle).size(13).color(design::muted())
         ]
         .spacing(4),
     ]

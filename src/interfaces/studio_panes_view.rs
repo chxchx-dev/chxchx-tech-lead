@@ -73,13 +73,13 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
         .padding(8)
         .width(Fill)
         .height(Fill)
-        .style(styles::surface(design::BG_DEEP))
+        .style(styles::surface(design::bg_deep()))
         .into()
 }
 
 fn control<'a>(icon: &'static str, tip: &'static str, message: Message) -> Element<'a, Message> {
     styles::tip(
-        button(icons::icon(icon, design::MUTED, 13.0))
+        button(icons::icon(icon, design::muted(), 13.0))
             .padding(4)
             .style(styles::ghost(false))
             .on_press(message),
@@ -90,9 +90,9 @@ fn control<'a>(icon: &'static str, tip: &'static str, message: Message) -> Eleme
 
 fn describe<'a>(state: &'a Dashboard, content: &'a Content) -> (&'static str, iced::Color, String) {
     match content {
-        Content::Editor => ("code", design::BRAND_CYAN, "Editor".to_owned()),
-        Content::Activity => ("bell", design::MUTED, "Actividad".to_owned()),
-        Content::Local => ("cpu", design::TINT_GREEN, "Modelos locales".to_owned()),
+        Content::Editor => ("code", design::brand_cyan(), "Editor".to_owned()),
+        Content::Activity => ("bell", design::muted(), "Actividad".to_owned()),
+        Content::Local => ("cpu", design::tint_green(), "Modelos locales".to_owned()),
         Content::Chat(id) => {
             let label = state
                 .chat
@@ -100,7 +100,7 @@ fn describe<'a>(state: &'a Dashboard, content: &'a Content) -> (&'static str, ic
                 .iter()
                 .find(|c| c.agent.id == *id)
                 .map_or_else(|| id.clone(), |c| c.agent.label());
-            ("sparkle", design::ACCENT, format!("Chat · {label}"))
+            ("sparkle", design::accent(), format!("Chat · {label}"))
         }
         Content::Terminal(Some(id)) => {
             let tab = state.terminal.tabs.iter().find(|t| t.id == *id);
@@ -114,9 +114,9 @@ fn describe<'a>(state: &'a Dashboard, content: &'a Content) -> (&'static str, ic
                     }
                 },
             );
-            ("terminal", design::TINT_GREEN, title)
+            ("terminal", design::tint_green(), title)
         }
-        Content::Terminal(None) => ("terminal", design::TINT_GREEN, "Terminal".to_owned()),
+        Content::Terminal(None) => ("terminal", design::tint_green(), "Terminal".to_owned()),
     }
 }
 
@@ -135,11 +135,11 @@ fn tab_strip<'a>(
             icons::icon(
                 icon,
                 if active && focused {
-                    design::ACCENT
+                    design::accent()
                 } else if active {
                     tint
                 } else {
-                    design::FAINT
+                    design::faint()
                 },
                 13.0,
             ),
@@ -147,11 +147,11 @@ fn tab_strip<'a>(
                 .size(11)
                 .font(design::UI_BOLD)
                 .color(if active && focused {
-                    design::TEXT
+                    design::fg()
                 } else if active {
-                    design::MUTED
+                    design::muted()
                 } else {
-                    design::FAINT
+                    design::faint()
                 })
                 .wrapping(iced::widget::text::Wrapping::None),
         ]
@@ -159,7 +159,7 @@ fn tab_strip<'a>(
         .align_y(iced::Center);
         if *content != Content::Editor {
             tab = tab.push(
-                button(icons::icon("close", design::FAINT, 10.0))
+                button(icons::icon("close", design::faint(), 10.0))
                     .padding(2)
                     .style(styles::ghost(false))
                     .on_press(Message::Panes(Event::CloseTab(pane, index))),

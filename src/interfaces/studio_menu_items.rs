@@ -10,6 +10,49 @@ pub(super) enum Entry {
         /// `None` shows the item disabled.
         message: Option<Message>,
     },
+    /// An entry that unfolds a second list next to the dropdown.
+    Submenu {
+        label: &'static str,
+        entries: Vec<Entry>,
+    },
+}
+
+/// "Preferencias": settings, themes, interface size and shortcuts, one click from the File menu.
+fn preferences(state: &Dashboard) -> Entry {
+    let look = &state.session.preferences().appearance;
+    let mark = |on: bool| if on { "✓" } else { "" };
+    let mut entries = vec![
+        item("Ajustes…", "Ctrl+,", Message::Navigate(Page::Settings)),
+        Entry::Separator,
+    ];
+    for (id, name, _) in design::themes::THEMES {
+        entries.push(item(
+            name,
+            mark(look.theme == *id),
+            Message::Settings(settings::Event::Theme((*id).to_owned())),
+        ));
+    }
+    entries.push(Entry::Separator);
+    for (label, value) in settings::SCALES {
+        entries.push(item(
+            label,
+            mark((look.scale - value).abs() < 0.01),
+            Message::Settings(settings::Event::Scale(value)),
+        ));
+    }
+    entries.extend([
+        Entry::Separator,
+        item("Atajos de teclado…", "", Message::Navigate(Page::Settings)),
+        item(
+            "Restaurar atajos",
+            "",
+            Message::Settings(settings::Event::ResetKeys),
+        ),
+    ]);
+    Entry::Submenu {
+        label: "Preferencias",
+        entries,
+    }
 }
 
 fn item(label: &'static str, hint: &'static str, message: Message) -> Entry {
@@ -52,6 +95,8 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
                 editing,
                 Message::Editor(editor::Event::Close(state.editor.selected.unwrap_or(0))),
             ),
+            Separator,
+            preferences(state),
             Separator,
             item(
                 "Nueva ventana",
@@ -151,6 +196,11 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
                 Message::Navigate(Page::Integrations),
             ),
             item("Diagnóstico", "", Message::Navigate(Page::Diagnostics)),
+            item(
+                "Ajustes: temas y atajos",
+                "Ctrl+,",
+                Message::Navigate(Page::Settings),
+            ),
         ],
         Menu::Project => vec![
             item(

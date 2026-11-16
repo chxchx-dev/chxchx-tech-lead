@@ -1,4 +1,5 @@
 //! Window layout state: resizable panels, bottom dock and global shortcuts.
+use super::keymap::{self, Action};
 use super::*;
 use iced::widget::mouse_area;
 use iced::{Point, Subscription, keyboard, mouse};
@@ -281,27 +282,29 @@ fn shortcut(
     ) {
         return Some(Message::Menu(menu::Event::Close));
     }
-    if !modifiers.command() || modifiers.alt() {
+    if keymap::capturing() {
         return None;
     }
+    let chord = keymap::chord(&key, modifiers)?;
+    let action = keymap::lookup(&chord)?;
     // The terminal owns Ctrl+<letter> while it has the focus (Ctrl+C, Ctrl+R…); only Studio's reserved ones remain.
     if super::terminal_surface::capturing() && !super::terminal_keys::reserved(&key, modifiers) {
         return None;
     }
     // Keys the focused editor or input already handled must not fire twice.
-    let free = status == iced::event::Status::Ignored;
-    let character = match key.as_ref() {
-        keyboard::Key::Character(character) => character.to_ascii_lowercase(),
-        _ => return None,
-    };
-    match (character.as_str(), modifiers.shift()) {
-        ("b", false) => Some(Message::Shell(Event::ToggleSide(Side::Explorer))),
-        ("j", false) => Some(Message::Shell(Event::ToggleDock)),
-        ("f", true) => Some(Message::Shell(Event::ShowSide(Side::Search))),
-        ("s", false) if free => Some(Message::Editor(editor::Event::Save)),
-        ("w", false) if free => Some(Message::Editor(editor::Event::CloseCurrent)),
-        _ => None,
+    if action.needs_free_key() && status != iced::event::Status::Ignored {
+        return None;
     }
+    Some(match action {
+        Action::ToggleSidebar => Message::Shell(Event::ToggleSide(Side::Explorer)),
+        Action::ToggleDock => Message::Shell(Event::ToggleDock),
+        Action::SearchProject => Message::Shell(Event::ShowSide(Side::Search)),
+        Action::Save => Message::Editor(editor::Event::Save),
+        Action::CloseTab => Message::Editor(editor::Event::CloseCurrent),
+        Action::OpenSettings => Message::Navigate(Page::Settings),
+        Action::NewChat => Message::Chat(chat::Event::NewChat),
+        Action::CopyLastAnswer => Message::Chat(chat::Event::CopyLast),
+    })
 }
 
 #[cfg(test)]

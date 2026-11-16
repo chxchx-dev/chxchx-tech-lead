@@ -40,6 +40,8 @@ mod icons;
 mod ide;
 #[path = "studio_jobs.rs"]
 mod jobs;
+#[path = "studio_keymap.rs"]
+mod keymap;
 #[path = "studio_view.rs"]
 mod layout;
 #[path = "studio_learning.rs"]
@@ -62,6 +64,8 @@ mod review;
 mod search;
 #[path = "studio_session.rs"]
 mod session;
+#[path = "studio_settings.rs"]
+mod settings;
 #[path = "studio_shell.rs"]
 mod shell;
 #[path = "studio_ide_status.rs"]
@@ -91,6 +95,7 @@ enum Page {
     Catalog,
     Integrations,
     Diagnostics,
+    Settings,
 }
 
 impl Page {
@@ -102,6 +107,7 @@ impl Page {
             Page::Catalog => "catalog",
             Page::Integrations => "integrations",
             Page::Diagnostics => "diagnostics",
+            Page::Settings => "settings",
         }
     }
 
@@ -112,6 +118,7 @@ impl Page {
             "catalog" => Page::Catalog,
             "integrations" => Page::Integrations,
             "diagnostics" => Page::Diagnostics,
+            "settings" => Page::Settings,
             _ => Page::Home,
         }
     }
@@ -130,6 +137,7 @@ struct Dashboard {
     shell: shell::State,
     catalog: catalog::State,
     session: session::State,
+    settings: settings::State,
     menu: menu::State,
     search: search::State,
     git: git::State,
@@ -167,6 +175,7 @@ enum Message {
     Shell(shell::Event),
     Catalog(catalog::Event),
     Session(session::Event),
+    Settings(settings::Event),
     Menu(menu::Event),
     Search(search::Event),
     Git(git::Event),
@@ -270,6 +279,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 shell: shell::State::default(),
                 catalog: catalog::State::default(),
                 session,
+                settings: settings::State::default(),
                 menu: menu::State::default(),
                 search: search::State::default(),
                 git: git::State::default(),
@@ -291,6 +301,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 message: warning.unwrap_or_default(),
             };
             session::apply(&mut state);
+            settings::apply(&state);
             let tasks = [
                 editor::list(path.clone(), PathBuf::new()),
                 session::restore(&state),
@@ -318,6 +329,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
     )
     .title(|state: &Dashboard| format!("{} — ChxChx Studio", chrome::project_name(state)))
     .theme(|_: &Dashboard| design::theme())
+    .scale_factor(|state: &Dashboard| state.session.scale())
     .default_font(design::UI)
     .window(iced::window::Settings {
         size: window_size,
@@ -334,6 +346,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
             session::subscription(state),
         ];
         subscriptions.push(iced::Subscription::run(wake_stream));
+        subscriptions.extend(settings::subscription(state));
         // Polling Git rebuilds and redraws the window: only while it is being looked at, and
         // faster only when the Git view itself is on screen.
         if state.git.is_repository() && state.git.unavailable.is_none() && state.shell.focused {

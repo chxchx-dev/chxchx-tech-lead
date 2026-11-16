@@ -15,23 +15,23 @@ fn describe(mode: &str) -> &'static str {
 fn level<'a>(chat: &Chat, mode: &'static str, label: &'static str) -> Element<'a, Message> {
     let active = chat.mode == mode;
     let tint = if mode == "full-access" {
-        design::WARNING
+        design::warning()
     } else {
-        design::ACCENT
+        design::accent()
     };
     button(
         column![
             row![
                 icons::icon(
                     if active { "check" } else { "shield" },
-                    if active { tint } else { design::MUTED },
+                    if active { tint } else { design::muted() },
                     13.0
                 ),
                 text(label).size(12).font(design::UI_BOLD),
             ]
             .spacing(6)
             .align_y(iced::Center),
-            text(describe(mode)).size(10).color(design::MUTED),
+            text(describe(mode)).size(10).color(design::muted()),
         ]
         .spacing(4),
     )
@@ -40,7 +40,7 @@ fn level<'a>(chat: &Chat, mode: &'static str, label: &'static str) -> Element<'a
     .style(move |theme: &iced::Theme, status| {
         let mut style = styles::ghost(active)(theme, status);
         style.border = iced::Border {
-            color: if active { tint } else { design::BORDER },
+            color: if active { tint } else { design::border() },
             width: 1.0,
             radius: 8.0.into(),
         };
@@ -55,14 +55,14 @@ fn rules<'a>(title: &'a str, list: &'a [String], remembered: bool) -> Element<'a
         text(title)
             .size(10)
             .font(design::UI_BOLD)
-            .color(design::FAINT)
+            .color(design::faint())
     ]
     .spacing(4);
     for rule in list {
         body = body.push(
             row![
                 text(rule).size(11).font(design::MONO).width(Fill),
-                button(icons::icon("close", design::MUTED, 11.0))
+                button(icons::icon("close", design::muted(), 11.0))
                     .padding(3)
                     .style(styles::ghost(false))
                     .on_press(send(Event::Revoke(rule.clone(), remembered))),
@@ -99,9 +99,9 @@ pub(super) fn panel(chat: &Chat) -> Element<'_, Message> {
     } else {
         "Cuando el agente necesite algo más, te lo preguntará aquí con una tarjeta."
     };
-    container(body.push(text(note).size(10).color(design::FAINT)))
+    container(body.push(text(note).size(10).color(design::faint())))
         .padding([12, 16])
         .width(Fill)
-        .style(styles::surface(design::BG_RAISED))
+        .style(styles::surface(design::bg_raised()))
         .into()
 }

@@ -31,10 +31,10 @@ pub(super) fn skills<'a>(data: &'a CatalogView, filter: &str) -> Rows<'a> {
     }) {
         let mut chips = Vec::new();
         if skill.enabled {
-            chips.push(chip("HABILITADA", design::SUCCESS));
+            chips.push(chip("HABILITADA", design::success()));
         }
         if skill.recommended {
-            chips.push(chip("RECOMENDADA", design::BRAND_CYAN));
+            chips.push(chip("RECOMENDADA", design::brand_cyan()));
         }
         let change = if skill.enabled {
             SkillsChange::Disable(vec![skill.name.clone()])
@@ -67,16 +67,16 @@ pub(super) fn packs<'a>(data: &'a CatalogView, filter: &str) -> Rows<'a> {
     {
         let mut chips = vec![chip(
             format!("{}/{} SKILLS", pack.enabled_skills, pack.skills.len()),
-            design::BRAND_BLUE,
+            design::brand_blue(),
         )];
         if pack.recommended {
-            chips.push(chip("DETECTADO", design::BRAND_CYAN));
+            chips.push(chip("DETECTADO", design::brand_cyan()));
         }
         let complete = pack.enabled_skills == pack.skills.len();
         let mut notes = vec![format!("Incluye: {}", pack.skills.join(", "))];
         notes.extend(pack.reasons.iter().cloned());
         let apply = if complete {
-            chip("COMPLETO", design::SUCCESS)
+            chip("COMPLETO", design::success())
         } else {
             action(
                 "Aplicar pack",
@@ -109,16 +109,16 @@ pub(super) fn mods<'a>(data: &'a CatalogView, filter: &str) -> Rows<'a> {
     {
         let mut chips = Vec::new();
         if module.applied {
-            chips.push(chip("INSTALADO", design::SUCCESS));
+            chips.push(chip("INSTALADO", design::success()));
         }
         if module.recommended {
-            chips.push(chip("RECOMENDADO", design::BRAND_CYAN));
+            chips.push(chip("RECOMENDADO", design::brand_cyan()));
         }
         if module.conflict {
-            chips.push(chip("ARCHIVO AJENO", design::WARNING));
+            chips.push(chip("ARCHIVO AJENO", design::warning()));
         }
         let control = if module.conflict {
-            chip("NO SE SOBRESCRIBE", design::FAINT)
+            chip("NO SE SOBRESCRIBE", design::faint())
         } else if module.applied {
             action(
                 "Retirar",

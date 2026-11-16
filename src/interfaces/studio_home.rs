@@ -17,11 +17,11 @@ pub(super) fn hero<'a>() -> Element<'a, Message> {
                     .font(design::UI_BOLD)
                 )
                 .padding([3, 10])
-                .style(styles::chip(design::BRAND_CYAN)),
+                .style(styles::chip(design::brand_cyan())),
                 text("ChxChx Studio").size(30).font(design::UI_BOLD),
                 text("Prepara, conecta y controla tus proyectos asistidos por agentes desde un solo lugar.")
                     .size(14)
-                    .color(design::MUTED),
+                    .color(design::muted()),
             ]
             .spacing(10),
         ]
@@ -46,13 +46,13 @@ pub(super) fn project_card<'a>(
             text(state.root.display().to_string())
                 .size(12)
                 .font(design::MONO)
-                .color(design::MUTED),
+                .color(design::muted()),
         ]
         .spacing(5),
         Space::new().width(Fill),
         button(
             row![
-                icons::icon("refresh", design::MUTED, 14.0),
+                icons::icon("refresh", design::muted(), 14.0),
                 text("Actualizar").size(12)
             ]
             .spacing(7)
@@ -98,13 +98,13 @@ pub(super) fn project_card<'a>(
 
 fn indicator<'a>(label: &'a str, value: &'a str, ready: bool) -> Element<'a, Message> {
     let tint = if ready {
-        design::SUCCESS
+        design::success()
     } else {
-        design::WARNING
+        design::warning()
     };
     container(
         column![
-            text(label).size(11).color(design::MUTED),
+            text(label).size(11).color(design::muted()),
             row![icons::icon("dot", tint, 11.0), text(value).size(13)]
                 .spacing(6)
                 .align_y(iced::Center),
@@ -122,20 +122,24 @@ pub(super) fn technologies(project: &ProjectOverview) -> Element<'_, Message> {
     container(
         column![
             row![
-                icons::icon("layers", design::ACCENT, 16.0),
+                icons::icon("layers", design::accent(), 16.0),
                 text("Tecnologías del proyecto")
                     .size(15)
                     .font(design::UI_BOLD),
                 Space::new().width(Fill),
                 container(text(format!("Perfil · {}", detection.profile)).size(11))
                     .padding([3, 10])
-                    .style(styles::chip(design::BRAND_CYAN)),
+                    .style(styles::chip(design::brand_cyan())),
             ]
             .spacing(9)
             .align_y(iced::Center),
-            group("Stacks", &detection.stacks, design::BRAND_BLUE),
-            group("Lenguajes", &detection.languages, design::TINT_PURPLE),
-            group("Gestores", &detection.package_managers, design::TINT_GREEN),
+            group("Stacks", &detection.stacks, design::brand_blue()),
+            group("Lenguajes", &detection.languages, design::tint_purple()),
+            group(
+                "Gestores",
+                &detection.package_managers,
+                design::tint_green()
+            ),
         ]
         .spacing(12),
     )
@@ -148,7 +152,7 @@ pub(super) fn technologies(project: &ProjectOverview) -> Element<'_, Message> {
 fn group<'a>(label: &'a str, values: &'a [String], tint: iced::Color) -> Element<'a, Message> {
     let mut chips = iced::widget::Row::new().spacing(6);
     if values.is_empty() {
-        chips = chips.push(text("Sin detectar").size(12).color(design::FAINT));
+        chips = chips.push(text("Sin detectar").size(12).color(design::faint()));
     }
     for value in values {
         chips = chips.push(
@@ -158,7 +162,7 @@ fn group<'a>(label: &'a str, values: &'a [String], tint: iced::Color) -> Element
         );
     }
     row![
-        text(label).size(12).color(design::MUTED).width(84),
+        text(label).size(12).color(design::muted()).width(84),
         chips.wrap()
     ]
     .spacing(8)
@@ -191,13 +195,17 @@ pub(super) fn recents(state: &Dashboard) -> Option<Element<'_, Message>> {
         ));
     }
     if files.is_empty() {
-        file_list = file_list.push(text("Aún no abres archivos.").size(12).color(design::FAINT));
+        file_list = file_list.push(
+            text("Aún no abres archivos.")
+                .size(12)
+                .color(design::faint()),
+        );
     }
     let mut project_list = iced::widget::column![eyebrow("PROYECTOS RECIENTES")].spacing(4);
     for path in &projects {
         project_list = project_list.push(entry(
             "folder",
-            design::BRAND_BLUE,
+            design::brand_blue(),
             path,
             Message::Session(session::Event::OpenProject((*path).clone())),
         ));
@@ -206,7 +214,7 @@ pub(super) fn recents(state: &Dashboard) -> Option<Element<'_, Message>> {
         project_list = project_list.push(
             text("Sin otros proyectos todavía.")
                 .size(12)
-                .color(design::FAINT),
+                .color(design::faint()),
         );
     }
     Some(

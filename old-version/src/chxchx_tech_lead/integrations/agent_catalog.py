@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tomllib
@@ -28,6 +29,12 @@ INSTALL_HINTS = {
 }
 _CODEX_FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
 _CLAUDE_MODELS = ["sonnet", "opus", "haiku", "fable", "opusplan", "sonnet[1m]", "opus[1m]"]
+# Versioned ids the `--model` flag accepts, newest first; the aliases above follow the latest one.
+_CLAUDE_VERSIONS = [
+    "claude-fable-5-2", "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
+    "claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-1",
+]
+_CLAUDE_MODEL_ID = re.compile(r'"model":\s*"(claude-[a-z0-9.\-]+(?:\[1m\])?)"')
 _CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max", "ultracode"]
 
 
@@ -138,14 +145,33 @@ def _claude_options() -> dict[str, Any]:
     except (OSError, UnicodeError, json.JSONDecodeError):
         settings = {}
     settings = settings if isinstance(settings, dict) else {}
+    default = str(settings.get("model") or "")
+    ids = [*_CLAUDE_MODELS, *_CLAUDE_VERSIONS, *_claude_extra_models(config_dir, settings), default]
+    seen: list[str] = []
+    for model in ids:
+        if model and model not in seen:
+            seen.append(model)
     return {
-        "default_model": str(settings.get("model") or ""),
+        "default_model": default,
         "default_effort": str(settings.get("effortLevel") or ""),
         "models": [
-            {"id": alias, "label": alias, "efforts": _CLAUDE_EFFORTS, "default_effort": ""}
-            for alias in _CLAUDE_MODELS
+            {"id": model, "label": model, "efforts": _CLAUDE_EFFORTS, "default_effort": ""} for model in seen
         ],
     }
+
+
+def _claude_extra_models(config_dir: Path, settings: dict[str, Any]) -> list[str]:
+    """Models this machine already uses: `availableModels`, `ANTHROPIC_*_MODEL` and the latest transcripts."""
+    found = [str(m) for m in settings.get("availableModels", []) if isinstance(m, str)]
+    found += [v for k, v in os.environ.items() if k.startswith("ANTHROPIC_DEFAULT_") and k.endswith("_MODEL") and v]
+    try:
+        files = sorted((config_dir / "projects").glob("*/*.jsonl"), key=lambda f: f.stat().st_mtime, reverse=True)[:25]
+        for file in files:
+            with file.open(encoding="utf-8", errors="ignore") as stream:
+                found += _CLAUDE_MODEL_ID.findall(stream.read(2_000_000))
+    except OSError:
+        pass
+    return sorted(set(found))
 
 
 def _opencode_options(executable: str) -> dict[str, Any]:
@@ -164,13 +190,21 @@ def _opencode_options(executable: str) -> dict[str, Any]:
         if isinstance(loaded, dict):
             config = loaded
             break
+    default = str(config.get("model") or "")
+    configured = [
+        f"{provider}/{model}"
+        for provider, spec in (config.get("provider") or {}).items()
+        if isinstance(spec, dict)
+        for model in (spec.get("models") or {})
+    ]
+    ids: list[str] = []
+    for model in [*_opencode_models(executable), *configured, default]:
+        if "/" in model and model not in ids:
+            ids.append(model)
     return {
-        "default_model": str(config.get("model") or ""),
+        "default_model": default,
         "default_effort": "",
-        "models": [
-            {"id": model, "label": model, "efforts": [], "default_effort": ""}
-            for model in _opencode_models(executable)
-        ],
+        "models": [{"id": model, "label": model, "efforts": [], "default_effort": ""} for model in ids],
     }
 
 
@@ -179,7 +213,7 @@ def _opencode_models(executable: str) -> list[str]:
         return []
     try:
         result = subprocess.run([resolve_executable(executable), "models"], capture_output=True, text=True, encoding="utf-8",
-                                errors="replace", timeout=8, check=False, env=with_search_path())
+                                errors="replace", timeout=20, check=False, env=with_search_path())
     except (OSError, subprocess.TimeoutExpired):
         return []
     if result.returncode != 0:

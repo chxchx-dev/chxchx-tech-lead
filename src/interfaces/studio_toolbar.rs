@@ -94,6 +94,13 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
             page(Page::Diagnostics),
             Some(Message::Navigate(Page::Diagnostics)),
         ),
+        tool(
+            "settings",
+            Some("Ajustes"),
+            "Temas, colores y atajos",
+            page(Page::Settings),
+            Some(Message::Navigate(Page::Settings)),
+        ),
     ]
     .spacing(2)
     .align_y(iced::Center);
@@ -102,14 +109,14 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         bar = bar.push(
             container(
                 row![
-                    icons::icon("refresh", design::ACCENT, 12.0),
+                    icons::icon("refresh", design::accent(), 12.0),
                     text("Procesando…").size(11)
                 ]
                 .spacing(6)
                 .align_y(iced::Center),
             )
             .padding([3, 10])
-            .style(styles::chip(design::BRAND_CYAN)),
+            .style(styles::chip(design::brand_cyan())),
         );
     }
     bar = bar.push(tool(
@@ -122,7 +129,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     container(bar)
         .padding([3, 12])
         .width(Fill)
-        .style(styles::surface(design::BG_PANEL))
+        .style(styles::surface(design::bg_panel()))
         .into()
 }
 
@@ -130,7 +137,7 @@ fn divider<'a>() -> Element<'a, Message> {
     container(Space::new())
         .width(1)
         .height(18)
-        .style(styles::surface(design::BORDER))
+        .style(styles::surface(design::border()))
         .into()
 }
 
@@ -143,9 +150,9 @@ fn tool<'a>(
     message: Option<Message>,
 ) -> Element<'a, Message> {
     let color = match (message.is_some(), active) {
-        (false, _) => design::FAINT,
-        (true, true) => design::ACCENT,
-        (true, false) => design::MUTED,
+        (false, _) => design::faint(),
+        (true, true) => design::accent(),
+        (true, false) => design::muted(),
     };
     let mut content = row![icons::icon(icon, color, 16.0)]
         .spacing(6)

@@ -20,7 +20,7 @@ pub(super) fn project_name(state: &Dashboard) -> String {
 
 pub(super) fn title_bar(state: &Dashboard) -> Element<'_, Message> {
     let mut workspace = row![
-        icons::icon("folder", design::BRAND_BLUE, 14.0),
+        icons::icon("folder", design::brand_blue(), 14.0),
         text(project_name(state)).size(12).font(design::UI_BOLD),
     ]
     .spacing(7)
@@ -29,7 +29,7 @@ pub(super) fn title_bar(state: &Dashboard) -> Element<'_, Message> {
         workspace = workspace.push(
             text(format!("·  {}", overview.detection.profile))
                 .size(11)
-                .color(design::MUTED),
+                .color(design::muted()),
         );
     }
     let brand = container(
@@ -67,7 +67,7 @@ pub(super) fn title_bar(state: &Dashboard) -> Element<'_, Message> {
         .height(menu::BAR_HEIGHT)
         .align_y(iced::Center)
         .width(Fill)
-        .style(styles::surface(design::BG_DEEP))
+        .style(styles::surface(design::bg_deep()))
         .into()
 }
 
@@ -78,9 +78,9 @@ fn layout_toggle<'a>(
     message: Message,
 ) -> Element<'a, Message> {
     let color = if active {
-        design::ACCENT
+        design::accent()
     } else {
-        design::MUTED
+        design::muted()
     };
     styles::tip(
         button(icons::icon(icon, color, 16.0))
@@ -136,7 +136,7 @@ pub(super) fn activity_rail(state: &Dashboard) -> Element<'_, Message> {
         .padding([8, 0])
         .width(46)
         .height(Fill)
-        .style(styles::surface(design::BG_DEEP))
+        .style(styles::surface(design::bg_deep()))
         .into()
 }
 
@@ -146,12 +146,16 @@ fn rail_action<'a>(
     active: bool,
     message: Message,
 ) -> Element<'a, Message> {
-    let color = if active { design::TEXT } else { design::FAINT };
+    let color = if active {
+        design::fg()
+    } else {
+        design::faint()
+    };
     let marker = container(Space::new())
         .width(2)
         .height(22)
         .style(styles::surface(if active {
-            design::ACCENT
+            design::accent()
         } else {
             iced::Color::TRANSPARENT
         }));
@@ -186,7 +190,7 @@ fn agents_action(state: &Dashboard) -> Element<'_, Message> {
     }
     iced::widget::stack![
         base,
-        container(icons::icon("dot", design::SUCCESS, 10.0))
+        container(icons::icon("dot", design::success(), 10.0))
             .align_right(Fill)
             .align_top(Fill)
             .padding([6, 8])

@@ -28,6 +28,10 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
         model_query: String::new(),
         turn_started: None,
         durations: Vec::new(),
+        history: Vec::new(),
+        recall: None,
+        selecting: Vec::new(),
+        draft: String::new(),
         expanded: Vec::new(),
         rendered: Vec::new(),
         picks: Vec::new(),
@@ -161,6 +165,16 @@ pub(super) fn sync(chat: &mut Chat) {
         };
         match chat.rendered.get_mut(index) {
             Some(cached) if cached.0 == wanted => {}
+            // A streaming answer only grows: parse the new tail, not the whole text again.
+            Some(cached)
+                if shown
+                    && cached.0 > 0
+                    && cached.0 < wanted
+                    && entry.text.is_char_boundary(cached.0) =>
+            {
+                cached.1.push_str(&entry.text[cached.0..]);
+                cached.0 = wanted;
+            }
             Some(cached) => *cached = (wanted, content()),
             None => chat.rendered.push((wanted, content())),
         }

@@ -22,15 +22,15 @@ pub(super) fn usage_bar(usage: &Usage) -> Element<'_, Message> {
     let mut line = row![].spacing(14).align_y(iced::Center);
     let summary = usage.summary();
     if !summary.is_empty() {
-        line = line.push(text(summary).size(11).color(design::MUTED));
+        line = line.push(text(summary).size(11).color(design::muted()));
     }
     if let Some(percent) = usage.context_percent() {
         let tint = if percent >= 90.0 {
-            design::DANGER
+            design::danger()
         } else if percent >= 70.0 {
-            design::WARNING
+            design::warning()
         } else {
-            design::ACCENT
+            design::accent()
         };
         line = line.push(styles::tip(
             row![
@@ -45,7 +45,7 @@ pub(super) fn usage_bar(usage: &Usage) -> Element<'_, Message> {
                     .length(90)
                     .girth(5)
                     .style(move |_: &iced::Theme| iced::widget::progress_bar::Style {
-                        background: iced::Background::Color(design::BORDER),
+                        background: iced::Background::Color(design::border()),
                         bar: iced::Background::Color(tint),
                         border: iced::Border::default().rounded(3.0),
                     }),
@@ -66,13 +66,13 @@ pub(super) fn usage_bar(usage: &Usage) -> Element<'_, Message> {
             line = line.push(
                 text(format!("{}{plan}", window_label(label, window)))
                     .size(11)
-                    .color(design::MUTED),
+                    .color(design::muted()),
             );
         }
     }
     container(line)
         .padding([6, 16])
         .width(Fill)
-        .style(styles::surface(design::BG_DEEP))
+        .style(styles::surface(design::bg_deep()))
         .into()
 }

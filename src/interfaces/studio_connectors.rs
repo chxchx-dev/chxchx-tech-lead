@@ -194,9 +194,9 @@ fn standing_chips<'a>(state: Option<&ConnectorState>) -> Element<'a, Message> {
     let mut chips = row![].spacing(6);
     for (client, standing) in state.map(|s| s.standing.clone()).unwrap_or_default() {
         let (glyph, tint) = match standing {
-            Standing::Configured => ("✓", design::SUCCESS),
-            Standing::Different => ("≠", design::WARNING),
-            Standing::Absent => ("·", design::FAINT),
+            Standing::Configured => ("✓", design::success()),
+            Standing::Different => ("≠", design::warning()),
+            Standing::Absent => ("·", design::faint()),
         };
         chips = chips.push(chip(format!("{} {glyph}", client.label()), tint));
     }
@@ -210,9 +210,9 @@ fn connector_card<'a>(state: &'a Dashboard, c: &'a Connector) -> Element<'a, Mes
         .as_ref()
         .and_then(|all| all.iter().find(|s| s.name == c.name));
     let origin_tint = match c.origin.as_str() {
-        "oficial" => design::SUCCESS,
-        "referencia" => design::ACCENT,
-        _ => design::MUTED,
+        "oficial" => design::success(),
+        "referencia" => design::accent(),
+        _ => design::muted(),
     };
     let mut needs: Vec<String> = Vec::new();
     for program in &c.requires {
@@ -233,18 +233,18 @@ fn connector_card<'a>(state: &'a Dashboard, c: &'a Connector) -> Element<'a, Mes
         row![
             text(&c.title).size(14).font(design::UI_BOLD).width(Fill),
             chip(c.origin.clone(), origin_tint),
-            chip(c.category.clone(), design::TINT_PURPLE),
+            chip(c.category.clone(), design::tint_purple()),
         ]
         .spacing(8)
         .align_y(iced::Center),
-        text(&c.description).size(12).color(design::MUTED),
+        text(&c.description).size(12).color(design::muted()),
         text(format!("Necesita: {}", needs.join("  ·  ")))
             .size(11)
-            .color(design::FAINT),
+            .color(design::faint()),
     ]
     .spacing(6);
     if !c.note.is_empty() {
-        body = body.push(text(&c.note).size(11).color(design::WARNING));
+        body = body.push(text(&c.note).size(11).color(design::warning()));
     }
     let mut controls = row![standing_chips(found), Space::new().width(Fill)]
         .spacing(8)
@@ -302,17 +302,21 @@ fn plan_panel<'a>(title: &'a str, plan: &'a ConnectorsPlan, busy: bool) -> Eleme
         lines = lines.push(text(format!("• {action}")).size(12));
     }
     for warning in &plan.warnings {
-        lines = lines.push(text(format!("▲ {warning}")).size(11).color(design::WARNING));
+        lines = lines.push(
+            text(format!("▲ {warning}"))
+                .size(11)
+                .color(design::warning()),
+        );
     }
     if let Some(reason) = &plan.blocked_reason {
         lines = lines.push(
             text(format!("✗ No se puede aplicar: {reason}"))
                 .size(12)
-                .color(design::DANGER),
+                .color(design::danger()),
         );
     }
     for (file, content) in plan.previews() {
-        lines = lines.push(text(file).size(11).color(design::MUTED));
+        lines = lines.push(text(file).size(11).color(design::muted()));
         lines = lines.push(
             container(
                 styles::vscroll(text(content).size(11).font(design::MONO))
@@ -340,7 +344,7 @@ fn plan_panel<'a>(title: &'a str, plan: &'a ConnectorsPlan, busy: bool) -> Eleme
     container(lines)
         .padding(14)
         .width(Fill)
-        .style(styles::tinted(design::ACCENT))
+        .style(styles::tinted(design::accent()))
         .into()
 }
 
@@ -355,7 +359,7 @@ fn custom_card<'a>(state: &'a Dashboard) -> Element<'a, Message> {
     container(
         column![
             text("Servidor MCP propio").size(14).font(design::UI_BOLD),
-            text("Añade cualquier servidor que no esté en el catálogo. Las variables de entorno se leen de tu entorno: no se guardan.").size(12).color(design::MUTED),
+            text("Añade cualquier servidor que no esté en el catálogo. Las variables de entorno se leen de tu entorno: no se guardan.").size(12).color(design::muted()),
             field("nombre (letras, números, - y _)", &state.connectors.custom_name, Event::CustomName),
             field("comando, por ejemplo: npx -y mi-paquete", &state.connectors.custom_command, Event::CustomCommand),
             field("variables de entorno, separadas por comas (opcional)", &state.connectors.custom_env, Event::CustomEnv),
@@ -373,7 +377,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     let mut list = column![
         pages::eyebrow("CONECTORES MCP"),
         text("Dale manos a tus agentes en tus apps").size(18).font(design::UI_BOLD),
-        text("Excel, Power BI, Word, Google Sheets y bases de datos. Se configuran en este proyecto, para cada agente; nunca se guarda una clave.").size(12).color(design::MUTED),
+        text("Excel, Power BI, Word, Google Sheets y bases de datos. Se configuran en este proyecto, para cada agente; nunca se guarda una clave.").size(12).color(design::muted()),
     ]
     .spacing(6);
     if let Some((title, plan)) = &state.connectors.plan {
@@ -383,7 +387,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         list = list.push(
             text("Leyendo qué hay configurado…")
                 .size(12)
-                .color(design::MUTED),
+                .color(design::muted()),
         );
     }
     for c in connectors() {
