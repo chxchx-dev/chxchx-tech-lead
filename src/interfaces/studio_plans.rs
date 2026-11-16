@@ -34,16 +34,17 @@ fn show<T: Send + 'static>(
     notice: &'static str,
     store: impl FnOnce(&mut Dashboard, T) + Send + 'static,
 ) -> Task<Message> {
-    jobs::run(state, job, move |state, result| {
-        match result {
-            Ok(value) => {
-                clear_previews(state);
-                state.message = notice.to_owned();
-                store(state, value);
-            }
-            Err(error) => state.message = error,
+    jobs::run(state, job, move |state, result| match result {
+        Ok(value) => {
+            clear_previews(state);
+            state.message = notice.to_owned();
+            store(state, value);
+            iced::widget::operation::snap_to_end(styles::PAGE_SCROLL_ID)
         }
-        Task::none()
+        Err(error) => {
+            state.message = error;
+            Task::none()
+        }
     })
 }
 

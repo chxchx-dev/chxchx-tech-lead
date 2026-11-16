@@ -1,5 +1,11 @@
 # Current State
 
+## Studio: primeros pasos y scroll (2026-11-15)
+
+- Versión preparada: `0.6.1` en Cargo y en el paquete Python auxiliar; el changelog describe el ajuste de Inicio.
+- Inicio ahora muestra tres pasos concretos (preparación, confianza y empezar a trabajar), con lenguaje más directo. Al terminar de calcular una vista previa, Studio desplaza la página hasta la revisión para que el botón no parezca no responder.
+- `cargo check --locked --features studio` y `cargo fmt --all` pasan. La lentitud general del scroll aún requiere medición en la ventana; el cambio reduce la altura de Inicio y arregla la visibilidad de las revisiones, pero no confirma una causa global de render.
+
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
 ## Ajustes de Git: scroll y Sugerir (2026-11-13)
