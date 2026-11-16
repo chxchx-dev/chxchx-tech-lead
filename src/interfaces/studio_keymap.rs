@@ -240,6 +240,11 @@ mod tests {
     fn only_chords_with_a_modifier_or_a_function_key_can_be_bound() {
         assert!(is_bindable("mod+shift+n") && is_bindable("alt+x") && is_bindable("f5"));
         assert!(!is_bindable("a") && !is_bindable("shift+a") && !is_bindable("enter"));
-        assert_eq!(display("mod+shift+f"), "Ctrl+Mayús+F");
+        let expected = if cfg!(target_os = "macos") {
+            "⌘MayúsF"
+        } else {
+            "Ctrl+Mayús+F"
+        };
+        assert_eq!(display("mod+shift+f"), expected);
     }
 }
