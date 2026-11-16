@@ -1,5 +1,9 @@
 # Current State
 
+## Release estable 0.6.1 (2026-11-16)
+
+- Publicado el tag `v0.6.1` sobre el merge de `main` `fa80b7c` (incluye `2c088e4`). El workflow `Studio release (Rust)` terminó correctamente; GitHub publicó el release estable con paquetes Linux, Windows, macOS ARM64/Intel y wheel Python. Release: https://github.com/chxchx-dev/chxchx-tech-lead/releases/tag/v0.6.1.
+
 ## Studio: primeros pasos y scroll (2026-11-15)
 
 - Versión preparada: `0.6.1` en Cargo y en el paquete Python auxiliar; el changelog describe el ajuste de Inicio.

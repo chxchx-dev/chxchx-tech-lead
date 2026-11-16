@@ -1,5 +1,9 @@
 # Handoff
 
+## Release estable 0.6.1 (2026-11-16)
+
+- El tag `v0.6.1` está publicado sobre `main` (`fa80b7c`) y la ejecución `43814711205` del workflow de release finalizó en éxito con los paquetes de todas las plataformas. Release: https://github.com/chxchx-dev/chxchx-tech-lead/releases/tag/v0.6.1.
+
 ## Studio: primeros pasos y scroll (2026-11-15)
 
 - Versión `0.6.1` preparada en Cargo y el paquete Python auxiliar; changelog con la corrección de Inicio.
