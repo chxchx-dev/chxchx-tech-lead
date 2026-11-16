@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.2 — Scroll más ligero
+
+- **Desplazarse por el editor y por los chats largos cuesta menos**: unos 8 ms de CPU por paso de rueda en lugar de unos 13
+  (−39 %). Antes, la tarjeta redondeada que envuelve el editor se pintaba entera, con suavizado, en cada fotograma; ahora los
+  rectángulos lisos y los redondeados opacos se rellenan como rectángulos y solo las esquinas llevan suavizado.
+- El editor ya no copia el documento completo para compararlo al desplazarse o mover el cursor; solo lo hace al editar.
+- Una carrera que podía perder el último mensaje de un turno de chat o de una instalación de modelo local queda corregida.
+
 ## 0.6.1 — Inicio más claro
 
 - La guía de Inicio se concentra en tres pasos: preparar el proyecto, decidir la confianza local y empezar a trabajar.
