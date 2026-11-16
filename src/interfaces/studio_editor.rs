@@ -200,8 +200,13 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                         tab.undo.pop_front();
                     }
                 }
+                // Only a real edit can change the text: scrolling, moving the cursor and selecting
+                // must not copy the whole document just to compare it.
+                let edits = matches!(&action, text_editor::Action::Edit(_));
                 tab.content.perform(action);
-                tab.dirty = tab.content.text() != tab.document.text;
+                if edits {
+                    tab.dirty = tab.content.text() != tab.document.text;
+                }
             }
         }
         Event::Search => editor.search = !editor.search,

@@ -282,4 +282,33 @@ mod tests {
         let _ = update(&mut state, Event::Cancel);
         assert_eq!(state.editor.tabs.len(), 2);
     }
+
+    #[test]
+    fn scrolling_and_moving_the_cursor_never_recompare_the_whole_document() {
+        use iced::widget::text_editor::{Action, Motion};
+        let mut state = fixture();
+        let document = Document {
+            relative: "a.txt".into(),
+            text: "uno\ndos\n".into(),
+            fingerprint: Vec::new(),
+        };
+        state.editor.tabs.push(Tab {
+            content: text_editor::Content::with_text(&document.text),
+            document,
+            // Marked dirty on purpose: only a real edit may decide it is clean again.
+            dirty: true,
+            readonly: false,
+            undo: Default::default(),
+            redo: Default::default(),
+        });
+        state.editor.selected = Some(0);
+        state.editor.home = false;
+        for action in [Action::Scroll { lines: 3 }, Action::Move(Motion::Down)] {
+            let _ = super::update(&mut state, super::Event::Edit(action));
+        }
+        assert!(
+            state.editor.tabs[0].dirty,
+            "no recomparison without an edit"
+        );
+    }
 }
