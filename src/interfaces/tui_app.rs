@@ -135,6 +135,8 @@ pub struct App {
     pub git_rows: Sel,
     pub git_history: bool,
     pub connect: Sel,
+    /// A value being typed for a connector parameter.
+    pub prompt: Option<super::connectors::Prompt>,
     pub health_scroll: u16,
     pub project_rows: Sel,
     /// Where each tab was drawn, so a click can find it.
@@ -172,6 +174,7 @@ impl App {
             git_rows: Sel::default(),
             git_history: false,
             connect: Sel::default(),
+            prompt: None,
             health_scroll: 0,
             project_rows: Sel::default(),
             tab_hits: Vec::new(),

@@ -2,6 +2,7 @@
 //! of the product becomes the same modal, and applying runs off the UI thread.
 use super::theme::*;
 use crate::features::{
+    mcp_connectors_plan::{ConnectorsPlan, apply_connectors},
     mcp_setup::{McpIntegrationPlan, apply_mcp_integration},
     project_mods::{ModsPlan, apply_mods_plan},
     project_rollback::{ProjectRollbackPlan, apply_project_rollback},
@@ -22,6 +23,7 @@ pub enum Apply {
     Sync(ProjectSyncPlan),
     Skills(SkillsPlan),
     Mods(ModsPlan),
+    Connectors(ConnectorsPlan),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -170,6 +172,23 @@ impl Preview {
             .finish(&None, changes, Apply::Sync(plan))
     }
 
+    /// A connector change, with the exact result for each file under the actions.
+    pub fn connectors(title: &str, plan: ConnectorsPlan) -> Self {
+        let blocked = plan.blocked_reason.clone();
+        let changes = plan.changes_state();
+        let mut preview = Self::new(title)
+            .actions(&plan.actions.clone())
+            .warnings(&plan.warnings.clone());
+        for (file, text) in plan.previews() {
+            preview.lines.push((Tone::Plain, String::new()));
+            preview.lines.push((Tone::Note, format!("{file}:")));
+            preview
+                .lines
+                .extend(text.lines().map(|l| (Tone::Plain, format!("  {l}"))));
+        }
+        preview.finish(&blocked, changes, Apply::Connectors(plan))
+    }
+
     pub fn skills(title: &str, plan: SkillsPlan) -> Self {
         let (blocked, changes) = (plan.blocked_reason.clone(), plan.changes_state());
         Self::new(title).actions(&plan.actions.clone()).finish(
@@ -247,6 +266,14 @@ pub fn apply(change: Apply) -> Result<String, String> {
                 format!("Skills habilitadas: {}", done.enabled.join(", ")),
                 "Respaldo",
                 &done.backups,
+            )
+        }),
+        Apply::Connectors(plan) => apply_connectors(&plan).map(|done| {
+            let message = done.completed.join(" · ");
+            join(
+                message,
+                "Respaldo",
+                &done.backup.into_iter().collect::<Vec<_>>(),
             )
         }),
         Apply::Mods(plan) => apply_mods_plan(&plan)

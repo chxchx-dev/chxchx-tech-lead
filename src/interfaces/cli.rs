@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 #[path = "cli_catalog.rs"]
 mod catalog;
+#[path = "cli_connectors.rs"]
+mod connectors;
 #[path = "cli_launch.rs"]
 mod launch;
 #[path = "cli_style.rs"]
@@ -112,6 +114,12 @@ enum Command {
         /// Aplica la vista previa y permite invocar los CLIs oficiales.
         #[arg(long)]
         apply: bool,
+    },
+    /// Conecta tus agentes con apps y datos (Excel, Power BI, bases de datos…) por MCP.
+    #[command(visible_alias = "conn", alias = "connector")]
+    Connectors {
+        #[command(subcommand)]
+        command: connectors::ConnectorsCommand,
     },
     /// Gestiona las skills habilitadas del proyecto.
     #[command(visible_alias = "sk", alias = "skill")]
@@ -276,6 +284,7 @@ pub fn run() -> Result<(), String> {
             refresh,
             apply,
         } => view::integrate(&ui, &path, &client, refresh, apply),
+        Command::Connectors { command } => connectors::run(&ui, command),
         Command::Skills { command } => catalog::skills(&ui, command),
         Command::Packs { command } => catalog::packs(&ui, command),
         Command::Mods { command } => catalog::mods(&ui, command),

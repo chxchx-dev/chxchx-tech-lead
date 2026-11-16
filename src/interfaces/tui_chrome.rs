@@ -88,9 +88,13 @@ fn page_hints(app: &App) -> Vec<Span<'static>> {
             hints.extend(key_hint("↑↓", "Elegir paso"));
             hints.extend(key_hint("Intro", "Ir"));
         }
-        Page::Setup | Page::Connect => {
+        Page::Setup => {
             hints.extend(key_hint("↑↓", "Elegir"));
             hints.extend(key_hint("Intro", "Previsualizar"));
+        }
+        Page::Connect => {
+            hints.extend(key_hint("↑↓", "Elegir"));
+            hints.extend(key_hint("Intro", "Añadir o quitar"));
         }
         Page::Catalog => {
             hints.extend(key_hint("←→", "Skills/Packs/Mods"));

@@ -35,13 +35,15 @@ fn bundle_catalog() {
     let skills = base.join("skills");
     let packs = base.join("packs");
     let mods = base.join("mods");
-    for path in [&skills, &packs, &mods] {
+    let connectors = base.join("connectors");
+    for path in [&skills, &packs, &mods, &connectors] {
         println!("cargo:rerun-if-changed={}", path.display());
     }
     let mut out = String::new();
     write_entries(&mut out, "SKILLS", &skills, "skill.toml", true);
     write_entries(&mut out, "MODS", &mods, "mod.toml", true);
     write_entries(&mut out, "PACKS", &packs, "", false);
+    write_entries(&mut out, "CONNECTORS", &connectors, "", false);
     let target =
         PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR")).join("catalog_data.rs");
     fs::write(target, out).expect("write catalog_data.rs");

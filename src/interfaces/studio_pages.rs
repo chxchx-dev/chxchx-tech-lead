@@ -57,13 +57,17 @@ pub(super) fn page_actions<'a>(
                 Message::PreviewSync
             ),
         ],
-        Page::Integrations => column![card(
-            "ASISTENTES",
-            "Conexiones MCP",
-            "Conecta tus clientes con las herramientas del proyecto. Podrás revisar comandos y alcance antes de aplicar.",
-            "Revisar conexiones",
-            Message::PreviewMcp
-        )],
+        Page::Integrations => column![
+            card(
+                "ASISTENTES",
+                "Memoria y código (basic-memory y Serena)",
+                "Conecta tus clientes con la memoria y el análisis de código del proyecto. Podrás revisar comandos y alcance antes de aplicar.",
+                "Revisar conexiones",
+                Message::PreviewMcp
+            ),
+            connectors::view(state),
+        ]
+        .spacing(16),
         Page::Diagnostics => column![card(
             "SALUD DEL PROYECTO",
             "Comprueba tu entorno",

@@ -187,6 +187,7 @@ pub(in crate::interfaces::studio) fn fixture() -> Dashboard {
         agents: Default::default(),
         chat: Default::default(),
         local: Default::default(),
+        connectors: Default::default(),
         update: Default::default(),
         panes: Default::default(),
         shell: Default::default(),

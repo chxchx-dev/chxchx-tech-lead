@@ -15,6 +15,8 @@ mod catalog;
 mod chat;
 #[path = "studio_ide_chrome.rs"]
 mod chrome;
+#[path = "studio_connectors.rs"]
+mod connectors;
 #[path = "studio_design.rs"]
 mod design;
 #[path = "studio_ide_dock.rs"]
@@ -120,6 +122,7 @@ struct Dashboard {
     panes: panes::State,
     chat: chat::State,
     local: local::State,
+    connectors: connectors::State,
     update: update::State,
     terminal: terminal::State,
     agents: agents::State,
@@ -155,6 +158,7 @@ enum Message {
     Agents(agents::Event),
     Chat(chat::Event),
     Local(local::Event),
+    Connectors(connectors::Event),
     Update(update::Event),
     Panes(panes::Event),
     /// A reader thread has data (terminal output, an agent's answer).
@@ -259,6 +263,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 },
                 chat: chat::State::default(),
                 local: local::State::default(),
+                connectors: connectors::State::default(),
                 update: update::State::default(),
                 panes: panes::State::default(),
                 editor: editor::State::new(),
@@ -297,6 +302,11 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                     .unwrap_or_else(Task::none),
                 if state.page == Page::Catalog {
                     catalog::update(&mut state, catalog::Event::Load)
+                } else {
+                    Task::none()
+                },
+                if state.page == Page::Integrations {
+                    connectors::update(&mut state, connectors::Event::Load)
                 } else {
                     Task::none()
                 },

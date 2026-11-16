@@ -8,6 +8,8 @@ pub mod features {
     pub mod chat_model;
     pub mod doctor;
     pub mod git;
+    pub mod mcp_connectors;
+    pub mod mcp_connectors_plan;
     pub mod mcp_diagnostics;
     pub mod mcp_setup;
     pub mod project_backup;

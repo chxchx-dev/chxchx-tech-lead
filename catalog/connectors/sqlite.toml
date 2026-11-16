@@ -1,0 +1,15 @@
+name = "sqlite"
+title = "SQLite"
+category = "Bases de datos"
+description = "Consulta y analiza un archivo SQLite: tablas, esquemas y consultas SQL."
+docs = "https://github.com/modelcontextprotocol/servers"
+origin = "referencia"
+requires = ["uvx"]
+command = ["uvx", "mcp-server-sqlite", "--db-path", "{db_path}"]
+platforms = ["windows", "macos", "linux"]
+note = "Abre el archivo de base de datos que indiques, con permiso de lectura y escritura."
+
+[[param]]
+name = "db_path"
+description = "Ruta del archivo .db o .sqlite (relativa al proyecto o absoluta)."
+placeholder = "./datos.db"

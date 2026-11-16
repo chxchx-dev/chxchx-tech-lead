@@ -15,7 +15,7 @@ use ratatui::widgets::{List, ListItem, ListState, Paragraph, Wrap};
 pub struct Action {
     pub title: &'static str,
     pub detail: &'static str,
-    run: fn(&App) -> Result<Preview, String>,
+    pub(super) run: fn(&App) -> Result<Preview, String>,
 }
 
 pub fn actions(page: Page) -> Vec<Action> {

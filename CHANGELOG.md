@@ -1,5 +1,9 @@
 # Changelog
 
+## Sin publicar
+
+- **Conectores MCP**: catálogo de servidores para Excel, Power BI, Word, Google Sheets, PostgreSQL y SQLite, más servidores propios. `chxchx-tech connectors list|add|remove|custom`, la página *Conectar* del TUI y la sección *Herramientas / MCP* de Studio. Se escriben en los archivos del proyecto de cada agente (`.mcp.json`, `.codex/config.toml`, `opencode.json`) con vista previa exacta, respaldo de lo que existía y sin guardar claves.
+
 ## 0.6.2 — Scroll más ligero
 
 - **Desplazarse por el editor y por los chats largos cuesta menos**: unos 8 ms de CPU por paso de rueda en lugar de unos 13

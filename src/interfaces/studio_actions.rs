@@ -36,6 +36,9 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
     if let Message::Local(event) = message {
         return local::update(state, event);
     }
+    if let Message::Connectors(event) = message {
+        return connectors::update(state, event);
+    }
     if let Message::Update(event) = message {
         return update::update(state, event);
     }
@@ -88,6 +91,7 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
         | Message::Agents(_)
         | Message::Chat(_)
         | Message::Local(_)
+        | Message::Connectors(_)
         | Message::Update(_)
         | Message::Panes(_)
         | Message::Wake
@@ -104,6 +108,10 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
             state.editor.home = true;
             if page == Page::Catalog && state.catalog.view.is_none() {
                 return catalog::update(state, catalog::Event::Load);
+            }
+            if page == Page::Integrations {
+                state.connectors.states = None;
+                return connectors::update(state, connectors::Event::Load);
             }
         }
         Message::Dismiss => {

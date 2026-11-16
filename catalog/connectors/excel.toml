@@ -1,0 +1,17 @@
+name = "excel"
+title = "Excel"
+category = "Office"
+description = "Lee y edita libros de Excel (.xlsx): hojas, celdas, fórmulas, tablas y gráficos, sin abrir Excel."
+docs = "https://github.com/negokaz/excel-mcp-server"
+origin = "comunidad"
+requires = ["npx"]
+command = ["npx", "--yes", "@negokaz/excel-mcp-server"]
+command_windows = ["cmd", "/c", "npx", "--yes", "@negokaz/excel-mcp-server"]
+platforms = ["windows", "macos", "linux"]
+note = "La edición en vivo del libro abierto en Excel solo funciona en Windows; en macOS y Linux trabaja sobre el archivo."
+
+[[env]]
+name = "EXCEL_MCP_PAGING_CELLS_LIMIT"
+description = "Máximo de celdas por lectura paginada (4000 si no se define)."
+secret = false
+required = false

@@ -252,3 +252,90 @@ fn finished_background_work_reports_back_and_closes_the_preview() {
     app.complete(Done::Applied(Err("falló".into())));
     assert!(screen(&mut app, 110, 40).contains("falló"));
 }
+
+fn select_connector(app: &mut App, name: &str) {
+    let all = connectors::rows();
+    let position = all
+        .iter()
+        .position(|row| matches!(row, connectors::Row::Connector(i) if crate::features::mcp_connectors::connectors()[*i].name == name))
+        .expect("the connector is in the list");
+    app.connect.0 = position;
+}
+
+#[test]
+fn the_connect_page_lists_the_apps_their_needs_and_where_they_are_configured() {
+    let mut app = app("conn");
+    press(&mut app, KeyCode::Char('6'));
+    let text = screen(&mut app, 120, 44);
+    for word in [
+        "MEMORIA DEL PROYECTO",
+        "OFFICE",
+        "BASES DE DATOS",
+        "Excel",
+        "Power BI",
+        "PostgreSQL",
+    ] {
+        assert!(text.contains(word), "{word:?} missing from:\n{text}");
+    }
+    select_connector(&mut app, "postgres");
+    let text = screen(&mut app, 120, 44);
+    assert!(
+        text.contains("Necesita") && text.contains("DATABASE_URI"),
+        "{text}"
+    );
+    assert!(
+        text.contains("En este proyecto") && text.contains("sin configurar"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_connector_is_previewed_with_the_exact_files_and_nothing_is_written() {
+    let mut app = app("conn-preview");
+    press(&mut app, KeyCode::Char('6'));
+    select_connector(&mut app, "excel");
+    press(&mut app, KeyCode::Enter);
+    let modal = app.modal.as_ref().expect("Intro previews adding it");
+    assert!(modal.title.contains("Excel"), "{}", modal.title);
+    assert!(modal.apply.is_some(), "it can be confirmed");
+    assert!(
+        modal
+            .lines
+            .iter()
+            .any(|(_, l)| l.contains("@negokaz/excel-mcp-server")),
+        "the exact command is shown"
+    );
+    assert!(!app.path.join(".mcp.json").exists() && !app.path.join("opencode.json").exists());
+    let text = screen(&mut app, 120, 44);
+    assert!(text.contains("Aplicar"), "{text}");
+}
+
+#[test]
+fn a_connector_that_needs_a_value_asks_for_it_before_the_preview() {
+    let mut app = app("conn-prompt");
+    press(&mut app, KeyCode::Char('6'));
+    select_connector(&mut app, "sqlite");
+    press(&mut app, KeyCode::Enter);
+    assert!(app.prompt.is_some() && app.modal.is_none(), "it asks first");
+    assert!(screen(&mut app, 120, 44).contains("db_path"));
+    press(&mut app, KeyCode::Enter);
+    assert!(app.prompt.is_some(), "an empty value is not accepted");
+    type_chars(&mut app, "./datos.db");
+    press(&mut app, KeyCode::Backspace);
+    type_chars(&mut app, "b");
+    press(&mut app, KeyCode::Enter);
+    assert!(app.prompt.is_none());
+    let modal = app.modal.as_ref().expect("then the preview");
+    assert!(
+        modal.lines.iter().any(|(_, l)| l.contains("./datos.db")),
+        "{:?}",
+        modal.lines
+    );
+    // Escape cancels the question without a trace.
+    let mut other = self::app("conn-cancel");
+    press(&mut other, KeyCode::Char('6'));
+    select_connector(&mut other, "sqlite");
+    press(&mut other, KeyCode::Enter);
+    press(&mut other, KeyCode::Esc);
+    assert!(other.prompt.is_none() && other.modal.is_none());
+}
