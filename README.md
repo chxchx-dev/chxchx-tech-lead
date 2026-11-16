@@ -13,7 +13,7 @@
   <a href="https://github.com/chxchx-dev/chxchx-tech-lead/actions/workflows/rust-product.yml"><img alt="Build" src="https://github.com/chxchx-dev/chxchx-tech-lead/actions/workflows/rust-product.yml/badge.svg"></a>
   <img alt="Rust" src="https://img.shields.io/badge/Rust-2024-orange?logo=rust">
   <img alt="Plataformas" src="https://img.shields.io/badge/Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-informational">
-  <img alt="Versión" src="https://img.shields.io/badge/versi%C3%B3n-0.6.0-blue">
+  <img alt="Versión" src="https://img.shields.io/badge/versi%C3%B3n-0.6.2-blue">
 </p>
 
 <p align="center">
@@ -219,6 +219,6 @@ los procesos e integraciones externas viven en `integrations/`. Más reglas en [
 
 ## Estado
 
-Versión `0.6.0`, el producto en Rust. Pendiente: portar `agent chat` y los modelos locales a Rust (hoy los sirve el CLI de Python de `old-version/`), guardar la disposición de paneles entre sesiones y completar la QA en macOS y Linux.
+Versión `0.6.2`, el producto en Rust. Pendiente: portar `agent chat` y los modelos locales a Rust (hoy los sirve el CLI de Python de `old-version/`), guardar la disposición de paneles entre sesiones y completar la QA en macOS y Linux.
 `agent chat` a Rust (hoy usa el CLI de Python), guardar la disposición de paneles entre sesiones y completar la QA
 en macOS y Linux.
