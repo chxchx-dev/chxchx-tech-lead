@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 — Inicio más claro
+
+- La guía de Inicio se concentra en tres pasos: preparar el proyecto, decidir la confianza local y empezar a trabajar.
+- Al terminar una vista previa, Studio desplaza la página hasta el panel de revisión. La confianza explica que guardarla no ejecuta procesos y que se puede revocar.
+- Inicio ocupa menos espacio vertical. La lentitud general del scroll en otras páginas sigue pendiente de medición en la ventana.
+
 ## 0.6.0 — el producto pasa a Rust
 
 Reescritura completa del producto en Rust: un solo comando, tres interfaces y mucho menos consumo.

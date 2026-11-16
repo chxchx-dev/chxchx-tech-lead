@@ -7,7 +7,7 @@ name: Studio release (Rust)
 # `v<version>` that every installed Studio on the stable channel updates to. Run it by hand:
 # Actions > this workflow > Run workflow (with `publish` off it only builds and stages).
 on:
-  # Pushing a tag `vX.Y.Z` publishes that stable release (`git tag v0.6.0 && git push origin v0.6.0`).
+  # Pushing a tag `vX.Y.Z` publishes that stable release (`git tag v0.6.1 && git push origin v0.6.1`).
   push:
     tags: ["v*"]
     # Every push to `dev` refreshes the rolling `studio-dev-preview` for the machines on the dev channel.

@@ -96,11 +96,15 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
             .style(styles::card),
         );
     }
-    container(styles::vscroll(container(body).center_x(Fill).padding([22, 28])).height(Fill))
-        .width(Fill)
-        .height(Fill)
-        .style(styles::surface(design::BG_BASE))
-        .into()
+    container(
+        styles::vscroll(container(body).center_x(Fill).padding([22, 28]))
+            .id(styles::PAGE_SCROLL_ID)
+            .height(Fill),
+    )
+    .width(Fill)
+    .height(Fill)
+    .style(styles::surface(design::BG_BASE))
+    .into()
 }
 
 fn page_header<'a>(page: Page) -> Element<'a, Message> {

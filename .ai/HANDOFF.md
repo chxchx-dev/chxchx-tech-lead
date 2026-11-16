@@ -1,5 +1,11 @@
 # Handoff
 
+## Studio: primeros pasos y scroll (2026-11-15)
+
+- Versión `0.6.1` preparada en Cargo y el paquete Python auxiliar; changelog con la corrección de Inicio.
+- Inicio tiene una guía compacta de preparación, confianza y primer agente; al completar una vista previa, el scroll principal va hasta el panel de revisión. Build de Studio y formato pasan.
+- Pendiente de QA visual: comprobar rueda/trackpad en Inicio y otras páginas para medir la lentitud general con la misma máquina y contenido; aún no hay evidencia de que el uso de RAM sea la causa.
+
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
 ## 0.6.0 y limpieza de old-version (2026-11-15)
@@ -42,49 +48,6 @@
 - Memoria (`integrations/process_memory.rs`, `MEMORIA.md`): devolución al sistema, `MALLOC_ARENA_MAX`, recortes en el chat, RAM en la barra de estado.
 - Ruta de aprendizaje en Inicio (`studio_learning.rs`).
 - Sin probar con un agente real desde la ventana: permisos en vivo, preguntas, liberación de contexto.
-
-## Studio Rust: diseño verificado y Windows (2026-11-14)
-
-- El diseño del Studio Rust (menú, barra de herramientas, explorador, héroe de Inicio) existe en `origin/migracion-rust`; la copia local de Fedora estaba 14 commits atrasada y además `chxchx-studio` del PATH es el lanzador del Studio Qt. Se actualizó y se verificó con captura: coincide con las capturas de Windows. Abrir siempre con `scripts/studio-rust.sh` (Linux/macOS) o `scripts/studio-rust.ps1` (Windows).
-- Windows: `features/startup_log.rs` guarda errores de arranque y pánicos en `<home>/logs/studio-startup.log` (sin consola no se veían). CI nuevo `windows-package`: compila release, abre el Studio 8 s, lee `status --json` y sube el `.zip`.
-- Pendiente: la prueba de integración falla en macOS desde `d48490b` (código 101; sin logs accesibles). Primera compilación debug local: ~43 min.
-- El stash `local-before-pulling-origin-2026-11-14` guarda el rediseño anterior (superado) y notas `.ai` compactadas.
-
-## Sugerencias de commit (2026-11-13)
-
-- Reglas en `suggest_rules.rs` (clasificación, nombres, tipo), `suggest_split.rs`
-  (módulos grandes), `suggest_checks.rs` (secretos, formato). Para ajustar una regla,
-  añadir un caso en `suggest_tests.rs`. Cuando existan agentes (R4) se puede ofrecer una
-  sugerencia con IA además de esta, con consentimiento y sin enviar archivos sensibles.
-
-## Git (2026-11-13)
-
-- Pedido: Git completo en la barra izquierda, como el Studio Qt, con recomendaciones.
-  Hecho salvo lo listado como «No portado» en `.ai/CURRENT_STATE.md`.
-- Las pruebas de `features/git/tests.rs` crean repositorios temporales con el `git` real y
-  se omiten si no existe. Usan `core.autocrlf=false` para ser deterministas en Windows.
-- Siguiente paso natural: el asistente (sugerir mensaje / consejo) cuando se porten los
-  agentes (R4); hoy la guía es determinista y local.
-- Un repositorio con el proyecto en una subcarpeta usa `Repository::prefix`: los archivos
-  fuera de la carpeta no se muestran en el explorador y no se pueden abrir desde el panel.
-
-## Espacio de trabajo a la izquierda (2026-11-13)
-
-- Pedido del usuario: mover «Espacio de trabajo» del lado derecho al menú izquierdo para
-  ganar pantalla. Hecho; detalle en `.ai/CURRENT_STATE.md`. Para añadir una sección,
-  una entrada en `GROUPS` de `studio_workspace.rs`, la página en `Page` y su menú/atajo.
-
-## UX del Studio (2026-11-13, Windows)
-
-- Pedido: que no se sienta bugueado ni pegado, con barra de menú y de herramientas.
-  Detalle y hallazgos en `.ai/CURRENT_STATE.md`.
-- El rail ya no contiene páginas; navegar secciones es por menú Ir, barra de
-  herramientas y panel derecho. Para añadir un comando: una entrada en
-  `studio_menu_items.rs` y, si es frecuente, un botón en `studio_toolbar.rs`; los que
-  inician un plan se encadenan con `Message::Sequence` para abrir antes su sección.
-- Pendiente: navegación con flechas dentro de los menús, buscar y reemplazar,
-  búsqueda con regex/mayúsculas, numeración de líneas, y QA de ratón real.
-- Estado del código del Studio: todos los módulos bajo 300 líneas.
 
 ## Último cambio
 

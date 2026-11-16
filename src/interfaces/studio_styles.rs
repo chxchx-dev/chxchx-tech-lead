@@ -2,6 +2,8 @@
 use super::design::*;
 use super::{Element, Message};
 use iced::widget::{button, container, scrollable, text_editor, text_input, tooltip};
+
+pub(super) const PAGE_SCROLL_ID: iced::widget::Id = iced::widget::Id::new("studio-main-page");
 #[path = "studio_styles_panes.rs"]
 mod panes;
 use iced::{Background, Border, Color, Shadow, Theme, Vector, gradient};
