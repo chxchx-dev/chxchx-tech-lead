@@ -12,6 +12,13 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Scroll más ligero (2026-11-16)
+
+- Medido con el Studio real bajo X11 inyectando rueda (XTEST) y muestreando pilas: el scroll del editor costaba ~13 ms de CPU por notch, casi todo en `tiny_skia::fill_path` con antialiasing y máscara. Causa: `iced_tiny_skia` dibuja **todo** cuadro de fondo como camino con AA; la tarjeta redondeada (radio 12, borde) de todo el grupo de pestañas (~1,4 M px) se rellenaba entera en cada fotograma.
+- `vendor/iced_tiny_skia/` (copia de 0.14.1, MIT, `[patch.crates-io]` en `Cargo.toml`): rectángulos lisos van como `fill_rect`, y los rectángulos redondeados opacos se parten en un rectángulo central + dos tapas finas con las esquinas. Resultado: ~13 → ~8 ms/notch en el editor (−39 %), chat largo ~7 ms. Al subir iced hay que reaplicar el cambio (`ChxChx patch` en `src/engine.rs`) o descartarlo si ya lo incluye.
+- `Event::Edit` ya no copia el documento entero para comparar en cada scroll/movimiento de cursor (solo en ediciones reales).
+- Lo que queda por fotograma: dibujar ~4000 glifos (`draw_pixmap` crea un blitter por glifo) y presentar el buffer; bajarlo más exigiría cachear líneas de texto o reducir el área dañada.
+
 ## 0.6.0 y limpieza de old-version (2026-11-15)
 
 - Versión `0.6.0` (Cargo y pyproject/wheel); `CHANGELOG.md` tiene la sección 0.6.0 (conserva el historial 0.5.x). Decisión del dueño: publicar 0.6.0 para que las instalaciones la bajen (reemplaza la alpha/dev planeada). Cada push a `dev` renueva `studio-dev-preview` (canal dev; solo lo reciben las instalaciones en dev). Pendiente de él: publicar el estable subiendo el tag `v0.6.0` (el workflow `release.yml` también se dispara con cualquier tag `v*` y publica el stable), o a mano en Actions con `channel=stable` (primero `publish` desmarcado para revisar). El stable publica el tag `v0.6.0` con las notas del changelog y `make_latest`. **El workflow nunca se ha ejecutado**; no se probó en macOS/Windows.

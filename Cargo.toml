@@ -61,3 +61,8 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+
+# A copy of iced_tiny_skia 0.14.1 with one change: plain rectangles are filled as rectangles, not
+# as anti-aliased paths (see vendor/iced_tiny_skia/src/engine.rs). It made scrolling cost a fraction.
+[patch.crates-io]
+iced_tiny_skia = { path = "vendor/iced_tiny_skia" }
