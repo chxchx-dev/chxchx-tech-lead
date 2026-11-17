@@ -1,29 +1,95 @@
-//! Build-time packaging: the Windows icon and the bundled skills/packs/mods catalog.
+//! Build-time packaging: Windows executable metadata and the bundled catalog.
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 fn main() {
-    embed_windows_icon();
+    embed_windows_resources();
     bundle_catalog();
 }
 
-fn embed_windows_icon() {
-    println!("cargo:rerun-if-changed=assets/brand/studio.rc");
+fn embed_windows_resources() {
     println!("cargo:rerun-if-changed=assets/brand/chxchx.ico");
+    println!("cargo:rerun-if-changed=assets/brand/chxchx.manifest");
     let windows = std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "windows");
-    let studio = std::env::var_os("CARGO_FEATURE_STUDIO").is_some();
-    if windows && studio {
-        // The icon is cosmetic: a missing resource compiler must not break the build.
-        if let Err(error) = embed_resource::compile_for(
-            "assets/brand/studio.rc",
-            ["chxchx-studio"],
-            embed_resource::NONE,
-        )
-        .manifest_optional()
-        {
-            println!("cargo:warning=No se pudo incrustar el icono de Studio: {error}");
-        }
+    if !windows {
+        return;
+    }
+
+    let mut binaries = Vec::new();
+    if std::env::var_os("CARGO_FEATURE_CLI").is_some() {
+        binaries.extend([("chxchx-tech", "ChxChx Tech"), ("chxchx", "ChxChx")]);
+    }
+    if std::env::var_os("CARGO_FEATURE_STUDIO").is_some() {
+        binaries.push(("chxchx-studio", "ChxChx Studio"));
+    }
+    if std::env::var_os("CARGO_FEATURE_PYTHON_HELPER_LAUNCHER").is_some() {
+        binaries.push(("chxchx-python-helper", "ChxChx Python Helper"));
+    }
+
+    let version = std::env::var("CARGO_PKG_VERSION").expect("Cargo sets CARGO_PKG_VERSION");
+    let major = std::env::var("CARGO_PKG_VERSION_MAJOR")
+        .expect("Cargo sets CARGO_PKG_VERSION_MAJOR")
+        .parse::<u16>()
+        .expect("Windows file version major must fit in 16 bits");
+    let minor = std::env::var("CARGO_PKG_VERSION_MINOR")
+        .expect("Cargo sets CARGO_PKG_VERSION_MINOR")
+        .parse::<u16>()
+        .expect("Windows file version minor must fit in 16 bits");
+    let patch = std::env::var("CARGO_PKG_VERSION_PATCH")
+        .expect("Cargo sets CARGO_PKG_VERSION_PATCH")
+        .parse::<u16>()
+        .expect("Windows file version patch must fit in 16 bits");
+    let output = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR"));
+    let manifest = std::path::absolute("assets/brand/chxchx.manifest")
+        .expect("absolute Windows application manifest");
+
+    for (binary, description) in binaries {
+        let manifest_path = manifest.to_string_lossy().replace('\\', "/");
+        let icon = (binary == "chxchx-studio")
+            .then(|| std::path::absolute("assets/brand/chxchx.ico").expect("absolute icon"))
+            .map(|path| format!("1 ICON \"{}\"\n", path.to_string_lossy().replace('\\', "/")))
+            .unwrap_or_default();
+        let resource = format!(
+            r#"1 24 "{manifest_path}"
+#include <windows.h>
+{icon}VS_VERSION_INFO VERSIONINFO
+ FILEVERSION {major},{minor},{patch},0
+ PRODUCTVERSION {major},{minor},{patch},0
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0x0L
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName", "ChxChx\0"
+      VALUE "FileDescription", "{description}\0"
+      VALUE "FileVersion", "{version}\0"
+      VALUE "InternalName", "{binary}\0"
+      VALUE "OriginalFilename", "{binary}.exe\0"
+      VALUE "ProductName", "ChxChx\0"
+      VALUE "ProductVersion", "{version}\0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
+"#
+        );
+        let resource_path = output.join(format!("{binary}.rc"));
+        fs::write(&resource_path, resource).expect("write Windows version resource");
+
+        embed_resource::compile_for(&resource_path, [binary], embed_resource::NONE)
+            .manifest_required()
+            .unwrap_or_else(|error| {
+                panic!("No se pudieron incrustar los recursos de Windows en {binary}: {error}")
+            });
     }
 }
 

@@ -142,3 +142,19 @@ def test_windows_arm64_prefers_a_native_package_and_falls_back_to_x64():
     assert feed.parse_manifest(x64_only, system="Windows", machine="ARM64").platform == "windows-x86_64"
     with pytest.raises(ValueError):
         feed.platform_asset("Windows", "x86")
+
+
+def test_windows_manifest_exposes_only_a_valid_optional_msi():
+    windows = f"\nasset.windows-x86_64=chxchx-studio-windows-x86_64.zip\nsha256.windows-x86_64={SHA}"
+    with_msi = manifest(extra=windows + f"\nasset.windows-msi=chxchx-studio-windows-x86_64.msi\nsha256.windows-msi={SHA}")
+    release = feed.parse_manifest(with_msi, system="Windows", machine="AMD64")
+    assert release.windows_msi == "chxchx-studio-windows-x86_64.msi"
+    assert release.windows_msi_sha256 == SHA
+
+    incomplete = manifest(extra=windows + "\nasset.windows-msi=chxchx-studio-windows-x86_64.msi")
+    with pytest.raises(ValueError, match="MSI incompleto"):
+        feed.parse_manifest(incomplete, system="Windows", machine="AMD64")
+
+    invalid = manifest(extra=windows + f"\nasset.windows-msi=other.msi\nsha256.windows-msi={SHA}")
+    with pytest.raises(ValueError, match="MSI o checksum inválido"):
+        feed.parse_manifest(invalid, system="Windows", machine="AMD64")

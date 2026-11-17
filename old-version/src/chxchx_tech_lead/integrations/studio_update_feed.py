@@ -35,6 +35,8 @@ class StudioRelease:
     wheel: str
     wheel_sha256: str
     channel: str = "dev"
+    windows_msi: str | None = None
+    windows_msi_sha256: str | None = None
 
 
 def platform_asset(system: str | None = None, machine: str | None = None) -> tuple[str, str]:
@@ -102,6 +104,16 @@ def parse_manifest(
     if not re.fullmatch(r"[0-9a-f]{64}", values["sha256.cli-wheel"]):
         raise ValueError("El manifiesto de Studio contiene un checksum inválido.")
 
+    windows_msi = values.get("asset.windows-msi")
+    windows_msi_sha = values.get("sha256.windows-msi")
+    if bool(windows_msi) != bool(windows_msi_sha):
+        raise ValueError("El manifiesto de Studio contiene un MSI incompleto.")
+    if windows_msi and (
+        windows_msi != "chxchx-studio-windows-x86_64.msi"
+        or not re.fullmatch(r"[0-9a-f]{64}", windows_msi_sha or "")
+    ):
+        raise ValueError("El manifiesto de Studio contiene un MSI o checksum inválido.")
+
     platform_key, expected_package = platform_asset(system, machine)
     if platform_key == "windows-arm64" and f"asset.{platform_key}" not in values:
         # No native ARM64 build in this release: Windows 11 runs the x64 one under emulation.
@@ -119,6 +131,8 @@ def parse_manifest(
         wheel=wheel,
         wheel_sha256=values["sha256.cli-wheel"],
         channel=channel,
+        windows_msi=windows_msi,
+        windows_msi_sha256=windows_msi_sha,
     )
 
 

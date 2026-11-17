@@ -19,23 +19,32 @@ from ..workspace.project_context import project_for_path as _project
 def install_command(
     dry_run: bool = typer.Option(False, "--dry-run", help="Muestra acciones sin ejecutarlas."),
 ):
-    """Instala las herramientas base administradas por uv."""
+    """Instala Basic Memory y Serena, requeridas por las integraciones MCP."""
+    failed = False
     for tool in ("basic-memory", "serena"):
         console.print(f"[cyan]→[/] {tool}")
         try:
             result = install_tool(tool, dry_run=dry_run)
         except RuntimeError as exc:
             console.print(f"[red]✗[/] {exc}")
-            raise typer.Exit(code=1)
+            failed = True
+            continue
         if result.returncode == 0:
             if result.skipped:
                 console.print(f"[green]✓[/] {tool} ya está instalado")
             else:
                 console.print(f"[green]✓[/] {'DRY RUN ' if dry_run else ''}{' '.join(result.command)}")
+                if result.stdout and not dry_run:
+                    console.print(result.stdout)
+                if result.stderr:
+                    console.print(result.stderr)
         else:
             console.print(f"[red]✗[/] {' '.join(result.command)}")
             if result.stderr:
                 console.print(result.stderr)
+            failed = True
+    if failed:
+        raise typer.Exit(code=1)
 
 @app.command("init")
 def init_command(

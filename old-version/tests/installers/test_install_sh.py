@@ -27,6 +27,7 @@ def test_dry_run_verifies_the_download_and_changes_nothing(box, make_release) ->
 
     assert result.returncode == 0, result.stderr
     assert "DRY RUN" in result.stdout and "0.5.0" in result.stdout and "linux-ubuntu-x86_64" in result.stdout
+    assert "Basic Memory y Serena" in result.stdout and "extras requeridos" in result.stdout
     assert box.tree() == set()  # not even ~/.local was created
 
 
@@ -44,6 +45,14 @@ def test_a_stable_install_sets_up_studio_the_command_and_the_app_menu(box, make_
     cli_path = studio.stdout.split("cli=")[1].split()[0]
     assert cli_path == str(root / ".venv/bin/chxchx-tech") and Path(cli_path).is_file()
     assert box.command("chxchx-tech", "--version").stdout.strip() == "chxchx-tech 0.5.0"
+    assert box.command("chxchx-future", "status").stdout.strip() == "chxchx-future 0.5.0 args=status"
+    for startup_file in (box.home / ".profile", box.home / ".bashrc"):
+        content = startup_file.read_text()
+        assert content.count("# >>> CHXCHX_LOCAL_BIN_PATH >>>") == 1
+        assert '"$HOME/.local/bin:$PATH"' in content
+    assert box.command("basic-memory").stdout.strip() == "basic-memory instalado"
+    assert box.command("bm").stdout.strip() == "bm instalado"
+    assert box.command("serena").stdout.strip() == "serena instalado"
     desktop = (box.home / ".local/share/applications/chxchx-studio.desktop").read_text()
     assert 'Exec="%s" %%f' % (box.home / ".local/bin/chxchx-studio") in desktop and "Name=ChxChx Studio\n" in desktop
     assert "CHXCHX_STUDIO_DESKTOP" in desktop and "Icon=chxchx-studio" in desktop
@@ -60,6 +69,7 @@ def test_installing_again_is_safe_and_update_needs_a_previous_install(box, make_
     first = box.tree()
     assert install(box, release).returncode == 0 and install(box, release, "--update").returncode == 0
     assert box.tree() == first
+    assert (box.home / ".profile").read_text().count("CHXCHX_LOCAL_BIN_PATH") == 2
 
 
 def test_the_dev_preview_installs_next_to_stable_without_touching_it(box, make_release) -> None:
@@ -110,6 +120,8 @@ def test_cli_only_installs_just_the_command(box, make_release) -> None:
 
     assert result.returncode == 0, result.stderr
     assert box.command("chxchx-tech").stdout.strip() == "chxchx-tech 0.5.0"
+    assert box.command("basic-memory").returncode == 0
+    assert box.command("serena").returncode == 0
     assert (box.home / ".local/opt/chxchx-tech/stable-0.5.0/.chxchx-managed").is_file()
     assert not (box.home / ".local/opt/chxchx-studio").exists() and not (box.home / ".local/share").exists()
     assert not (box.home / ".local/bin/chxchx-studio").exists()
@@ -142,9 +154,10 @@ def test_uninstall_removes_only_what_chxchx_installed(box, make_release) -> None
 
     assert result.returncode == 0, result.stderr
     assert not (box.home / ".local/opt").exists()
-    assert sorted(path.name for path in (box.home / ".local/bin").iterdir()) == ["otro"]
+    assert sorted(path.name for path in (box.home / ".local/bin").iterdir()) == ["basic-memory", "bm", "otro", "serena"]
     assert not list((box.home / ".local/share/applications").glob("chxchx*")) and not (box.home / ".local/share/icons/hicolor/256x256/apps/chxchx-studio.png").exists()
     assert data.is_file() and "No se tocaron tus datos" in result.stdout
+    assert (box.home / ".profile").is_file()  # queda para Basic Memory y Serena, que se conservan
     assert "No había nada instalado" in box.run("--uninstall").stdout  # a second uninstall is a no-op
 
 

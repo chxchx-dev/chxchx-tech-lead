@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
+
 from chxchx_tech_lead.integrations.studio_update_prune import prune_stale_installs
 
 
@@ -33,7 +35,12 @@ def test_foreign_folders_and_other_channels_are_never_touched(tmp_path: Path) ->
     foreign.mkdir()  # same name, but no ChxChx marker
     other_channel = _install(tmp_path, "dev-0123456789ab", 10)
     link = tmp_path / "chxchx-link"
-    link.symlink_to(newest)
+    try:
+        link.symlink_to(newest, target_is_directory=True)
+    except OSError as error:
+        if getattr(error, "winerror", None) != 1314:
+            raise
+        pytest.skip("crear enlaces simbólicos de directorio requiere privilegios de Windows")
     assert prune_stale_installs(newest, "stable") == []
     assert foreign.exists() and other_channel.exists() and link.is_symlink()
 

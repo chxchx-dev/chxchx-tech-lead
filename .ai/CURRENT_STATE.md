@@ -1,8 +1,28 @@
 # Current State
 
-## Release estable 0.6.1 (2026-11-16)
+## Instaladores visuales macOS/Linux y PATH de comandos (2026-11-17)
 
-- Publicado el tag `v0.6.1` sobre el merge de `main` `fa80b7c` (incluye `2c088e4`). El workflow `Studio release (Rust)` terminó correctamente; GitHub publicó el release estable con paquetes Linux, Windows, macOS ARM64/Intel y wheel Python. Release: https://github.com/chxchx-dev/chxchx-tech-lead/releases/tag/v0.6.1.
+- Se añadió `chxchx-installer`, una ventana Iced que ejecuta la versión embebida de `install.sh`, permite elegir `stable`/`dev`, verificar descargas sin instalar, muestra la salida y ofrece instalar o desinstalar. CI prepara el DMG de `ChxChx Installer.app` para macOS arm64/Intel y el tar.gz Linux x86_64; `release_assets.py` los registra con SHA-256 en el manifiesto.
+- `install.sh` agrega `~/.local/bin` de forma idempotente a Bash, Zsh o Fish. Linux usa `pkexec` desde la GUI solo para instalar bibliotecas del sistema. Los scripts de Windows y el builder MSI generan shims para futuros ejecutables CLI Rust `chxchx-*`; los paquetes macOS/Linux/Windows incorporan los binarios disponibles.
+- Basic Memory y Serena siguen siendo extras requeridos, descargados durante la instalación; se conservan al desinstalar ChxChx. README y ADR-0018 describen la descarga de assets desde GitHub Releases. La distribución sigue sin certificado de firma digital ni notarización.
+- Verificación local: `cargo fmt --all -- --check`, Clippy con `visual-installer`, `cargo test --locked` (218 + 6 + 9) y `uv run --locked pytest` (487 pasaron, 38 omitidas, 10 deseleccionadas) pasan. También pasan 18 pruebas enfocadas, sintaxis PowerShell y Bash del instalador (copia LF) y `git diff --check`. Windows omite la prueba end-to-end Linux de `install.sh`; se añadió su ejecución al workflow Linux de release. Pendientes: resultado remoto y builds nativos publicados de macOS/Linux.
+
+## Checkout actual 0.6.3 (2026-11-17)
+
+- Rama `dev`, commit `34bb869` (`test: connector launcher follows the platform`), versión Cargo y Python `0.6.3`. El estado del CI y de los releases remotos no se verificó en esta sesión porque no está disponible `gh`.
+
+## Distribución Windows: MSI por usuario implementado localmente (2026-11-17)
+
+- Se enlaza estáticamente el runtime MSVC para `x86_64-pc-windows-msvc`. Los tres ejecutables Rust y el launcher Python incorporan versión, manifiesto de ejecución sin elevación, DPI por monitor y soporte de rutas largas; Studio conserva su icono.
+- El MSI WiX 5.0.2 instala por usuario en `%LOCALAPPDATA%\Programs\ChxChxStudio`, agrega PATH y acceso al menú Inicio, registra la instalación en Aplicaciones instaladas y trae CPython 3.11.18, `uv.exe`, el ayudante y sus paquetes. Su acción posterior a `InstallFiles` instala Basic Memory y Serena con `uv` en una carpeta compartida; sus comandos y PATH sobreviven a actualizaciones y desinstalación. `install.ps1` y `install.sh` también instalan ambos extras en la carpeta de herramientas del usuario; requieren Internet y se conservan al quitar ChxChx.
+- El manifiesto admite `windows-msi`; las instalaciones MSI verifican el SHA-256 y actualizan mediante `msiexec`. El actualizador ZIP y `install.ps1` no modifican una raíz MSI.
+- Verificado localmente en Windows: WiX 5.0.2 compila y valida con ICE el MSI 0.6.3 y el MSI de prueba 0.6.4; la prueba de ciclo con extras ahora comprueba sus ejecutables antes y después de actualizar/desinstalar. La ejecución completa de ese instalador de prueba se reserva al runner de CI porque instala los extras y deja su PATH persistente en el perfil que lo ejecuta.
+- `cargo fmt --all -- --check`, Clippy y `cargo test --locked` pasan (218 unitarias, 6 de catálogo y 9 de flujos). La suite Python completa pasa en Windows: 487 pasaron, 38 omitidas y 10 deseleccionadas. También pasan la sintaxis PowerShell/Bash y `git diff --check`.
+- Los artefactos están en `dist/windows-msi/` y `dist/windows-msi-smoke-update/`, ignorados por Git. No se pudo comprobar el CI remoto porque `gh` no está disponible; tampoco se publicó una release. Por decisión del dueño, MSI y ejecutables se mantienen sin firma para uso personal y conocidos; no hay publicación general planeada.
+
+## Registro histórico de release estable 0.6.1 (2026-11-16)
+
+- Se registró el tag `v0.6.1` sobre el merge de `main` `fa80b7c` (incluye `2c088e4`). El workflow `Studio release (Rust)` terminó correctamente y GitHub publicó paquetes Linux, Windows, macOS ARM64/Intel y wheel Python. Release: https://github.com/chxchx-dev/chxchx-tech-lead/releases/tag/v0.6.1.
 
 ## Studio: primeros pasos y scroll (2026-11-15)
 
@@ -118,16 +138,12 @@
 
 ## Estado actual
 
-- Producto: control plane local con CLI/TUI en Python y ChxChx Studio en C++20/Qt 6 Widgets con Scintilla/Lexilla. Studio llama al CLI mediante el bridge JSON v1 (`workspace/bridge_contracts.py`); Python sigue siendo la autoridad. La rama de integración es `dev`.
-- Studio cubre todas las áreas de la TUI (inventario en `.ai/EDITOR-PARITY.md`). Toda escritura pasa por `--dry-run`, preview y confirmación. Inicio ofrece `Preparar y entrar`. Incluye terminal PTY/ConPTY + libvterm (scrollback de 5000 líneas), pestañas de agentes Codex/Claude/OpenCode (+Ollama), búsqueda de rutas y contenido, archivos recientes y grupos divididos, diff Git por archivo, símbolos básicos, atajos configurables y paleta `Ctrl+P`.
-- Catálogo: 21 skills, 13 Tech Packs y 9 Mods de Claude Code en `.claude/skills`. RAM Governor: `max_agents` 2, aviso RAM 70 %, crítico 85 % y aviso swap 40 %; trust local obligatorio antes de ejecutar procesos.
-- CI/CD de proyectos del usuario: CI opt-in para Python/Node/CMake y CD opt-in a VPS con Docker Compose (ADR 0007), ambos en CLI/TUI/Studio.
-- Distribución: CPack genera ZIP/DMG/TGZ y un `Setup.exe` NSIS. Stable `0.5.0` se instaló y verificó por versión en Fedora x86_64; no se lanzó la ventana. No se ha probado la instalación en equipos limpios ni en Windows/macOS.
-- Memoria: `.ai/memory/PROJECT_MEMORY.md` guarda las peticiones explícitas, y Basic Memory se usa limitado al `memory_project` del proyecto. Al cerrar cada sesión de Codex/Claude se escribe un resumen en `.ai/history/SESSIONS.md`, que se inyecta en el siguiente chat nuevo. `CURRENT_STATE`/`HANDOFF` se compactan solos hacia `.ai/history/`.
-- Lo que bloquea el uso diario: QA interactivo de Studio en Fedora con un proyecto real. El orden de trabajo está en `.ai/ROADMAP.md` (plan de noviembre 2026).
-- Equipo actual: Fedora 44 con CMake 4.3, GCC 16, Qt 6.11 y Ninja. Studio stable `0.5.0` está en `~/.local/opt/chxchx-studio/stable-0.5.0`; el launcher `~/.local/bin/chxchx-studio` y la entrada de menú están instalados. La antigua instalación compilada de `dev` (`5eae006`) y sus accesos se retiraron el 2026-11-04. El estado anterior completo está en `.ai/history/CURRENT_STATE.md`.
+- Producto: paquete Rust único con CLI, TUI y Studio Iced; `old-version/` conserva el ayudante Python, instaladores y actualización puenteados mientras se completa el port. La autoridad de las funciones nuevas está en Rust.
+- Distribución Windows: se mantiene ZIP/`install.ps1` y se añadió el MSI per-user, aún pendiente de pasar por una release remota antes de estar disponible a usuarios.
+- La suite de release publica los canales `stable` y `dev` con un manifiesto común. El CI remoto no se verificó en este checkout.
+- Los límites de paridad del Studio y los portes pendientes permanecen en `.ai/EDITOR-PARITY.md` y `.ai/ROADMAP.md`.
 
-## En progreso
+## Pendientes
 
-- Falta que el usuario reinicie la TUI y pruebe `A`. Una pestaña `Agentes` conservada de un layout viejo debe recrearse con `chxchx-tech run . --recreate`.
-- En el primer inicio de Claude Code, aprobar la carpeta desde su pane si presenta su propio diálogo.
+- Confirmar el workflow de release en GitHub cuando haya acceso al CI remoto; la publicación aún no se ejecutó.
+- No hay build Windows ARM64 y el panel Git sigue necesitando Git instalado. La distribución actual es de alcance personal, sin firma digital.

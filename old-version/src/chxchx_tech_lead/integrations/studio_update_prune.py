@@ -18,7 +18,12 @@ from .studio_channels import CHANNELS, Channel
 def _managed(parent: Path, channel: Channel) -> list[Path]:
     found = []
     for entry in parent.iterdir() if parent.is_dir() else ():
-        if entry.is_symlink() or not entry.is_dir() or not (entry / ".chxchx-managed").is_file():
+        if (
+            entry.is_symlink()
+            or not entry.is_dir()
+            or not (entry / ".chxchx-managed").is_file()
+            or (entry / ".chxchx-msi").is_file()
+        ):
             continue
         if re.fullmatch(channel.root_pattern, entry.name) or re.fullmatch(channel.app_pattern, entry.name, re.IGNORECASE):
             found.append(entry)

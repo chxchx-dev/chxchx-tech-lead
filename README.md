@@ -150,14 +150,40 @@ símbolos y tablas; si la rediriges o usas `NO_COLOR`, sigue siendo el texto pla
 
 ### Windows
 
-Cada push genera el artefacto **`chxchx-rust-windows-x86_64`** (workflow *Rust product builds*) con
-`chxchx-studio.exe` y `chxchx-tech.exe`; no requiere instalar nada más. Para compilar desde el repositorio:
+La release ofrece un [MSI x64 por usuario](https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/chxchx-studio-windows-x86_64.msi), sin permisos de administrador. Como alternativa, `install.ps1` descarga el ZIP y verifica su SHA-256 contra el manifiesto; el ayudante Python descarga `uv` y Python 3.11 si faltan. Ambos métodos instalan Basic Memory y Serena como extras requeridos, así que necesitan Internet.
+
+El MSI se instala en `%LOCALAPPDATA%\Programs\ChxChxStudio\stable-X.Y.Z`. Incluye los ejecutables Rust, el ayudante Python con CPython 3.11.18 y sus paquetes, y `uv.exe`; descarga Basic Memory y Serena durante la instalación. Los shims de sus comandos quedan en PATH. Tanto el MSI como `install.ps1` crean shims para todos los comandos Rust `chxchx-*` incluidos, también los que se añadan en futuras versiones. El workflow añade al manifiesto los paquetes y sus SHA-256 y comprueba el ciclo silencioso de instalar, abrir, actualizar y desinstalar antes de publicarlos. El script de ZIP no modifica una instalación MSI del mismo canal. Por decisión del dueño, los instaladores no llevan firma digital y se destinan al uso personal y conocidos; Windows puede mostrar SmartScreen.
+
+Para seguir instalando con el método actual, usa `-DryRun` antes de modificar el equipo:
 
 ```powershell
+Invoke-WebRequest https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.ps1 -OutFile install.ps1
+.\install.ps1 -DryRun
+.\install.ps1
+```
+
+El ZIP nativo también se publica en Releases para instalaciones existentes. El artefacto **`chxchx-rust-windows-x86_64`** del workflow *Rust product builds* es una compilación de CI, retenida por 14 días, no un instalador. No se publica aún un build nativo para Windows ARM64. Para compilar y validar el MSI desde el repositorio (requiere el SDK de .NET 6, WiX 5.0.2 y `uv`):
+
+```powershell
+./scripts/build_windows_msi.ps1 -Channel stable
 ./scripts/studio-rust.ps1
 ```
 
 ### Linux y macOS
+
+Hay instaladores gráficos para Linux x86_64 y macOS (Apple Silicon e Intel), publicados como archivos descargables en [GitHub Releases](https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest). Los paquetes se generan en CI y su SHA-256 se incluye en `studio-manifest.txt`. La ventana permite verificar descargas sin instalar antes de continuar.
+
+- **macOS:** descarga [Apple Silicon](https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/chxchx-installer-macos-arm64.dmg) o [Intel](https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/chxchx-installer-macos-x86_64.dmg), abre el DMG, copia *ChxChx Installer.app* a Aplicaciones y ejecútalo. La app instala Studio y los comandos en tu usuario. Al no tener certificado Developer ID ni notarización, macOS puede pedir autorizarla la primera vez.
+- **Linux x86_64:** descarga [el instalador gráfico](https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/chxchx-installer-linux-x86_64.tar.gz), extráelo desde el gestor de archivos y abre `iniciar-instalador.sh`. Si necesita bibliotecas gráficas, pedirá autorización del sistema; el programa y los comandos quedan en tu usuario.
+- En ambos sistemas puedes seleccionar `stable` o `dev`. Basic Memory y Serena son extras requeridos: se descargan durante la instalación, por lo que hace falta conexión a Internet.
+
+Los comandos quedan en `~/.local/bin`. El instalador agrega esa carpeta, sin duplicar el bloque, a los archivos de inicio de Bash, Zsh o Fish; abre una terminal nueva al terminar. Los paquetes incluyen automáticamente los ejecutables CLI Rust `chxchx-*` disponibles, así que futuros comandos siguen el mismo mecanismo. Al desinstalar ChxChx se conserva la ruta porque Basic Memory y Serena también viven ahí.
+
+El instalador de consola sigue disponible para automatización y `--dry-run`:
+
+```bash
+curl -fsSL https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.sh | bash -s -- --dry-run
+```
 
 Necesitas [Rust](https://rustup.rs). En Linux, las bibliotecas de ventana:
 
@@ -170,6 +196,7 @@ sudo apt-get install libwayland-dev libx11-dev libxkbcommon-dev libxcb1-dev libx
 cargo build --release
 ./target/release/chxchx-studio .         # abre Studio sobre el proyecto actual
 ./target/release/chxchx-tech status .    # o usa el CLI
+cargo run --release --features visual-installer --bin chxchx-installer
 # o, de una vez: ./scripts/studio-rust.sh
 ```
 

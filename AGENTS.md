@@ -85,12 +85,13 @@ el plan de trabajo vigente está en `.ai/ROADMAP.md`.
 
 ## Arquitectura
 
-El producto es un control plane local con CLI/TUI en Python y Studio nativo
-C++20/Qt 6. Las interfaces invocan casos de uso y adapters; no duplican lógica
-de procesos, confianza, recursos o integraciones. El bridge JSON versionado
-conecta Studio con el CLI mientras Python siga siendo la autoridad. La terminal
-integrada usa PTY/ConPTY y libvterm; el launcher externo se conserva como
-alternativa. Consulta `.ai/PROJECT.md` y `.ai/EDITOR-PARITY.md` para el estado.
+El producto actual es un paquete Rust único (`chxchx-tech`) con CLI, TUI y
+Studio nativo en Iced. Las interfaces invocan capacidades compartidas y adapters;
+no duplican lógica de procesos, confianza, recursos o integraciones. `old-version/`
+conserva el ayudante Python que aún sirve el chat visual, los modelos locales y
+algunas tareas delegadas, además de los instaladores de releases. Studio se
+comunica con ese ayudante mediante el bridge JSON versionado mientras se completa
+el port. Consulta `.ai/PROJECT.md` y `.ai/EDITOR-PARITY.md` para el estado.
 
 Seguridad: ningún agente ejecuta procesos configurados sin trust local. Las
 acciones sensibles deben ofrecer `--dry-run`, preview/confirmación y backups

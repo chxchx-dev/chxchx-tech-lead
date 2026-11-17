@@ -27,10 +27,12 @@ def test_a_package_with_the_rust_command_makes_it_the_command_and_creates_the_sh
 
     _rewrite_shim("Linux", bin_dir, root)
 
+    rust_command = root / "bin" / "chxchx-tech"
+    helper = root / ".venv" / "bin" / "chxchx-tech"
     for name in ("chxchx-tech", "chxchx"):
         text = (bin_dir / name).read_text(encoding="utf-8")
-        assert f'exec "{root}/bin/chxchx-tech"' in text, name
-        assert f'CHXCHX_TECH_CLI="{root}/.venv/bin/chxchx-tech"' in text, name
+        assert f'exec "{rust_command}"' in text, name
+        assert f'CHXCHX_TECH_CLI="{helper}"' in text, name
         assert SHIM_MARK in text
 
 
@@ -42,7 +44,8 @@ def test_a_package_without_it_keeps_the_python_command(tmp_path: Path) -> None:
 
     _rewrite_shim("Linux", bin_dir, root)
 
-    assert (bin_dir / "chxchx-tech").read_text(encoding="utf-8").endswith(f'exec "{root}/.venv/bin/chxchx-tech" "$@"\n')
+    helper = root / ".venv" / "bin" / "chxchx-tech"
+    assert (bin_dir / "chxchx-tech").read_text(encoding="utf-8").endswith(f'exec "{helper}" "$@"\n')
 
 
 def test_foreign_files_are_never_replaced(tmp_path: Path) -> None:
@@ -75,4 +78,5 @@ def test_the_macos_package_keeps_its_binary_inside_the_bundle(tmp_path: Path) ->
 
     _rewrite_shim("Darwin", bin_dir, contents)
 
-    assert f'exec "{contents}/MacOS/chxchx-tech"' in (bin_dir / "chxchx-tech").read_text(encoding="utf-8")
+    rust_command = contents / "MacOS" / "chxchx-tech"
+    assert f'exec "{rust_command}"' in (bin_dir / "chxchx-tech").read_text(encoding="utf-8")

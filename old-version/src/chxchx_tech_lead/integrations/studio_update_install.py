@@ -22,19 +22,24 @@ from .studio_update_feed import (
 )
 from .studio_channels import CHANNELS, root_name
 from .studio_update_launcher import switch_launcher
+from .studio_update_msi import install_windows_msi
 from .studio_update_prune import prune_stale_installs
 
 
 def update_status() -> dict[str, object]:
     current = installed_commit()
     channel = installed_channel()
-    _prune(installed_app_root(), channel.name)
+    root = installed_app_root()
+    if not (root / ".chxchx-msi").is_file():
+        _prune(root, channel.name)
     latest = fetch_release(channel)
     return _payload(current, latest)
 
 
 def _prune(running: Path, channel: str) -> None:
     """Best effort: leftovers of earlier updates must never make an update fail."""
+    if (running / ".chxchx-msi").is_file():
+        return
     try:
         prune_stale_installs(running, channel, keep=(running,))
     except OSError:
@@ -43,19 +48,24 @@ def _prune(running: Path, channel: str) -> None:
 
 def apply_update() -> dict[str, object]:
     current = installed_commit()
-    release = fetch_release(installed_channel())
+    channel = installed_channel()
+    release = fetch_release(channel)
     result = _payload(current, release)
     if release.commit.startswith(current):
         return result
+    running = installed_app_root()
     base = CHANNELS[release.channel].base
     try:
         with tempfile.TemporaryDirectory(prefix="chxchx-studio-update-") as temporary:
             work = Path(temporary)
+            if (running / ".chxchx-msi").is_file():
+                result["restart_required"] = install_windows_msi(release, work, base=base)
+                result["updated"] = True
+                return result
             package = work / release.package
             wheel = work / release.wheel
             download_asset(release.package, release.package_sha256, package, base=base)
             download_asset(release.wheel, release.wheel_sha256, wheel, base=base)
-            running = installed_app_root()
             _install_package(release, package, wheel)
             _prune(running, release.channel)
     except Exception as exc:
@@ -119,6 +129,8 @@ def _install_package(release: StudioRelease, package: Path, wheel: Path) -> None
     if destination.is_symlink():
         raise ValueError(f"La ruta {destination} es un enlace ajeno; no se reemplazó.")
     if destination.exists():
+        if (destination / ".chxchx-msi").is_file():
+            raise ValueError("La carpeta de destino pertenece a Windows Installer; no se actualizó mediante el ZIP.")
         if not marker.is_file() or marker.read_text(encoding="utf-8").strip() != release.commit:
             raise ValueError(f"La ruta {destination} ya existe y no pertenece a esta versión de Studio.")
         _require_executable(destination, mac_bundle)

@@ -5,7 +5,8 @@ Instala o actualiza ChxChx Studio y el comando `chxchx-tech` en Windows 10/11.
 .DESCRIPTION
 No necesita permisos de administrador ni clonar el repositorio. Descarga solo los
 paquetes de Windows, comprueba su SHA-256 contra el manifiesto del release e instala
-en tu perfil (%LOCALAPPDATA%\Programs\ChxChxStudio).
+en tu perfil (%LOCALAPPDATA%\Programs\ChxChxStudio). También instala Basic Memory
+y Serena con uv; esos extras requieren Internet y se conservan al desinstalar ChxChx.
 
   & ([scriptblock]::Create((irm https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.ps1)))
   & ([scriptblock]::Create((irm .../install.ps1))) -DryRun
@@ -24,7 +25,7 @@ Exige una instalación previa y la actualiza.
 Instala solo el comando chxchx-tech, sin la aplicación de escritorio.
 
 .PARAMETER Uninstall
-Quita lo que instaló ChxChx. No toca tus datos ni tus proyectos.
+Quita ChxChx. No toca tus datos, tus proyectos ni los extras Basic Memory y Serena.
 
 .PARAMETER DryRun
 Descarga y verifica (o lista lo que quitaría) sin cambiar nada.
@@ -83,7 +84,8 @@ function Test-ManagedDirectory([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Container)) { return $false }
     $Item = Get-Item -LiteralPath $Path -Force
     if ($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { return $false }
-    return (Test-Path -LiteralPath (Join-Path $Path '.chxchx-managed') -PathType Leaf)
+    return ((Test-Path -LiteralPath (Join-Path $Path '.chxchx-managed') -PathType Leaf) -and
+        -not (Test-Path -LiteralPath (Join-Path $Path '.chxchx-msi') -PathType Leaf))
 }
 
 # ---- PATH del usuario: se edita el registro (conserva %VARIABLES%) y se avisa al sistema ----------------------
@@ -144,9 +146,10 @@ function Invoke-Uninstall {
         if (Test-ManagedFile $Path @('CHXCHX_STUDIO_LAUNCHER', 'CHXCHX_STUDIO_DEV_LAUNCHER')) { Remove-Managed $Path }
     }
     if (Test-ManagedFile $LegacyLauncher @('CHXCHX_STUDIO_DEV_LAUNCHER')) { Remove-Managed $LegacyLauncher }
-    foreach ($Name in @('chxchx-tech.cmd', 'chxchx.cmd')) {
-        $Shim = Join-Path $ShimDir $Name
-        if (Test-ManagedFile $Shim @('CHXCHX_CLI_SHIM')) { Remove-Managed $Shim }
+    if (Test-Path -LiteralPath $ShimDir -PathType Container) {
+        foreach ($Shim in @(Get-ChildItem -LiteralPath $ShimDir -File -Filter 'chxchx*.cmd' -Force)) {
+            if (Test-ManagedFile $Shim.FullName @('CHXCHX_CLI_SHIM')) { Remove-Managed $Shim.FullName }
+        }
     }
     foreach ($Name in @('ChxChx Studio.lnk', 'ChxChx Studio Dev.lnk')) {
         $Link = Join-Path $StartMenuDir $Name
@@ -170,7 +173,7 @@ function Invoke-Uninstall {
     if ($script:Removed -eq 0) { Write-Note 'No había nada instalado por ChxChx.' }
     elseif ($DryRun) { Write-Note 'DRY RUN: no se quitó nada.' }
     Write-Note 'No se tocaron tus datos: %USERPROFILE%\.chxchx-tech-lead (confianza, copias, registros) ni la carpeta .ai de tus proyectos.'
-    Write-Note 'uv se administra aparte. Para borrar tus datos de ChxChx: Remove-Item -Recurse -Force "$env:USERPROFILE\.chxchx-tech-lead"'
+    Write-Note 'uv, Basic Memory y Serena se administran aparte y no se quitaron. Para borrar tus datos de ChxChx: Remove-Item -Recurse -Force "$env:USERPROFILE\.chxchx-tech-lead"'
 }
 
 if ($Uninstall) { Invoke-Uninstall; return }
@@ -258,11 +261,17 @@ try {
     } else {
         $Id = "stable-$ManifestVersion"; $AppLabel = 'ChxChx Studio'; $LauncherName = 'chxchx-studio.cmd'
     }
+    if (Test-Path -LiteralPath $AppParent -PathType Container) {
+        $MsiInstalls = @(Get-ChildItem -LiteralPath $AppParent -Directory -Filter "$Channel-*" -Force | Where-Object {
+            Test-Path -LiteralPath (Join-Path $_.FullName '.chxchx-msi') -PathType Leaf
+        })
+        if ($MsiInstalls.Count -gt 0) {
+            throw "El canal $Channel está administrado por MSI en $($MsiInstalls[0].FullName). Usa 'Buscar actualizaciones' o Aplicaciones instaladas; install.ps1 no debe modificar esa instalación."
+        }
+    }
     if ($CliOnly) { $AppRoot = Join-Path $CliParent $Id } else { $AppRoot = Join-Path $AppParent $Id }
     $Launcher = Join-Path $ShimDir $LauncherName
     $Shim = Join-Path $ShimDir 'chxchx-tech.cmd'
-    $ShortShim = Join-Path $ShimDir 'chxchx.cmd'
-    $RustBinary = Join-Path $AppRoot 'bin\chxchx-tech.exe'
     $StartMenu = Join-Path $StartMenuDir "$AppLabel.lnk"
     $CliBinary = Join-Path $AppRoot '.venv\Scripts\chxchx-tech.exe'
     $Python = Join-Path $AppRoot '.venv\Scripts\python.exe'
@@ -319,7 +328,7 @@ try {
     }
     Write-Note "Instalación: $AppRoot"
     if ($DryRun) {
-        Write-Note 'DRY RUN: las descargas y checksums son válidos; no se instaló nada ni se escribieron archivos de instalación.'
+        Write-Note 'DRY RUN: descargas y checksums válidos; no se instaló nada. Basic Memory y Serena son extras requeridos y se descargarían durante la instalación.'
         return
     }
     if (-not $NeedsCliInstall) {
@@ -364,10 +373,15 @@ try {
     }
 
     # ---- Comando chxchx-tech (entorno aislado con uv) ------------------------------------------------------------------------------------
-    if ($NeedsCliInstall) {
-        # Windows PowerShell 5.1 convierte en error cualquier salida por stderr de un programa nativo (uv la usa para el progreso).
+    # uv también es necesario para los extras, incluso al actualizar una instalación existente.
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    $PreviousPath = $env:PATH
+    $HadToolBin = Test-Path Env:UV_TOOL_BIN_DIR
+    $PreviousToolBin = $env:UV_TOOL_BIN_DIR
+    try {
+        # Windows PowerShell 5.1 trata el progreso en stderr de uv como errores de PowerShell.
         $ErrorActionPreference = 'Continue'
-        $Uv = Get-Command uv -ErrorAction SilentlyContinue
+        $Uv = Get-Command uv -ErrorAction SilentlyContinue | Where-Object { $_.CommandType -eq 'Application' } | Select-Object -First 1
         if ($null -eq $Uv) {
             $UvPath = Join-Path $HOME '.local\bin\uv.exe'
             if (-not (Test-Path -LiteralPath $UvPath)) {
@@ -378,16 +392,30 @@ try {
             $UvPath = $Uv.Source
         }
         $PythonEnvironment = Join-Path $AppRoot '.venv'
-        if (-not (Test-Path -LiteralPath $Python -PathType Leaf) -or -not (Test-Path -LiteralPath $CliBinary -PathType Leaf)) {
-            & $UvPath venv --clear --python 3.11 $PythonEnvironment
-            if ($LASTEXITCODE -ne 0) { throw "uv venv falló con código $LASTEXITCODE." }
+        if ($NeedsCliInstall) {
+            if (-not (Test-Path -LiteralPath $Python -PathType Leaf) -or -not (Test-Path -LiteralPath $CliBinary -PathType Leaf)) {
+                & $UvPath venv --clear --python 3.11 $PythonEnvironment
+                if ($LASTEXITCODE -ne 0) { throw "uv venv falló con código $LASTEXITCODE." }
+            }
+            & $UvPath pip install --python $Python --reinstall-package chxchx-tech-lead $WheelPath
+            if ($LASTEXITCODE -ne 0) { throw "uv pip install falló con código $LASTEXITCODE." }
+            if (-not (Test-Path -LiteralPath $CliBinary -PathType Leaf)) { throw 'El wheel no dejó el comando chxchx-tech esperado.' }
+            & $CliBinary --help | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'El bridge CLI instalado no puede iniciarse.' }
         }
-        & $UvPath pip install --python $Python --reinstall-package chxchx-tech-lead $WheelPath
-        if ($LASTEXITCODE -ne 0) { throw "uv pip install falló con código $LASTEXITCODE." }
-        if (-not (Test-Path -LiteralPath $CliBinary -PathType Leaf)) { throw 'El wheel no dejó el comando chxchx-tech esperado.' }
-        & $CliBinary --help | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'El bridge CLI instalado no puede iniciarse.' }
-        $ErrorActionPreference = 'Stop'
+
+        $ToolBin = Join-Path $HOME '.local\bin'
+        New-Item -ItemType Directory -Path $ToolBin -Force | Out-Null
+        $env:UV_TOOL_BIN_DIR = $ToolBin
+        $env:PATH = "$ToolBin;$(Split-Path -Parent $UvPath);$PreviousPath"
+        Write-Note 'Instalando extras requeridos: Basic Memory y Serena (se necesita Internet)...'
+        & $CliBinary install
+        if ($LASTEXITCODE -ne 0) { throw 'No se pudieron instalar Basic Memory y Serena. Revisa tu conexión e inténtalo de nuevo.' }
+        Add-UserPath $ToolBin
+    } finally {
+        $env:PATH = $PreviousPath
+        if ($HadToolBin) { $env:UV_TOOL_BIN_DIR = $PreviousToolBin } else { Remove-Item Env:UV_TOOL_BIN_DIR -ErrorAction SilentlyContinue }
+        $ErrorActionPreference = $PreviousErrorActionPreference
     }
 
     # ---- Launcher, comando en el PATH y acceso del menú Inicio --------------------------------------------------------------------------
@@ -406,24 +434,42 @@ try {
             '"%APP_ROOT%\bin\chxchx-studio.exe" %*'))
     }
     # El comando va al binario Rust cuando el paquete lo trae; si no, al CLI de Python como siempre.
-    function Write-Shim([string]$Path) {
-        if ((-not $CliOnly) -and (Test-Path -LiteralPath $RustBinary -PathType Leaf)) {
-            Write-Cmd $Path @('@echo off', 'rem CHXCHX_CLI_SHIM', "set `"CHXCHX_TECH_CLI=$CliBinary`"", "`"$RustBinary`" %*")
+    function Write-Shim([string]$Path, [string]$Binary) {
+        if ((-not $CliOnly) -and $Binary -and (Test-Path -LiteralPath $Binary -PathType Leaf)) {
+            Write-Cmd $Path @('@echo off', 'rem CHXCHX_CLI_SHIM', "set `"CHXCHX_TECH_CLI=$CliBinary`"", "`"$Binary`" %*")
         } else {
             Write-Cmd $Path @('@echo off', 'rem CHXCHX_CLI_SHIM', "`"$CliBinary`" %*")
         }
     }
-    $ShimNote = ''
-    if ((Test-Path -LiteralPath $Shim) -and -not (Test-ManagedFile $Shim @('CHXCHX_CLI_SHIM'))) {
-        $ShimNote = "Ya existe $Shim y no es de ChxChx; no lo reemplacé. El comando de esta instalación está en $CliBinary"
-    } else {
-        Write-Shim $Shim
+    $CommandBinaries = @()
+    if (-not $CliOnly) {
+        foreach ($Binary in @(Get-ChildItem -LiteralPath (Join-Path $AppRoot 'bin') -File -Filter 'chxchx*.exe' | Where-Object {
+            $_.Name -notin @('chxchx-studio.exe', 'chxchx-installer.exe', 'chxchx-python-helper.exe')
+        })) {
+            $CommandBinaries += [pscustomobject]@{ Name = [IO.Path]::GetFileNameWithoutExtension($Binary.Name); Path = $Binary.FullName }
+        }
+        foreach ($RequiredName in @('chxchx-tech', 'chxchx')) {
+            if ($CommandBinaries.Name -notcontains $RequiredName) {
+                $Fallback = Join-Path $AppRoot 'bin\chxchx-tech.exe'
+                if (-not (Test-Path -LiteralPath $Fallback -PathType Leaf)) { $Fallback = '' }
+                $CommandBinaries += [pscustomobject]@{ Name = $RequiredName; Path = $Fallback }
+            }
+        }
     }
-    # `chxchx` es el nombre corto del mismo comando; si es de otro programa se respeta.
-    if ((Test-Path -LiteralPath $ShortShim) -and -not (Test-ManagedFile $ShortShim @('CHXCHX_CLI_SHIM'))) {
-        $ShimNote = ("$ShimNote Ya existe $ShortShim y no es de ChxChx; el nombre corto no se instaló.").Trim()
-    } else {
-        Write-Shim $ShortShim
+    if ($CommandBinaries.Count -eq 0) {
+        $CommandBinaries = @(
+            [pscustomobject]@{ Name = 'chxchx-tech'; Path = '' },
+            [pscustomobject]@{ Name = 'chxchx'; Path = '' }
+        )
+    }
+    $ShimNote = ''
+    foreach ($Command in $CommandBinaries) {
+        $CommandShim = Join-Path $ShimDir "$($Command.Name).cmd"
+        if ((Test-Path -LiteralPath $CommandShim) -and -not (Test-ManagedFile $CommandShim @('CHXCHX_CLI_SHIM'))) {
+            $ShimNote = ("$ShimNote Ya existe $CommandShim y no es de ChxChx; no lo reemplacé.").Trim()
+            continue
+        }
+        Write-Shim $CommandShim $Command.Path
     }
     Add-UserPath $ShimDir
 
@@ -478,7 +524,7 @@ try {
     if (-not $CliOnly) { Write-Note "Abre Studio desde el menú Inicio ($AppLabel) o con: $($LauncherName -replace '\.cmd$', '') C:\ruta\al\proyecto" }
     Write-Note 'Comando: chxchx-tech doctor   (abre una terminal nueva si aún no lo encuentra)'
     if ($ShimNote) { Write-Warn $ShimNote }
-    if (-not $CliOnly) { Write-Note 'El preview no está firmado: Windows puede mostrar SmartScreen la primera vez ("Más información" > "Ejecutar de todas formas").' }
+    if (-not $CliOnly) { Write-Note 'Este instalador y sus ejecutables no están firmados; Windows puede mostrar SmartScreen la primera vez ("Más información" > "Ejecutar de todas formas").' }
     Write-Note 'Para desinstalar: "Aplicaciones instaladas" de Windows, o install.ps1 -Uninstall'
 } finally {
     if ($null -ne $Stage -and (Test-Path -LiteralPath $Stage)) { Remove-Item -LiteralPath $Stage -Recurse -Force }

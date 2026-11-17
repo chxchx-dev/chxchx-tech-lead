@@ -52,12 +52,16 @@ def test_stable_release_writes_a_complete_manifest_and_checksums(tmp_path: Path)
 
     assert values["channel"] == "stable" and values["tag"] == "v0.5.0" and values["version"] == "0.5.0" and values["commit"] == COMMIT
     assert values["asset.linux-ubuntu-x86_64"] == "chxchx-studio-ubuntu-x86_64.tar.gz"
+    assert values["asset.linux-installer-x86_64"] == "chxchx-installer-linux-x86_64.tar.gz"
+    assert values["asset.macos-installer-arm64"] == "chxchx-installer-macos-arm64.dmg"
+    assert values["asset.macos-installer-x86_64"] == "chxchx-installer-macos-x86_64.dmg"
     assert values["asset.install-sh"] == "install.sh" and values["asset.install-ps1"] == "install.ps1"
     assert values["asset.cli-wheel"] == "chxchx_tech_lead-0.5.0-py3-none-any.whl"
-    for key in ("linux-ubuntu-x86_64", "linux-fedora-x86_64", "windows-x86_64", "windows-setup", "macos-arm64", "macos-x86_64", "cli-wheel", "install-sh", "install-ps1"):
+    for key in ("linux-ubuntu-x86_64", "linux-fedora-x86_64", "linux-installer-x86_64", "windows-x86_64", "windows-setup", "windows-msi", "macos-arm64", "macos-x86_64", "macos-installer-arm64", "macos-installer-x86_64", "cli-wheel", "install-sh", "install-ps1"):
         assert len(values[f"sha256.{key}"]) == 64 and (output / values[f"asset.{key}"]).is_file()
     sums = (output / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
     assert f"{values['sha256.install-sh']}  install.sh" in sums
+    assert values["asset.windows-msi"] == "chxchx-studio-windows-x86_64.msi"
     assert not (output / "studio-preview.txt").exists()  # only the dev channel keeps the legacy name
 
 

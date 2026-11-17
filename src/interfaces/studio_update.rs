@@ -34,7 +34,7 @@ pub(super) enum Event {
 /// A local build is not a managed install: say so instead of showing the CLI's internal error.
 fn explain(error: String) -> String {
     if error.contains("instalación administrada") || error.contains("canal de la instalación") {
-        "Esta copia de Studio no se instaló con el instalador (es una compilación local), así que no se actualiza desde aquí. Reinstálala con install.sh / install.ps1 o compila la versión nueva.".to_owned()
+        "Esta copia de Studio no se instaló con un instalador administrado (es una compilación local), así que no se actualiza desde aquí. Reinstálala con install.sh, install.ps1 o el MSI de Windows, o compila la versión nueva.".to_owned()
     } else {
         error
     }
@@ -163,10 +163,17 @@ pub(super) fn dialog(state: &Dashboard) -> Option<Element<'_, Message>> {
                 "check",
                 design::success(),
                 "Studio se actualizó",
-                format!(
-                    "Quedó instalada la versión {}. Cierra Studio y ábrelo de nuevo para usarla; la anterior se conserva hasta la próxima actualización.",
-                    info.latest
-                ),
+                if info.restart_required {
+                    format!(
+                        "Quedó instalada la versión {}. Windows necesita reiniciar el equipo para completar la actualización.",
+                        info.latest
+                    )
+                } else {
+                    format!(
+                        "Quedó instalada la versión {}. Cierra Studio y ábrelo de nuevo para usarla; la versión anterior se conserva hasta que Windows termine de quitar los archivos en uso.",
+                        info.latest
+                    )
+                },
                 close().into(),
             ),
             Phase::Failed(error) => (

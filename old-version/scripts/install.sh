@@ -6,6 +6,7 @@
 #
 # No necesita clonar el repositorio. Descarga solo los paquetes de tu sistema,
 # comprueba su SHA-256 contra el manifiesto del release e instala en tu usuario.
+# Añade ~/.local/bin al PATH de la shell activa de forma persistente e idempotente.
 set -Eeuo pipefail
 
 OWNER="chxchx-dev"
@@ -27,9 +28,9 @@ Uso: install.sh [opciones]
   --version X.Y.Z        Instala esa versión estable (no combina con --channel dev).
   --update               Exige una instalación previa y la actualiza.
   --cli-only             Instala solo el comando chxchx-tech (sin la aplicación de escritorio).
-  --uninstall            Quita lo que instaló ChxChx (no toca tus datos ni tus proyectos).
+  --uninstall            Quita ChxChx, pero conserva uv, Basic Memory y Serena, tus datos y tus proyectos.
   --dry-run              Descarga y verifica, o lista lo que quitaría, sin cambiar nada.
-  --no-deps              No instala bibliotecas del sistema con sudo (Linux).
+  --no-deps              No instala bibliotecas gráficas del sistema (Linux).
   -h, --help             Muestra esta ayuda.
 USAGE
 }
@@ -67,7 +68,7 @@ fi
 [[ "$UNINSTALL" == false || ( "$UPDATE_ONLY" == false && "$CLI_ONLY" == false && -z "$VERSION" ) ]] \
   || fail "--uninstall no se combina con --update, --cli-only ni --version."
 
-[[ "$(id -u)" -ne 0 ]] || fail "Ejecútalo como usuario normal; pedirá sudo solo para bibliotecas del sistema."
+[[ "$(id -u)" -ne 0 ]] || fail "Ejecútalo como usuario normal; la autorización de sistema se limita a bibliotecas gráficas."
 [[ -n "${HOME:-}" && -d "$HOME" ]] || fail "No se pudo determinar tu carpeta personal (HOME)."
 
 OS="$(uname -s)"
@@ -77,6 +78,101 @@ DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 OPT_STUDIO="$HOME/.local/opt/chxchx-studio"
 OPT_CLI="$HOME/.local/opt/chxchx-tech"
 MAC_APPS="$HOME/Applications"
+SHIM="$LOCAL_BIN/chxchx-tech"
+
+write_path_block() { # archivo delimitador-inicio delimitador-fin bloque
+  local file="$1" begin="$2" end="$3" block="$4" tmp mode
+  mkdir -p "$(dirname "$file")" || { warn "No pude preparar $(dirname "$file"); revisa los permisos."; return 1; }
+  if [[ -L "$file" || ( -e "$file" && ! -f "$file" ) ]]; then
+    warn "No modifiqué $file porque no es un archivo normal."
+    return 1
+  fi
+  if [[ -f "$file" ]] && grep -Fq "$begin" "$file"; then
+    if grep -Fq "$end" "$file"; then return 0; fi
+    warn "No modifiqué $file porque el bloque administrado de PATH está incompleto."
+    return 1
+  fi
+  tmp="$file.chxchx-tmp.$$"
+  if [[ -f "$file" ]]; then
+    cat "$file" > "$tmp"
+    if [[ "$OS" == "Darwin" ]]; then mode="$(stat -f '%Lp' "$file")"; else mode="$(stat -c '%a' "$file")"; fi
+  else
+    mode=644
+  fi
+  {
+    [[ ! -s "$tmp" ]] || printf '\n'
+    printf '%s\n' "$block"
+  } >> "$tmp"
+  chmod "$mode" "$tmp"
+  mv -f "$tmp" "$file"
+}
+
+configure_user_path() {
+  local shell_name shell_path file user_name
+  local files=()
+  local posix_block='# >>> CHXCHX_LOCAL_BIN_PATH >>>
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+# <<< CHXCHX_LOCAL_BIN_PATH <<<'
+  shell_path="${SHELL:-}"
+  if [[ -z "$shell_path" && "$OS" == "Darwin" ]] && command -v dscl >/dev/null 2>&1; then
+    shell_path="$(dscl . -read "/Users/$(id -un)" UserShell 2>/dev/null | awk '{print $2}')"
+  elif [[ -z "$shell_path" && "$OS" == "Linux" ]] && command -v getent >/dev/null 2>&1; then
+    user_name="${USER:-$(id -un)}"
+    shell_path="$(getent passwd "$user_name" | awk -F: 'NR == 1 {print $7}')"
+  fi
+  shell_name="$(basename "$shell_path")"
+  PATH_CONFIGURED=true
+  case "$shell_name" in
+    bash)
+      if [[ "$OS" == "Darwin" ]]; then
+        files=("$HOME/.bash_profile" "$HOME/.bashrc")
+      elif [[ -f "$HOME/.bash_profile" ]]; then
+        files=("$HOME/.bash_profile" "$HOME/.bashrc")
+      else
+        files=("$HOME/.profile" "$HOME/.bashrc")
+      fi
+      for file in "${files[@]}"; do
+        write_path_block "$file" '# >>> CHXCHX_LOCAL_BIN_PATH >>>' '# <<< CHXCHX_LOCAL_BIN_PATH <<<' "$posix_block" \
+          || { warn "Añade ~/.local/bin a PATH en $file para usar los comandos desde una terminal nueva."; PATH_CONFIGURED=false; }
+      done
+      ;;
+    zsh)
+      files=("$HOME/.zprofile" "$HOME/.zshrc")
+      for file in "${files[@]}"; do
+        write_path_block "$file" '# >>> CHXCHX_LOCAL_BIN_PATH >>>' '# <<< CHXCHX_LOCAL_BIN_PATH <<<' "$posix_block" \
+          || { warn "Añade ~/.local/bin a PATH en $file para usar los comandos desde una terminal nueva."; PATH_CONFIGURED=false; }
+      done
+      ;;
+    fish)
+      file="$HOME/.config/fish/conf.d/chxchx-path.fish"
+      block='# >>> CHXCHX_LOCAL_BIN_PATH >>>
+fish_add_path --global "$HOME/.local/bin"
+# <<< CHXCHX_LOCAL_BIN_PATH <<<'
+      write_path_block "$file" '# >>> CHXCHX_LOCAL_BIN_PATH >>>' '# <<< CHXCHX_LOCAL_BIN_PATH <<<' "$block" \
+        || { warn "Añade ~/.local/bin a PATH en $file para usar los comandos desde una terminal nueva."; PATH_CONFIGURED=false; }
+      ;;
+    *)
+      file="$HOME/.profile"
+      write_path_block "$file" '# >>> CHXCHX_LOCAL_BIN_PATH >>>' '# <<< CHXCHX_LOCAL_BIN_PATH <<<' "$posix_block" \
+        || { warn "Añade ~/.local/bin a PATH en $file para usar los comandos desde una terminal nueva."; PATH_CONFIGURED=false; }
+      ;;
+  esac
+  PATH="$LOCAL_BIN:$PATH"
+  export PATH
+}
+
+run_privileged() {
+  if [[ "${CHXCHX_INSTALLER_GUI:-}" == "1" ]]; then
+    command -v pkexec >/dev/null 2>&1 || fail "Falta pkexec para autorizar las bibliotecas gráficas. Instálalo o ejecuta install.sh --no-deps desde una terminal."
+    pkexec "$@"
+  else
+    sudo "$@"
+  fi
+}
 
 # ---------- Desinstalación -----------------------------------------------------------------
 # is_managed_file ARCHIVO MARCA...: un archivo normal (no un enlace) que contiene alguna marca de ChxChx.
@@ -115,7 +211,7 @@ do_uninstall() {
   for link in "$LOCAL_BIN/chxchx-studio" "$LOCAL_BIN/chxchx-studio-dev"; do
     if is_managed_file "$link" CHXCHX_STUDIO_LAUNCHER CHXCHX_STUDIO_DEV_LAUNCHER; then remove_path "$link"; fi
   done
-  for shim in "$LOCAL_BIN/chxchx-tech" "$LOCAL_BIN/chxchx"; do
+  for shim in "$LOCAL_BIN"/chxchx*; do
     if is_managed_file "$shim" CHXCHX_CLI_SHIM; then remove_path "$shim"; fi
   done
   for link in "$DATA_HOME/applications/chxchx-studio.desktop" "$DATA_HOME/applications/chxchx-studio-dev.desktop"; do
@@ -135,7 +231,7 @@ do_uninstall() {
     note "DRY RUN: no se quitó nada."
   fi
   note "No se tocaron tus datos: ~/.chxchx-tech-lead (confianza, copias, registros) ni la carpeta .ai de tus proyectos."
-  note "Las bibliotecas del sistema y uv se administran aparte. Para borrar tus datos de ChxChx: rm -rf ~/.chxchx-tech-lead"
+  note "uv, Basic Memory y Serena se administran aparte y no se quitaron. Para borrar tus datos de ChxChx: rm -rf ~/.chxchx-tech-lead"
 }
 
 if [[ "$UNINSTALL" == true ]]; then
@@ -273,8 +369,6 @@ else
   ID="stable-${MANIFEST_VERSION}"; SUFFIX="$MANIFEST_VERSION"; APP_LABEL="ChxChx Studio"; LAUNCHER_NAME="chxchx-studio"
 fi
 LAUNCHER="$LOCAL_BIN/$LAUNCHER_NAME"
-SHIM="$LOCAL_BIN/chxchx-tech"
-SHORT_SHIM="$LOCAL_BIN/chxchx"
 
 # ---------- Rutas de la instalación --------------------------------------------------------------
 APP_LINK=""
@@ -287,9 +381,7 @@ else
   APP_PARENT="$OPT_STUDIO"; APP_ROOT="$APP_PARENT/$ID"; CLI_ROOT="$APP_ROOT"; APP_BINARY="$APP_ROOT/bin/chxchx-studio"
 fi
 CLI_BINARY="$CLI_ROOT/.venv/bin/chxchx-tech"
-# El paquete del producto Rust trae su propio `chxchx-tech`: ese es el comando de la instalación
-# y el CLI de Python queda como su ayudante (chat, puente, modelos locales).
-if [[ "$OS" == "Darwin" ]]; then RUST_REL="Contents/MacOS/chxchx-tech"; else RUST_REL="bin/chxchx-tech"; fi
+# El paquete del producto Rust trae sus comandos; el CLI Python queda como ayudante.
 
 # ---------- Comprobaciones previas (no se pisa nada ajeno) ----------------------------------------
 if [[ "$CLI_ONLY" == false ]]; then
@@ -346,7 +438,7 @@ else
   printf 'Instalación de Studio: %s\nCLI bridge aislado: %s/.venv\n' "$APP_ROOT" "$CLI_ROOT"
 fi
 if [[ "$DRY_RUN" == true ]]; then
-  printf 'DRY RUN: descargas y checksums válidos; no se instalaron paquetes ni se escribieron archivos fuera de /tmp.\n'
+  printf 'DRY RUN: descargas y checksums válidos; no se instalaron paquetes ni se escribieron archivos fuera de /tmp. Basic Memory y Serena son extras requeridos y se descargarían al instalar.\n'
   exit 0
 fi
 if [[ "$NEEDS_CLI_INSTALL" == false ]] && ! "$CLI_BINARY" --help >/dev/null 2>&1; then
@@ -355,16 +447,20 @@ fi
 
 # ---------- Bibliotecas del sistema (Linux) -------------------------------------------------------------
 if [[ "$OS" == "Linux" && "$CLI_ONLY" == false && "$INSTALL_DEPS" == true ]]; then
-  command -v sudo >/dev/null 2>&1 || fail "Instala sudo, o vuelve a ejecutar con --no-deps si ya tienes las bibliotecas gráficas de Qt."
+  if [[ "${CHXCHX_INSTALLER_GUI:-}" == "1" ]]; then
+    command -v pkexec >/dev/null 2>&1 || fail "Falta pkexec para autorizar las bibliotecas gráficas. Instálalo o ejecuta install.sh --no-deps desde una terminal."
+  else
+    command -v sudo >/dev/null 2>&1 || fail "Instala sudo, o vuelve a ejecutar con --no-deps si ya tienes las bibliotecas gráficas de Qt."
+  fi
   if [[ "$PLATFORM" == "linux-fedora-x86_64" ]]; then
     command -v dnf >/dev/null 2>&1 || fail "No se encontró dnf."
-    sudo dnf install -y fontconfig libglvnd-egl libglvnd-opengl libxkbcommon-x11 libX11-xcb libxcb \
+    run_privileged dnf install -y fontconfig libglvnd-egl libglvnd-opengl libxkbcommon-x11 libX11-xcb libxcb \
       mesa-libGL xcb-util xcb-util-cursor xcb-util-image xcb-util-keysyms \
       xcb-util-renderutil xcb-util-wm
   else
     command -v apt-get >/dev/null 2>&1 || fail "No se encontró apt-get."
-    sudo apt-get update
-    sudo apt-get install -y fontconfig libegl1 libgl1 libopengl0 libx11-xcb1 libxkbcommon-x11-0 \
+    run_privileged apt-get update
+    run_privileged apt-get install -y fontconfig libegl1 libgl1 libopengl0 libx11-xcb1 libxkbcommon-x11-0 \
       libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
       libxcb-glx0 libxcb-render0 libxcb-render-util0 libxcb-shape0 libxcb-shm0 \
       libxcb-sync1 libxcb-util1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1
@@ -409,13 +505,13 @@ else
 fi
 
 # ---------- Comando chxchx-tech (entorno aislado con uv) ----------------------------------------------------
+if ! command -v uv >/dev/null 2>&1 && [[ ! -x "$HOME/.local/bin/uv" ]]; then
+  curl --fail --silent --show-error --location --proto '=https' https://astral.sh/uv/install.sh | sh
+fi
+UV_BIN="$(command -v uv || true)"
+[[ -n "$UV_BIN" ]] || UV_BIN="$HOME/.local/bin/uv"
+[[ -x "$UV_BIN" ]] || fail "No se encontró uv después de instalarlo."
 if [[ "$NEEDS_CLI_INSTALL" == true ]]; then
-  if ! command -v uv >/dev/null 2>&1 && [[ ! -x "$HOME/.local/bin/uv" ]]; then
-    curl --fail --silent --show-error --location --proto '=https' https://astral.sh/uv/install.sh | sh
-  fi
-  UV_BIN="$(command -v uv || true)"
-  [[ -n "$UV_BIN" ]] || UV_BIN="$HOME/.local/bin/uv"
-  [[ -x "$UV_BIN" ]] || fail "No se encontró uv después de instalarlo."
   if [[ ! -x "$CLI_ROOT/.venv/bin/python" || ! -x "$CLI_BINARY" ]]; then
     "$UV_BIN" venv --clear --python 3.11 "$CLI_ROOT/.venv"
   fi
@@ -424,9 +520,17 @@ if [[ "$NEEDS_CLI_INSTALL" == true ]]; then
   [[ -x "$CLI_BINARY" ]] || fail "El wheel no dejó el comando chxchx-tech esperado."
   "$CLI_BINARY" --help >/dev/null || fail "El bridge CLI instalado no puede iniciarse."
 fi
+
+# ---------- Extras requeridos: Basic Memory y Serena -------------------------------------------------------
+mkdir -p "$LOCAL_BIN"
+UV_TOOL_BIN_DIR="$LOCAL_BIN"
+export UV_TOOL_BIN_DIR
+PATH="$LOCAL_BIN:$(dirname "$UV_BIN"):$PATH"
+export PATH
+"$CLI_BINARY" install || fail "No se pudieron instalar Basic Memory y Serena. Revisa tu conexión e inténtalo de nuevo."
 [[ -z "$APP_LINK" ]] || ln -sfn "$APP_ROOT" "$APP_LINK"
 
-# ---------- Launcher, comando y menú de aplicaciones ------------------------------------------------------------
+# ---------- Launcher, comandos y menú de aplicaciones ------------------------------------------------------------
 mkdir -p "$LOCAL_BIN"
 write_script() { # destino contenido
   local tmp="$1.tmp.$$"
@@ -461,16 +565,17 @@ exec \"\$APP_ROOT/bin/chxchx-studio\" \"\$@\""
   fi
 fi
 
-# El comando va al binario Rust cuando el paquete lo trae; si no, al CLI de Python como siempre.
-TECH_HOME="${APP_LINK:-$APP_ROOT}"
-write_shim() { # destino
-  if [[ "$CLI_ONLY" == false && -x "$APP_ROOT/$RUST_REL" ]]; then
+# Crea un shim por binario CLI Rust. Así los comandos que se añadan a los paquetes futuros
+# quedan disponibles en PATH sin mantener una lista duplicada en el instalador.
+write_shim() { # destino binario
+  local target="$2"
+  if [[ "$CLI_ONLY" == false && -x "$target" ]]; then
     local cli="$CLI_BINARY"
     [[ -z "$APP_LINK" ]] || cli="$APP_LINK/Contents/.venv/bin/chxchx-tech"
     write_script "$1" "#!/usr/bin/env bash
 # CHXCHX_CLI_SHIM
 export CHXCHX_TECH_CLI=\"${cli}\"
-exec \"${TECH_HOME}/${RUST_REL}\" \"\$@\""
+exec \"${target}\" \"\$@\""
   else
     write_script "$1" "#!/usr/bin/env bash
 # CHXCHX_CLI_SHIM
@@ -479,17 +584,48 @@ exec \"${CLI_BINARY}\" \"\$@\""
 }
 
 SHIM_NOTE=""
-if [[ -L "$SHIM" ]] || { [[ -e "$SHIM" ]] && ! is_managed_file "$SHIM" CHXCHX_CLI_SHIM; }; then
-  SHIM_NOTE="Ya existe $SHIM y no es de ChxChx (quizá instalado con uv); no lo reemplacé. El comando de esta instalación está en $CLI_BINARY"
+SHIM_COUNT=0
+RUST_BIN_DIR="$APP_ROOT/bin"
+[[ "$OS" != "Darwin" ]] || RUST_BIN_DIR="$APP_ROOT/Contents/MacOS"
+if [[ "$CLI_ONLY" == true ]]; then
+  COMMAND_BINARIES=("$CLI_BINARY")
+  COMMAND_NAMES=(chxchx-tech chxchx)
 else
-  write_shim "$SHIM"
+  COMMAND_BINARIES=("$RUST_BIN_DIR/chxchx" "$RUST_BIN_DIR"/chxchx-*)
+  COMMAND_NAMES=()
+  for candidate in "${COMMAND_BINARIES[@]}"; do
+    [[ -f "$candidate" && -x "$candidate" ]] || continue
+    name="$(basename "$candidate")"
+    case "$name" in chxchx-studio|chxchx-installer|chxchx-python-helper) continue ;; esac
+    COMMAND_NAMES+=("$name")
+  done
+  for required_name in chxchx-tech chxchx; do
+    found=false
+    for name in "${COMMAND_NAMES[@]}"; do [[ "$name" != "$required_name" ]] || found=true; done
+    if [[ "$found" == false ]]; then
+      candidate="$CLI_BINARY"
+      [[ ! -x "$RUST_BIN_DIR/chxchx-tech" ]] || candidate="$RUST_BIN_DIR/chxchx-tech"
+      COMMAND_NAMES+=("$required_name")
+      COMMAND_BINARIES+=("$candidate")
+    fi
+  done
 fi
-# `chxchx` es el nombre corto del mismo comando; si es de otro programa se respeta.
-if [[ -L "$SHORT_SHIM" ]] || { [[ -e "$SHORT_SHIM" ]] && ! is_managed_file "$SHORT_SHIM" CHXCHX_CLI_SHIM; }; then
-  SHIM_NOTE="${SHIM_NOTE:+$SHIM_NOTE }Ya existe $SHORT_SHIM y no es de ChxChx; el nombre corto no se instaló."
-else
-  write_shim "$SHORT_SHIM"
-fi
+for index in "${!COMMAND_NAMES[@]}"; do
+  name="${COMMAND_NAMES[$index]}"
+  target="$LOCAL_BIN/$name"
+  candidate="$CLI_BINARY"
+  [[ "$CLI_ONLY" == true ]] || candidate="${COMMAND_BINARIES[$index]}"
+  if [[ -L "$target" ]] || { [[ -e "$target" ]] && ! is_managed_file "$target" CHXCHX_CLI_SHIM; }; then
+    SHIM_NOTE="${SHIM_NOTE:+$SHIM_NOTE }Ya existe $target y no es de ChxChx; no lo reemplacé."
+    continue
+  fi
+  # En --cli-only se crean ambos nombres para el mismo CLI Python.
+  if [[ "$CLI_ONLY" == true ]]; then candidate="$CLI_BINARY"; fi
+  write_shim "$target" "$candidate"
+  SHIM_COUNT=$((SHIM_COUNT + 1))
+done
+[[ "$CLI_ONLY" == true || "$SHIM_COUNT" -gt 0 ]] || fail "El paquete no contiene ningún ejecutable CLI chxchx*."
+configure_user_path
 
 if [[ "$OS" == "Linux" && "$CLI_ONLY" == false ]]; then
   DESKTOP="$DATA_HOME/applications/${LAUNCHER_NAME}.desktop"
@@ -538,11 +674,12 @@ if [[ "$CLI_ONLY" == false ]]; then
 fi
 printf 'Comando: chxchx-tech doctor\n'
 [[ -z "$SHIM_NOTE" ]] || warn "$SHIM_NOTE"
-case ":$PATH:" in
-  *":$LOCAL_BIN:"*) ;;
-  *) printf 'Agrega ~/.local/bin a tu PATH (por ejemplo en ~/.profile) o abre una terminal nueva.\n' ;;
-esac
+if [[ "${PATH_CONFIGURED:-false}" == true ]]; then
+  printf 'Añadí ~/.local/bin al PATH persistente. Abre una terminal nueva para usar los comandos.\n'
+else
+  printf 'Agrega ~/.local/bin a tu PATH para usar los comandos desde una terminal nueva.\n'
+fi
 if [[ "$OS" == "Darwin" && "$CLI_ONLY" == false ]]; then
-  printf 'El preview no está firmado; macOS puede pedir confirmar Abrir una vez desde Finder.\n'
+  printf 'La app no tiene certificado Developer ID ni notarización; macOS puede pedir autorizar Abrir una vez desde Finder.\n'
 fi
 printf 'Para desinstalar: install.sh --uninstall\n'

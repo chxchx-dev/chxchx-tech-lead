@@ -1,6 +1,21 @@
 # Handoff
 
-## Release estable 0.6.1 (2026-11-16)
+## Instaladores gráficos macOS/Linux y PATH por usuario (2026-11-17)
+
+- El binario `chxchx-installer` (feature `visual-installer`) ejecuta el `install.sh` embebido, ofrece stable/dev, verificación `--dry-run`, instalación/desinstalación y salida en ventana. Release CI crea un DMG por arquitectura Mac y un tar.gz x86_64 para Linux; el manifiesto verifica ambos con SHA-256. El README tiene enlaces de descarga a `releases/latest/download/`.
+- `install.sh` ahora agrega `~/.local/bin` a los archivos de inicio de Bash, Zsh o Fish con un bloque administrado idempotente y crea shims para todos los ejecutables CLI `chxchx-*` del paquete. MSI/ZIP Windows también generan los shims desde los binarios disponibles. Basic Memory y Serena se descargan como extras requeridos y se conservan al desinstalar.
+- Linux GUI solicita `pkexec` solo para dependencias gráficas de sistema. Los paquetes principales siguen instalándose por usuario. Los instaladores no tienen certificado de firma; la app macOS solo lleva firma ad hoc y no está notarizada.
+- Comprobado en Windows local: formato, Clippy con `visual-installer`, `cargo test --locked` (218 + 6 + 9), `uv run --locked pytest` (487 pasaron, 38 omitidas, 10 deseleccionadas), 18 pruebas enfocadas, parser PowerShell, `bash -n` sobre copia LF y `git diff --check`. La suite Windows omite el smoke end-to-end Linux de `install.sh`; ya quedó en el job Linux de release. Falta verificar el CI remoto, la apertura real de la GUI y publicar los assets nativos Mac/Linux.
+- No se pudo guardar checkpoint en Basic Memory: el conector/herramienta `write_memory` no está disponible en este entorno; ADR-0018 y estos archivos locales guardan la decisión y el estado.
+
+## Distribución Windows: MSI validado localmente (2026-11-17)
+
+- Checkout `dev` en `34bb869`, versión 0.6.3. Además del runtime estático, recursos de versión/manifiesto, actualización MSI y protección entre instaladores, el MSI WiX 5.0.2 incluye CPython 3.11.18 y `uv.exe`; una acción por usuario instala Basic Memory y Serena en una carpeta compartida. `install.ps1` y `install.sh` invocan el mismo comando requerido y dejan los extras en el PATH del usuario.
+- Build local completado para MSI 0.6.3 y actualización de prueba 0.6.4; ambos pasaron `wix msi validate` con ICE. El test `scripts/test_windows_msi.ps1` comprueba instalar, abrir los tres comandos, actualizar y desinstalar, conservando los extras y su PATH. No se ejecutó localmente porque modifica el perfil de usuario y deja intencionalmente los extras instalados.
+- Verificaciones: `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked` (218 + 6 + 9); `uv run --locked pytest` (487 pasaron, 38 omitidas, 10 deseleccionadas); sintaxis PowerShell/Bash y `git diff --check`.
+- El dueño decidió mantener MSI y ejecutables sin firma para uso personal y conocidos. No se comprobó el CI remoto porque `gh` no está disponible y no se publicó una release. Próximo paso: ejecutar el workflow en un runner Windows y revisar el ciclo con descargas reales antes de publicar cualquier release.
+
+## Registro histórico del release estable 0.6.1 (2026-11-16)
 
 - El tag `v0.6.1` está publicado sobre `main` (`fa80b7c`) y la ejecución `43814711205` del workflow de release finalizó en éxito con los paquetes de todas las plataformas. Release: https://github.com/chxchx-dev/chxchx-tech-lead/releases/tag/v0.6.1.
 

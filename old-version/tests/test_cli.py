@@ -200,13 +200,31 @@ def test_doctor_checks_config_after_init(tmp_path: Path, monkeypatch):
     assert ".ai/chxchx-tech.toml válido" in diagnosed.stdout
 
 
-def test_install_dry_run_reports_commands_without_uv(monkeypatch):
+def test_install_dry_run_reports_commands_without_uv(monkeypatch, tmp_path: Path):
     monkeypatch.setattr("chxchx_tech_lead.integrations.installers.executable", lambda name: None)
+    monkeypatch.setattr("chxchx_tech_lead.integrations.installers._uv_command", lambda: None)
+    monkeypatch.setattr("chxchx_tech_lead.integrations.installers._tool_bin_directory", lambda: tmp_path / "tools")
 
     result = runner.invoke(app, ["install", "--dry-run"])
 
     assert result.exit_code == 0, result.stdout
     assert result.stdout.count("DRY RUN") == 2
+
+
+def test_install_reports_failure_after_trying_both_required_extras(monkeypatch):
+    installed = []
+
+    def fake_install(tool, dry_run=False):
+        installed.append(tool)
+        return CommandResult(["uv", "tool", "install", tool], 1 if tool == "basic-memory" else 0, "", "red")
+
+    monkeypatch.setattr("chxchx_tech_lead.commands.setup.install_tool", fake_install)
+
+    result = runner.invoke(app, ["install"])
+
+    assert result.exit_code == 1
+    assert installed == ["basic-memory", "serena"]
+    assert "basic-memory" in result.stdout and "serena" in result.stdout
 
 
 def test_setup_dry_run_preserves_three_stage_flow_without_writes(tmp_path: Path, monkeypatch):

@@ -47,6 +47,9 @@ pub mod interfaces {
     #[cfg(feature = "studio")]
     pub mod studio;
 
+    #[cfg(feature = "visual-installer")]
+    pub mod installer;
+
     #[cfg(feature = "tui")]
     pub mod tui;
 }

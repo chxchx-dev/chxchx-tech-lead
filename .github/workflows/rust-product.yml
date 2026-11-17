@@ -63,6 +63,9 @@ jobs:
           workspaces: .
       - name: Build the release binaries (CLI, TUI and Studio)
         run: cargo build --locked --release
+      - name: Verify Windows executable resources and runtime dependencies
+        shell: pwsh
+        run: ./scripts/verify_windows_binaries.ps1 -BinDirectory target/release
       - name: Smoke test the release binaries
         shell: pwsh
         run: |

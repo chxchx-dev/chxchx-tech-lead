@@ -45,7 +45,31 @@ case "$1" in
     done
     version="$(basename "$wheel" | sed -E 's/^chxchx_tech_lead-([^-]+)-.*/\\1/')"
     printf '#!/usr/bin/env bash\\necho "chxchx-tech %s"\\n' "$version" > "$(dirname "$python")/chxchx-tech"
+    cat >> "$(dirname "$python")/chxchx-tech" <<'HELPER'
+if [ "$1" = "install" ]; then
+  uv tool install -p 3.12 --prerelease allow basic-memory || exit $?
+  uv tool install -p 3.13 serena-agent
+  exit $?
+fi
+HELPER
     chmod +x "$(dirname "$python")/chxchx-tech"
+    ;;
+  tool)
+    if [ "$2" != "install" ]; then echo "uv falso: $*" >&2; exit 2; fi
+    mkdir -p "$UV_TOOL_BIN_DIR"
+    case "${@: -1}" in
+      basic-memory)
+        for command in basic-memory bm; do
+          printf '#!/usr/bin/env bash\\necho %s instalado\\n' "$command" > "$UV_TOOL_BIN_DIR/$command"
+          chmod +x "$UV_TOOL_BIN_DIR/$command"
+        done
+        ;;
+      serena-agent)
+        printf '#!/usr/bin/env bash\\necho serena instalado\\n' > "$UV_TOOL_BIN_DIR/serena"
+        chmod +x "$UV_TOOL_BIN_DIR/serena"
+        ;;
+      *) echo "uv falso: paquete desconocido ${@: -1}" >&2; exit 2 ;;
+    esac
     ;;
   *) echo "uv falso: $*" >&2; exit 2 ;;
 esac
@@ -79,6 +103,12 @@ def _studio_tarball(path: Path, version: str) -> None:
             info.size, info.mode = len(data), mode
             archive.addfile(info, io.BytesIO(data))
         add("bin/chxchx-studio", FAKE_STUDIO.format(version=version).encode(), 0o755)
+        for name in ("chxchx-tech", "chxchx", "chxchx-future"):
+            if name == "chxchx-tech":
+                command = f'#!/usr/bin/env bash\nif [ "$1" = install ]; then exec "$CHXCHX_TECH_CLI" "$@"; fi\necho "chxchx-tech {version}"\n'
+            else:
+                command = f'#!/usr/bin/env bash\necho "{name} {version} args=$*"\n'
+            add(f"bin/{name}", command.encode(), 0o755)
         add("share/icons/hicolor/256x256/apps/chxchx-studio.png", PNG)
         add("qt.conf", b"[Paths]\n")
 
@@ -154,7 +184,7 @@ def sandbox(tmp_path: Path):
 
         def env(self, release: Release | None = None, **extra: str) -> dict[str, str]:
             env = {key: value for key, value in os.environ.items() if not key.startswith(("CHXCHX_", "XDG_"))}
-            env.update(HOME=str(home), PATH=f"{fakebin}{os.pathsep}{os.environ['PATH']}", FAKE_PYTHON=sys.executable,
+            env.update(HOME=str(home), PATH=f"{fakebin}{os.pathsep}{os.environ['PATH']}", SHELL="/bin/bash", FAKE_PYTHON=sys.executable,
                        CHXCHX_LINUX_FLAVOR="ubuntu")
             if release is not None:
                 env["CHXCHX_TEST_BASE"] = f"{self.base}/{release.name}"

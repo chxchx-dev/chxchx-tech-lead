@@ -28,8 +28,10 @@ def test_memory_mcp_command_is_pinned_to_project(tmp_path: Path):
     assert '"--project"' in content
     assert "project-" in content
 
-def test_install_dry_run_does_not_require_uv():
-    with patch("chxchx_tech_lead.integrations.installers.executable", return_value=None):
+def test_install_dry_run_does_not_require_uv(tmp_path: Path):
+    with patch("chxchx_tech_lead.integrations.installers.executable", return_value=None), patch(
+        "chxchx_tech_lead.integrations.installers._uv_command", return_value=None
+    ), patch("chxchx_tech_lead.integrations.installers._tool_bin_directory", return_value=tmp_path / "tools"):
         result = install_tool("basic-memory", dry_run=True)
 
     assert result.returncode == 0

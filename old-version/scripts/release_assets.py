@@ -31,11 +31,15 @@ DEV_TAG = "studio-dev-preview"
 PACKAGES = {
     "linux-ubuntu-x86_64": ("linux-ubuntu-x86_64", "*.tar.gz", "chxchx-studio-ubuntu-x86_64.tar.gz"),
     "linux-fedora-x86_64": ("linux-fedora-x86_64", "*.tar.gz", "chxchx-studio-fedora-x86_64.tar.gz"),
+    "linux-installer-x86_64": ("linux-installer-x86_64", "*.tar.gz", "chxchx-installer-linux-x86_64.tar.gz"),
     "windows-x86_64": ("windows-x86_64", "*.zip", "chxchx-studio-windows-x86_64.zip"),
     "windows-setup": ("windows-x86_64", "*-setup.exe", "chxchx-studio-windows-x86_64-setup.exe"),
+    "windows-msi": ("windows-msi", "*.msi", "chxchx-studio-windows-x86_64.msi"),
     "windows-arm64": ("windows-arm64", "*.zip", "chxchx-studio-windows-arm64.zip"),
     "macos-arm64": ("macos-arm64", "*.dmg", "chxchx-studio-macos-arm64.dmg"),
     "macos-x86_64": ("macos-x86_64", "*.dmg", "chxchx-studio-macos-x86_64.dmg"),
+    "macos-installer-arm64": ("macos-installer-arm64", "*.dmg", "chxchx-installer-macos-arm64.dmg"),
+    "macos-installer-x86_64": ("macos-installer-x86_64", "*.dmg", "chxchx-installer-macos-x86_64.dmg"),
 }
 # Included only when its artifact was downloaded: the native ARM64 build is not required for a release.
 OPTIONAL_PACKAGES = {"windows-arm64"}

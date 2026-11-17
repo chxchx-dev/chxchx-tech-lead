@@ -12,6 +12,7 @@ pub struct Info {
     pub latest: String,
     pub available: bool,
     pub updated: bool,
+    pub restart_required: bool,
 }
 
 pub fn parse(output: &str) -> Result<Info, String> {
@@ -38,6 +39,7 @@ pub fn parse(output: &str) -> Result<Info, String> {
         latest: text("latest_version"),
         available: flag("available"),
         updated: flag("updated"),
+        restart_required: flag("restart_required"),
     })
 }
 
