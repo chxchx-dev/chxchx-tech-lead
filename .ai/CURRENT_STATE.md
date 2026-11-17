@@ -9,7 +9,7 @@
 
 ## Checkout actual 0.6.3 (2026-11-17)
 
-- Rama `dev`, commit `34bb869` (`test: connector launcher follows the platform`), versión Cargo y Python `0.6.3`. El estado del CI y de los releases remotos no se verificó en esta sesión porque no está disponible `gh`.
+- Rama `dev`, commit base `dc80248` (`feat(installer): add cross-platform installers`), versión Cargo y Python `0.6.3`. La release remota `v0.6.3` existía, pero no tenía un asset MSI al empezar esta tarea.
 
 ## Distribución Windows: MSI por usuario implementado localmente (2026-11-17)
 
@@ -18,7 +18,7 @@
 - El manifiesto admite `windows-msi`; las instalaciones MSI verifican el SHA-256 y actualizan mediante `msiexec`. El actualizador ZIP y `install.ps1` no modifican una raíz MSI.
 - Verificado localmente en Windows: WiX 5.0.2 compila y valida con ICE el MSI 0.6.3 y el MSI de prueba 0.6.4; la prueba de ciclo con extras ahora comprueba sus ejecutables antes y después de actualizar/desinstalar. La ejecución completa de ese instalador de prueba se reserva al runner de CI porque instala los extras y deja su PATH persistente en el perfil que lo ejecuta.
 - `cargo fmt --all -- --check`, Clippy y `cargo test --locked` pasan (218 unitarias, 6 de catálogo y 9 de flujos). La suite Python completa pasa en Windows: 487 pasaron, 38 omitidas y 10 deseleccionadas. También pasan la sintaxis PowerShell/Bash y `git diff --check`.
-- Los artefactos están en `dist/windows-msi/` y `dist/windows-msi-smoke-update/`, ignorados por Git. No se pudo comprobar el CI remoto porque `gh` no está disponible; tampoco se publicó una release. Por decisión del dueño, MSI y ejecutables se mantienen sin firma para uso personal y conocidos; no hay publicación general planeada.
+- La copia distribuible del MSI estable 0.6.3 está en `installers/windows/v0.6.3/`, versionada con Git LFS y acompañada por `SHA256SUMS`; la copia temporal de smoke test 0.6.4 permanece en `dist/windows-msi-smoke-update/` ignorada por Git. El asset MSI se publica además en la release `v0.6.3`; el README enlaza ambos accesos. Por decisión del dueño, MSI y ejecutables se mantienen sin firma para uso personal y conocidos.
 
 ## Registro histórico de release estable 0.6.1 (2026-11-16)
 
