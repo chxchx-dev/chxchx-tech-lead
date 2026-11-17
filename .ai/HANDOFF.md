@@ -10,10 +10,10 @@
 
 ## Distribución Windows: MSI validado localmente (2026-11-17)
 
-- Checkout `dev` en `dc80248`, versión 0.6.3. Además del runtime estático, recursos de versión/manifiesto, actualización MSI y protección entre instaladores, el MSI WiX 5.0.2 incluye CPython 3.11.18 y `uv.exe`; una acción por usuario instala Basic Memory y Serena en una carpeta compartida. `install.ps1` y `install.sh` invocan el mismo comando requerido y dejan los extras en el PATH del usuario.
+- Build MSI 0.6.3 desde `dev` (`dc80248`); el snapshot de distribución quedó en `9c2255c`. Además del runtime estático, recursos de versión/manifiesto, actualización MSI y protección entre instaladores, el MSI WiX 5.0.2 incluye CPython 3.11.18 y `uv.exe`; una acción por usuario instala Basic Memory y Serena en una carpeta compartida. `install.ps1` y `install.sh` invocan el mismo comando requerido y dejan los extras en el PATH del usuario.
 - Build local completado para MSI 0.6.3 y actualización de prueba 0.6.4; ambos pasaron `wix msi validate` con ICE. El test `scripts/test_windows_msi.ps1` comprueba instalar, abrir los tres comandos, actualizar y desinstalar, conservando los extras y su PATH. No se ejecutó localmente porque modifica el perfil de usuario y deja intencionalmente los extras instalados.
 - Verificaciones: `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked` (218 + 6 + 9); `uv run --locked pytest` (487 pasaron, 38 omitidas, 10 deseleccionadas); sintaxis PowerShell/Bash y `git diff --check`.
-- La release `v0.6.3` ya existía, pero no traía el MSI; el MSI estable ahora se conserva también en `installers/windows/v0.6.3/` con Git LFS, checksum y enlace en README. El asset de esa release se añade por separado para que funcione el enlace de descarga. El dueño mantiene MSI y ejecutables sin firma para uso personal y conocidos. El ciclo de instalación sigue pendiente de validación remota en Windows CI.
+- Se añadió el MSI a la release `v0.6.3`, junto con el manifiesto y `SHA256SUMS` actualizados; GitHub confirma el nombre y el digest. La copia está versionada con Git LFS en `installers/windows/v0.6.3/`, con enlace desde README. El dueño mantiene MSI y ejecutables sin firma para uso personal y conocidos. El ciclo de instalación sigue pendiente de validación remota en Windows CI.
 
 ## Registro histórico del release estable 0.6.1 (2026-11-16)
 
