@@ -1,0 +1,11 @@
+name = "powerbi"
+title = "Power BI (modelado)"
+category = "Business Intelligence"
+description = "Servidor oficial de Microsoft para modelar en Power BI: tablas, medidas DAX, relaciones y jerarquías de un modelo semántico."
+docs = "https://github.com/microsoft/powerbi-modeling-mcp"
+origin = "oficial"
+requires = ["npx"]
+command = ["npx", "-y", "@microsoft/powerbi-modeling-mcp@latest", "--start"]
+command_windows = ["cmd", "/c", "npx", "-y", "@microsoft/powerbi-modeling-mcp@latest", "--start"]
+platforms = ["windows", "macos", "linux"]
+note = "Vista previa pública de Microsoft: puede cambiar y pide aceptar su EULA la primera vez. Solo ejecuta operaciones de modelado; no edita páginas de informes ni su diseño. Comprueba el comando en su repositorio antes de confiar en él."

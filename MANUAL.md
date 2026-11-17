@@ -1,7 +1,7 @@
 # Manual técnico de ChxChx
 
 Detalle de capacidades, seguridad y decisiones del producto. Para una visión general, empieza por el [README](README.md).
-La versión es `0.6.2` (la línea 0.6 es el producto Rust); reemplaza a la instalación 0.5.x al actualizar.
+La versión es `0.6.3` (la línea 0.6 es el producto Rust); reemplaza a la instalación 0.5.x al actualizar.
 
 ## Capacidades compartidas actuales
 

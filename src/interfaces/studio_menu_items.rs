@@ -6,25 +6,83 @@ pub(super) enum Entry {
     Separator,
     Item {
         label: &'static str,
-        hint: &'static str,
+        /// The shortcut, as it is bound right now.
+        hint: String,
         /// `None` shows the item disabled.
         message: Option<Message>,
     },
+    /// An entry that unfolds a second list next to the dropdown.
+    Submenu {
+        label: &'static str,
+        entries: Vec<Entry>,
+    },
 }
 
-fn item(label: &'static str, hint: &'static str, message: Message) -> Entry {
+/// "Preferencias": settings, themes, interface size and shortcuts, one click from the File menu.
+fn preferences(state: &Dashboard) -> Entry {
+    let look = &state.session.preferences().appearance;
+    let mark = |on: bool| if on { "✓" } else { "" };
+    let mut entries = vec![
+        item(
+            "Ajustes…",
+            key(keymap::Action::OpenSettings),
+            Message::Navigate(Page::Settings),
+        ),
+        Entry::Separator,
+    ];
+    for (id, name, _) in design::themes::THEMES {
+        entries.push(item(
+            name,
+            mark(look.theme == *id),
+            Message::Settings(settings::Event::Theme((*id).to_owned())),
+        ));
+    }
+    entries.push(Entry::Separator);
+    for (label, value) in settings::SCALES {
+        entries.push(item(
+            label,
+            mark((look.scale - value).abs() < 0.01),
+            Message::Settings(settings::Event::Scale(value)),
+        ));
+    }
+    entries.extend([
+        Entry::Separator,
+        item("Atajos de teclado…", "", Message::Navigate(Page::Settings)),
+        item(
+            "Restaurar atajos",
+            "",
+            Message::Settings(settings::Event::ResetKeys),
+        ),
+    ]);
+    Entry::Submenu {
+        label: "Preferencias",
+        entries,
+    }
+}
+
+fn item(label: &'static str, hint: impl Into<String>, message: Message) -> Entry {
     Entry::Item {
         label,
-        hint,
+        hint: hint.into(),
         message: Some(message),
     }
 }
 
-fn gated(label: &'static str, hint: &'static str, enabled: bool, message: Message) -> Entry {
+fn gated(label: &'static str, hint: impl Into<String>, enabled: bool, message: Message) -> Entry {
     Entry::Item {
         label,
-        hint,
+        hint: hint.into(),
         message: enabled.then_some(message),
+    }
+}
+
+/// The keys an action has right now (empty when it has none).
+fn key(action: keymap::Action) -> String {
+    let binding = keymap::binding(action);
+    if binding.is_empty() {
+        String::new()
+    } else {
+        keymap::display(&binding)
     }
 }
 
@@ -42,16 +100,18 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
         Menu::File => vec![
             gated(
                 "Guardar",
-                "Ctrl+S",
+                key(keymap::Action::Save),
                 tab.is_some_and(|tab| tab.dirty) && !state.editor.saving,
                 Message::Editor(editor::Event::Save),
             ),
             gated(
                 "Cerrar pestaña",
-                "Ctrl+W",
+                key(keymap::Action::CloseTab),
                 editing,
                 Message::Editor(editor::Event::Close(state.editor.selected.unwrap_or(0))),
             ),
+            Separator,
+            preferences(state),
             Separator,
             item(
                 "Nueva ventana",
@@ -88,19 +148,19 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
             ),
             item(
                 "Buscar en el proyecto",
-                "Ctrl+Shift+F",
+                key(keymap::Action::SearchProject),
                 Message::Shell(ShellEvent::ShowSide(Side::Search)),
             ),
         ],
         Menu::View => vec![
             item(
                 "Explorador",
-                "Ctrl+B",
+                key(keymap::Action::ToggleSidebar),
                 Message::Shell(ShellEvent::ShowSide(Side::Explorer)),
             ),
             item(
                 "Buscar",
-                "Ctrl+Shift+F",
+                key(keymap::Action::SearchProject),
                 Message::Shell(ShellEvent::ShowSide(Side::Search)),
             ),
             item(
@@ -116,7 +176,7 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
             Separator,
             item(
                 "Panel inferior",
-                "Ctrl+J",
+                key(keymap::Action::ToggleDock),
                 Message::Shell(ShellEvent::ToggleDock),
             ),
             item(
@@ -151,6 +211,11 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
                 Message::Navigate(Page::Integrations),
             ),
             item("Diagnóstico", "", Message::Navigate(Page::Diagnostics)),
+            item(
+                "Ajustes: temas y atajos",
+                key(keymap::Action::OpenSettings),
+                Message::Navigate(Page::Settings),
+            ),
         ],
         Menu::Project => vec![
             item(

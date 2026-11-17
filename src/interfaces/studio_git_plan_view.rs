@@ -7,15 +7,15 @@ use iced::widget::{column, text_input, tooltip};
 
 pub(super) fn type_color(kind: CommitType) -> iced::Color {
     match kind {
-        CommitType::Feat => design::SUCCESS,
-        CommitType::Fix => design::DANGER,
-        CommitType::Docs => design::BRAND_CYAN,
-        CommitType::Test => design::TINT_PURPLE,
-        CommitType::Build => design::TINT_ORANGE,
-        CommitType::Ci => design::TINT_YELLOW,
-        CommitType::Refactor => design::BRAND_BLUE,
-        CommitType::Perf => design::WARNING,
-        CommitType::Style | CommitType::Chore => design::MUTED,
+        CommitType::Feat => design::success(),
+        CommitType::Fix => design::danger(),
+        CommitType::Docs => design::brand_cyan(),
+        CommitType::Test => design::tint_purple(),
+        CommitType::Build => design::tint_orange(),
+        CommitType::Ci => design::tint_yellow(),
+        CommitType::Refactor => design::brand_blue(),
+        CommitType::Perf => design::warning(),
+        CommitType::Style | CommitType::Chore => design::muted(),
     }
 }
 
@@ -25,16 +25,16 @@ pub(super) fn view(state: &Dashboard) -> Option<Element<'_, Message>> {
     let blocked = git.busy.is_some() || git.merge;
     let mut cards = column![
         row![
-            icons::icon("sparkle", design::ACCENT, 15.0),
+            icons::icon("sparkle", design::accent(), 15.0),
             text("Plan de commits").size(13).font(design::UI_BOLD),
-            text(plan.groups.len().to_string()).size(11).color(design::FAINT),
+            text(plan.groups.len().to_string()).size(11).color(design::faint()),
             Space::new().width(Fill),
             button(text("Guardar todos").size(11).font(design::UI_BOLD))
                 .padding([4, 10])
                 .style(styles::primary)
                 .on_press_maybe((!blocked).then(|| event(Event::PlanCommitAll))),
             styles::tip(
-                button(icons::icon("close", design::MUTED, 12.0))
+                button(icons::icon("close", design::muted(), 12.0))
                     .padding(4)
                     .style(styles::ghost(false))
                     .on_press(event(Event::PlanClose)),
@@ -46,14 +46,14 @@ pub(super) fn view(state: &Dashboard) -> Option<Element<'_, Message>> {
         .align_y(iced::Center),
         text("Cada commit cuenta una sola historia. Cambia el tipo con un clic, edita la descripción y guarda.")
             .size(10)
-            .color(design::FAINT),
+            .color(design::faint()),
     ]
     .spacing(8);
     for warning in &plan.warnings {
         cards = cards.push(
             row![
-                icons::icon("warning", design::WARNING, 13.0),
-                text(warning).size(10).color(design::WARNING).width(Fill),
+                icons::icon("warning", design::warning(), 13.0),
+                text(warning).size(10).color(design::warning()).width(Fill),
             ]
             .spacing(6),
         );
@@ -65,7 +65,7 @@ pub(super) fn view(state: &Dashboard) -> Option<Element<'_, Message>> {
         container(cards)
             .padding(12)
             .width(Fill)
-            .style(styles::tinted(design::BRAND_BLUE))
+            .style(styles::tinted(design::brand_blue()))
             .into(),
     )
 }
@@ -109,7 +109,7 @@ fn card(index: usize, group: &CommitGroup, blocked: bool) -> Element<'_, Message
                 Space::new().width(Fill),
                 text(format!("{} archivo(s)", group.files.len()))
                     .size(10)
-                    .color(design::FAINT),
+                    .color(design::faint()),
             ]
             .align_y(iced::Center),
             text_input("Describe el cambio", &group.text)
@@ -124,9 +124,9 @@ fn card(index: usize, group: &CommitGroup, blocked: bool) -> Element<'_, Message
             })
             .size(10)
             .color(if too_long {
-                design::WARNING
+                design::warning()
             } else {
-                design::FAINT
+                design::faint()
             })
             .wrapping(iced::widget::text::Wrapping::None),
             button(text("Guardar este commit").size(11))

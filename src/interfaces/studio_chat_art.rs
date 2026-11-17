@@ -78,7 +78,7 @@ pub(super) fn banner<'a>(provider: Provider, name: String) -> Element<'a, Messag
         }
         let mut art = column![].spacing(0);
         for (index, line) in lines.iter().enumerate() {
-            let color = mix(tint, design::BRAND_CYAN, index as f32 / 7.0);
+            let color = mix(tint, design::brand_cyan(), index as f32 / 7.0);
             art = art.push(
                 text(*line)
                     .size(SIZE)

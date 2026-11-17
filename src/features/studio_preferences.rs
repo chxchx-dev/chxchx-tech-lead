@@ -46,6 +46,25 @@ impl Default for Layout {
     }
 }
 
+/// How Studio looks: theme, optional accent color (`#RRGGBB`) and interface scale.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Appearance {
+    pub theme: String,
+    pub accent: Option<String>,
+    pub scale: f32,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            theme: "chxchx".to_owned(),
+            accent: None,
+            scale: 1.0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectSession {
@@ -62,6 +81,9 @@ pub struct ProjectSession {
 pub struct Preferences {
     pub version: u32,
     pub layout: Layout,
+    pub appearance: Appearance,
+    /// Keyboard shortcuts the person changed: action id -> binding (empty = none).
+    pub shortcuts: BTreeMap<String, String>,
     pub recent_projects: Vec<String>,
     pub projects: BTreeMap<String, ProjectSession>,
 }
@@ -71,6 +93,8 @@ impl Default for Preferences {
         Self {
             version: VERSION,
             layout: Layout::default(),
+            appearance: Appearance::default(),
+            shortcuts: BTreeMap::new(),
             recent_projects: Vec::new(),
             projects: BTreeMap::new(),
         }
@@ -131,6 +155,24 @@ impl Preferences {
             (width.is_finite() && height.is_finite())
                 .then(|| [width.clamp(880.0, 3840.0), height.clamp(520.0, 2160.0)])
         });
+        let look = &mut self.appearance;
+        look.scale = clamp(look.scale, 0.8, 1.6, 1.0);
+        if look.theme.len() > 32 || !look.theme.chars().all(|c| c.is_ascii_alphanumeric()) {
+            look.theme = "chxchx".to_owned();
+        }
+        if look.accent.as_deref().is_some_and(|hex| {
+            hex.len() != 7
+                || !hex.starts_with('#')
+                || !hex[1..].chars().all(|c| c.is_ascii_hexdigit())
+        }) {
+            look.accent = None;
+        }
+        self.shortcuts.retain(|action, binding| {
+            action.len() <= 32 && binding.len() <= 40 && binding.is_ascii()
+        });
+        while self.shortcuts.len() > 64 {
+            self.shortcuts.pop_last();
+        }
         self.recent_projects
             .retain(|path| !path.is_empty() && path.len() <= 1024);
         self.recent_projects.dedup();
@@ -151,7 +193,13 @@ impl Preferences {
             }
             if !matches!(
                 session.page.as_str(),
-                "home" | "setup" | "projects" | "catalog" | "integrations" | "diagnostics"
+                "home"
+                    | "setup"
+                    | "projects"
+                    | "catalog"
+                    | "integrations"
+                    | "diagnostics"
+                    | "settings"
             ) {
                 session.page = "home".to_owned();
             }

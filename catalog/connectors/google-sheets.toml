@@ -1,0 +1,22 @@
+name = "google-sheets"
+title = "Google Sheets"
+category = "Office"
+description = "Lee y escribe hojas de cálculo de Google Sheets y Drive con una cuenta de servicio."
+docs = "https://github.com/xing5/mcp-google-sheets"
+origin = "comunidad"
+requires = ["uvx"]
+command = ["uvx", "mcp-google-sheets@latest"]
+platforms = ["windows", "macos", "linux"]
+note = "Crea una cuenta de servicio de Google Cloud, descarga su clave JSON y comparte tu carpeta de Drive con su correo (rol Editor). La clave nunca se guarda en el proyecto: solo la ruta, desde tu entorno."
+
+[[env]]
+name = "SERVICE_ACCOUNT_PATH"
+description = "Ruta completa al archivo JSON de la cuenta de servicio."
+secret = true
+required = true
+
+[[env]]
+name = "DRIVE_FOLDER_ID"
+description = "ID de la carpeta de Drive compartida con la cuenta de servicio."
+secret = false
+required = false

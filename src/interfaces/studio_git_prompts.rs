@@ -6,17 +6,17 @@ use iced::widget::column;
 
 pub(super) fn notice_card<'a>(ok: bool, warn: bool, message: &'a str) -> Element<'a, Message> {
     let tint = if warn {
-        design::WARNING
+        design::warning()
     } else if ok {
-        design::SUCCESS
+        design::success()
     } else {
-        design::DANGER
+        design::danger()
     };
     container(
         row![
             icons::icon(if ok && !warn { "check" } else { "warning" }, tint, 14.0),
             text(message).size(11).width(Fill),
-            button(icons::icon("close", design::MUTED, 11.0))
+            button(icons::icon("close", design::muted(), 11.0))
                 .padding(3)
                 .style(styles::ghost(false))
                 .on_press(event(Event::DismissNotice)),
@@ -94,7 +94,7 @@ pub(super) fn confirm_card<'a>(state: &'a Dashboard, confirm: &'a Confirm) -> El
     )
     .padding(10)
     .width(Fill)
-    .style(styles::tinted(design::WARNING))
+    .style(styles::tinted(design::warning()))
     .into()
 }
 

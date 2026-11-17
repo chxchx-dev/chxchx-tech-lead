@@ -21,6 +21,8 @@ mod app;
 mod catalog;
 #[path = "tui_chrome.rs"]
 mod chrome;
+#[path = "tui_connectors.rs"]
+mod connectors;
 #[path = "tui_git.rs"]
 mod git;
 #[path = "tui_health.rs"]
@@ -116,7 +118,8 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let body = chrome::frame(frame, app);
     match app.page {
         Page::Home => home::render(frame, app, body),
-        Page::Setup | Page::Connect => actions::render(frame, app, body, app.page),
+        Page::Setup => actions::render(frame, app, body, app.page),
+        Page::Connect => connectors::render(frame, app, body),
         Page::Catalog => catalog::render(frame, app, body),
         Page::Agents => agents::render(frame, app, body),
         Page::Git => git::render(frame, app, body),
@@ -125,6 +128,9 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &mut App) {
     }
     if let Some(modal) = &app.modal {
         preview::render(frame, modal, app.busy.is_some());
+    }
+    if let Some(prompt) = &app.prompt {
+        connectors::render_prompt(frame, prompt);
     }
     if app.help {
         chrome::help(frame);
@@ -140,6 +146,10 @@ pub(super) fn handle_key(app: &mut App, key: KeyEvent) {
         if matches!(key.code, KeyCode::Esc | KeyCode::Char('?' | 'q')) {
             app.help = false;
         }
+        return;
+    }
+    if app.prompt.is_some() {
+        connectors::prompt_key(app, key.code);
         return;
     }
     if app.modal.is_some() {
@@ -160,7 +170,8 @@ pub(super) fn handle_key(app: &mut App, key: KeyEvent) {
         }
         code => match app.page {
             Page::Home => home::key(app, code),
-            Page::Setup | Page::Connect => actions::key(app, app.page, code),
+            Page::Setup => actions::key(app, app.page, code),
+            Page::Connect => connectors::key(app, code),
             Page::Catalog => catalog::key(app, code),
             Page::Agents => agents::key(app, code),
             Page::Git => git::key(app, code),

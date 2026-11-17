@@ -23,19 +23,19 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     let body: Element<'_, Message> = if let Some(reason) = &git.unavailable {
         empty(
             "warning",
-            design::WARNING,
+            design::warning(),
             "Git no está disponible",
             reason,
             None,
         )
     } else if !git.loaded {
-        container(text("Leyendo Git…").size(12).color(design::MUTED))
+        container(text("Leyendo Git…").size(12).color(design::muted()))
             .padding([8, 14])
             .into()
     } else if !git.is_repository() {
         empty(
             "branch",
-            design::BRAND_BLUE,
+            design::brand_blue(),
             "Este proyecto no es un repositorio Git",
             "Inicialízalo para guardar versiones, crear ramas y ver el historial.",
             Some(("Inicializar repositorio", event(Event::Init))),
@@ -49,7 +49,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
                 text("GIT")
                     .size(10)
                     .font(design::UI_BOLD)
-                    .color(design::FAINT)
+                    .color(design::faint())
             )
             .padding([0, 12]),
             body,
@@ -59,7 +59,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     .padding([10, 0])
     .width(state.shell.explorer_width)
     .height(Fill)
-    .style(styles::surface(design::BG_PANEL))
+    .style(styles::surface(design::bg_panel()))
     .into()
 }
 
@@ -77,7 +77,7 @@ fn empty<'a>(
         ]
         .spacing(8)
         .align_y(iced::Center),
-        text(detail).size(12).color(design::MUTED),
+        text(detail).size(12).color(design::muted()),
     ]
     .spacing(10);
     if let Some((label, message)) = action {
@@ -100,8 +100,8 @@ fn repository(state: &Dashboard) -> Element<'_, Message> {
         content = content.push(
             container(
                 row![
-                    icons::icon("refresh", design::ACCENT, 12.0),
-                    text(label).size(11).color(design::MUTED)
+                    icons::icon("refresh", design::accent(), 12.0),
+                    text(label).size(11).color(design::muted())
                 ]
                 .spacing(6)
                 .align_y(iced::Center),
@@ -130,17 +130,17 @@ fn header(state: &Dashboard) -> Element<'_, Message> {
     };
     let busy = git.busy.is_some();
     let mut branch = row![
-        icons::icon("branch", design::BRAND_CYAN, 15.0),
+        icons::icon("branch", design::brand_cyan(), 15.0),
         text(&status.head).size(13).font(design::UI_BOLD),
     ]
     .spacing(7)
     .align_y(iced::Center);
     if status.detached {
-        branch = branch.push(text("(sin rama)").size(11).color(design::WARNING));
+        branch = branch.push(text("(sin rama)").size(11).color(design::warning()));
     }
     for (symbol, count, tint) in [
-        ("↑", status.ahead, design::ACCENT),
-        ("↓", status.behind, design::WARNING),
+        ("↑", status.ahead, design::accent()),
+        ("↓", status.behind, design::warning()),
     ] {
         if count > 0 {
             branch = branch.push(
@@ -185,7 +185,7 @@ fn header(state: &Dashboard) -> Element<'_, Message> {
         status.ahead > 0 || publish,
     );
     let refresh = styles::tip(
-        button(icons::icon("refresh", design::MUTED, 14.0))
+        button(icons::icon("refresh", design::muted(), 14.0))
             .padding(6)
             .style(styles::ghost(false))
             .on_press_maybe((!busy).then(|| event(Event::Fetch))),
@@ -208,9 +208,9 @@ fn sync_button<'a>(
     highlight: bool,
 ) -> Element<'a, Message> {
     let tint = match (message.is_some(), highlight) {
-        (false, _) => design::FAINT,
-        (true, true) => design::ACCENT,
-        (true, false) => design::MUTED,
+        (false, _) => design::faint(),
+        (true, true) => design::accent(),
+        (true, false) => design::muted(),
     };
     button(
         row![

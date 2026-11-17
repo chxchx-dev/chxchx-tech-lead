@@ -48,12 +48,12 @@ pub(super) fn item<'a>(
         ]
         .spacing(10)
         .align_y(iced::Center),
-        text(description).size(12).color(design::MUTED),
+        text(description).size(12).color(design::muted()),
     ]
     .spacing(5)
     .width(Fill);
     if !notes.is_empty() {
-        details = details.push(text(notes.join(" · ")).size(11).color(design::FAINT));
+        details = details.push(text(notes.join(" · ")).size(11).color(design::faint()));
     }
     container(row![details, button].spacing(14).align_y(iced::Center))
         .padding([12, 16])
@@ -72,8 +72,8 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
         };
         return container(
             row![
-                icons::icon("layers", design::ACCENT, 16.0),
-                text(label).size(13).color(design::MUTED),
+                icons::icon("layers", design::accent(), 16.0),
+                text(label).size(13).color(design::muted()),
                 action("Cargar", styles::secondary, Message::Catalog(Event::Load)),
             ]
             .spacing(10)
@@ -108,7 +108,7 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
     ]
     .spacing(12);
     if let Some(error) = &data.selection_error {
-        content = content.push(pages::banner("warning", design::WARNING, error.clone()));
+        content = content.push(pages::banner("warning", design::warning(), error.clone()));
     }
     if let Some(plan) = &catalog.skills_plan {
         content = content.push(review(
@@ -148,7 +148,7 @@ pub(in crate::interfaces::studio) fn header<'a>() -> Element<'a, Message> {
             text("Catálogo del proyecto").size(22).font(design::UI_BOLD),
             text("Skills, Tech Packs y Mods que guían a tus agentes. Cada cambio se previsualiza y respalda.")
                 .size(13)
-                .color(design::MUTED)
+                .color(design::muted())
         ]
         .spacing(4),
     ]
@@ -164,7 +164,7 @@ pub(super) fn bulk<'a>(
 ) -> Element<'a, Message> {
     container(
         row![
-            icons::icon("sparkle", design::ACCENT, 15.0),
+            icons::icon("sparkle", design::accent(), 15.0),
             text(label).size(12),
             Space::new().width(Fill),
             action(button_label, styles::primary, message),
@@ -193,7 +193,7 @@ fn review<'a>(
     for line in actions {
         lines = lines.push(
             row![
-                icons::icon("check", design::SUCCESS, 13.0),
+                icons::icon("check", design::success(), 13.0),
                 text(line).size(12)
             ]
             .spacing(8)
@@ -202,7 +202,7 @@ fn review<'a>(
     }
     if can_apply {
         lines = lines.push(if busy {
-            Element::from(text("Aplicando…").size(12).color(design::MUTED))
+            Element::from(text("Aplicando…").size(12).color(design::muted()))
         } else {
             action(
                 "Confirmar y aplicar",

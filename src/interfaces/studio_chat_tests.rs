@@ -272,3 +272,19 @@ fn a_model_chosen_before_the_chat_is_ready_survives_its_preparation() {
             .any(|m| m.id == "ollama/qwen2.5-coder:7b-ctx32k")
     );
 }
+
+#[test]
+fn arrows_walk_back_through_sent_messages_and_return_to_the_draft() {
+    let mut state = dashboard();
+    let chat = &mut state.chat.chats[0];
+    chat.history = vec!["uno".into(), "dos".into()];
+    chat.composer = text_editor::Content::with_text("borrador");
+    let _ = update(&mut state, Event::HistoryPrev);
+    assert_eq!(state.chat.chats[0].composer.text().trim_end(), "dos");
+    let _ = update(&mut state, Event::HistoryPrev);
+    assert_eq!(state.chat.chats[0].composer.text().trim_end(), "uno");
+    let _ = update(&mut state, Event::HistoryNext);
+    let _ = update(&mut state, Event::HistoryNext);
+    assert_eq!(state.chat.chats[0].composer.text().trim_end(), "borrador");
+    assert!(state.chat.chats[0].recall.is_none());
+}

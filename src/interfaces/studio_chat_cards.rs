@@ -11,12 +11,15 @@ pub(super) fn entry<'a>(chat: &'a Chat, index: usize, entry: &'a Entry) -> Eleme
         Kind::Assistant => assistant(chat, index, entry),
         Kind::Reasoning => reasoning(chat, index, &entry.text),
         Kind::Tool => tool(chat, index, entry),
-        Kind::Notice => note("info", design::ACCENT, &entry.text),
-        Kind::Error => note("warning", design::DANGER, &entry.text),
+        Kind::Notice => note("info", design::accent(), &entry.text),
+        Kind::Error => note("warning", design::danger(), &entry.text),
         Kind::Permission => super::asks::permission(index, entry),
         Kind::Question => super::asks::question(chat, index, entry),
     }
 }
+
+/// Characters after which a sent message is folded in the transcript.
+const LONG_MESSAGE: usize = 1500;
 
 fn user<'a>(chat: &'a Chat, index: usize, body: &'a str) -> Element<'a, Message> {
     let mut bubble = column![].spacing(8);
@@ -28,16 +31,92 @@ fn user<'a>(chat: &'a Chat, index: usize, body: &'a str) -> Element<'a, Message>
         bubble = bubble.push(strip);
     }
     if !body.trim().is_empty() {
-        bubble = bubble.push(text(body).size(13));
+        // A huge pasted message is laid out on every frame: fold it until the person asks.
+        let long = body.chars().nth(LONG_MESSAGE).is_some();
+        if let Some(editor) = selectable(chat, index, 13) {
+            bubble = bubble.push(editor);
+        } else if long && !chat.expanded.contains(&index) {
+            let head: String = body.chars().take(LONG_MESSAGE / 2).collect();
+            bubble = bubble
+                .push(text(format!("{}…", head.trim_end())).size(13))
+                .push(
+                    button(
+                        text("Ver mensaje completo")
+                            .size(11)
+                            .color(design::accent()),
+                    )
+                    .padding(0)
+                    .style(styles::plain(false))
+                    .on_press(send(Event::Toggle(index))),
+                );
+        } else {
+            bubble = bubble.push(text(body).size(13));
+            if long {
+                bubble = bubble.push(
+                    button(text("Mostrar menos").size(11).color(design::accent()))
+                        .padding(0)
+                        .style(styles::plain(false))
+                        .on_press(send(Event::Toggle(index))),
+                );
+            }
+        }
+    }
+    if !body.trim().is_empty() {
+        bubble = bubble.push(tools(
+            index,
+            chat.selecting.iter().any(|(e, _)| *e == index),
+        ));
     }
     row![
         Space::new().width(Fill),
         container(bubble)
             .padding([9, 13])
             .max_width(620)
-            .style(styles::tinted(design::BRAND_BLUE)),
+            .style(styles::tinted(design::brand_blue())),
     ]
     .into()
+}
+
+/// Small icon buttons under a message: copy it, or switch it to text that can be selected.
+fn tools<'a>(index: usize, selecting: bool) -> Element<'a, Message> {
+    row![
+        styles::tip(
+            button(icons::icon("file-text", design::faint(), 12.0))
+                .padding(3)
+                .style(styles::ghost(false))
+                .on_press(send(Event::CopyEntry(index))),
+            "Copiar el mensaje",
+            iced::widget::tooltip::Position::Top,
+        ),
+        styles::tip(
+            button(icons::icon("code", design::faint(), 12.0))
+                .padding(3)
+                .style(styles::ghost(selecting))
+                .on_press(send(Event::Select(index))),
+            if selecting {
+                "Volver al texto con formato"
+            } else {
+                "Seleccionar texto (Ctrl+C copia lo seleccionado)"
+            },
+            iced::widget::tooltip::Position::Top,
+        ),
+    ]
+    .spacing(2)
+    .into()
+}
+
+/// The message as text the mouse can select; `None` while it is shown with its format.
+fn selectable<'a>(chat: &'a Chat, index: usize, size: u32) -> Option<Element<'a, Message>> {
+    let (_, content) = chat.selecting.iter().find(|(entry, _)| *entry == index)?;
+    let to = super::sender();
+    Some(
+        iced::widget::text_editor(content)
+            .on_action(move |action| to(Event::Selected(index, action)))
+            .padding(0)
+            .size(size as f32)
+            .style(styles::composer_editor)
+            .into(),
+    )
 }
 
 pub(super) fn thumb<'a>(image: &'a super::Image, side: f32) -> Element<'a, Message> {
@@ -85,7 +164,9 @@ fn tool_icon(kind: &str) -> &'static str {
 }
 
 fn assistant<'a>(chat: &'a Chat, index: usize, entry: &'a Entry) -> Element<'a, Message> {
+    let selecting = chat.selecting.iter().any(|(e, _)| *e == index);
     let body: Element<'a, Message> = match chat.rendered.get(index) {
+        _ if selecting => selectable(chat, index, 13).unwrap_or_else(|| text("").into()),
         Some((_, content)) => markdown::view(
             content.items(),
             markdown::Settings::with_text_size(13, design::theme()),
@@ -107,16 +188,9 @@ fn assistant<'a>(chat: &'a Chat, index: usize, entry: &'a Entry) -> Element<'a, 
                 )
                 .size(11)
                 .font(design::UI_BOLD)
-                .color(design::MUTED),
+                .color(design::muted()),
                 Space::new().width(Fill),
-                styles::tip(
-                    button(icons::icon("file-text", design::FAINT, 12.0))
-                        .padding(3)
-                        .style(styles::ghost(false))
-                        .on_press(send(Event::Copy(entry.text.clone()))),
-                    "Copiar respuesta",
-                    iced::widget::tooltip::Position::Left,
-                ),
+                tools(index, selecting),
             ]
             .align_y(iced::Center),
             body,
@@ -144,7 +218,7 @@ fn fold<'a>(
                 } else {
                     "chevron-right"
                 },
-                design::FAINT,
+                design::faint(),
                 12.0
             ),
             head,
@@ -177,13 +251,13 @@ fn reasoning<'a>(chat: &Chat, index: usize, body: &'a str) -> Element<'a, Messag
         format!("Razonamiento · {first}…")
     })
     .size(11)
-    .color(design::FAINT)
+    .color(design::faint())
     .into();
     fold(
         chat,
         index,
         head,
-        Some(text(body).size(11).color(design::FAINT).into()),
+        Some(text(body).size(11).color(design::faint()).into()),
     )
 }
 
@@ -201,13 +275,13 @@ fn note<'a>(icon: &'static str, tint: iced::Color, body: &'a str) -> Element<'a,
 
 fn tool<'a>(chat: &Chat, index: usize, entry: &'a Entry) -> Element<'a, Message> {
     let (icon, tint) = match entry.status.as_str() {
-        "completed" | "done" | "success" => ("check", design::SUCCESS),
-        "failed" | "error" => ("warning", design::DANGER),
-        _ => ("refresh", design::ACCENT),
+        "completed" | "done" | "success" => ("check", design::success()),
+        "failed" | "error" => ("warning", design::danger()),
+        _ => ("refresh", design::accent()),
     };
     let head = row![
         icons::icon(icon, tint, 13.0),
-        icons::icon(tool_icon(&entry.tool_kind), design::FAINT, 12.0),
+        icons::icon(tool_icon(&entry.tool_kind), design::faint(), 12.0),
         text(&entry.text)
             .size(12)
             .font(design::MONO)
@@ -220,7 +294,7 @@ fn tool<'a>(chat: &Chat, index: usize, entry: &'a Entry) -> Element<'a, Message>
         text(tail(&entry.output, 4000))
             .size(11)
             .font(design::MONO)
-            .color(design::MUTED)
+            .color(design::muted())
             .into()
     });
     container(fold(chat, index, head, detail))

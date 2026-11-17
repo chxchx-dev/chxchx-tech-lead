@@ -495,3 +495,226 @@ fn commands_of_the_legacy_cli_are_handed_over_with_their_arguments_and_exit_code
         text(&looped)
     );
 }
+
+#[test]
+fn connectors_are_previewed_then_written_for_every_agent_and_removed_without_touching_the_rest() {
+    let sandbox = Sandbox::new();
+    let project = sandbox.project.display().to_string();
+    let run = |words: &[&str]| {
+        let mut args: Vec<OsString> = words.iter().map(OsString::from).collect();
+        args.push("--path".into());
+        args.push(project.clone().into());
+        sandbox.cli(args)
+    };
+
+    // The catalog lists the apps people ask for.
+    let listed = assert_success(&sandbox.cli([
+        "connectors".into(),
+        "list".into(),
+        sandbox.project.clone().into_os_string(),
+    ]));
+    for word in ["excel", "powerbi", "postgres", "Office", "Bases de datos"] {
+        assert!(listed.contains(word), "{word:?} missing from {listed}");
+    }
+
+    // A project that already has its own server in .mcp.json.
+    fs::write(
+        sandbox.path(".mcp.json"),
+        r#"{"mcpServers": {"mio": {"command": "propio", "args": []}}}"#,
+    )
+    .unwrap();
+
+    // Preview: says what would change and writes nothing.
+    let preview = assert_success(&run(&[
+        "connectors",
+        "add",
+        "excel",
+        "word",
+        "--client",
+        "all",
+    ]));
+    assert!(preview.contains("añadir `excel` a .mcp.json"), "{preview}");
+    assert!(preview.contains("Vista previa"), "{preview}");
+    assert!(!sandbox.path("opencode.json").exists() && !sandbox.path(".codex").exists());
+
+    // Apply: the three files, valid, with the person's own server still there and a backup of it.
+    let applied = assert_success(&run(&[
+        "connectors",
+        "add",
+        "excel",
+        "word",
+        "--client",
+        "all",
+        "--apply",
+    ]));
+    assert!(applied.contains("Respaldo"), "{applied}");
+    // Windows runs `npx` through `cmd /c`, so the program differs by platform.
+    let launcher = if cfg!(windows) { "cmd" } else { "npx" };
+    let claude: serde_json::Value =
+        serde_json::from_str(&read(&sandbox.path(".mcp.json"))).unwrap();
+    assert!(
+        claude["mcpServers"]["mio"].is_object()
+            && claude["mcpServers"]["excel"]["command"] == launcher
+    );
+    let opencode: serde_json::Value =
+        serde_json::from_str(&read(&sandbox.path("opencode.json"))).unwrap();
+    assert_eq!(opencode["mcp"]["word"]["type"], "local");
+    let codex: toml::Value = toml::from_str(&read(&sandbox.path(".codex/config.toml"))).unwrap();
+    assert_eq!(
+        codex["mcp_servers"]["excel"]["command"].as_str(),
+        Some(launcher)
+    );
+    let backups = sandbox.home.join("backups-mcp");
+    assert!(
+        backups.is_dir(),
+        "the file that existed was saved before it changed"
+    );
+    assert!(
+        !sandbox.home.join("backups").exists(),
+        "rollback's own backups are not touched"
+    );
+
+    // Idempotent.
+    let again = assert_success(&run(&[
+        "connectors",
+        "add",
+        "excel",
+        "word",
+        "--client",
+        "all",
+        "--apply",
+    ]));
+    assert!(again.contains("todo está actualizado"), "{again}");
+
+    // Removing takes only what ChxChx added.
+    assert_success(&run(&[
+        "connectors",
+        "remove",
+        "excel",
+        "--client",
+        "all",
+        "--apply",
+    ]));
+    let claude: serde_json::Value =
+        serde_json::from_str(&read(&sandbox.path(".mcp.json"))).unwrap();
+    assert!(
+        claude["mcpServers"].get("excel").is_none() && claude["mcpServers"]["word"].is_object()
+    );
+    assert!(
+        claude["mcpServers"]["mio"].is_object(),
+        "the person's own server stays"
+    );
+}
+
+#[test]
+fn a_secret_never_reaches_the_project_and_custom_servers_and_mistakes_are_handled() {
+    let sandbox = Sandbox::new();
+    let project = sandbox.project.display().to_string();
+    let run = |words: &[&str], env: &[(&str, &str)]| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chxchx-tech"));
+        command.args(words).arg("--path").arg(&project);
+        command
+            .env("CHXCHX_TECH_HOME", &sandbox.home)
+            .env("PATH", &sandbox.bin);
+        for (k, v) in env {
+            command.env(k, v);
+        }
+        command.output().expect("run the CLI")
+    };
+    let out = run(
+        &[
+            "connectors",
+            "add",
+            "postgres",
+            "--client",
+            "claude",
+            "--apply",
+        ],
+        &[("DATABASE_URI", "postgresql://u:SUPERSECRETA@h/db")],
+    );
+    assert_success(&out);
+    let written = read(&sandbox.path(".mcp.json"));
+    assert!(
+        written.contains("${DATABASE_URI}") && !written.contains("SUPERSECRETA"),
+        "{written}"
+    );
+    assert!(
+        !text(&out).contains("SUPERSECRETA"),
+        "the value is not echoed either"
+    );
+
+    // A parameter that is missing, an unknown connector and a bad custom server say why.
+    let missing = run(&["connectors", "add", "sqlite", "--client", "claude"], &[]);
+    assert!(
+        !missing.status.success() && text(&missing).contains("db_path"),
+        "{}",
+        text(&missing)
+    );
+    let unknown = run(
+        &["connectors", "add", "no-existe", "--client", "claude"],
+        &[],
+    );
+    assert!(text(&unknown).contains("desconocido"), "{}", text(&unknown));
+    let with_value = run(
+        &[
+            "connectors",
+            "add",
+            "sqlite",
+            "--client",
+            "opencode",
+            "--param",
+            "db_path=./datos.db",
+            "--apply",
+        ],
+        &[],
+    );
+    assert_success(&with_value);
+    assert!(read(&sandbox.path("opencode.json")).contains("./datos.db"));
+
+    let custom = run(
+        &[
+            "connectors",
+            "custom",
+            "mi-api",
+            "--command",
+            "npx",
+            "--arg",
+            "-y",
+            "--arg",
+            "mi-paquete",
+            "--env",
+            "MI_TOKEN",
+            "--client",
+            "claude",
+            "--apply",
+        ],
+        &[],
+    );
+    assert_success(&custom);
+    let claude: serde_json::Value =
+        serde_json::from_str(&read(&sandbox.path(".mcp.json"))).unwrap();
+    assert_eq!(
+        claude["mcpServers"]["mi-api"]["args"],
+        serde_json::json!(["-y", "mi-paquete"])
+    );
+    assert_eq!(
+        claude["mcpServers"]["mi-api"]["env"]["MI_TOKEN"],
+        "${MI_TOKEN}"
+    );
+
+    // A broken file is reported, never overwritten.
+    fs::write(sandbox.path("opencode.json"), "{ roto").unwrap();
+    let broken = run(
+        &[
+            "connectors",
+            "add",
+            "excel",
+            "--client",
+            "opencode",
+            "--apply",
+        ],
+        &[],
+    );
+    assert!(!broken.status.success());
+    assert_eq!(read(&sandbox.path("opencode.json")), "{ roto");
+}

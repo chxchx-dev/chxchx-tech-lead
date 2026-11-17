@@ -11,9 +11,9 @@ pub(super) fn guide_card(
     open: bool,
 ) -> Element<'_, Message> {
     let tint = match guide.tone {
-        Tone::Info => design::BRAND_CYAN,
-        Tone::Warning => design::WARNING,
-        Tone::Done => design::SUCCESS,
+        Tone::Info => design::brand_cyan(),
+        Tone::Warning => design::warning(),
+        Tone::Done => design::success(),
     };
     // Warnings always show every step; the rest folds away so the file list stays in view.
     let expanded = open || guide.tone == Tone::Warning || guide.steps.len() <= 1;
@@ -28,9 +28,9 @@ pub(super) fn guide_card(
             row![
                 text(format!("{}.", index + 1))
                     .size(11)
-                    .color(design::FAINT)
+                    .color(design::faint())
                     .width(16),
-                text(step).size(11).color(design::MUTED)
+                text(step).size(11).color(design::muted())
             ]
             .spacing(2),
         );
@@ -58,7 +58,7 @@ pub(super) fn guide_card(
                         } else {
                             "chevron-right"
                         },
-                        design::MUTED,
+                        design::muted(),
                         11.0
                     ),
                     text(if open {
@@ -67,7 +67,7 @@ pub(super) fn guide_card(
                         "Ver todos los pasos"
                     })
                     .size(10)
-                    .color(design::MUTED),
+                    .color(design::muted()),
                 ]
                 .spacing(4)
                 .align_y(iced::Center),
@@ -103,20 +103,20 @@ pub(super) fn commit_box(state: &Dashboard, staged: usize, changed: usize) -> El
     let (hint, tint) = if first_line.chars().count() > 72 {
         (
             "El título supera 72 caracteres: acórtalo y pasa el detalle al cuerpo.".to_owned(),
-            design::WARNING,
+            design::warning(),
         )
     } else if has_message && !is_conventional(&first_line) {
-        ("Tip: usa «tipo(alcance): descripción», por ejemplo feat(rust): añade Git. Pulsa Sugerir y te lo propongo.".to_owned(), design::MUTED)
+        ("Tip: usa «tipo(alcance): descripción», por ejemplo feat(rust): añade Git. Pulsa Sugerir y te lo propongo.".to_owned(), design::muted())
     } else if all {
         (
             "No hay nada preparado: se guardarán todos los cambios. Ctrl+Intro guarda.".to_owned(),
-            design::FAINT,
+            design::faint(),
         )
     } else {
         (
             "Se guardarán solo los archivos de «Listos para guardar». Ctrl+Intro guarda."
                 .to_owned(),
-            design::FAINT,
+            design::faint(),
         )
     };
     column![
@@ -144,7 +144,7 @@ pub(super) fn commit_box(state: &Dashboard, staged: usize, changed: usize) -> El
         row![
             button(
                 row![
-                    icons::icon("sparkle", design::ACCENT, 13.0),
+                    icons::icon("sparkle", design::accent(), 13.0),
                     text("Sugerir").size(12)
                 ]
                 .spacing(6)

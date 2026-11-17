@@ -253,7 +253,7 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for Surface<'_
                 renderer::Quad {
                     bounds: layout.bounds(),
                     border: Border {
-                        color: design::alpha(design::ACCENT, 0.55),
+                        color: design::alpha(design::accent(), 0.55),
                         width: 1.0,
                         radius: 8.0.into(),
                     },

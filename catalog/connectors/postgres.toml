@@ -1,0 +1,16 @@
+name = "postgres"
+title = "PostgreSQL"
+category = "Bases de datos"
+description = "Consulta y analiza una base PostgreSQL: esquemas, consultas SQL, planes de ejecución y salud de índices."
+docs = "https://github.com/crystaldba/postgres-mcp"
+origin = "comunidad"
+requires = ["uvx"]
+command = ["uvx", "postgres-mcp", "--access-mode=restricted"]
+platforms = ["windows", "macos", "linux"]
+note = "Arranca en modo restringido (solo lectura). La cadena de conexión lleva la contraseña: se toma de tu entorno y no se escribe en el proyecto."
+
+[[env]]
+name = "DATABASE_URI"
+description = "URI de conexión, por ejemplo postgresql://usuario:clave@host:5432/base."
+secret = true
+required = true

@@ -10,7 +10,7 @@ fn msg(event: Event) -> Message {
 
 fn stat<'a>(label: &'static str, value: String) -> Element<'a, Message> {
     column![
-        text(label).size(10).color(design::FAINT),
+        text(label).size(10).color(design::faint()),
         text(value).size(14).font(design::UI_BOLD),
     ]
     .spacing(2)
@@ -35,10 +35,10 @@ fn chip<'a>(label: String, tint: iced::Color) -> Element<'a, Message> {
 
 fn fit_chip<'a>(fit: &str) -> Element<'a, Message> {
     match fit {
-        "gpu" => chip("GPU · rápido".into(), design::SUCCESS),
-        "partial" => chip("GPU + RAM".into(), design::ACCENT),
-        "cpu" => chip("Solo CPU".into(), design::WARNING),
-        _ => chip("No cabe".into(), design::DANGER),
+        "gpu" => chip("GPU · rápido".into(), design::success()),
+        "partial" => chip("GPU + RAM".into(), design::accent()),
+        "cpu" => chip("Solo CPU".into(), design::warning()),
+        _ => chip("No cabe".into(), design::danger()),
     }
 }
 
@@ -55,16 +55,16 @@ fn hardware(snapshot: &Snapshot) -> Element<'_, Message> {
             ]
             .spacing(12),
             row![
-                icons::icon("cpu", design::MUTED, 13.0),
+                icons::icon("cpu", design::muted(), 13.0),
                 text(format!("Aceleración: {}", hw.accelerator))
                     .size(11)
-                    .color(design::MUTED),
+                    .color(design::muted()),
             ]
             .spacing(6)
             .align_y(iced::Center),
             text("Un modelo corre rápido solo si cabe en la memoria de la GPU; si no, se reparte con la RAM y va más lento.")
                 .size(11)
-                .color(design::FAINT),
+                .color(design::faint()),
         ]
         .spacing(10),
     )
@@ -73,15 +73,15 @@ fn hardware(snapshot: &Snapshot) -> Element<'_, Message> {
 fn ollama(snapshot: &Snapshot) -> Element<'_, Message> {
     let o = &snapshot.ollama;
     let (tint, headline) = if !o.installed {
-        (design::WARNING, "Ollama no está instalado".to_owned())
+        (design::warning(), "Ollama no está instalado".to_owned())
     } else if !o.running {
         (
-            design::WARNING,
+            design::warning(),
             "Ollama está instalado pero no responde".to_owned(),
         )
     } else {
         (
-            design::SUCCESS,
+            design::success(),
             format!("Ollama {} activo · {} modelos", o.version, o.models.len()),
         )
     };
@@ -98,7 +98,7 @@ fn ollama(snapshot: &Snapshot) -> Element<'_, Message> {
         body = body.push(
             text("Ollama ejecuta modelos en tu equipo, gratis y sin enviar nada a internet. Instálalo con el método oficial y vuelve a diagnosticar:")
                 .size(11)
-                .color(design::MUTED),
+                .color(design::muted()),
         );
         if let Some(command) = &o.install_command {
             body = body.push(copyable(command.clone()));
@@ -111,7 +111,7 @@ fn ollama(snapshot: &Snapshot) -> Element<'_, Message> {
                 o.base_url
             ))
             .size(11)
-            .color(design::MUTED),
+            .color(design::muted()),
         );
     }
     if !snapshot.opencode_installed {
@@ -121,7 +121,7 @@ fn ollama(snapshot: &Snapshot) -> Element<'_, Message> {
                 snapshot.opencode_hint
             ))
             .size(11)
-            .color(design::WARNING),
+            .color(design::warning()),
         );
     }
     card(body)
@@ -140,7 +140,7 @@ fn copyable<'a>(value: String) -> Element<'a, Message> {
         .clip(true)
         .style(styles::chip_surface(false)),
         styles::tip(
-            button(icons::icon("file-text", design::MUTED, 13.0))
+            button(icons::icon("file-text", design::muted(), 13.0))
                 .padding(6)
                 .style(styles::ghost(false))
                 .on_press(msg(Event::Copy(value))),
@@ -163,12 +163,12 @@ fn model_row<'a>(local: &State, snapshot: &Snapshot, model: &'a Candidate) -> El
     .spacing(8)
     .align_y(iced::Center);
     if model.recommended {
-        title = title.push(chip("★ Recomendado".into(), design::BRAND_CYAN));
+        title = title.push(chip("★ Recomendado".into(), design::brand_cyan()));
     }
     if model.configured {
-        title = title.push(chip("En OpenCode".into(), design::SUCCESS));
+        title = title.push(chip("En OpenCode".into(), design::success()));
     } else if model.downloaded {
-        title = title.push(chip("Descargado".into(), design::MUTED));
+        title = title.push(chip("Descargado".into(), design::muted()));
     }
     let mut actions = row![].spacing(6).align_y(iced::Center);
     let connected = super::connected_name(snapshot, &model.tag);
@@ -190,7 +190,7 @@ fn model_row<'a>(local: &State, snapshot: &Snapshot, model: &'a Candidate) -> El
                 .push(
                     button(
                         row![
-                            icons::icon("terminal", design::TEXT, 12.0),
+                            icons::icon("terminal", design::fg(), 12.0),
                             text("Terminal").size(11)
                         ]
                         .spacing(6)
@@ -203,7 +203,7 @@ fn model_row<'a>(local: &State, snapshot: &Snapshot, model: &'a Candidate) -> El
                 .push(
                     button(
                         row![
-                            icons::icon("sparkle", design::TEXT, 12.0),
+                            icons::icon("sparkle", design::fg(), 12.0),
                             text("Chat").size(11)
                         ]
                         .spacing(6)
@@ -242,12 +242,12 @@ fn model_row<'a>(local: &State, snapshot: &Snapshot, model: &'a Candidate) -> El
                     size_label(model.required)
                 ))
                 .size(11)
-                .color(design::MUTED),
-                text(&model.note).size(11).color(design::FAINT),
+                .color(design::muted()),
+                text(&model.note).size(11).color(design::faint()),
                 text(&model.summary).size(11).color(if fits {
-                    design::MUTED
+                    design::muted()
                 } else {
-                    design::DANGER
+                    design::danger()
                 }),
             ]
             .spacing(3)
@@ -292,7 +292,7 @@ fn working(local: &State) -> Option<Element<'_, Message>> {
             ]
             .align_y(iced::Center),
             progress_bar(0.0..=1.0, fraction).girth(6),
-            text(detail).size(11).color(design::MUTED),
+            text(detail).size(11).color(design::muted()),
         ]
         .spacing(8),
     ))
@@ -306,12 +306,12 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
                 text("Modelos locales").size(20).font(design::UI_BOLD),
                 text("Ejecuta modelos en tu equipo con Ollama y úsalos desde OpenCode: privados, sin conexión y sin costo por uso.")
                     .size(12)
-                    .color(design::MUTED),
+                    .color(design::muted()),
             ]
             .spacing(4)
             .width(Fill),
             styles::tip(
-                button(icons::icon("refresh", design::MUTED, 14.0))
+                button(icons::icon("refresh", design::muted(), 14.0))
                     .padding(7)
                     .style(styles::ghost(false))
                     .on_press_maybe((!local.loading && !local.busy()).then(|| msg(Event::Refresh))),
@@ -329,7 +329,7 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
             container(text(error).size(12))
                 .padding([8, 12])
                 .width(Fill)
-                .style(styles::tinted(design::WARNING)),
+                .style(styles::tinted(design::warning())),
         );
     }
     if let Some(done) = &local.result {
@@ -337,7 +337,7 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
             container(text(done).size(12))
                 .padding([8, 12])
                 .width(Fill)
-                .style(styles::tinted(design::SUCCESS)),
+                .style(styles::tinted(design::success())),
         );
     }
     if let Some(job) = working(local) {
@@ -352,7 +352,7 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
                     "Sin diagnóstico todavía."
                 })
                 .size(12)
-                .color(design::MUTED),
+                .color(design::muted()),
             );
         }
         Some(snapshot) => {
@@ -377,13 +377,13 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
             page = page.push(
                 text("Los tamaños y requisitos son estimaciones. Instalar descarga el modelo con `ollama pull`, crea una variante con más contexto y la conecta al opencode.json de este proyecto (con respaldo).")
                     .size(11)
-                    .color(design::FAINT),
+                    .color(design::faint()),
             );
         }
     }
     container(styles::vscroll(container(page).center_x(Fill)).height(Fill))
         .width(Fill)
         .height(Fill)
-        .style(styles::surface(design::BG_BASE))
+        .style(styles::surface(design::bg_base()))
         .into()
 }

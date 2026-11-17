@@ -90,21 +90,21 @@ pub(super) fn card(state: &Dashboard) -> Element<'_, Message> {
                     text("Deja listo tu espacio").size(16).font(design::UI_BOLD),
                     text("La preparación y la confianza se revisan antes de guardar.")
                         .size(12)
-                        .color(design::MUTED),
+                        .color(design::muted()),
                 ]
                 .spacing(4),
                 Space::new().width(Fill),
                 text(format!("{done} de 3"))
                     .size(12)
                     .font(design::UI_BOLD)
-                    .color(design::ACCENT),
+                    .color(design::accent()),
             ]
             .align_y(iced::Center),
             progress_bar(0.0..=3.0, done as f32)
                 .girth(5)
                 .style(|_: &iced::Theme| iced::widget::progress_bar::Style {
-                    background: iced::Background::Color(design::BORDER),
-                    bar: iced::Background::Color(design::ACCENT),
+                    background: iced::Background::Color(design::border()),
+                    bar: iced::Background::Color(design::accent()),
                     border: iced::Border::default().rounded(3.0),
                 }),
             list,
@@ -119,11 +119,11 @@ pub(super) fn card(state: &Dashboard) -> Element<'_, Message> {
 
 fn row_of(step: Step, next: bool) -> Element<'static, Message> {
     let (icon, tint) = if step.done {
-        ("check", design::SUCCESS)
+        ("check", design::success())
     } else if next {
-        ("arrow-right", design::ACCENT)
+        ("arrow-right", design::accent())
     } else {
-        ("dot", design::FAINT)
+        ("dot", design::faint())
     };
     let action = button(text(step.label).size(12))
         .padding([5, 12])
@@ -138,7 +138,7 @@ fn row_of(step: Step, next: bool) -> Element<'static, Message> {
             icons::icon(icon, tint, 15.0),
             column![
                 text(step.title).size(13).font(design::UI_BOLD),
-                text(step.detail).size(11).color(design::MUTED),
+                text(step.detail).size(11).color(design::muted()),
             ]
             .spacing(2)
             .width(Fill),
@@ -151,7 +151,7 @@ fn row_of(step: Step, next: bool) -> Element<'static, Message> {
     .width(Fill)
     .style(move |theme: &iced::Theme| {
         if next {
-            styles::tinted(design::ACCENT)(theme)
+            styles::tinted(design::accent())(theme)
         } else {
             styles::well(theme)
         }

@@ -16,17 +16,19 @@ const MAX_WIDTH: f32 = 92.0;
 const MAX_STEP: f32 = 13.0;
 
 /// One color per lane; lane 0 is the trunk.
-const LANES: [Color; 6] = [
-    design::BRAND_BLUE,
-    design::SUCCESS,
-    design::TINT_PURPLE,
-    design::TINT_ORANGE,
-    design::BRAND_CYAN,
-    design::TINT_YELLOW,
-];
+fn lanes() -> [Color; 6] {
+    [
+        design::brand_blue(),
+        design::success(),
+        design::tint_purple(),
+        design::tint_orange(),
+        design::brand_cyan(),
+        design::tint_yellow(),
+    ]
+}
 
 pub(super) fn lane_color(lane: usize) -> Color {
-    LANES[lane % LANES.len()]
+    lanes()[lane % 6]
 }
 
 /// Distance between lanes: shrinks when there are many so the graph never eats the message.
@@ -74,7 +76,7 @@ impl<Message> canvas::Program<Message> for Graph {
             frame.fill_rectangle(
                 Point::ORIGIN,
                 Size::new(bounds.width, ROW_HEIGHT.min(height)),
-                design::BG_ACTIVE,
+                design::bg_active(),
             );
         }
         let row = &self.row;
@@ -133,7 +135,7 @@ impl<Message> canvas::Program<Message> for Graph {
             );
         }
         // A dark halo keeps the lines from touching the dot.
-        frame.fill(&Path::circle(node, 5.0), design::BG_PANEL);
+        frame.fill(&Path::circle(node, 5.0), design::bg_panel());
         frame.fill(
             &Path::circle(node, if self.head { 4.2 } else { 3.4 }),
             color,
@@ -161,7 +163,7 @@ mod tests {
 
     #[test]
     fn lanes_wrap_around_the_palette_so_a_deep_graph_still_has_colors() {
-        assert_eq!(lane_color(0), lane_color(LANES.len()));
+        assert_eq!(lane_color(0), lane_color(6));
         assert_ne!(lane_color(0), lane_color(1));
     }
 }

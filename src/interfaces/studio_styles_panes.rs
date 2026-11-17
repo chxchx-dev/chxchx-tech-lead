@@ -5,12 +5,12 @@ use iced::{Background, Border, Color, Theme};
 
 pub(in crate::interfaces::studio) fn pane(focused: bool) -> impl Fn(&Theme) -> container::Style {
     move |_| container::Style {
-        background: Some(Background::Color(BG_BASE)),
+        background: Some(Background::Color(bg_base())),
         border: Border {
             color: if focused {
-                alpha(ACCENT, 0.32)
+                alpha(accent(), 0.32)
             } else {
-                alpha(BORDER, 0.55)
+                alpha(border(), 0.55)
             },
             width: 1.0,
             radius: 12.0.into(),
@@ -24,7 +24,11 @@ pub(in crate::interfaces::studio) fn pane_title(
     focused: bool,
 ) -> impl Fn(&Theme) -> container::Style {
     move |_| container::Style {
-        background: Some(Background::Color(if focused { BG_PANEL } else { BG_BASE })),
+        background: Some(Background::Color(if focused {
+            bg_panel()
+        } else {
+            bg_base()
+        })),
         border: Border {
             radius: iced::border::Radius::new(12.0).bottom(0.0),
             ..Border::default()
@@ -37,14 +41,14 @@ pub(in crate::interfaces::studio) fn grid(_: &Theme) -> pane_grid::Style {
     let line = |color: Color| pane_grid::Line { color, width: 3.0 };
     pane_grid::Style {
         hovered_region: pane_grid::Highlight {
-            background: Background::Color(alpha(ACCENT, 0.16)),
+            background: Background::Color(alpha(accent(), 0.16)),
             border: Border {
-                color: ACCENT,
+                color: accent(),
                 width: 2.0,
                 radius: 12.0.into(),
             },
         },
-        hovered_split: line(alpha(ACCENT, 0.7)),
-        picked_split: line(ACCENT),
+        hovered_split: line(alpha(accent(), 0.7)),
+        picked_split: line(accent()),
     }
 }

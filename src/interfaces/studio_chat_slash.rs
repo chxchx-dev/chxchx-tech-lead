@@ -84,8 +84,8 @@ pub(super) fn menu(chat: &Chat) -> Option<Element<'_, Message>> {
     let mut list = column![].spacing(1);
     for (index, item) in shown.into_iter().enumerate() {
         let tint = match item.kind {
-            "chat" => design::ACCENT,
-            _ => design::TEXT,
+            "chat" => design::accent(),
+            _ => design::fg(),
         };
         let message = send(Event::Slash(item.name.clone()));
         list = list.push(
@@ -94,10 +94,10 @@ pub(super) fn menu(chat: &Chat) -> Option<Element<'_, Message>> {
                     text(format!("/{}", item.name)).size(12).color(tint),
                     text(item.hint)
                         .size(11)
-                        .color(design::MUTED)
+                        .color(design::muted())
                         .wrapping(iced::widget::text::Wrapping::None),
                     Space::new().width(Fill),
-                    text(item.kind).size(10).color(design::FAINT),
+                    text(item.kind).size(10).color(design::faint()),
                 ]
                 .spacing(10)
                 .align_y(iced::Center),

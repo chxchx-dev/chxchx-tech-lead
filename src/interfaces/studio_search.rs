@@ -89,7 +89,7 @@ fn heading<'a>(label: &'a str) -> iced::widget::Text<'a> {
     text(label)
         .size(10)
         .font(design::UI_BOLD)
-        .color(design::FAINT)
+        .color(design::faint())
 }
 
 pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
@@ -127,7 +127,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     .padding([10, 0])
     .width(state.shell.explorer_width)
     .height(Fill)
-    .style(styles::surface(design::BG_PANEL))
+    .style(styles::surface(design::bg_panel()))
     .into()
 }
 
@@ -153,7 +153,7 @@ fn summary(search: &State) -> Element<'_, Message> {
     } else {
         "Escribe y pulsa Intro. Se omiten carpetas de dependencias y archivos .env.".to_owned()
     };
-    text(line).size(11).color(design::MUTED).into()
+    text(line).size(11).color(design::muted()).into()
 }
 
 fn results(search: &State) -> Element<'_, Message> {
@@ -186,7 +186,7 @@ fn results(search: &State) -> Element<'_, Message> {
                     text(hit.line.unwrap_or(0).to_string())
                         .size(10)
                         .font(design::MONO)
-                        .color(design::FAINT)
+                        .color(design::faint())
                         .width(34)
                         .align_x(iced::alignment::Horizontal::Right),
                     text(&hit.preview)

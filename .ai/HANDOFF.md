@@ -12,6 +12,23 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Conectores MCP (2026-11-16)
+
+- Decisión del dueño: primera entrega con Excel, Power BI, bases de datos (PostgreSQL, SQLite), Word/Google Sheets y servidor propio; configuración **por proyecto**.
+- Catálogo en datos: `catalog/connectors/*.toml` (embebido por `build.rs`, parseado en `features/mcp_connectors.rs`). Cada entrada dice comando (y forma `cmd /c` de Windows), requisitos (`npx`/`uvx`), variables de entorno (secretas o no) y parámetros (`{db_path}`). Los comandos salen de listados de terceros y del repo de cada proyecto: **Power BI (`--start`) y SQLite no están verificados contra el README oficial**; la vista previa muestra siempre el comando exacto. Faltan SQL Server y PowerPoint (sin paquete verificado); el «servidor propio» cubre cualquier otro.
+- Escritura: `integrations/mcp_files.rs` (JSON de Claude `.mcp.json` y OpenCode `opencode.json`) y `mcp_codex::merge_servers` (TOML de Codex) son funciones de texto puras; `features/mcp_connectors_plan.rs` planifica/aplica con la transacción compartida (`apply_changes`, rollback si falla). Nunca se sobrescribe un servidor del mismo nombre configurado distinto, y al quitar solo se toca lo que coincide con lo que escribió ChxChx. Un secreto solo se **nombra** (`${VAR}` en Claude, `{env:VAR}` en OpenCode, `env_vars` en Codex).
+- Respaldo propio en `<home>/backups-mcp/<proyecto>/<tiempo>/` (a propósito fuera de `backups/`: `rollback` toma el último de ahí y un respaldo sin AGENTS.md lo rompería). No lo restaura `rollback`; deshacer = `connectors remove`.
+- Superficies: CLI `connectors` (`cli_connectors.rs`), TUI página Conectar (`tui_connectors.rs`, con prompt de parámetros), Studio sección en *Herramientas / MCP* (`studio_connectors.rs`). `serde_json` ahora con `preserve_order` para no reordenar los JSON del usuario.
+- Pendiente: probar de verdad contra Claude Code/Codex/OpenCode (que arranquen los servidores), verificar comandos de Power BI/SQLite, SQL Server y PowerPoint, ADR corto, y mostrar los conectores en la ayuda del chat.
+
+## 0.6.3: ajustes, temas y scroll de páginas (2026-11-16)
+
+- Ajustes de Studio: `studio_settings.rs` (página), `studio_themes.rs` (6 paletas + acento; la paleta activa es global y los tokens de `design::` ahora son funciones), `studio_keymap.rs` (atajos remapeables; el listener es una función global). Se guardan en `studio-preferences.json` (`appearance`, `shortcuts`). Menú Archivo → Preferencias es un submenú (`Entry::Submenu`).
+- Chat: historial ↑/↓, selección de texto por mensaje (editor de solo lectura), copiar con aviso, mensajes largos plegados, Markdown incremental.
+- Catálogo de modelos (Python, `agent_catalog.py`): versiones de Claude y modelos de `opencode.json`; `opencode models` con 20 s de margen.
+- Scroll: medido con XTEST bajo X11 en el Inicio, ~16,5 → ~8 ms/notch. Cambios en `vendor/iced_tiny_skia/src/engine.rs`: `fill_opaque_rounded` solo suaviza esquinas, `adjust_clip_mask` reescribe solo la zona sucia (hay prueba de equivalencia de píxeles). Degradados → color liso. Al subir iced hay que reaplicar los parches `ChxChx patch`.
+- Pendiente: el terminal y el resaltado del editor no siguen el tema; las pistas de atajo de los menús son fijas; `claude-fable-5-1` y los ids 4.x del selector de Claude no están verificados.
+
 ## Scroll más ligero (2026-11-16)
 
 - Medido con el Studio real bajo X11 inyectando rueda (XTEST) y muestreando pilas: el scroll del editor costaba ~13 ms de CPU por notch, casi todo en `tiny_skia::fill_path` con antialiasing y máscara. Causa: `iced_tiny_skia` dibuja **todo** cuadro de fondo como camino con AA; la tarjeta redondeada (radio 12, borde) de todo el grupo de pestañas (~1,4 M px) se rellenaba entera en cada fotograma.

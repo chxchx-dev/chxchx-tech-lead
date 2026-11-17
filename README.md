@@ -13,7 +13,7 @@
   <a href="https://github.com/chxchx-dev/chxchx-tech-lead/actions/workflows/rust-product.yml"><img alt="Build" src="https://github.com/chxchx-dev/chxchx-tech-lead/actions/workflows/rust-product.yml/badge.svg"></a>
   <img alt="Rust" src="https://img.shields.io/badge/Rust-2024-orange?logo=rust">
   <img alt="Plataformas" src="https://img.shields.io/badge/Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-informational">
-  <img alt="Versión" src="https://img.shields.io/badge/versi%C3%B3n-0.6.2-blue">
+  <img alt="Versión" src="https://img.shields.io/badge/versi%C3%B3n-0.6.3-blue">
 </p>
 
 <p align="center">
@@ -64,6 +64,9 @@ Cada agente se abre de dos formas, lado a lado: un **chat visual** y una **termi
   agente va directo a lo que muestra.
 - **Modelos locales (Ollama):** una pestaña que diagnostica tu equipo (memoria, GPU, disco), recomienda los modelos
   que caben y los instala y conecta a OpenCode con progreso, vista previa y respaldo.
+- **Conectores MCP:** da manos a tus agentes en tus apps —Excel, Power BI, Word, Google Sheets, PostgreSQL, SQLite o un servidor propio—
+  desde la página *Herramientas / MCP*. Se configuran en el proyecto para Claude Code, Codex y OpenCode, con vista previa del
+  archivo exacto, respaldo, y sin guardar nunca una clave (solo el nombre de la variable de entorno).
 - **Terminal real:** emulación VT completa con colores, historial, teclado entero y varias sesiones.
 - **Pestañas y paneles, como en VS Code:** chats, terminales y el editor conviven como pestañas de un mismo grupo;
   saca una pestaña a su propio panel con un clic, o arrastra un panel al borde de otro para dividir y al centro
@@ -93,6 +96,8 @@ previsualiza antes de aplicarse.
   <img src="assets/screenshots/studio-catalog.png" alt="Catálogo" width="100%">
 </p>
 
+Guía de los conectores (Excel, Power BI, bases de datos…): [CONECTORES.md](CONECTORES.md).
+
 Además: una **ruta de aprendizaje** en la página de inicio que se marca sola según lo que ya hiciste.
 
 ## TUI
@@ -101,8 +106,9 @@ El mismo producto dentro de tu terminal, con ocho páginas (`Tab` o `1`-`8`, tam
 de cambiar nada. Abre con `chxchx-tech tui .`.
 
 - **Inicio:** el proyecto, su estado, la tecnología detectada y los primeros pasos con una barra de progreso.
-- **Preparar** y **Conectar:** preparar el proyecto, dar o revocar la confianza, restaurar un respaldo y conectar MCP; cada
-  acción abre una vista previa y `y` la aplica.
+- **Preparar** y **Conectar:** preparar el proyecto, dar o revocar la confianza, restaurar un respaldo y conectar MCP; en
+  *Conectar* eliges Excel, Power BI, bases de datos… y `Intro` añade o quita el conector. Cada acción abre una vista previa y
+  `y` la aplica.
 - **Catálogo:** skills, Tech Packs y Mods con las recomendadas para tu stack (★); `Intro` activa o quita, `a` aplica las
   recomendadas.
 - **Agentes:** Claude Code, Codex y OpenCode; `Intro` abre el agente en esta misma terminal y vuelves al panel al salir.
@@ -134,7 +140,8 @@ símbolos y tablas; si la rediriges o usas `NO_COLOR`, sigue siendo el texto pla
 | `rollback` | Restaura los archivos administrados desde el último respaldo |
 | `workspace` | Gestiona la confianza local del proyecto |
 | `skills` · `packs` · `mods` | Catálogo de skills, Tech Packs y Mods |
-| `integrate` | Configura servidores MCP para los clientes instalados |
+| `integrate` | Configura los servidores de memoria y código (basic-memory, Serena) |
+| `connectors` (`conn`) | Conecta tus agentes con Excel, Power BI, bases de datos… (`list`, `add`, `remove`, `custom`); ver [CONECTORES.md](CONECTORES.md) |
 | `doctor` | Diagnostica herramientas y configuración sin ejecutar comandos |
 | `projects` | Proyectos registrados |
 | `tui` · `studio` | Abren las otras interfaces (también `chxchx-tech` a secas) |
@@ -203,6 +210,7 @@ libera, recorta lo que el chat no necesita y lanza los agentes con ajustes que r
 ├── scripts/        Arranque y validación
 ├── MANUAL.md       Manual técnico: capacidades, seguridad y decisiones
 ├── MEMORIA.md      Guía de gestión de memoria
+├── CONECTORES.md   Guía de los conectores MCP (Excel, Power BI, bases de datos…)
 └── old-version/    Solo el CLI de Python que aún sirve el chat, los modelos locales y el actualizador
 ```
 
@@ -219,6 +227,6 @@ los procesos e integraciones externas viven en `integrations/`. Más reglas en [
 
 ## Estado
 
-Versión `0.6.2`, el producto en Rust. Pendiente: portar `agent chat` y los modelos locales a Rust (hoy los sirve el CLI de Python de `old-version/`), guardar la disposición de paneles entre sesiones y completar la QA en macOS y Linux.
+Versión `0.6.3`, el producto en Rust. Pendiente: portar `agent chat` y los modelos locales a Rust (hoy los sirve el CLI de Python de `old-version/`), guardar la disposición de paneles entre sesiones y completar la QA en macOS y Linux.
 `agent chat` a Rust (hoy usa el CLI de Python), guardar la disposición de paneles entre sesiones y completar la QA
 en macOS y Linux.

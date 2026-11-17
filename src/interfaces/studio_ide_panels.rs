@@ -8,7 +8,7 @@ fn heading<'a>(label: &'a str) -> iced::widget::Text<'a> {
     text(label)
         .size(10)
         .font(design::UI_BOLD)
-        .color(design::FAINT)
+        .color(design::faint())
 }
 
 pub(super) fn explorer(state: &Dashboard) -> Element<'_, Message> {
@@ -19,7 +19,7 @@ pub(super) fn explorer(state: &Dashboard) -> Element<'_, Message> {
         heading("EXPLORADOR"),
         Space::new().width(Fill),
         styles::tip(
-            button(icons::icon("refresh", design::MUTED, 14.0))
+            button(icons::icon("refresh", design::muted(), 14.0))
                 .padding(4)
                 .style(styles::ghost(false))
                 .on_press(Message::Editor(Event::RefreshTree)),
@@ -29,7 +29,7 @@ pub(super) fn explorer(state: &Dashboard) -> Element<'_, Message> {
     ]
     .align_y(iced::Center);
     let project = row![
-        icons::icon("chevron-down", design::MUTED, 12.0),
+        icons::icon("chevron-down", design::muted(), 12.0),
         text(chrome::project_name(state).to_uppercase())
             .size(11)
             .font(design::UI_BOLD),
@@ -55,7 +55,7 @@ pub(super) fn explorer(state: &Dashboard) -> Element<'_, Message> {
     .padding([10, 0])
     .width(state.shell.explorer_width)
     .height(Fill)
-    .style(styles::surface(design::BG_PANEL))
+    .style(styles::surface(design::bg_panel()))
     .into()
 }
 
@@ -84,10 +84,10 @@ fn folder_rows<'a>(
             let badge = state.git.badges.get(&key).copied();
             let changed = entry.directory && state.git.dirty_dirs.contains(&key);
             let tint = badge.map(|letter| match letter {
-                'M' => design::WARNING,
-                'N' => design::SUCCESS,
-                'D' | '!' => design::DANGER,
-                _ => design::BRAND_CYAN,
+                'M' => design::warning(),
+                'N' => design::success(),
+                'D' | '!' => design::danger(),
+                _ => design::brand_cyan(),
             });
             let (chevron, icon): (Element<'a, Message>, _) = if entry.directory {
                 let (arrow, folder_icon) = if expanded {
@@ -96,8 +96,8 @@ fn folder_rows<'a>(
                     ("chevron-right", "folder")
                 };
                 (
-                    icons::icon(arrow, design::FAINT, 11.0).into(),
-                    icons::icon(folder_icon, design::BRAND_BLUE, 15.0),
+                    icons::icon(arrow, design::faint(), 11.0).into(),
+                    icons::icon(folder_icon, design::brand_blue(), 15.0),
                 )
             } else {
                 let kind = file_types::of(&entry.relative);
@@ -114,16 +114,16 @@ fn folder_rows<'a>(
                         icon,
                         text(name)
                             .size(12)
-                            .color(tint.unwrap_or(design::TEXT))
+                            .color(tint.unwrap_or(design::fg()))
                             .wrapping(iced::widget::text::Wrapping::None),
                         Space::new().width(Fill),
                         text(badge.map(String::from).unwrap_or_default())
                             .size(10)
                             .font(design::UI_BOLD)
-                            .color(tint.unwrap_or(design::TEXT)),
+                            .color(tint.unwrap_or(design::fg())),
                         text(if changed { "●" } else { "" })
                             .size(8)
-                            .color(design::WARNING),
+                            .color(design::warning()),
                     ]
                     .spacing(6)
                     .align_y(iced::Center),

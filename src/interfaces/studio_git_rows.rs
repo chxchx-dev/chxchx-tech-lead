@@ -14,11 +14,11 @@ pub(super) enum Kind {
 
 fn tint(badge: char) -> iced::Color {
     match badge {
-        'M' => design::WARNING,
-        'N' => design::SUCCESS,
-        'D' | '!' => design::DANGER,
-        'R' | 'C' => design::BRAND_CYAN,
-        _ => design::MUTED,
+        'M' => design::warning(),
+        'N' => design::success(),
+        'D' | '!' => design::danger(),
+        'R' | 'C' => design::brand_cyan(),
+        _ => design::muted(),
     }
 }
 
@@ -37,7 +37,7 @@ pub(super) fn small<'a>(
     message: Message,
 ) -> Element<'a, Message> {
     styles::tip(
-        button(icons::icon(icon, design::MUTED, 13.0))
+        button(icons::icon(icon, design::muted(), 13.0))
             .padding(4)
             .style(styles::ghost(false))
             .on_press(message),
@@ -85,7 +85,7 @@ pub(super) fn row_for(entry: &GitEntry, kind: Kind) -> Element<'_, Message> {
                     .wrapping(iced::widget::text::Wrapping::None),
                 text(folder)
                     .size(10)
-                    .color(design::FAINT)
+                    .color(design::faint())
                     .wrapping(iced::widget::text::Wrapping::None),
             ]
             .spacing(6)
@@ -142,7 +142,7 @@ pub(super) fn section<'a>(
     let mut header = row![
         icons::icon(icon, color, 14.0),
         text(title).size(12).font(design::UI_BOLD),
-        text(count.to_string()).size(11).color(design::FAINT),
+        text(count.to_string()).size(11).color(design::faint()),
         Space::new().width(Fill),
     ]
     .spacing(6)
@@ -154,7 +154,7 @@ pub(super) fn section<'a>(
         container(Space::new())
             .width(Fill)
             .height(1)
-            .style(styles::surface(design::BORDER)),
+            .style(styles::surface(design::border())),
         header,
         column(rows).spacing(1)
     ]

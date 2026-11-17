@@ -27,6 +27,10 @@ const GROUPS: &[(&str, &[Entry])] = &[
         "SALUD",
         &[("diagnostics", "Diagnóstico", Page::Diagnostics)],
     ),
+    (
+        "PERSONALIZAR",
+        &[("settings", "Ajustes: temas y atajos", Page::Settings)],
+    ),
 ];
 
 const DOCUMENTS: &[(&str, &str)] = &[
@@ -41,7 +45,7 @@ fn heading<'a>(label: &'a str) -> Element<'a, Message> {
         text(label)
             .size(10)
             .font(design::UI_BOLD)
-            .color(design::FAINT),
+            .color(design::faint()),
     )
     .padding([8, 8])
     .into()
@@ -54,9 +58,9 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         for (icon, label, page) in *entries {
             let active = state.page == *page && state.editor.home;
             let tint = if active {
-                design::ACCENT
+                design::accent()
             } else {
-                design::MUTED
+                design::muted()
             };
             list = list.push(link(icon, tint, label, active, Message::Navigate(*page)));
         }
@@ -65,7 +69,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     for (label, path) in DOCUMENTS {
         list = list.push(link(
             "file-text",
-            design::BRAND_CYAN,
+            design::brand_cyan(),
             label,
             false,
             Message::Editor(Event::Open(PathBuf::from(path))),
@@ -77,7 +81,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
                 text("ESPACIO DE TRABAJO")
                     .size(10)
                     .font(design::UI_BOLD)
-                    .color(design::FAINT)
+                    .color(design::faint())
             )
             .padding([0, 12]),
             styles::vscroll(container(list).padding([0, 6])).height(Fill),
@@ -88,7 +92,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     .padding([10, 0])
     .width(state.shell.explorer_width)
     .height(Fill)
-    .style(styles::surface(design::BG_PANEL))
+    .style(styles::surface(design::bg_panel()))
     .into()
 }
 
@@ -96,7 +100,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
 fn project_card(state: &Dashboard) -> Element<'_, Message> {
     let mut card = column![
         row![
-            icons::icon("folder", design::BRAND_BLUE, 15.0),
+            icons::icon("folder", design::brand_blue(), 15.0),
             text(chrome::project_name(state))
                 .size(13)
                 .font(design::UI_BOLD)
@@ -110,7 +114,7 @@ fn project_card(state: &Dashboard) -> Element<'_, Message> {
         let fact = |icon: &'static str, tint: iced::Color, label: &'static str| {
             row![
                 icons::icon(icon, tint, 12.0),
-                text(label).size(11).color(design::MUTED)
+                text(label).size(11).color(design::muted())
             ]
             .spacing(6)
             .align_y(iced::Center)
@@ -119,20 +123,20 @@ fn project_card(state: &Dashboard) -> Element<'_, Message> {
             .push(
                 text(format!("Perfil {}", overview.detection.profile))
                     .size(11)
-                    .color(design::MUTED),
+                    .color(design::muted()),
             )
             .push(if trusted {
-                fact("shield", design::SUCCESS, "Proyecto de confianza")
+                fact("shield", design::success(), "Proyecto de confianza")
             } else {
-                fact("warning", design::WARNING, "Permisos por revisar")
+                fact("warning", design::warning(), "Permisos por revisar")
             })
             .push(if overview.project.git_repository {
-                fact("branch", design::MUTED, "Repositorio Git")
+                fact("branch", design::muted(), "Repositorio Git")
             } else {
-                fact("branch", design::FAINT, "Sin repositorio Git")
+                fact("branch", design::faint(), "Sin repositorio Git")
             });
     } else if state.overview_loading {
-        card = card.push(text("Leyendo el proyecto…").size(11).color(design::MUTED));
+        card = card.push(text("Leyendo el proyecto…").size(11).color(design::muted()));
     }
     container(card)
         .padding(12)
@@ -144,10 +148,10 @@ fn project_card(state: &Dashboard) -> Element<'_, Message> {
 fn pending<'a>() -> Element<'a, Message> {
     container(
         row![
-            icons::icon("sparkle", design::ACCENT, 13.0),
+            icons::icon("sparkle", design::accent(), 13.0),
             text("Agentes y Git: port pendiente")
                 .size(11)
-                .color(design::MUTED)
+                .color(design::muted())
         ]
         .spacing(7)
         .align_y(iced::Center),

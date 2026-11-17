@@ -1,0 +1,10 @@
+name = "word"
+title = "Word"
+category = "Office"
+description = "Crea y edita documentos de Word (.docx): párrafos, estilos, tablas, imágenes y comentarios."
+docs = "https://github.com/GongRzhe/Office-Word-MCP-Server"
+origin = "comunidad"
+requires = ["uvx"]
+command = ["uvx", "--from", "office-word-mcp-server", "word_mcp_server"]
+platforms = ["windows", "macos", "linux"]
+note = "Trabaja sobre archivos .docx; no necesita Word instalado."

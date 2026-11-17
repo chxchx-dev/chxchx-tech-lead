@@ -104,6 +104,11 @@ pub fn mods() -> &'static [Mod] {
     })
 }
 
+/// The raw `(id, manifest, _)` entries of the MCP connectors (parsed by `mcp_connectors`).
+pub(crate) fn connector_manifests() -> &'static [(&'static str, &'static str, &'static str)] {
+    data::CONNECTORS
+}
+
 pub fn skill(name: &str) -> Option<&'static Skill> {
     skills()
         .iter()
