@@ -563,7 +563,7 @@ fn memory_bytes() -> (u64, u64) {
                     .saturating_mul(page)
             })
             .unwrap_or(0);
-        return (total, free);
+        (total, free)
     }
     #[cfg(windows)]
     {
