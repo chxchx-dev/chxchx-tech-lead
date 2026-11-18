@@ -6,6 +6,7 @@ pub mod features {
     pub mod catalog;
     pub mod catalog_view;
     pub mod chat_model;
+    pub mod chat_state;
     pub mod doctor;
     pub mod git;
     pub mod mcp_connectors;
@@ -34,6 +35,9 @@ pub mod features {
     pub mod project_trust;
     pub mod startup_log;
     pub mod studio_preferences;
+    pub mod workspace_lifecycle;
+    pub mod workspace_processes;
+    pub mod workspace_resources;
     #[cfg(feature = "terminal")]
     pub mod workspace_terminal;
 }

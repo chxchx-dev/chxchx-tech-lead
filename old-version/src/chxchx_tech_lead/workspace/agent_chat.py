@@ -7,11 +7,9 @@ session journal are the same ones the terminal agent pane uses.
 
 from __future__ import annotations
 
-import json
 import os
 import secrets
 import subprocess
-import sys
 import threading
 from collections import deque
 from collections.abc import Callable, Iterator
@@ -35,12 +33,10 @@ from .chat_process import delete_opencode_session, drain, watch_cancel
 from .chat_context import capture_after_session
 from .chat_first_message import first_message
 from .chat_release import release_context
-from .chat_resume import resolve_resume
+from .chat_resume import load_resume_recap, resolve_resume
+from .chat_stream_protocol import json_line_emitter, rust_normalizes
 from .chat_state import begin_turn, end_turn
 from .service import WorkspaceOperationError
-
-SCHEMA = "chxchx.agent-event"
-SCHEMA_VERSION = 1
 
 Emit = Callable[[dict[str, Any]], None]
 # Providers that can pause a turn to ask the person (Claude: stream-json control requests, Codex: app-server,
@@ -105,6 +101,8 @@ def plan_chat_turn(
     allow: tuple[str, ...] = (),
     live: bool = False,
     auto_release: bool = True,
+    resume_decided_by_rust: bool = False,
+    resume_recap: str = "",
 ) -> ChatTurnPlan:
     if lean:
         mode = "read-only"  # advice only: a lean turn must never be able to change files
@@ -134,8 +132,8 @@ def plan_chat_turn(
     major = opencode_major(resolve_executable(config.command[0])) if provider == "OpenCode" else None
     can_live = live and not lean and provider in LIVE_PROVIDERS
     continued_from, session_id = (session_id, None) if handoff else (None, session_id)
-    recap = ""
-    if not lean and not handoff:
+    recap = resume_recap if resume_decided_by_rust else ""
+    if not resume_decided_by_rust and not lean and not handoff:
         session_id, recap = resolve_resume(root, provider, agent_id, session_id, config.command[0])
     try:
         argv = turn_command(config.command, mode=mode, session_id=session_id, model=model, effort=effort,
@@ -163,7 +161,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
         emit({"type": "start", "agent": plan.agent_id, "provider": plan.provider, "mode": plan.mode})
     watch = UsageWatch(plan.provider, plan.model)
     user_text, replies = prompt, []
-    remember = not plan.lean and not housekeeping  # the visual chat keeps its conversation across restarts
+    # Rust Studio persists its visible transcript itself; avoid competing writes from this adapter.
+    remember = not plan.lean and not housekeeping and os.environ.get("CHXCHX_RUST_CHAT_STATE") != "1"
 
     def notify(message: str, is_error: bool) -> None:
         emit({"type": "notice", "message": message, "error": is_error})
@@ -185,6 +184,10 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     if remember:
         _remember(begin_turn, plan, plan.session_id or plan.continued_from, user_text)
     started_at = datetime.now(timezone.utc)
+    provider_env = with_search_path({**os.environ, **plan.env})
+    # These markers belong to the ChxChx adapter and must not reach provider processes.
+    provider_env.pop("CHXCHX_RUST_CHAT_STATE", None)
+    provider_env.pop("CHXCHX_RUST_AGENT_STREAM", None)
     try:
         process = subprocess.Popen(
             argv,
@@ -196,7 +199,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
             encoding="utf-8",
             errors="replace",
             start_new_session=os.name != "nt",
-            env=with_search_path({**os.environ, **plan.env}),
+            env=provider_env,
         )
     except OSError as exc:
         emit({"type": "error", "message": f"No pude iniciar {argv[0]}: {exc}"})
@@ -221,11 +224,14 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     except OSError:
         pass
 
-    def deliver(event: dict[str, Any]) -> None:
+    rust_stream = rust_normalizes(plan.provider, live=plan.live)
+
+    def deliver(event: dict[str, Any], *, publish: bool = True) -> None:
         event = watch.observe(event, getattr(live, "model_seen", None))
         if event["type"] == "message":
             replies.append(str(event.get("text", "")))
-        emit(event)
+        if publish:
+            emit(event)
 
     session_id = plan.session_id
     assert process.stdout is not None
@@ -236,16 +242,22 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
             if live.done:
                 live.finish()  # the turn is over: let the agent exit
             if controls is not None:
-                for event in controls:
-                    if event["type"] == "session":
-                        session_id = event["session_id"]
-                    if not (cancelled.is_set() and event["type"] == "error"):  # stopping it is not a failure
-                        deliver(event)
+                if rust_stream and plan.provider == "Claude" and record.get("type") == "control_request":
+                    emit({"type": "provider_record", "provider": plan.provider, "record": record})
+                else:
+                    for event in controls:
+                        if event["type"] == "session":
+                            session_id = event["session_id"]
+                        if not (cancelled.is_set() and event["type"] == "error"):  # stopping it is not a failure
+                            deliver(event)
                 continue
-        for event in normalize(plan.provider, record):
+        normalized = normalize(plan.provider, record)
+        for event in normalized:
             if event["type"] == "session":
                 session_id = event["session_id"]
-            deliver(event)
+            deliver(event, publish=not rust_stream)
+        if rust_stream:
+            emit({"type": "provider_record", "provider": plan.provider, "record": record})
     exit_code = process.wait()
     if plan.lean:
         remove_staged_images(plan.project_root, staged)
@@ -282,12 +294,3 @@ def _remember(write: Callable[..., None], plan: ChatTurnPlan, session_id: str | 
         write(plan.project_root, plan.agent_id, plan.provider, session_id, payload)
     except OSError:
         pass  # a read-only project must not stop the chat; it just will not be restored
-
-
-def json_line_emitter(stream: IO[str] = sys.stdout) -> Emit:
-    def emit(event: dict[str, Any]) -> None:
-        payload = {"schema": SCHEMA, "schema_version": SCHEMA_VERSION, **event}
-        stream.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        stream.flush()
-
-    return emit

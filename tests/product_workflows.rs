@@ -158,6 +158,258 @@ fn trust_requires_apply_and_untrust_removes_only_the_project_entry() {
     assert!(sandbox.home.join("backups/global").is_dir());
 }
 
+#[cfg(unix)]
+#[test]
+fn configured_processes_require_trust_and_support_dry_run_start_stop_and_listing() {
+    let sandbox = Sandbox::new();
+    fs::create_dir_all(sandbox.path(".ai")).unwrap();
+    fs::write(
+        sandbox.path(".ai/chxchx-tech.toml"),
+        "version=2\n[workspace]\nname='fixture'\n[[workspace.processes]]\nid='worker'\nlabel='Worker'\ncommand=['/bin/sleep','30']\ncwd='.'\n",
+    ).unwrap();
+
+    let denied = sandbox.cli(
+        ["process", "start", "worker", "--path"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert!(!denied.status.success());
+    assert!(
+        text(&denied).contains("no es confiable"),
+        "{}",
+        text(&denied)
+    );
+
+    let trust = sandbox.cli(
+        ["workspace", "trust", "--apply"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert_success(&trust);
+    let dry = sandbox.cli(
+        ["process", "start", "worker", "--path"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned(), "--dry-run".into()]),
+    );
+    assert!(assert_success(&dry).contains("DRY RUN"));
+    assert!(!sandbox.home.join("workspace-state.json").exists());
+
+    let start = sandbox.cli(
+        ["process", "start", "worker", "--path"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    let started = assert_success(&start);
+    assert!(started.contains("Iniciado `worker`"), "{started}");
+    let duplicate = sandbox.cli(
+        ["process", "start", "worker", "--path"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    let duplicate_text = assert_success(&duplicate);
+    assert!(
+        duplicate_text.contains("ya está ejecutándose"),
+        "{duplicate_text}\nstate: {}",
+        fs::read_to_string(sandbox.home.join("workspace-state.json")).unwrap_or_default()
+    );
+    let listed = sandbox.cli(
+        ["process", "list"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert!(assert_success(&listed).contains("worker\tRunning"));
+    let stopped = sandbox.cli(
+        ["process", "stop", "worker", "--path"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert!(assert_success(&stopped).contains("Detenido `worker`"));
+}
+
+#[cfg(unix)]
+#[test]
+fn short_lived_configured_process_records_its_exit_and_exposes_a_bounded_log_tail() {
+    let sandbox = Sandbox::new();
+    fs::create_dir_all(sandbox.path(".ai")).unwrap();
+    fs::write(
+        sandbox.path(".ai/chxchx-tech.toml"),
+        r#"version=2
+[workspace]
+name='fixture'
+[[workspace.processes]]
+id='worker'
+label='Worker'
+command=["/bin/sh","-c","printf 'one\\ntwo\\nthree\\n'"]
+cwd='.'
+"#,
+    )
+    .unwrap();
+    let trust = sandbox.cli(
+        ["workspace", "trust", "--apply"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert_success(&trust);
+
+    let started = sandbox.cli(
+        ["process", "start", "worker", "--path"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert!(assert_success(&started).contains("terminó durante el inicio"));
+
+    let log = sandbox.cli(
+        ["process", "log", "worker", "--path"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([
+                sandbox.project.as_os_str().to_owned(),
+                "--lines".into(),
+                "2".into(),
+            ]),
+    );
+    assert_eq!(assert_success(&log).trim(), "two\nthree");
+
+    let listed = sandbox.cli(
+        ["process", "list"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert!(assert_success(&listed).contains("worker\tExited"));
+}
+
+#[test]
+fn resources_overview_matches_registered_projects_without_writing_workspace_state() {
+    let sandbox = Sandbox::new();
+    let other = sandbox.root.join("other-project");
+    fs::create_dir(&other).unwrap();
+    fs::write(
+        sandbox.home.join("projects.json"),
+        serde_json::json!({
+            "projects": [{"alias": "other-app", "name": "Other", "path": other}]
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let output = sandbox.cli(command(&["resources", "--json"], &sandbox.project));
+    let payload: serde_json::Value =
+        serde_json::from_str(&assert_success(&output)).expect("resources prints JSON");
+
+    assert_eq!(payload["schema"], "chxchx.resources-overview");
+    assert_eq!(payload["schema_version"], 1);
+    assert!(payload["system"]["memory_total_bytes"].as_u64().unwrap() > 0);
+    let projects = payload["projects"].as_array().unwrap();
+    assert_eq!(projects.len(), 2);
+    assert!(projects.iter().any(|project| {
+        project["alias"] == "other-app" && project["path"] == other.display().to_string()
+    }));
+    assert!(projects.iter().any(|project| {
+        project["path"] == sandbox.project.display().to_string() && project["max_agents"] == 2
+    }));
+    assert!(
+        !sandbox.home.join("workspace-state.json").exists(),
+        "resource inspection must stay read-only"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn workspace_lifecycle_previews_auto_start_and_preserves_active_suspended_and_stopped_states() {
+    let sandbox = Sandbox::new();
+    fs::create_dir_all(sandbox.path(".ai")).unwrap();
+    fs::write(
+        sandbox.path(".ai/chxchx-tech.toml"),
+        "version=2\n[workspace]\nname='Lifecycle fixture'\nauto_start=true\n[[workspace.processes]]\nid='worker'\nlabel='Worker'\ncommand=['/bin/sleep','30']\ncwd='.'\nauto_start=true\n",
+    )
+    .unwrap();
+    let trust = sandbox.cli(
+        ["workspace", "trust", "--apply"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert_success(&trust);
+
+    let preview = sandbox.cli(
+        ["workspace", "start", "--dry-run"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert!(assert_success(&preview).contains("DRY RUN: iniciar workspace"));
+    assert!(!sandbox.home.join("workspace-state.json").exists());
+
+    let start = sandbox.cli(
+        ["workspace", "start"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert!(assert_success(&start).contains("Iniciado `worker`"));
+    let state_path = sandbox.home.join("workspace-state.json");
+    let state: serde_json::Value = serde_json::from_slice(&fs::read(&state_path).unwrap()).unwrap();
+    let key = sandbox
+        .project
+        .canonicalize()
+        .unwrap()
+        .display()
+        .to_string();
+    assert_eq!(state["workspaces"][&key]["status"], "ACTIVE");
+    assert_eq!(state["workspaces"][&key]["project_path"], key);
+    assert_eq!(
+        state["workspaces"][&key]["session_name"],
+        "Lifecycle-fixture"
+    );
+
+    let suspend = sandbox.cli(
+        ["workspace", "suspend"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert_success(&suspend);
+    let suspended: serde_json::Value =
+        serde_json::from_slice(&fs::read(&state_path).unwrap()).unwrap();
+    assert_eq!(suspended["workspaces"][&key]["status"], "SUSPENDED");
+
+    let resume = sandbox.cli(
+        ["workspace", "resume"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert_success(&resume);
+    let resumed: serde_json::Value =
+        serde_json::from_slice(&fs::read(&state_path).unwrap()).unwrap();
+    assert_eq!(resumed["workspaces"][&key]["status"], "ACTIVE");
+
+    let stop = sandbox.cli(
+        ["workspace", "stop"]
+            .into_iter()
+            .map(OsString::from)
+            .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert_success(&stop);
+    let stopped: serde_json::Value =
+        serde_json::from_slice(&fs::read(&state_path).unwrap()).unwrap();
+    assert_eq!(stopped["workspaces"][&key]["status"], "STOPPED");
+    assert_eq!(
+        stopped["workspaces"][&key]["process_ids"],
+        serde_json::json!([])
+    );
+}
+
 #[test]
 fn project_catalog_treats_missing_as_empty_and_preserves_invalid_json() {
     let sandbox = Sandbox::new();
@@ -494,6 +746,52 @@ fn commands_of_the_legacy_cli_are_handed_over_with_their_arguments_and_exit_code
         "{}",
         text(&looped)
     );
+}
+
+#[test]
+fn chat_state_restore_and_reset_are_served_by_rust_without_a_python_cli() {
+    let sandbox = Sandbox::new();
+    let state_dir = sandbox.path(".ai/chat-state");
+    fs::create_dir_all(&state_dir).unwrap();
+    fs::write(
+        state_dir.join("codex.json"),
+        r#"{"schema":"chxchx.chat-state","schema_version":1,"agent":"codex","provider":"Codex","session_id":"thread-1","updated":"2026-11-17T00:00:00Z","verified":true,"messages":[{"role":"user","text":"¿En qué íbamos?"},{"role":"assistant","text":"Migrábamos el CLI."},{"role":"tool","text":"se descarta"}]}"#,
+    )
+    .unwrap();
+
+    let restore = sandbox.cli([
+        "agent".into(),
+        "chat-state".into(),
+        "codex".into(),
+        "--path".into(),
+        sandbox.project.as_os_str().to_owned(),
+        "--restore".into(),
+    ]);
+    assert_success(&restore);
+    let payload: serde_json::Value = serde_json::from_slice(&restore.stdout).unwrap();
+    assert_eq!(payload["schema"], "chxchx.chat-state");
+    assert_eq!(payload["session_id"], "thread-1");
+    assert_eq!(payload["messages"].as_array().unwrap().len(), 2);
+    assert!(
+        payload.get("verified").is_none(),
+        "verification is internal"
+    );
+    let saved: serde_json::Value =
+        serde_json::from_slice(&fs::read(state_dir.join("codex.json")).unwrap()).unwrap();
+    assert_eq!(saved["verified"], false);
+
+    let reset = sandbox.cli([
+        "agent".into(),
+        "chat-state".into(),
+        "codex".into(),
+        "--path".into(),
+        sandbox.project.as_os_str().to_owned(),
+        "--reset".into(),
+    ]);
+    assert_success(&reset);
+    let cleared: serde_json::Value = serde_json::from_slice(&reset.stdout).unwrap();
+    assert_eq!(cleared["messages"], serde_json::json!([]));
+    assert!(!state_dir.join("codex.json").exists());
 }
 
 #[test]

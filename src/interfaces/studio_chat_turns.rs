@@ -69,6 +69,7 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         agent: chat.agent.id.clone(),
         project: root,
         prompt: with_images(prompt, attached.len()),
+        resume_recap: chat.resume_recap.clone(),
         images: attached.iter().map(|i| i.prepared.path.clone()).collect(),
         session: Some(chat.model.session_id.clone()).filter(|s| !s.is_empty()),
         mode: chat.mode.clone(),
@@ -77,15 +78,24 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         model: chat.model_id.clone(),
         effort: chat.effort.clone(),
     };
+    let visible_prompt = shown(display.unwrap_or(prompt), attached.len());
     match Turn::start(&cli, &spec) {
         Ok(turn) => {
             if show {
-                chat.model
-                    .add_user(shown(display.unwrap_or(prompt), attached.len()));
+                let _ = crate::features::chat_state::begin_turn(
+                    &spec.project,
+                    &spec.agent,
+                    state_provider(chat.agent.provider),
+                    spec.session.as_deref(),
+                    &visible_prompt,
+                );
+                chat.model.add_user(visible_prompt);
+                chat.resume_recap.clear();
                 if !attached.is_empty() {
                     chat.sent.push((chat.model.entries.len() - 1, attached));
                 }
             }
+            chat.turn_replies.clear();
             chat.turn = Some(turn);
             chat.turn_started = Some(std::time::Instant::now());
             sync(chat);
@@ -96,6 +106,15 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
             state.message = error;
             false
         }
+    }
+}
+
+pub(super) fn state_provider(provider: crate::features::agents::Provider) -> &'static str {
+    match provider {
+        crate::features::agents::Provider::Claude => "Claude",
+        crate::features::agents::Provider::Codex => "Codex",
+        crate::features::agents::Provider::OpenCode => "OpenCode",
+        crate::features::agents::Provider::Other => "Agente",
     }
 }
 
@@ -225,23 +244,23 @@ pub(super) fn reply(state: &mut Dashboard, index: usize) {
 }
 
 pub(super) fn new_chat(state: &mut Dashboard) {
-    let (root, cli) = (state.root.clone(), state.chat.cli.clone());
+    let root = state.root.clone();
     with_chat(state, |chat| {
         if let Some(turn) = chat.turn.as_mut() {
             turn.cancel();
         }
         chat.turn = None;
         chat.model.clear();
+        chat.turn_replies.clear();
+        chat.resume_recap.clear();
         chat.once.clear();
         chat.approved.clear();
         chat.composer = text_editor::Content::new();
         chat.rendered.clear();
         chat.selecting.clear();
         chat.picks.clear();
-        if let Some(cli) = cli {
-            let id = chat.agent.id.clone();
-            std::thread::spawn(move || bridge::reset_chat(&cli, &root, &id));
-        }
+        let id = chat.agent.id.clone();
+        std::thread::spawn(move || bridge::reset_chat(&root, &id));
     });
 }
 

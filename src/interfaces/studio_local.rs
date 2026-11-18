@@ -1,7 +1,6 @@
 //! Local models: the "Modelos locales" tab. Studio diagnoses the machine, shows which Ollama
 //! models fit and runs the setup that downloads one and connects it to OpenCode, with progress.
 use super::*;
-use crate::integrations::chat_bridge as bridge;
 use crate::integrations::local_models::{self as models, Job, Op, Snapshot};
 use serde_json::Value;
 
@@ -25,9 +24,12 @@ pub(super) struct State {
     pub progress: Progress,
     /// What the last operation reported.
     pub result: Option<String>,
+    /// A model operation waiting for the person to confirm its download or deletion.
+    pub pending: Option<Op>,
     /// Makes the next installed model OpenCode's default for the project.
     pub set_default: bool,
-    cli: Option<std::path::PathBuf>,
+    #[cfg(test)]
+    pub(super) ollama_executable: Option<std::path::PathBuf>,
 }
 
 impl State {
@@ -41,9 +43,11 @@ pub(super) enum Event {
     /// Opens the tab (and diagnoses the machine the first time).
     Open,
     Refresh,
-    Loaded(Box<Result<Snapshot, String>>, Option<std::path::PathBuf>),
+    Loaded(Box<Result<Snapshot, String>>),
     Install(String),
     Remove(String),
+    Confirm,
+    CancelConfirmation,
     Cancel,
     ToggleDefault,
     /// The visual chat of OpenCode with this connected model (its name in `opencode.json`).
@@ -63,11 +67,8 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             }
         }
         Event::Refresh => return refresh(state),
-        Event::Loaded(result, cli) => {
+        Event::Loaded(result) => {
             state.local.loading = false;
-            if cli.is_some() {
-                state.local.cli = cli;
-            }
             match *result {
                 Ok(snapshot) => {
                     state.local.snapshot = Some(snapshot);
@@ -76,14 +77,19 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                 Err(error) => state.local.error = Some(error),
             }
         }
-        Event::Install(tag) => start(
-            state,
-            Op::Setup {
+        Event::Install(tag) => {
+            state.local.pending = Some(Op::Setup {
                 tag,
                 set_default: state.local.set_default,
-            },
-        ),
-        Event::Remove(tag) => start(state, Op::Remove { tag }),
+            });
+        }
+        Event::Remove(tag) => state.local.pending = Some(Op::Remove { tag }),
+        Event::Confirm => {
+            if let Some(op) = state.local.pending.take() {
+                start(state, op);
+            }
+        }
+        Event::CancelConfirmation => state.local.pending = None,
         Event::Cancel => {
             if let Some(job) = state.local.job.as_mut() {
                 job.cancel();
@@ -165,20 +171,14 @@ fn refresh(state: &mut Dashboard) -> Task<Message> {
         return Task::none();
     }
     state.local.loading = true;
-    let (root, known) = (state.root.clone(), state.local.cli.clone());
+    let root = state.root.clone();
     Task::perform(
         async move {
-            jobs::offload(move || {
-                let cli = known.or_else(|| bridge::find_cli(&root));
-                match &cli {
-                    Some(cli) => (models::snapshot(cli, &root), Some(cli.clone())),
-                    None => (Err(bridge::missing_cli_hint()), None),
-                }
-            })
-            .await
-            .unwrap_or_else(|| (Err("No se pudo diagnosticar el equipo".into()), None))
+            jobs::offload(move || models::snapshot(&root))
+                .await
+                .unwrap_or_else(|| Err("No se pudo diagnosticar el equipo".into()))
         },
-        |(result, cli)| Message::Local(Event::Loaded(Box::new(result), cli)),
+        |result| Message::Local(Event::Loaded(Box::new(result))),
     )
 }
 
@@ -190,22 +190,63 @@ fn start(state: &mut Dashboard, op: Op) {
         state.message = "Concede confianza al proyecto para configurar modelos locales.".into();
         return;
     }
-    let Some(cli) = state.local.cli.clone() else {
-        state.local.error = Some(bridge::missing_cli_hint());
-        return;
-    };
     let context = state
         .local
         .snapshot
         .as_ref()
         .map_or(32768, |s| s.context.max(8192));
+    let Some(snapshot) = state.local.snapshot.clone() else {
+        state.local.error =
+            Some("Actualiza el diagnóstico antes de configurar modelos locales.".into());
+        return;
+    };
     state.local.result = None;
     state.local.error = None;
     state.local.progress = Progress {
         text: "Preparando…".into(),
         ..Progress::default()
     };
-    match Job::start(&cli, &state.root, op, context) {
+    let trusted = state.overview.as_ref().is_ok_and(|p| p.workspace.trusted);
+    #[cfg(test)]
+    let result = if let Some(executable) = state.local.ollama_executable.clone() {
+        Job::start_with(
+            &state.root,
+            op.clone(),
+            context,
+            executable,
+            trusted,
+            models::OperationOptions {
+                confirmed: true,
+                ..models::OperationOptions::default()
+            },
+            snapshot,
+        )
+    } else {
+        Job::start(
+            &state.root,
+            op,
+            context,
+            trusted,
+            models::OperationOptions {
+                confirmed: true,
+                ..models::OperationOptions::default()
+            },
+            snapshot,
+        )
+    };
+    #[cfg(not(test))]
+    let result = Job::start(
+        &state.root,
+        op,
+        context,
+        trusted,
+        models::OperationOptions {
+            confirmed: true,
+            ..models::OperationOptions::default()
+        },
+        snapshot,
+    );
+    match result {
         Ok(job) => state.local.job = Some(job),
         Err(error) => state.local.error = Some(error),
     }

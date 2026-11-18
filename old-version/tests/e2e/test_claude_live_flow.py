@@ -34,8 +34,11 @@ def _turn(root: Path, prompt: str, answer, *, live: bool = True, **options):
 
     def emit(event: dict) -> None:
         events.append(event)
-        if event["type"] in {"permission", "question"} and event.get("request_id"):
-            reply = answer(event)
+        request = event
+        if event["type"] == "provider_record" and event.get("record", {}).get("type") == "control_request":
+            request = {"type": "permission", "request_id": event["record"].get("request_id")}
+        if request["type"] in {"permission", "question"} and request.get("request_id"):
+            reply = answer(request)
             if reply == "close":  # Studio went away without answering
                 writer.close()
             elif reply is not None:
@@ -98,6 +101,42 @@ def test_without_live_the_prompt_is_plain_text_and_nothing_is_asked(tmp_path: Pa
     plan, events = _turn(tmp_path, "hola", lambda e: None, live=False)
     assert not plan.live and "--input-format" not in plan.argv
     assert not [event for event in events if event["type"] == "permission"]
+
+
+def test_studio_can_delegate_claude_stream_normalization_to_rust(tmp_path: Path, fake_bin, monkeypatch) -> None:
+    monkeypatch.setenv("CHXCHX_RUST_CHAT_STATE", "1")
+    monkeypatch.setenv("CHXCHX_RUST_AGENT_STREAM", "1")
+
+    _, events = _turn(tmp_path, "hola", lambda e: None, live=False)
+
+    records = [event for event in events if event["type"] == "provider_record"]
+    assert [event["record"]["type"] for event in records] == ["system", "assistant", "result"]
+    assert all(event["provider"] == "Claude" for event in records)
+    assert not [event for event in events if event["type"] in {"session", "message", "reasoning", "tool", "usage", "limits"}]
+    assert events[0]["type"] == "start" and events[-1]["type"] == "done"
+    assert events[-1]["session_id"] == "claude-live-1"
+    child = fake_bin("claude")[-1]
+    assert child["chxchx_markers"] == {"CHXCHX_RUST_CHAT_STATE": None, "CHXCHX_RUST_AGENT_STREAM": None}
+
+
+def test_studio_receives_claude_live_control_requests_as_provider_records(tmp_path: Path, fake_bin, monkeypatch) -> None:
+    monkeypatch.setenv("CHXCHX_RUST_CHAT_STATE", "1")
+    monkeypatch.setenv("CHXCHX_RUST_AGENT_STREAM", "1")
+
+    _, events = _turn(
+        tmp_path,
+        "PERMISO",
+        lambda event: {"type": "answer", "request_id": event["request_id"], "behavior": "allow"},
+    )
+
+    requests = [
+        event for event in events
+        if event["type"] == "provider_record" and event["record"].get("type") == "control_request"
+    ]
+    assert len(requests) == 1 and requests[0]["record"]["request"]["tool_name"] == "Bash"
+    assert not [event for event in events if event["type"] == "permission"]
+    response = next(row["response"] for row in fake_bin("claude") if "response" in row)
+    assert response["behavior"] == "allow" and response["updatedInput"]["command"] == "python3 -V"
 
 
 def test_lean_turns_are_never_live(tmp_path: Path) -> None:

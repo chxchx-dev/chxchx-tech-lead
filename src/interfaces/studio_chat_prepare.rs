@@ -13,6 +13,7 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
         model: model::Model::default(),
         composer: text_editor::Content::new(),
         turn: None,
+        turn_replies: Vec::new(),
         mode: "workspace-write".to_owned(),
         network: false,
         approved: Vec::new(),
@@ -20,6 +21,7 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
         options: None,
         model_id: None,
         effort: None,
+        resume_recap: String::new(),
         preparing: true,
         images: Vec::new(),
         sent: Vec::new(),
@@ -42,21 +44,28 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
     let root = state.root.clone();
     let known = state.chat.cli.clone();
     let id = agent.id.clone();
+    let provider = super::turns::state_provider(agent.provider).to_owned();
+    let executable = agent
+        .executable
+        .as_deref()
+        .map(|path| path.display().to_string())
+        .unwrap_or_default();
     Task::perform(
         async move {
             jobs::offload(move || -> Prepared {
                 let cli = known.or_else(|| bridge::find_cli(&root));
+                let options = crate::integrations::agent_catalog::options(&agent, &root);
                 match &cli {
                     Some(cli) => (
                         Some(cli.clone()),
-                        bridge::restore_chat(cli, &root, &agent.id),
-                        bridge::agent_options(cli, &root, &agent.id),
+                        bridge::restore_chat_for_provider(&root, &agent.id, &provider, &executable),
+                        Ok(options),
                         slash_commands::discover(&root, &agent.id),
                     ),
                     None => (
                         None,
-                        Err(bridge::missing_cli_hint()),
-                        Err(String::new()),
+                        bridge::SavedChat::default(),
+                        Ok(options),
                         slash_commands::discover(&root, &agent.id),
                     ),
                 }
@@ -65,7 +74,7 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
             .unwrap_or_else(|| {
                 (
                     None,
-                    Err("No se pudo preparar el chat".into()),
+                    bridge::SavedChat::default(),
                     Err(String::new()),
                     Vec::new(),
                 )
@@ -90,22 +99,20 @@ pub(super) fn prepared_for(state: &mut Dashboard, id: &str, prepared: &Prepared)
     };
     chat.preparing = false;
     chat.commands = commands.clone();
-    match saved {
-        Ok(saved) => {
-            chat.model.session_id = saved.session_id.clone();
-            for (role, body) in &saved.messages {
-                if role == "user" {
-                    chat.model.add_user(body.clone());
-                } else {
-                    chat.model.apply(&json!({
-                        "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
-                        "type": "message", "role": "assistant", "text": body,
-                    }));
-                }
-            }
+    chat.model.session_id = saved.session_id.clone();
+    chat.resume_recap = saved.resume_recap.clone();
+    for (role, body) in &saved.messages {
+        if role == "user" {
+            chat.model.add_user(body.clone());
+        } else {
+            chat.model.apply(&json!({
+                "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
+                "type": "message", "role": "assistant", "text": body,
+            }));
         }
-        Err(error) if cli.is_none() => chat.problem = Some(error.clone()),
-        Err(_) => {}
+    }
+    if cli.is_none() {
+        chat.problem = Some(bridge::missing_cli_hint());
     }
     if let Ok(options) = options {
         if !options.available {

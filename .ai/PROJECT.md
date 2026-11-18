@@ -2,12 +2,12 @@
 
 ## Propósito
 
-Control plane local y liviano para preparar y operar repositorios de desarrollo asistido por agentes: workspace, procesos, terminales, CLI/TUI, skills, memoria y ChxChx Studio. La aplicación principal es un paquete Rust único con CLI, TUI y Studio nativo en Iced; `old-version/` conserva el ayudante Python que aún requiere el chat visual y otras funciones delegadas.
+Control plane local y liviano para preparar y operar repositorios de desarrollo asistido por agentes: workspace, procesos, terminales, CLI/TUI, skills, memoria y ChxChx Studio. La aplicación es un paquete Rust con CLI, TUI y Studio nativo en Iced. `old-version/` es solo una fuente de migración y debe quedar fuera del estado final. Si una capacidad exige Python o C++ sin alternativa viable, su código se aísla como servicio en `services/<nombre>/`, con protocolo y ciclo de vida definidos, pruebas y empaquetado, y se vincula a Rust mediante `src/integrations/`. Studio carga modelos y niveles de esfuerzo, persiste el historial visible, verifica sesiones restauradas y reconstruye un recap cuando el proveedor perdió una sesión. Rust normaliza eventos JSONL de Claude, Codex y OpenCode no-live, incluidas tarjetas live de Claude; el adapter aún conserva la ejecución y el control live mientras se completa el port.
 
 ## Stack detectado
 
 - Principal: Rust (CLI, TUI y Studio)
-- Auxiliar heredado: Python en `old-version/`
+- Servicios auxiliares Python/C++: solo cuando una dependencia los haga indispensables, aislados bajo `services/` y vinculados desde Rust.
 - Plataformas objetivo: Windows, macOS, Fedora y Ubuntu
 
 ## Restricciones

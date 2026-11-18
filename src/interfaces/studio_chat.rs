@@ -1,6 +1,5 @@
-//! Visual chat with an agent: the legacy product's chat (permissions, access levels, tokens,
-//! context release) over the `chxchx-tech agent chat` protocol. The Python CLI stays the
-//! authority; this module only drives it and shows what it reports.
+//! Visual chat with an agent: Studio owns its transcript and UI while the Python adapter still
+//! runs provider turns and reports permissions, usage and context release over JSONL.
 use super::*;
 use crate::features::agents::Agent;
 use crate::features::chat_model::{self as model, Kind};
@@ -75,6 +74,8 @@ pub(super) struct Chat {
     pub model: model::Model,
     pub composer: text_editor::Content,
     pub turn: Option<Turn>,
+    /// Assistant messages produced by the current turn, saved when the provider exits.
+    pub turn_replies: Vec<String>,
     pub mode: String,
     pub network: bool,
     /// Rules approved for the rest of the chat.
@@ -84,6 +85,8 @@ pub(super) struct Chat {
     pub options: Option<AgentOptions>,
     pub model_id: Option<String>,
     pub effort: Option<String>,
+    /// Recap supplied to the adapter for a provider session Rust found missing.
+    pub resume_recap: String,
     pub preparing: bool,
     /// Images waiting in the composer.
     pub images: Vec<Image>,
@@ -139,7 +142,7 @@ impl State {
 
 type Prepared = (
     Option<PathBuf>,
-    Result<SavedChat, String>,
+    SavedChat,
     Result<AgentOptions, String>,
     Vec<crate::integrations::slash_commands::Found>,
 );
@@ -385,6 +388,12 @@ fn tick(state: &mut Dashboard) {
             continue;
         };
         for event in turn.poll() {
+            if event.get("type").and_then(Value::as_str) == Some("message")
+                && event.get("role").and_then(Value::as_str) == Some("assistant")
+                && let Some(text) = event.get("text").and_then(Value::as_str)
+            {
+                chat.turn_replies.push(text.to_owned());
+            }
             chat.model.apply(&event);
         }
         let finished = turn.exit.is_some();
@@ -392,6 +401,14 @@ fn tick(state: &mut Dashboard) {
             let code = turn.exit.unwrap_or(0);
             let stderr = turn.stderr_tail();
             chat.turn = None;
+            let replies = std::mem::take(&mut chat.turn_replies);
+            let _ = crate::features::chat_state::end_turn(
+                &state.root,
+                &chat.agent.id,
+                turns::state_provider(chat.agent.provider),
+                Some(&chat.model.session_id),
+                replies.iter().map(String::as_str),
+            );
             if let Some(started) = chat.turn_started.take()
                 && let Some(last) = chat
                     .model

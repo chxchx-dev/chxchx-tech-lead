@@ -1,9 +1,9 @@
 //! The visual chat's connection to `chxchx-tech agent chat`.
 //!
-//! The legacy Python CLI is still the authority for agent turns (permissions, live approvals, context
-//! release, memory, session persistence); Studio runs it as a child and speaks its JSON lines.
-//! This module finds a CLI that understands the protocol, runs one turn and answers its questions.
-//! It knows nothing about windows.
+//! The Python CLI still runs provider turns and owns provider permissions and context release.
+//! Rust `chat_state` owns the visible transcript. This module finds a compatible CLI, runs a turn
+//! and answers its questions; it knows nothing about windows.
+pub use crate::integrations::agent_catalog::{AgentOptions, ModelOption};
 use crate::integrations::executable_search::{agent_path, find_executable, find_in};
 use serde_json::Value;
 use std::collections::VecDeque;
@@ -19,7 +19,8 @@ use std::time::{Duration, Instant};
 pub const CLI_ENV: &str = "CHXCHX_TECH_CLI";
 
 /// What a CLI must print for `agent chat --help` to be the one that speaks the chat protocol.
-const PROTOCOL_MARK: &str = "--live";
+const REQUIRED_CHAT_OPTIONS: [&str; 3] =
+    ["--live", "--resume-decided-by-rust", "--resume-recap-file"];
 
 pub(super) fn command(cli: &Path) -> Command {
     let mut command = Command::new(cli);
@@ -91,7 +92,7 @@ pub(super) fn run_short(mut process: Command, limit: Duration) -> Result<(i32, S
 pub fn supports_chat(cli: &Path) -> bool {
     let mut process = command(cli);
     process.args(["agent", "chat", "--help"]);
-    matches!(run_short(process, Duration::from_secs(20)), Ok((0, text)) if text.contains(PROTOCOL_MARK))
+    matches!(run_short(process, Duration::from_secs(20)), Ok((0, text)) if REQUIRED_CHAT_OPTIONS.iter().all(|option| text.contains(option)))
 }
 
 fn candidates(project: &Path, path: &OsString) -> Vec<PathBuf> {
@@ -168,6 +169,8 @@ pub struct TurnSpec {
     pub agent: String,
     pub project: PathBuf,
     pub prompt: String,
+    /// Recap built by Rust when a restored provider session no longer exists.
+    pub resume_recap: String,
     pub session: Option<String>,
     /// `read-only`, `workspace-write`, `workspace-commands` or `full-access`.
     pub mode: String,
@@ -186,27 +189,44 @@ pub struct Turn {
     events: Receiver<Value>,
     stderr: Arc<Mutex<VecDeque<String>>>,
     prompt_file: PathBuf,
+    resume_recap_file: Option<PathBuf>,
     pub exit: Option<i32>,
 }
 
 impl Turn {
     pub fn start(cli: &Path, spec: &TurnSpec) -> Result<Self, String> {
         // The prompt travels in a file: a command line has length limits and quoting rules.
-        let prompt_file = std::env::temp_dir().join(format!(
-            "chxchx-chat-{}-{}.txt",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |elapsed| elapsed.as_nanos())
-        ));
-        std::fs::write(&prompt_file, &spec.prompt).map_err(|error| error.to_string())?;
+        let prompt_file = temporary_chat_file("prompt");
+        if let Err(error) = std::fs::write(&prompt_file, &spec.prompt) {
+            remove_turn_files(&prompt_file, None);
+            return Err(error.to_string());
+        }
+        let resume_recap_file = if spec.resume_recap.is_empty() {
+            None
+        } else {
+            let path = temporary_chat_file("recap");
+            if let Err(error) = std::fs::write(&path, &spec.resume_recap) {
+                remove_turn_files(&prompt_file, Some(&path));
+                return Err(error.to_string());
+            }
+            Some(path)
+        };
         let mut process = command(cli);
         process
             .args(["agent", "chat", &spec.agent, "--path"])
             .arg(&spec.project)
             .arg("--prompt-file")
             .arg(&prompt_file)
-            .args(["--cancel-on-stdin", "--live", "--mode", &spec.mode]);
+            .args([
+                "--cancel-on-stdin",
+                "--live",
+                "--mode",
+                &spec.mode,
+                "--resume-decided-by-rust",
+            ]);
+        if let Some(path) = &resume_recap_file {
+            process.arg("--resume-recap-file").arg(path);
+        }
         if spec.network {
             process.arg("--network");
         }
@@ -227,21 +247,46 @@ impl Turn {
         }
         let mut child = process
             .current_dir(&spec.project)
+            // Rust Studio owns the visible transcript; the Python adapter only runs the provider.
+            .env("CHXCHX_RUST_CHAT_STATE", "1")
+            // Claude stream-json and non-live Codex JSONL are normalized by Rust at this boundary.
+            .env("CHXCHX_RUST_AGENT_STREAM", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|error| {
-                let _ = std::fs::remove_file(&prompt_file);
+                remove_turn_files(&prompt_file, resume_recap_file.as_deref());
                 format!("No pude iniciar el CLI: {error}")
             })?;
         let stdin = child.stdin.take();
-        let stdout = child.stdout.take().ok_or("sin salida")?;
-        let stderr = child.stderr.take().ok_or("sin errores")?;
+        let Some(stdout) = child.stdout.take() else {
+            let _ = child.kill();
+            let _ = child.wait();
+            remove_turn_files(&prompt_file, resume_recap_file.as_deref());
+            return Err("sin salida".into());
+        };
+        let Some(stderr) = child.stderr.take() else {
+            let _ = child.kill();
+            let _ = child.wait();
+            remove_turn_files(&prompt_file, resume_recap_file.as_deref());
+            return Err("sin errores".into());
+        };
         let (sender, events) = channel();
         std::thread::spawn(move || {
             for line in BufReader::new(stdout).split(b'\n').map_while(Result::ok) {
                 if let Ok(value) = serde_json::from_slice::<Value>(&line) {
+                    if value["type"] == "provider_record" {
+                        let provider = value["provider"].as_str().unwrap_or_default();
+                        let record = &value["record"];
+                        for event in super::agent_stream::normalize(provider, record) {
+                            if sender.send(event).is_err() {
+                                return;
+                            }
+                            super::wake::notify();
+                        }
+                        continue;
+                    }
                     if sender.send(value).is_err() {
                         break;
                     }
@@ -268,6 +313,7 @@ impl Turn {
             events,
             stderr: tail,
             prompt_file,
+            resume_recap_file,
             exit: None,
         })
     }
@@ -318,7 +364,7 @@ impl Turn {
 
 impl Drop for Turn {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.prompt_file);
+        remove_turn_files(&self.prompt_file, self.resume_recap_file.as_deref());
         if self.exit.is_some() {
             return;
         }
@@ -341,32 +387,21 @@ impl Drop for Turn {
     }
 }
 
-/// A model the agent offers, with the effort levels it supports.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ModelOption {
-    pub id: String,
-    pub label: String,
-    pub efforts: Vec<String>,
-    pub default_effort: String,
+fn remove_turn_files(prompt: &Path, recap: Option<&Path>) {
+    let _ = std::fs::remove_file(prompt);
+    if let Some(recap) = recap {
+        let _ = std::fs::remove_file(recap);
+    }
 }
 
-/// What the agent can do on this machine (`bridge agent-options`).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct AgentOptions {
-    pub available: bool,
-    pub install_hint: String,
-    pub default_model: String,
-    pub default_effort: String,
-    pub models: Vec<ModelOption>,
-}
-
-fn strings(value: Option<&Value>) -> Vec<String> {
-    value
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|item| item.as_str().map(str::to_owned))
-        .collect()
+fn temporary_chat_file(kind: &str) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "chxchx-chat-{kind}-{}-{}.txt",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_nanos())
+    ))
 }
 
 fn text(value: &Value, key: &str) -> String {
@@ -377,65 +412,11 @@ fn text(value: &Value, key: &str) -> String {
         .to_owned()
 }
 
-pub fn parse_options(output: &str) -> Result<AgentOptions, String> {
-    let value: Value = serde_json::from_str(output.trim())
-        .map_err(|error| format!("Respuesta de opciones inválida: {error}"))?;
-    if value.get("schema").and_then(Value::as_str) != Some("chxchx.agent-options") {
-        return Err(text(&value, "error").if_empty("El CLI no devolvió las opciones del agente"));
-    }
-    Ok(AgentOptions {
-        available: value
-            .get("available")
-            .and_then(Value::as_bool)
-            .unwrap_or(true),
-        install_hint: text(&value, "install_hint"),
-        default_model: text(&value, "default_model"),
-        default_effort: text(&value, "default_effort"),
-        models: value
-            .get("models")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .map(|model| ModelOption {
-                id: text(model, "id"),
-                label: text(model, "label").if_empty(&text(model, "id")),
-                efforts: strings(model.get("efforts")),
-                default_effort: text(model, "default_effort"),
-            })
-            .filter(|model| !model.id.is_empty())
-            .collect(),
-    })
-}
-
-trait IfEmpty {
-    fn if_empty(self, fallback: &str) -> String;
-}
-
-impl IfEmpty for String {
-    fn if_empty(self, fallback: &str) -> String {
-        if self.is_empty() {
-            fallback.to_owned()
-        } else {
-            self
-        }
-    }
-}
-
-/// Models and efforts of an agent. Blocking (it asks the agent's own CLI): run it off the UI thread.
-pub fn agent_options(cli: &Path, project: &Path, agent: &str) -> Result<AgentOptions, String> {
-    let mut process = command(cli);
-    process
-        .args(["bridge", "agent-options"])
-        .arg(project)
-        .args(["--agent", agent]);
-    let (_, output) = run_short(process, Duration::from_secs(25))?;
-    parse_options(&output)
-}
-
 /// The conversation a chat saved the last time (`agent chat-state`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SavedChat {
     pub session_id: String,
+    pub resume_recap: String,
     /// `("user" | "assistant", text)`
     pub messages: Vec<(String, String)>,
 }
@@ -447,6 +428,7 @@ pub fn parse_saved_chat(output: &str) -> Result<SavedChat, String> {
     }
     Ok(SavedChat {
         session_id: text(&value, "session_id"),
+        resume_recap: String::new(),
         messages: value
             .get("messages")
             .and_then(Value::as_array)
@@ -463,27 +445,47 @@ pub fn parse_saved_chat(output: &str) -> Result<SavedChat, String> {
 }
 
 /// Reads the saved conversation and marks its session to be checked by the next turn.
-pub fn restore_chat(cli: &Path, project: &Path, agent: &str) -> Result<SavedChat, String> {
-    let mut process = command(cli);
-    process
-        .args(["agent", "chat-state", agent, "--path"])
-        .arg(project)
-        .arg("--restore");
-    let (code, output) = run_short(process, Duration::from_secs(20))?;
-    if code != 0 {
-        return Err("El CLI no pudo leer el chat guardado".to_owned());
+pub fn restore_chat(project: &Path, agent: &str) -> SavedChat {
+    let state = crate::features::chat_state::payload(project, agent, true);
+    SavedChat {
+        session_id: state.session_id,
+        resume_recap: String::new(),
+        messages: state
+            .messages
+            .into_iter()
+            .map(|message| (message.role, message.text))
+            .collect(),
     }
-    parse_saved_chat(&output)
+}
+
+pub fn restore_chat_for_provider(
+    project: &Path,
+    agent: &str,
+    provider: &str,
+    executable: &str,
+) -> SavedChat {
+    let state = crate::features::chat_state::payload(project, agent, true);
+    let (session_id, resume_recap) = super::chat_resume::resolve_resume(
+        project,
+        provider,
+        agent,
+        (!state.session_id.is_empty()).then_some(state.session_id.as_str()),
+        executable,
+    );
+    SavedChat {
+        session_id: session_id.unwrap_or_default(),
+        resume_recap,
+        messages: state
+            .messages
+            .into_iter()
+            .map(|message| (message.role, message.text))
+            .collect(),
+    }
 }
 
 /// A new chat starts from nothing.
-pub fn reset_chat(cli: &Path, project: &Path, agent: &str) {
-    let mut process = command(cli);
-    process
-        .args(["agent", "chat-state", agent, "--path"])
-        .arg(project)
-        .arg("--reset");
-    let _ = run_short(process, Duration::from_secs(20));
+pub fn reset_chat(project: &Path, agent: &str) {
+    crate::features::chat_state::reset(project, agent);
 }
 
 /// Where Studio would look for the CLI, for the message when none is found.

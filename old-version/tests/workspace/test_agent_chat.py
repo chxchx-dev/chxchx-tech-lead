@@ -66,6 +66,26 @@ def test_plan_requires_trust_and_a_supported_agent(tmp_path: Path, monkeypatch) 
     assert plan.provider == "Codex" and plan.argv[-3:] == ["resume", "t1", "-"]
 
 
+def test_rust_owned_resume_skips_the_python_session_lookup(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(agent_chat, "executable_available", lambda executable: True)
+
+    def unexpected_lookup(*_args):
+        raise AssertionError("Rust already decided whether the provider session exists")
+
+    monkeypatch.setattr(agent_chat, "resolve_resume", unexpected_lookup)
+    plan = agent_chat.plan_chat_turn(
+        _service(tmp_path),
+        "codex",
+        mode="read-only",
+        session_id=None,
+        resume_decided_by_rust=True,
+        resume_recap="<archivo-de-contexto>\nPersona: migrar\n</archivo-de-contexto>",
+    )
+
+    assert plan.session_id is None
+    assert plan.recap.endswith("</archivo-de-contexto>")
+
+
 def test_new_chat_turn_streams_events_with_context(tmp_path: Path, isolated_home) -> None:
     events: list[dict] = []
 

@@ -48,6 +48,22 @@ def test_new_chat_streams_normalized_events_and_resumes_by_session(tmp_path: Pat
     assert run["stdin"].strip() == "sigue" and "--agent" in run["argv"]
 
 
+def test_studio_can_delegate_non_live_opencode_stream_normalization_to_rust(
+    tmp_path: Path, fake_bin, monkeypatch
+) -> None:
+    monkeypatch.setenv("CHXCHX_RUST_AGENT_STREAM", "1")
+
+    code, events = _turn(tmp_path, "hola", live=False)
+
+    records = [event for event in events if event["type"] == "provider_record"]
+    assert code == 0
+    assert [event["record"]["type"] for event in records] == ["step_start", "tool_use", "text", "step_finish"]
+    assert all(event["provider"] == "OpenCode" for event in records)
+    assert not [event for event in events if event["type"] in {"session", "message", "tool", "usage", "limits"}]
+    assert events[0]["type"] == "start" and events[-1]["type"] == "done"
+    assert events[-1]["session_id"] == "ses_fake1"
+
+
 def test_the_launched_command_is_the_resolved_executable_path(tmp_path: Path, fake_bin, monkeypatch) -> None:
     """A bare `opencode` is launched by full path, so Windows `.cmd` shims work with CreateProcess."""
     image = tmp_path / "captura.png"

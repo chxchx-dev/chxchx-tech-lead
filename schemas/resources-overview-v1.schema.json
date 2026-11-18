@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chxchx.dev/schemas/resources-overview-v1.schema.json",
+  "title": "ChxChx Resources Overview",
+  "type": "object",
+  "required": ["schema", "schema_version", "system", "projects"],
+  "properties": {
+    "schema": { "const": "chxchx.resources-overview" },
+    "schema_version": { "const": 1 },
+    "system": {
+      "type": "object",
+      "required": [
+        "memory_total_bytes",
+        "memory_used_bytes",
+        "memory_available_bytes",
+        "memory_percent",
+        "swap_total_bytes",
+        "swap_used_bytes",
+        "swap_percent",
+        "cpu_percent"
+      ],
+      "properties": {
+        "memory_total_bytes": { "type": "integer", "minimum": 0 },
+        "memory_used_bytes": { "type": "integer", "minimum": 0 },
+        "memory_available_bytes": { "type": "integer", "minimum": 0 },
+        "memory_percent": { "type": "number", "minimum": 0 },
+        "swap_total_bytes": { "type": "integer", "minimum": 0 },
+        "swap_used_bytes": { "type": "integer", "minimum": 0 },
+        "swap_percent": { "type": "number", "minimum": 0 },
+        "cpu_percent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": false
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "alias",
+          "name",
+          "path",
+          "status",
+          "trusted",
+          "running_count",
+          "rss_bytes",
+          "cpu_percent",
+          "warning_memory_percent",
+          "critical_memory_percent",
+          "max_agents"
+        ],
+        "properties": {
+          "alias": { "type": "string" },
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "status": { "type": "string" },
+          "trusted": { "type": "boolean" },
+          "running_count": { "type": "integer", "minimum": 0 },
+          "rss_bytes": { "type": "integer", "minimum": 0 },
+          "cpu_percent": { "type": ["number", "null"], "minimum": 0 },
+          "warning_memory_percent": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "critical_memory_percent": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "max_agents": { "type": "integer", "minimum": 1, "maximum": 16 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

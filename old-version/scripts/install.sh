@@ -591,13 +591,15 @@ if [[ "$CLI_ONLY" == true ]]; then
   COMMAND_BINARIES=("$CLI_BINARY")
   COMMAND_NAMES=(chxchx-tech chxchx)
 else
-  COMMAND_BINARIES=("$RUST_BIN_DIR/chxchx" "$RUST_BIN_DIR"/chxchx-*)
+  COMMAND_CANDIDATES=("$RUST_BIN_DIR/chxchx" "$RUST_BIN_DIR"/chxchx-*)
+  COMMAND_BINARIES=()
   COMMAND_NAMES=()
-  for candidate in "${COMMAND_BINARIES[@]}"; do
+  for candidate in "${COMMAND_CANDIDATES[@]}"; do
     [[ -f "$candidate" && -x "$candidate" ]] || continue
     name="$(basename "$candidate")"
     case "$name" in chxchx-studio|chxchx-installer|chxchx-python-helper) continue ;; esac
     COMMAND_NAMES+=("$name")
+    COMMAND_BINARIES+=("$candidate")
   done
   for required_name in chxchx-tech chxchx; do
     found=false

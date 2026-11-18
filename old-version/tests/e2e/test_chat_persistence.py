@@ -7,7 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from typer.testing import CliRunner
 
+from chxchx_tech_lead.cli import app
 from chxchx_tech_lead.workspace import agent_chat
 from chxchx_tech_lead.workspace.chat_state import load_state, mark_unverified, state_payload
 
@@ -54,6 +56,37 @@ def test_every_turn_leaves_the_conversation_and_the_session_on_disk(tmp_path: Pa
     assert [(m["role"], m["text"]) for m in saved["messages"]] == [
         ("user", "primera pregunta"), ("assistant", "eco: primera pregunta"),
         ("user", "segunda pregunta"), ("assistant", "eco: segunda pregunta")]
+
+
+def test_studio_can_delegate_visible_chat_state_persistence_to_rust(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CHXCHX_RUST_CHAT_STATE", "1")
+
+    _, code, _ = _turn(tmp_path, "hola desde Studio", monkeypatch)
+
+    assert code == 0
+    assert load_state(tmp_path, "opencode") is None
+
+
+def test_studio_resume_decision_and_recap_cross_the_python_cli_boundary(
+    tmp_path: Path, fake_bin, monkeypatch
+) -> None:
+    recap = tmp_path / "resume-recap.txt"
+    recap.write_text("<archivo-de-contexto>\nPersona: migrar\n</archivo-de-contexto>", encoding="utf-8")
+    monkeypatch.setattr("chxchx_tech_lead.commands.agents._workspace_service", lambda _path: _service(tmp_path))
+
+    def unexpected_lookup(*_args):
+        raise AssertionError("the Rust-owned decision must not be repeated in Python")
+
+    monkeypatch.setattr(agent_chat, "resolve_resume", unexpected_lookup)
+    result = CliRunner().invoke(app, [
+        "agent", "chat", "opencode", "--path", str(tmp_path), "--prompt", "¿en qué íbamos?",
+        "--resume-decided-by-rust", "--resume-recap-file", str(recap),
+    ])
+
+    run = _runs(fake_bin)[-1]
+    assert result.exit_code == 0, result.output
+    assert "Persona: migrar" in run["stdin"]
+    assert run["stdin"].rstrip().endswith("¿en qué íbamos?")
 
 
 def test_the_persons_message_survives_a_turn_that_never_finished(tmp_path: Path, monkeypatch) -> None:

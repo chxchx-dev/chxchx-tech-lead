@@ -15,6 +15,7 @@ from ..workspace.agent_setup import AgentSetupError, add_agent
 from ..workspace.error_cache import record_error
 from ..workspace.handoff import update_handoff
 from ..workspace.project_context import workspace_service_for as _workspace_service
+from ..workspace.chat_resume import load_resume_recap
 from ..workspace.service import WorkspaceOperationError
 from .resource_guard import guard_cli_agent_start
 
@@ -181,6 +182,10 @@ def agent_chat(
     lean: bool = typer.Option(False, "--lean",
         help="Consulta puntual: sin contexto del proyecto, memoria ni diario, sin guardar la sesión y siempre en solo lectura."),
     session: str = typer.Option("", "--session", help="Sesión a continuar; vacío inicia un chat con contexto."),
+    resume_decided_by_rust: bool = typer.Option(False, "--resume-decided-by-rust",
+        help="Studio ya verificó la sesión y decidió si reconstruir el contexto."),
+    resume_recap_file: Path | None = typer.Option(None, "--resume-recap-file", exists=True, dir_okay=False, resolve_path=True,
+        help="Lee el recap de una sesión perdida preparado por Studio."),
     mode: str = typer.Option("read-only", "--mode", help=f"Permisos del agente: {', '.join(MODES)}."),
     model: str = typer.Option("", "--model", help="Modelo; vacío usa el configurado en el agente."),
     effort: str = typer.Option("", "--effort", help="Nivel de razonamiento; vacío usa el configurado."),
@@ -199,9 +204,11 @@ def agent_chat(
     emit = json_line_emitter()
     try:
         text = load_prompt(prompt, prompt_file)
+        resume_recap = load_resume_recap(resume_recap_file)
         plan = plan_chat_turn(_workspace_service(path), agent_id, mode=mode, session_id=session or None,
                               model=model or None, effort=effort or None, images=tuple(images), lean=lean,
-                              network=network, allow=tuple(allow), live=live and cancel_on_stdin, auto_release=auto_release)
+                              network=network, allow=tuple(allow), live=live and cancel_on_stdin, auto_release=auto_release,
+                              resume_decided_by_rust=resume_decided_by_rust, resume_recap=resume_recap)
     except WorkspaceOperationError as exc:
         _record_agent_error(path, "agent chat", str(exc))
         emit({"type": "error", "message": str(exc)})

@@ -47,9 +47,24 @@ del proyecto y comparten la lógica:
 | **TUI** | Un tablero rápido dentro de tu terminal | `chxchx-tech tui .` · `t` |
 | **CLI** | Automatización y scripts, con salida JSON versionada | `chxchx-tech <comando>` |
 
-Atajos: `st` (status) · `dr` (doctor) · `sk` (skills) · `ws` (workspace) · `pr` (projects). Los comandos que aún viven en el
-CLI de Python (`agent`, `bridge`, `local-models`, `run`, `ci`, `deploy`…) también se escriben con `chxchx-tech`: los ejecuta
-el CLI que acompaña a la instalación, así que no hay que recordar dos programas.
+Atajos: `st` (status) · `dr` (doctor) · `sk` (skills) · `ws` (workspace) · `pr` (projects). El CLI Rust incluye
+`local-models status|setup|remove`, `process list|start|stop|log`,
+`workspace start|stop|suspend|resume`, `resources` y `agent chat-state` para restaurar o reiniciar el historial. Studio lee y guarda el historial en Rust, y obtiene en Rust los modelos y niveles de esfuerzo disponibles; la ejecución de turnos y los comandos pendientes (`agent`,
+`bridge`, `run`, `ci`, `deploy`…) todavía dependen del CLI Python que acompaña a la instalación mientras se
+completa la migración.
+
+`resources --json` entrega el contrato `chxchx.resources-overview` v1 con RAM, swap y procesos de los proyectos
+registrados; la inspección es de solo lectura. `process log ID --lines 100` muestra una cola acotada del log.
+
+Para instalar y conectar modelos locales, consulta primero el equipo y después previsualiza la operación. Descargar
+o quitar un modelo requiere `--yes`; `--dry-run` muestra pasos y cambios sin descargar, borrar ni modificar archivos:
+
+```bash
+chxchx-tech local-models status
+chxchx-tech local-models setup qwen2.5-coder:7b --dry-run
+chxchx-tech local-models setup qwen2.5-coder:7b --yes
+chxchx-tech local-models remove qwen2.5-coder:7b --dry-run
+```
 
 ## Studio
 
@@ -200,9 +215,11 @@ cargo run --release --features visual-installer --bin chxchx-installer
 # o, de una vez: ./scripts/studio-rust.sh
 ```
 
-> **Nota:** el chat visual usa por ahora el CLI de Python de [`old-version/`](old-version/)
-> (`cd old-version && uv sync`) hasta que `agent chat` se porte a Rust. Studio lo busca solo; también puedes
-> indicar su ruta con `CHXCHX_TECH_CLI`. El resto del producto no lo necesita.
+> **Migración en curso:** el historial visual (`agent chat-state`) ya se lee y reinicia en Rust. Esta versión aún delega
+> los turnos del chat y algunos comandos al CLI Python de [`old-version/`](old-version/), que es temporal y se retirará
+> al completar el port y las pruebas. La arquitectura final no deja código de producto allí; cualquier runtime Python o
+> C++ indispensable vivirá como servicio independiente fuera de esa carpeta y se integrará mediante Rust. Los modelos
+> locales ya se diagnostican y configuran desde Rust y Ollama.
 
 ## Actualizaciones
 
@@ -238,7 +255,8 @@ libera, recorta lo que el chat no necesita y lanza los agentes con ajustes que r
 ├── MANUAL.md       Manual técnico: capacidades, seguridad y decisiones
 ├── MEMORIA.md      Guía de gestión de memoria
 ├── CONECTORES.md   Guía de los conectores MCP (Excel, Power BI, bases de datos…)
-└── old-version/    Solo el CLI de Python que aún sirve el chat, los modelos locales y el actualizador
+├── old-version/    fuente temporal de capacidades todavía en migración; se elimina al cerrar paridad
+└── services/       servicios auxiliares solo si un runtime externo resulta imprescindible
 ```
 
 ## Desarrollo
@@ -254,6 +272,4 @@ los procesos e integraciones externas viven en `integrations/`. Más reglas en [
 
 ## Estado
 
-Versión `0.6.3`, el producto en Rust. Pendiente: portar `agent chat` y los modelos locales a Rust (hoy los sirve el CLI de Python de `old-version/`), guardar la disposición de paneles entre sesiones y completar la QA en macOS y Linux.
-`agent chat` a Rust (hoy usa el CLI de Python), guardar la disposición de paneles entre sesiones y completar la QA
-en macOS y Linux.
+Versión `0.6.3`. Los modelos locales ya tienen diagnóstico, instalación, retirada y configuración nativos en Rust. El historial de chat también se restaura y reinicia en Rust, con pruebas unitarias y e2e. Sigue pendiente portar los turnos y adapters del chat, actualización y comandos Python restantes, retirar el runtime Python del empaquetado y eliminar `old-version/` después de la verificación completa. También falta completar la QA en macOS y Linux.

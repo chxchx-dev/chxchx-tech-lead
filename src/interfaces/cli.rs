@@ -9,6 +9,8 @@ mod catalog;
 mod connectors;
 #[path = "cli_launch.rs"]
 mod launch;
+#[path = "cli_local_models.rs"]
+mod local_models;
 #[path = "cli_style.rs"]
 mod style;
 #[path = "cli_view.rs"]
@@ -37,10 +39,11 @@ Ejemplos:
   chxchx-tech workspace trust .    Decide si los agentes pueden ejecutar procesos aquí
   chxchx-tech skills list .        Skills recomendadas para tu stack
   chxchx-tech doctor .             Qué herramientas faltan
+  chxchx-tech resources .          RAM, swap y procesos de proyectos registrados
   chxchx-tech tui .                El mismo panel en una terminal interactiva
 
 Atajos: st (status) · dr (doctor) · sk (skills) · ws (workspace) · pr (projects) · t (tui) · gui (studio).
-Comandos del agente y del puente (agent, bridge, local-models, run, ci, deploy…) se ejecutan con el CLI de Python que acompaña a la instalación.
+Modelos locales: `local-models status|setup|remove`. Los demás comandos pendientes de portar se mantienen disponibles durante la migración.
 Todo cambio muestra una vista previa; `--apply` la confirma. `status --json` imprime el contrato versionado.";
 
 #[derive(Debug, Parser)]
@@ -139,6 +142,18 @@ enum Command {
         #[command(subcommand)]
         command: catalog::ModsCommand,
     },
+    /// Diagnostica y configura modelos locales de Ollama para OpenCode.
+    #[command(name = "local-models")]
+    LocalModels {
+        #[command(subcommand)]
+        command: local_models::LocalModelsCommand,
+    },
+    /// Lee o reinicia el historial persistido de un chat visual.
+    #[command(subcommand_required = false)]
+    Agent {
+        #[command(subcommand)]
+        command: Option<AgentCommand>,
+    },
     /// Diagnostica herramientas y configuración del proyecto sin ejecutar comandos.
     #[command(visible_alias = "dr")]
     Doctor {
@@ -162,6 +177,19 @@ enum Command {
     },
     /// Muestra la versión común del producto.
     Version,
+    /// Administra procesos configurados en workspace.processes.
+    Process {
+        #[command(subcommand)]
+        command: ProcessCommand,
+    },
+    /// Consulta RAM, swap y recursos de procesos administrados.
+    Resources {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Imprime el contrato JSON versionado `chxchx.resources-overview`.
+        #[arg(long)]
+        json: bool,
+    },
     /// Lo demás lo resuelve el CLI heredado (agent, bridge, local-models…) o abre una carpeta.
     #[command(external_subcommand)]
     External(Vec<OsString>),
@@ -169,6 +197,34 @@ enum Command {
 
 #[derive(Debug, Subcommand)]
 enum WorkspaceCommand {
+    /// Inicia el workspace y sus procesos configurados para auto_start.
+    Start {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Detiene los procesos administrados y marca el workspace como detenido.
+    Stop {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Detiene el workspace y guarda el estado SUSPENDED.
+    Suspend {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Reanuda el workspace y sus procesos auto_start.
+    Resume {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Previsualiza o registra confianza para la configuración actual.
     Trust {
         #[arg(default_value = ".")]
@@ -199,6 +255,58 @@ enum ProjectsCommand {
         #[arg(long)]
         apply: bool,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum ProcessCommand {
+    /// Lista procesos configurados y su estado.
+    List {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// Inicia un proceso después de comprobar la confianza del proyecto.
+    Start {
+        id: String,
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Detiene un proceso administrado.
+    Stop {
+        id: String,
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Muestra las últimas líneas del log de un proceso configurado.
+    Log {
+        id: String,
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+        #[arg(long, default_value_t = 300)]
+        lines: usize,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AgentCommand {
+    /// Conversación guardada del chat visual (`chxchx.chat-state` v1).
+    ChatState {
+        agent_id: String,
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+        /// Olvida el historial guardado.
+        #[arg(long)]
+        reset: bool,
+        /// Marca la sesión para comprobarla al continuar el chat.
+        #[arg(long)]
+        restore: bool,
+    },
+    /// Los subcomandos de agentes aún no portados se delegan al CLI Python.
+    #[command(external_subcommand)]
+    External(Vec<OsString>),
 }
 
 /// Prints a failure the way the terminal can show it: `Error: …`, in red when it can.
@@ -270,6 +378,26 @@ pub fn run() -> Result<(), String> {
         } => view::init(&ui, &path, apply && !dry_run, minimal),
         Command::Rollback { path, apply } => view::rollback(&ui, &path, apply),
         Command::Workspace { command } => match command {
+            WorkspaceCommand::Start { path, dry_run } => {
+                let action = crate::features::workspace_lifecycle::start(&path, dry_run)?;
+                print_workspace_action(action);
+                Ok(())
+            }
+            WorkspaceCommand::Stop { path, dry_run } => {
+                let action = crate::features::workspace_lifecycle::stop(&path, dry_run)?;
+                print_workspace_action(action);
+                Ok(())
+            }
+            WorkspaceCommand::Suspend { path, dry_run } => {
+                let action = crate::features::workspace_lifecycle::suspend(&path, dry_run)?;
+                print_workspace_action(action);
+                Ok(())
+            }
+            WorkspaceCommand::Resume { path, dry_run } => {
+                let action = crate::features::workspace_lifecycle::resume(&path, dry_run)?;
+                print_workspace_action(action);
+                Ok(())
+            }
             WorkspaceCommand::Trust { path, apply } => view::trust(&ui, &path, true, apply),
             WorkspaceCommand::Untrust { path, apply } => view::trust(&ui, &path, false, apply),
         },
@@ -288,6 +416,38 @@ pub fn run() -> Result<(), String> {
         Command::Skills { command } => catalog::skills(&ui, command),
         Command::Packs { command } => catalog::packs(&ui, command),
         Command::Mods { command } => catalog::mods(&ui, command),
+        Command::LocalModels { command } => local_models::run(command),
+        Command::Agent { command } => match command {
+            Some(AgentCommand::ChatState {
+                agent_id,
+                path,
+                reset,
+                restore,
+            }) => {
+                if reset {
+                    crate::features::chat_state::reset(&path, &agent_id);
+                }
+                let payload =
+                    crate::features::chat_state::contract(&path, &agent_id, restore && !reset);
+                println!(
+                    "{}",
+                    serde_json::to_string(&payload).map_err(|error| error.to_string())?
+                );
+                Ok(())
+            }
+            Some(AgentCommand::External(arguments)) => {
+                let mut delegated = vec![OsString::from("agent")];
+                delegated.extend(arguments);
+                match launch::delegate(&delegated)? {
+                    0 => Ok(()),
+                    code => std::process::exit(code),
+                }
+            }
+            None => match launch::delegate(&[OsString::from("agent")])? {
+                0 => Ok(()),
+                code => std::process::exit(code),
+            },
+        },
         Command::Doctor { path } => view::doctor(&ui, &path),
         #[cfg(feature = "tui")]
         Command::Tui { path } => crate::interfaces::tui::run(path),
@@ -304,6 +464,76 @@ pub fn run() -> Result<(), String> {
             view::version(&ui);
             Ok(())
         }
+        Command::Process { command } => match command {
+            ProcessCommand::List { path } => {
+                let records = crate::features::workspace_processes::list(&path)?;
+                if records.is_empty() {
+                    println!("No hay procesos con estado guardado.");
+                }
+                for record in records {
+                    println!(
+                        "{}\t{:?}\tPID {}\t{}",
+                        record.id,
+                        record.status,
+                        record
+                            .pid
+                            .map(|p| p.to_string())
+                            .unwrap_or_else(|| "-".into()),
+                        record.label
+                    );
+                }
+                Ok(())
+            }
+            ProcessCommand::Start { id, path, dry_run } => {
+                let action = crate::features::workspace_processes::start(&path, &id, dry_run)?;
+                println!("{}", action.message);
+                Ok(())
+            }
+            ProcessCommand::Stop { id, path, dry_run } => {
+                let action = crate::features::workspace_processes::stop(&path, &id, dry_run)?;
+                println!("{}", action.message);
+                Ok(())
+            }
+            ProcessCommand::Log { id, path, lines } => {
+                let log =
+                    crate::features::workspace_processes::read_log(&path, &id, 16_000, lines)?;
+                println!("{log}");
+                Ok(())
+            }
+        },
+        Command::Resources { path, json } => {
+            let payload = crate::features::workspace_resources::resources_overview_payload(&path)?;
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&payload).map_err(|error| error.to_string())?
+                );
+            } else {
+                let system = &payload["system"];
+                println!(
+                    "RAM: {:.1}% · {} / {} bytes",
+                    system["memory_percent"].as_f64().unwrap_or_default(),
+                    system["memory_used_bytes"].as_u64().unwrap_or_default(),
+                    system["memory_total_bytes"].as_u64().unwrap_or_default()
+                );
+                println!(
+                    "Swap: {:.1}% · {} / {} bytes",
+                    system["swap_percent"].as_f64().unwrap_or_default(),
+                    system["swap_used_bytes"].as_u64().unwrap_or_default(),
+                    system["swap_total_bytes"].as_u64().unwrap_or_default()
+                );
+                for project in payload["projects"].as_array().into_iter().flatten() {
+                    println!(
+                        "{}\t{}\t{} proceso(s) activo(s)\t{} bytes RSS",
+                        project["alias"].as_str().unwrap_or(""),
+                        project["status"].as_str().unwrap_or("STOPPED"),
+                        project["running_count"].as_u64().unwrap_or_default(),
+                        project["rss_bytes"].as_u64().unwrap_or_default()
+                    );
+                }
+            }
+            Ok(())
+        }
         Command::External(arguments) => {
             if let Some(folder) = launch::folder_argument(&arguments) {
                 return open_default(folder);
@@ -313,6 +543,13 @@ pub fn run() -> Result<(), String> {
                 code => std::process::exit(code),
             }
         }
+    }
+}
+
+fn print_workspace_action(action: crate::features::workspace_lifecycle::WorkspaceAction) {
+    println!("{} · {}", action.message, action.status);
+    for process in action.processes {
+        println!("{}", process.message);
     }
 }
 
@@ -366,6 +603,22 @@ mod tests {
         assert!(parse(&[]).command.is_none());
     }
 
+    #[test]
+    fn local_models_commands_are_handled_by_rust() {
+        assert!(matches!(
+            parse(&["local-models", "setup", "qwen2.5-coder:7b", "--dry-run"]).command,
+            Some(Command::LocalModels {
+                command: local_models::LocalModelsCommand::Setup { dry_run: true, .. }
+            })
+        ));
+        assert!(matches!(
+            parse(&["local-models", "remove", "qwen2.5-coder:7b", "--yes"]).command,
+            Some(Command::LocalModels {
+                command: local_models::LocalModelsCommand::Remove { yes: true, .. }
+            })
+        ));
+    }
+
     #[cfg(feature = "studio")]
     #[test]
     fn studio_takes_a_folder_directly_and_still_understands_open() {
@@ -385,12 +638,30 @@ mod tests {
     #[test]
     fn what_the_legacy_cli_owns_is_passed_through_untouched() {
         match parse(&["agent", "chat", "claude", "--live", "-x"]).command {
-            Some(Command::External(args)) => {
-                assert_eq!(args.len(), 5);
-                assert_eq!(args[0], "agent");
-                assert_eq!(args[4], "-x", "flags travel with it");
+            Some(Command::Agent {
+                command: Some(AgentCommand::External(args)),
+            }) => {
+                assert_eq!(args.len(), 4);
+                assert_eq!(args[0], "chat");
+                assert_eq!(args[3], "-x", "flags travel with it");
             }
             other => panic!("expected a pass-through, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn chat_state_is_a_rust_command_while_other_agent_commands_still_delegate() {
+        assert!(matches!(
+            parse(&["agent", "chat-state", "codex", "--restore"]).command,
+            Some(Command::Agent {
+                command: Some(AgentCommand::ChatState { restore: true, .. })
+            })
+        ));
+        assert!(matches!(
+            parse(&["agent", "preflight", "codex"]).command,
+            Some(Command::Agent {
+                command: Some(AgentCommand::External(_))
+            })
+        ));
     }
 }

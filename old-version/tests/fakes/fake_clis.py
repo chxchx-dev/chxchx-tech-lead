@@ -322,7 +322,8 @@ def emit(record):
     print(json.dumps(record), flush=True)
 first = sys.stdin.readline()
 prompt = json.loads(first)["message"]["content"] if live else first + sys.stdin.read()
-note(argv=args, prompt=prompt)
+note(argv=args, prompt=prompt, chxchx_markers={name: os.environ.get(name) for name in
+     ("CHXCHX_RUST_CHAT_STATE", "CHXCHX_RUST_AGENT_STREAM")})
 emit({"type": "system", "subtype": "init", "session_id": "claude-live-1"})
 def ask(request_id, tool, data):
     emit({"type": "control_request", "request_id": request_id,

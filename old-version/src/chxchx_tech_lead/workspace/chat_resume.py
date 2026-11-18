@@ -7,7 +7,18 @@ from pathlib import Path
 from ..integrations.agent_catalog import resolve_executable
 from ..integrations.chat_history import list_conversations
 from ..integrations.opencode_memory import run_json
+from .service import WorkspaceOperationError
 from .chat_state import load_state, recap_block
+
+
+def load_resume_recap(path: Path | None) -> str:
+    """Read the bounded recap prepared by Rust for a restored Studio chat."""
+    if path is None:
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise WorkspaceOperationError(f"No pude leer el recap de reanudación: {exc}") from exc
 
 
 def session_exists(project_root: Path, provider: str, session_id: str, executable: str) -> bool | None:

@@ -257,7 +257,7 @@ fn a_model_chosen_before_the_chat_is_ready_survives_its_preparation() {
     prepared_for(
         &mut state,
         "claude",
-        &(None, Err(String::new()), Ok(options), Vec::new()),
+        &(None, bridge::SavedChat::default(), Ok(options), Vec::new()),
     );
     let chat = &state.chat.chats[0];
     assert_eq!(

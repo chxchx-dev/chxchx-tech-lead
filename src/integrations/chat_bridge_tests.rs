@@ -49,7 +49,7 @@ fn only_a_cli_that_speaks_the_chat_protocol_is_accepted() {
     let dir = scratch("probe");
     let good = fake_cli(
         &dir,
-        r#"[ "$1 $2 $3" = "agent chat --help" ] && echo "Usage: agent chat --live --lean" && exit 0; exit 2"#,
+        r#"[ "$1 $2 $3" = "agent chat --help" ] && echo "Usage: agent chat --live --lean --resume-decided-by-rust --resume-recap-file" && exit 0; exit 2"#,
     );
     assert!(supports_chat(&good));
     let other = scratch("probe-other");
@@ -65,6 +65,14 @@ fn only_a_cli_that_speaks_the_chat_protocol_is_accepted() {
     assert!(
         !supports_chat(&old),
         "an older CLI without --live cannot ask the person"
+    );
+    let old_resume = fake_cli(
+        &scratch("probe-old-resume"),
+        r#"echo "Usage: agent chat --live --lean"; exit 0"#,
+    );
+    assert!(
+        !supports_chat(&old_resume),
+        "an adapter without the Rust resume options cannot safely receive a restored chat"
     );
 }
 
@@ -91,6 +99,7 @@ printf '%s
     wanted.model = Some("sonnet".into());
     wanted.effort = Some("high".into());
     wanted.images = vec![dir.join("a.png")];
+    wanted.resume_recap = "<archivo-de-contexto>Persona: avanzar</archivo-de-contexto>".into();
 
     let mut turn = Turn::start(&cli, &wanted).unwrap();
     let events = wait_done(&mut turn);
@@ -106,6 +115,8 @@ printf '%s
     for part in [
         "agent chat claude --path",
         "--cancel-on-stdin --live --mode workspace-write",
+        "--resume-decided-by-rust",
+        "--resume-recap-file",
         "--network",
         "--allow Bash(ls:*) --allow edit",
         "--session s-0",
@@ -120,6 +131,61 @@ printf '%s
         "hola, ¿qué tal? \"comillas\"",
         "the prompt travels intact in a file"
     );
+    let recap_path = args
+        .split_whitespace()
+        .skip_while(|arg| *arg != "--resume-recap-file")
+        .nth(1)
+        .unwrap();
+    assert_eq!(fs::read_to_string(recap_path).unwrap(), wanted.resume_recap);
+    let prompt_path = args
+        .split_whitespace()
+        .skip_while(|arg| *arg != "--prompt-file")
+        .nth(1)
+        .unwrap();
+    drop(turn);
+    assert!(!Path::new(prompt_path).exists());
+    assert!(!Path::new(recap_path).exists());
+}
+
+#[test]
+fn raw_claude_control_records_become_live_cards_before_the_host_answers() {
+    let dir = scratch("raw-control");
+    let record = serde_json::json!({
+        "schema":"chxchx.agent-event", "schema_version":1, "type":"provider_record", "provider":"Claude",
+        "record":{"type":"control_request", "request_id":"r1", "request":{
+            "subtype":"can_use_tool", "tool_name":"Bash", "tool_use_id":"tool-1",
+            "input":{"command":"python3 -V"}
+        }}
+    })
+    .to_string();
+    let cli = fake_cli(
+        &dir,
+        &format!(
+            "printf '%s\\n' '{record}'; read answer; printf '%s\\n' '{done}'",
+            done = event("done", r#","exit_code":0"#)
+        ),
+    );
+    let mut turn = Turn::start(&cli, &spec(&dir)).unwrap();
+    let mut seen = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline
+        && !seen
+            .iter()
+            .any(|event: &Value| event["type"] == "permission")
+    {
+        seen.extend(turn.poll());
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let card = seen
+        .iter()
+        .find(|event| event["type"] == "permission")
+        .unwrap();
+    assert_eq!(card["request_id"], "r1");
+    assert_eq!(card["choices"][0]["label"], "Permitir esta vez");
+    turn.answer(&serde_json::json!({"type":"answer", "request_id":"r1", "behavior":"allow"}))
+        .unwrap();
+    seen.extend(wait_done(&mut turn));
+    assert!(seen.iter().any(|event| event["type"] == "done"));
 }
 
 #[test]
@@ -206,7 +272,10 @@ printf '%s
 #[test]
 fn the_cli_is_found_through_the_environment_variable_first() {
     let dir = scratch("find");
-    let good = fake_cli(&dir, r#"echo "agent chat --live"; exit 0"#);
+    let good = fake_cli(
+        &dir,
+        r#"echo "agent chat --live --resume-decided-by-rust --resume-recap-file"; exit 0"#,
+    );
     let found = candidates(&dir, &OsString::new());
     assert!(found.is_empty() || found[0] != good);
     // SAFETY: tests of this module do not read the variable concurrently.
@@ -216,38 +285,13 @@ fn the_cli_is_found_through_the_environment_variable_first() {
 }
 
 #[test]
-fn model_options_and_saved_chats_are_read_from_the_cli_output() {
-    let options = parse_options(r#"{"schema":"chxchx.agent-options","schema_version":1,"available":true,"install_hint":"npm i","default_model":"gpt-x",
-        "default_effort":"medium","models":[{"id":"gpt-x","efforts":["low","high"],"default_effort":"low"},{"id":"mini","label":"Mini"},{"id":""}]}"#).unwrap();
-    assert_eq!(
-        (
-            options.default_model.as_str(),
-            options.default_effort.as_str()
-        ),
-        ("gpt-x", "medium")
-    );
-    assert_eq!(options.models.len(), 2);
-    assert_eq!(
-        options.models[0],
-        ModelOption {
-            id: "gpt-x".into(),
-            label: "gpt-x".into(),
-            efforts: vec!["low".into(), "high".into()],
-            default_effort: "low".into()
-        }
-    );
-    assert_eq!(options.models[1].label, "Mini");
-    assert!(
-        parse_options(r#"{"schema":"chxchx.error","error":"sin trust"}"#)
-            .unwrap_err()
-            .contains("sin trust")
-    );
-
+fn saved_chats_are_filtered_from_the_versioned_contract() {
     let saved = parse_saved_chat(r#"{"schema":"chxchx.chat-state","schema_version":1,"session_id":"s","messages":[{"role":"user","text":"a"},{"role":"tool","text":"x"},{"role":"assistant","text":""},{"role":"assistant","text":"b"}]}"#).unwrap();
     assert_eq!(
         saved,
         SavedChat {
             session_id: "s".into(),
+            resume_recap: String::new(),
             messages: vec![
                 ("user".into(), "a".into()),
                 ("assistant".into(), "b".into())
@@ -255,16 +299,4 @@ fn model_options_and_saved_chats_are_read_from_the_cli_output() {
         }
     );
     assert!(parse_saved_chat(r#"{"schema":"otro"}"#).is_err());
-}
-
-#[test]
-#[ignore = "needs the real CLI and agents installed"]
-fn real_options_load() {
-    let root = std::env::current_dir().unwrap();
-    let cli = find_cli(&root).expect("cli");
-    for agent in ["opencode", "claude", "codex"] {
-        let options = agent_options(&cli, &root, agent);
-        eprintln!("{agent}: {:?}", options.as_ref().map(|o| o.models.len()));
-        assert!(options.is_ok(), "{agent}: {options:?}");
-    }
 }

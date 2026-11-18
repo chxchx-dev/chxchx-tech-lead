@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from chxchx_tech_lead.integrations.agent_stream import normalize, provider_for, turn_command, turn_environment
+from chxchx_tech_lead.workspace.chat_stream_protocol import rust_normalizes
 
 # Captured from `codex exec --json` (codex-cli 0.166.0).
 CODEX_EVENTS = [
@@ -80,6 +81,20 @@ def test_normalizes_claude_stream_json() -> None:
     assert events[2]["title"] == "Bash: cat app.py" and events[2]["kind"] == "command"
     assert events[3]["id"] == "toolu_1" and events[3]["status"] == "completed" and events[3]["output"] == "print('hola')"
     assert events[4]["cost_usd"] == 0.01
+
+
+def test_rust_normalization_is_enabled_only_for_supported_non_live_streams(monkeypatch) -> None:
+    monkeypatch.setenv("CHXCHX_RUST_AGENT_STREAM", "1")
+
+    assert rust_normalizes("Claude", live=True)
+    assert rust_normalizes("Codex", live=False)
+    assert not rust_normalizes("Codex", live=True)
+    assert rust_normalizes("OpenCode", live=False)
+    assert not rust_normalizes("OpenCode", live=True)
+    assert not rust_normalizes("Other", live=False)
+
+    monkeypatch.delenv("CHXCHX_RUST_AGENT_STREAM")
+    assert not rust_normalizes("OpenCode", live=False)
 
 
 def test_codex_flags_for_model_effort_and_images_end_before_the_prompt() -> None:
