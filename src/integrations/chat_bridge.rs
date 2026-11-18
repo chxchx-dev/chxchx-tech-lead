@@ -1,12 +1,11 @@
 //! The visual chat's connection to `chxchx-tech agent chat`.
 //!
-//! The Python CLI still runs provider turns and owns provider permissions and context release.
-//! Rust `chat_state` owns the visible transcript. This module finds a compatible CLI, runs a turn
-//! and answers its questions; it knows nothing about windows.
+//! The Python CLI still runs provider turns. Rust owns the visible transcript and Claude's live
+//! control responses while this module finds a compatible CLI, runs a turn and answers its cards.
 pub use crate::integrations::agent_catalog::{AgentOptions, ModelOption};
 use crate::integrations::executable_search::{agent_path, find_executable, find_in};
 use serde_json::Value;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -19,8 +18,12 @@ use std::time::{Duration, Instant};
 pub const CLI_ENV: &str = "CHXCHX_TECH_CLI";
 
 /// What a CLI must print for `agent chat --help` to be the one that speaks the chat protocol.
-const REQUIRED_CHAT_OPTIONS: [&str; 3] =
-    ["--live", "--resume-decided-by-rust", "--resume-recap-file"];
+const REQUIRED_CHAT_OPTIONS: [&str; 4] = [
+    "--live",
+    "--resume-decided-by-rust",
+    "--resume-recap-file",
+    "--rust-context-file",
+];
 
 pub(super) fn command(cli: &Path) -> Command {
     let mut command = Command::new(cli);
@@ -91,6 +94,9 @@ pub(super) fn run_short(mut process: Command, limit: Duration) -> Result<(i32, S
 /// Whether this CLI is the one that runs chat turns (the Rust CLI, also named `chxchx-tech`, is not).
 pub fn supports_chat(cli: &Path) -> bool {
     let mut process = command(cli);
+    // Typer/Rich shortens long options in narrow piped help output, which made a compatible CLI
+    // look too old to Studio. The probe needs the complete option names, not a terminal layout.
+    process.env("COLUMNS", "200");
     process.args(["agent", "chat", "--help"]);
     matches!(run_short(process, Duration::from_secs(20)), Ok((0, text)) if REQUIRED_CHAT_OPTIONS.iter().all(|option| text.contains(option)))
 }
@@ -167,6 +173,7 @@ pub fn find_cli(project: &Path) -> Option<PathBuf> {
 #[derive(Clone, Debug, Default)]
 pub struct TurnSpec {
     pub agent: String,
+    pub provider: String,
     pub project: PathBuf,
     pub prompt: String,
     /// Recap built by Rust when a restored provider session no longer exists.
@@ -188,8 +195,11 @@ pub struct Turn {
     stdin: Option<ChildStdin>,
     events: Receiver<Value>,
     stderr: Arc<Mutex<VecDeque<String>>>,
+    provider: String,
+    pending_claude: Arc<Mutex<HashMap<String, Value>>>,
     prompt_file: PathBuf,
     resume_recap_file: Option<PathBuf>,
+    rust_context_file: Option<PathBuf>,
     pub exit: Option<i32>,
 }
 
@@ -198,15 +208,44 @@ impl Turn {
         // The prompt travels in a file: a command line has length limits and quoting rules.
         let prompt_file = temporary_chat_file("prompt");
         if let Err(error) = std::fs::write(&prompt_file, &spec.prompt) {
-            remove_turn_files(&prompt_file, None);
+            remove_turn_files(&prompt_file, None, None);
             return Err(error.to_string());
         }
+        // Studio prepares context only for a new provider session. If compaction cannot be done,
+        // leave the option out so the Python adapter can use its existing fallback path.
+        let needs_new_context = spec.session.as_deref().is_none_or(str::is_empty);
+        let rust_context_file = if needs_new_context {
+            match crate::features::context_compaction::compact_context(&spec.project) {
+                Ok(result) => {
+                    let compacted_sections = result.moved_count();
+                    let path = temporary_chat_file("context");
+                    let context =
+                        super::chat_context::initial_context(&spec.project, &spec.provider);
+                    let payload = serde_json::json!({
+                        "schema": "chxchx.studio-chat-context",
+                        "schema_version": 1,
+                        "context": context,
+                        "compacted_sections": compacted_sections,
+                    });
+                    match std::fs::write(&path, payload.to_string()) {
+                        Ok(()) => Some(path),
+                        Err(_) => {
+                            let _ = std::fs::remove_file(path);
+                            None
+                        }
+                    }
+                }
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
         let resume_recap_file = if spec.resume_recap.is_empty() {
             None
         } else {
             let path = temporary_chat_file("recap");
             if let Err(error) = std::fs::write(&path, &spec.resume_recap) {
-                remove_turn_files(&prompt_file, Some(&path));
+                remove_turn_files(&prompt_file, Some(&path), rust_context_file.as_deref());
                 return Err(error.to_string());
             }
             Some(path)
@@ -226,6 +265,9 @@ impl Turn {
             ]);
         if let Some(path) = &resume_recap_file {
             process.arg("--resume-recap-file").arg(path);
+        }
+        if let Some(path) = &rust_context_file {
+            process.arg("--rust-context-file").arg(path);
         }
         if spec.network {
             process.arg("--network");
@@ -256,29 +298,79 @@ impl Turn {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|error| {
-                remove_turn_files(&prompt_file, resume_recap_file.as_deref());
+                remove_turn_files(
+                    &prompt_file,
+                    resume_recap_file.as_deref(),
+                    rust_context_file.as_deref(),
+                );
                 format!("No pude iniciar el CLI: {error}")
             })?;
         let stdin = child.stdin.take();
         let Some(stdout) = child.stdout.take() else {
             let _ = child.kill();
             let _ = child.wait();
-            remove_turn_files(&prompt_file, resume_recap_file.as_deref());
+            remove_turn_files(
+                &prompt_file,
+                resume_recap_file.as_deref(),
+                rust_context_file.as_deref(),
+            );
             return Err("sin salida".into());
         };
         let Some(stderr) = child.stderr.take() else {
             let _ = child.kill();
             let _ = child.wait();
-            remove_turn_files(&prompt_file, resume_recap_file.as_deref());
+            remove_turn_files(
+                &prompt_file,
+                resume_recap_file.as_deref(),
+                rust_context_file.as_deref(),
+            );
             return Err("sin errores".into());
         };
         let (sender, events) = channel();
+        let pending_claude = Arc::new(Mutex::new(HashMap::new()));
+        let reader_pending_claude = pending_claude.clone();
         std::thread::spawn(move || {
             for line in BufReader::new(stdout).split(b'\n').map_while(Result::ok) {
                 if let Ok(value) = serde_json::from_slice::<Value>(&line) {
                     if value["type"] == "provider_record" {
                         let provider = value["provider"].as_str().unwrap_or_default();
                         let record = &value["record"];
+                        if provider == "Claude"
+                            && let Some(request_id) = record["request_id"].as_str()
+                        {
+                            match record["type"].as_str() {
+                                Some("control_request") => {
+                                    if let Ok(mut pending) = reader_pending_claude.lock() {
+                                        pending.insert(request_id.to_owned(), record.clone());
+                                    }
+                                    if !request_id.is_empty()
+                                        && record["request"]["subtype"].as_str()
+                                            != Some("can_use_tool")
+                                    {
+                                        let internal = serde_json::json!({
+                                            "type":"chxchx_internal_claude_control",
+                                            "request_id":request_id
+                                        });
+                                        if sender.send(internal).is_err() {
+                                            return;
+                                        }
+                                        super::wake::notify();
+                                        continue;
+                                    }
+                                }
+                                Some("control_cancel_request") => {
+                                    if let Ok(mut pending) = reader_pending_claude.lock() {
+                                        pending.remove(request_id);
+                                    }
+                                }
+                                Some("result") => {
+                                    if let Ok(mut pending) = reader_pending_claude.lock() {
+                                        pending.clear();
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
                         for event in super::agent_stream::normalize(provider, record) {
                             if sender.send(event).is_err() {
                                 return;
@@ -312,22 +404,25 @@ impl Turn {
             stdin,
             events,
             stderr: tail,
+            provider: spec.provider.clone(),
+            pending_claude,
             prompt_file,
             resume_recap_file,
+            rust_context_file,
             exit: None,
         })
     }
 
     /// Events printed since the last call.
     pub fn poll(&mut self) -> Vec<Value> {
-        let mut found: Vec<Value> = self.events.try_iter().collect();
+        let mut found = self.consume_internal_events(self.events.try_iter().collect());
         if self.exit.is_none()
             && let Some(child) = self.child.as_mut()
             && let Ok(Some(status)) = child.try_wait()
         {
             self.exit = Some(status.code().unwrap_or(-1));
             // Whatever was printed right before exiting.
-            found.extend(drain_after_exit(&self.events));
+            found.extend(self.consume_internal_events(drain_after_exit(&self.events)));
         }
         found
     }
@@ -347,6 +442,24 @@ impl Turn {
 
     /// Answers a live permission or question: `{"type": "answer", "request_id": …, …}`.
     pub fn answer(&mut self, answer: &Value) -> Result<(), String> {
+        if self.provider == "Claude" && answer["type"].as_str() == Some("answer") {
+            let request_id = answer["request_id"]
+                .as_str()
+                .filter(|request_id| !request_id.is_empty())
+                .ok_or_else(|| "La respuesta de Claude no contiene request_id".to_owned())?;
+            let original = self
+                .pending_claude
+                .lock()
+                .map_err(|_| "No se pudo leer la solicitud pendiente de Claude".to_owned())?
+                .remove(request_id)
+                .ok_or_else(|| "La solicitud de Claude ya no está pendiente".to_owned())?;
+            let response = super::agent_live::claude_response(
+                request_id,
+                &original["request"]["input"],
+                answer,
+            );
+            return self.write_line(&response.to_string());
+        }
         self.write_line(&answer.to_string())
     }
 
@@ -362,9 +475,40 @@ impl Turn {
     }
 }
 
+impl Turn {
+    fn consume_internal_events(&mut self, events: Vec<Value>) -> Vec<Value> {
+        let mut visible = Vec::with_capacity(events.len());
+        for event in events {
+            if event["type"].as_str() != Some("chxchx_internal_claude_control") {
+                visible.push(event);
+                continue;
+            }
+            let Some(request_id) = event["request_id"].as_str() else {
+                continue;
+            };
+            if let Ok(mut pending) = self.pending_claude.lock() {
+                pending.remove(request_id);
+            }
+            let response = super::agent_live::claude_unsupported_response(request_id);
+            if let Err(error) = self.write_line(&response.to_string()) {
+                visible.push(serde_json::json!({
+                    "schema":"chxchx.agent-event", "schema_version":1,
+                    "type":"notice", "error":true,
+                    "message":format!("No se pudo responder a Claude: {error}")
+                }));
+            }
+        }
+        visible
+    }
+}
+
 impl Drop for Turn {
     fn drop(&mut self) {
-        remove_turn_files(&self.prompt_file, self.resume_recap_file.as_deref());
+        remove_turn_files(
+            &self.prompt_file,
+            self.resume_recap_file.as_deref(),
+            self.rust_context_file.as_deref(),
+        );
         if self.exit.is_some() {
             return;
         }
@@ -387,10 +531,9 @@ impl Drop for Turn {
     }
 }
 
-fn remove_turn_files(prompt: &Path, recap: Option<&Path>) {
-    let _ = std::fs::remove_file(prompt);
-    if let Some(recap) = recap {
-        let _ = std::fs::remove_file(recap);
+fn remove_turn_files(prompt: &Path, recap: Option<&Path>, context: Option<&Path>) {
+    for file in [Some(prompt), recap, context].into_iter().flatten() {
+        let _ = std::fs::remove_file(file);
     }
 }
 

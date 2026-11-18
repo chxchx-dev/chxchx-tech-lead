@@ -25,7 +25,7 @@ def json_lines(stream: IO[str]) -> Iterator[dict[str, Any]]:
             yield record
 
 
-def live_driver(plan: Any, process: subprocess.Popen[str], images: list[Path]) -> LiveClaude | LiveCodex | LiveOpenCode | LiveOpenCodeV2 | None:
+def live_driver(plan: Any, process: subprocess.Popen[str], images: list[Path], *, rust_controls: bool = False) -> LiveClaude | LiveCodex | LiveOpenCode | LiveOpenCodeV2 | None:
     if not plan.live:
         return None
     stdin = process.stdin
@@ -38,4 +38,4 @@ def live_driver(plan: Any, process: subprocess.Popen[str], images: list[Path]) -
     if plan.provider == "Codex":
         return LiveCodex(stdin, cwd=plan.cwd, access=Access(plan.mode, plan.network, plan.allow), session_id=plan.session_id,
                          model=plan.model or configured_model(plan.command), effort=plan.effort, images=images)
-    return LiveClaude(stdin)
+    return LiveClaude(stdin, rust_controls=rust_controls)

@@ -9,6 +9,7 @@ import pytest
 from chxchx_tech_lead.integrations.explicit_memory import user_visible_text
 from chxchx_tech_lead.workspace.agent_commands import CHAT_PANEL_REQUEST_MARKER
 from chxchx_tech_lead.workspace.chat_context import inline_project_context
+from chxchx_tech_lead.workspace import chat_first_message
 
 
 def project(tmp_path: Path) -> Path:
@@ -61,3 +62,34 @@ def test_memory_capture_ignores_the_inlined_notes(tmp_path: Path) -> None:
     # The first user message carries the context; project notes must not look like "remember this" requests.
     message = inline_project_context(project(tmp_path), provider="Claude") + f"\n\n{CHAT_PANEL_REQUEST_MARKER}\nhola"
     assert "Recuerda que el puerto" not in user_visible_text(message)
+
+
+def test_studio_uses_rust_context_without_rebuilding_or_compacting_it(tmp_path: Path, monkeypatch) -> None:
+    notices: list[tuple[str, bool]] = []
+
+    def recovered(_root: Path, _notify, *, compact: bool = True) -> str:
+        assert compact is False
+        return "\nmemoria recuperada"
+
+    def python_rebuild(*_args, **_kwargs):
+        raise AssertionError("Studio ya preparó el contexto en Rust")
+
+    monkeypatch.setattr(chat_first_message, "prepare_new_chat", recovered)
+    monkeypatch.setattr(chat_first_message, "inline_project_context", python_rebuild)
+    monkeypatch.setattr(chat_first_message, "new_chat_prompt", python_rebuild)
+
+    message = chat_first_message.first_message(
+        tmp_path,
+        "Claude",
+        "Continúa",
+        lambda text, is_error: notices.append((text, is_error)),
+        rust_context="contexto Rust",
+        rust_context_compacted_sections=2,
+        handoff="estado traspasado",
+        recap="recap anterior",
+    )
+
+    assert message.startswith("contexto Rust\nmemoria recuperada")
+    assert "traspasado" in message and "recap anterior" not in message
+    assert message.endswith(f"{CHAT_PANEL_REQUEST_MARKER}\nContinúa")
+    assert notices == [("Contexto compactado: 2 sección(es) antiguas movidas a .ai/history/.", False)]

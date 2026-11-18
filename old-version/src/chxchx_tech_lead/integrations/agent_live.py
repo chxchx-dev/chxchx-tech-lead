@@ -37,8 +37,9 @@ def user_message(prompt: str) -> str:
 class LiveClaude:
     """Answers Claude's `control_request`s while a turn runs. Safe to call `answer` from another thread."""
 
-    def __init__(self, stdin: IO[str]) -> None:
+    def __init__(self, stdin: IO[str], *, rust_controls: bool = False) -> None:
         self._stdin = stdin
+        self._rust_controls = rust_controls
         self._lock = threading.Lock()
         self._pending: dict[str, dict[str, Any]] = {}
         self.done = False  # set when the turn's result arrived: the caller then closes stdin
@@ -50,20 +51,26 @@ class LiveClaude:
         """Events for a control record, or None when the record is not one of ours."""
         kind = record.get("type")
         if kind == "control_cancel_request":
-            self._pending.pop(str(record.get("request_id")), None)
+            if not self._rust_controls:
+                self._pending.pop(str(record.get("request_id")), None)
             return []
         if kind == "result":
             self.done = True
         if kind != "control_request":
             return None
+        if self._rust_controls:
+            return []  # Rust owns request IDs and builds the provider response.
         request = record.get("request") if isinstance(record.get("request"), dict) else {}
         request_id = str(record.get("request_id") or "")
+        data = request.get("input") if isinstance(request.get("input"), dict) else {}
+        if request_id:
+            self._pending[request_id] = data
         if request.get("subtype") != "can_use_tool" or not request_id:
-            self._respond(request_id, {"subtype": "error", "error": "Solicitud no soportada"}, ok=False)
+            if not self._rust_controls:
+                self._pending.pop(request_id, None)
+                self._respond(request_id, {"subtype": "error", "error": "Solicitud no soportada"}, ok=False)
             return []
         name = str(request.get("tool_name") or "")
-        data = request.get("input") if isinstance(request.get("input"), dict) else {}
-        self._pending[request_id] = data
         identifier = str(request.get("tool_use_id") or request_id)
         if name == "AskUserQuestion":
             return [_question_event(request_id, identifier, data)]
@@ -91,6 +98,16 @@ class LiveClaude:
         """Nobody is going to answer any more (the host closed): refuse what is still waiting."""
         for request_id in list(self._pending):
             self.answer({"request_id": request_id, "behavior": "deny"})
+
+    def forward_response(self, message: dict[str, Any]) -> None:
+        """Forward a provider response already constructed by the Rust host."""
+        response = message.get("response") if isinstance(message.get("response"), dict) else {}
+        request_id = str(response.get("request_id") or "")
+        if not request_id:
+            return
+        if not self._rust_controls and self._pending.pop(request_id, None) is None:
+            return
+        self._write(json.dumps(message, ensure_ascii=False) + "\n")
 
     def finish(self) -> None:
         try:

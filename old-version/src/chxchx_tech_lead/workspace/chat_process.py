@@ -46,6 +46,10 @@ def watch_cancel(source: IO[str], process: subprocess.Popen[str], cancelled: thr
                 continue
             if isinstance(message, dict) and message.get("type") == "answer":
                 live.answer(message)
+            elif isinstance(message, dict) and message.get("type") == "control_response":
+                forward_response = getattr(live, "forward_response", None)
+                if forward_response is not None:
+                    forward_response(message)
     # EOF also lands here: the caller went away, so never leave the agent running.
     if process.poll() is not None:
         return

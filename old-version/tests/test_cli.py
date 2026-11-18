@@ -93,7 +93,7 @@ def test_agent_chat_runtime_failure_records_provider_and_exit_code(tmp_path: Pat
     project.mkdir()
     monkeypatch.setenv("CHXCHX_TECH_HOME", str(tmp_path / "chxchx-home"))
     monkeypatch.setattr(
-        "chxchx_tech_lead.commands.agents.plan_chat_turn",
+        "chxchx_tech_lead.commands.agent_chat.plan_chat_turn",
         lambda *_args, **_kwargs: SimpleNamespace(provider="OpenCode"),
     )
 
@@ -102,7 +102,7 @@ def test_agent_chat_runtime_failure_records_provider_and_exit_code(tmp_path: Pat
         emit({"type": "done", "exit_code": 2, "cancelled": False})
         return 2
 
-    monkeypatch.setattr("chxchx_tech_lead.commands.agents.run_chat_turn", fail_turn)
+    monkeypatch.setattr("chxchx_tech_lead.commands.agent_chat.run_chat_turn", fail_turn)
 
     result = runner.invoke(app, ["agent", "chat", "opencode", "--path", str(project), "--prompt", "hola"])
     errors = list_errors(project_path=project)

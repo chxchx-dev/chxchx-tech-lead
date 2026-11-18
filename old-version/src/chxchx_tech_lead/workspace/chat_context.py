@@ -31,10 +31,15 @@ _MAX_CONTEXT_CHARS = 36_000
 
 
 def prepare_new_chat(
-    project_root: Path, notify: Notifier, *, opencode_executable: str | None = None
+    project_root: Path, notify: Notifier, *, opencode_executable: str | None = None, compact: bool = True
 ) -> str:
-    """Compact context files and return the text to append to a new-chat prompt."""
-    _compact(project_root, notify)
+    """Compact context files and return the text to append to a new-chat prompt.
+
+    Studio can supply context already compacted and read by Rust; terminal callers keep the
+    Python implementation as their fallback.
+    """
+    if compact:
+        _compact(project_root, notify)
     extra = ""
     try:
         memories = recover_explicit_memories(project_root, **_memory_options(opencode_executable))

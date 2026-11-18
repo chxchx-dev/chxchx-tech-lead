@@ -67,6 +67,7 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
     };
     let spec = TurnSpec {
         agent: chat.agent.id.clone(),
+        provider: state_provider(chat.agent.provider).to_owned(),
         project: root,
         prompt: with_images(prompt, attached.len()),
         resume_recap: chat.resume_recap.clone(),

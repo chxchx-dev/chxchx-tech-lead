@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 #[cfg(any(target_os = "macos", windows))]
+#[cfg(target_os = "macos")]
 use std::process::Command;
 #[cfg(target_os = "linux")]
 use std::sync::{Mutex, OnceLock};
@@ -265,7 +266,7 @@ pub fn resources_overview_payload(current_path: &Path) -> Result<Value, String> 
             current.display()
         ));
     }
-    let mut paths = BTreeMap::<String, (String, std::path::PathBuf)>::new();
+    let mut paths = BTreeMap::<String, (String, std::path::PathBuf, String)>::new();
     for project in catalog
         .projects
         .into_iter()
@@ -277,7 +278,7 @@ pub fn resources_overview_payload(current_path: &Path) -> Result<Value, String> 
         let Ok(path) = fs::canonicalize(&raw_path) else {
             continue;
         };
-        paths.insert(path.display().to_string(), (project.alias, path));
+        paths.insert(path.display().to_string(), (project.alias, path, raw_path));
     }
     paths
         .entry(current.display().to_string())
@@ -286,12 +287,12 @@ pub fn resources_overview_payload(current_path: &Path) -> Result<Value, String> 
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_else(|| current.display().to_string());
-            (name, current.clone())
+            (name, current.clone(), current_path.display().to_string())
         });
 
     let system = read_system_resources();
     let mut projects = Vec::with_capacity(paths.len());
-    for (key, (alias, root)) in paths {
+    for (_canonical_key, (alias, root, display_path)) in paths {
         let config = config_from_project(&root).unwrap_or_default();
         let mut process_map = crate::features::workspace_processes::list_readonly(&root)
             .unwrap_or_default()
@@ -325,7 +326,7 @@ pub fn resources_overview_payload(current_path: &Path) -> Result<Value, String> 
         projects.push(json!({
             "alias": alias,
             "name": root.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default(),
-            "path": key,
+            "path": display_path,
             "status": read_workspace_status(&root),
             "trusted": trusted,
             "running_count": summary.running_count,

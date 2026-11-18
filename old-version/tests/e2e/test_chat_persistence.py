@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 
 from chxchx_tech_lead.cli import app
 from chxchx_tech_lead.workspace import agent_chat
+from chxchx_tech_lead.workspace import chat_context
 from chxchx_tech_lead.workspace.chat_state import load_state, mark_unverified, state_payload
 
 
@@ -72,7 +73,7 @@ def test_studio_resume_decision_and_recap_cross_the_python_cli_boundary(
 ) -> None:
     recap = tmp_path / "resume-recap.txt"
     recap.write_text("<archivo-de-contexto>\nPersona: migrar\n</archivo-de-contexto>", encoding="utf-8")
-    monkeypatch.setattr("chxchx_tech_lead.commands.agents._workspace_service", lambda _path: _service(tmp_path))
+    monkeypatch.setattr("chxchx_tech_lead.commands.agent_chat._workspace_service", lambda _path: _service(tmp_path))
 
     def unexpected_lookup(*_args):
         raise AssertionError("the Rust-owned decision must not be repeated in Python")
@@ -87,6 +88,43 @@ def test_studio_resume_decision_and_recap_cross_the_python_cli_boundary(
     assert result.exit_code == 0, result.output
     assert "Persona: migrar" in run["stdin"]
     assert run["stdin"].rstrip().endswith("¿en qué íbamos?")
+
+
+def test_studio_rust_context_contract_crosses_the_python_cli_boundary(
+    tmp_path: Path, fake_bin, monkeypatch
+) -> None:
+    context_file = tmp_path / "rust-context.json"
+    context_file.write_text(json.dumps({
+        "schema": "chxchx.studio-chat-context",
+        "schema_version": 1,
+        "context": "CONTEXTO_RUST_PREPARADO",
+        "compacted_sections": 2,
+    }), encoding="utf-8")
+    monkeypatch.setattr(
+        "chxchx_tech_lead.commands.agent_chat._workspace_service",
+        lambda _path: _service(tmp_path),
+    )
+    monkeypatch.setattr(
+        chat_context,
+        "_compact",
+        lambda *_args: pytest.fail("Rust ya compactó el contexto que entrega"),
+    )
+    events: list[dict] = []
+    monkeypatch.setattr(
+        "chxchx_tech_lead.commands.agent_chat.json_line_emitter",
+        lambda: events.append,
+    )
+
+    result = CliRunner().invoke(app, [
+        "agent", "chat", "opencode", "--path", str(tmp_path), "--prompt", "pregunta",
+        "--resume-decided-by-rust", "--rust-context-file", str(context_file),
+    ])
+
+    run = _runs(fake_bin)[-1]
+    assert result.exit_code == 0, result.output
+    assert run["stdin"].count("CONTEXTO_RUST_PREPARADO") == 1
+    assert "Studio ya leyó por ti" not in run["stdin"]
+    assert any("Contexto compactado: 2" in event.get("message", "") for event in events)
 
 
 def test_the_persons_message_survives_a_turn_that_never_finished(tmp_path: Path, monkeypatch) -> None:

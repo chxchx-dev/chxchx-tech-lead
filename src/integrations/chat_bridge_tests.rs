@@ -49,7 +49,7 @@ fn only_a_cli_that_speaks_the_chat_protocol_is_accepted() {
     let dir = scratch("probe");
     let good = fake_cli(
         &dir,
-        r#"[ "$1 $2 $3" = "agent chat --help" ] && echo "Usage: agent chat --live --lean --resume-decided-by-rust --resume-recap-file" && exit 0; exit 2"#,
+        r#"[ "$1 $2 $3" = "agent chat --help" ] && echo "Usage: agent chat --live --lean --resume-decided-by-rust --resume-recap-file --rust-context-file" && exit 0; exit 2"#,
     );
     assert!(supports_chat(&good));
     let other = scratch("probe-other");
@@ -74,6 +74,16 @@ fn only_a_cli_that_speaks_the_chat_protocol_is_accepted() {
         !supports_chat(&old_resume),
         "an adapter without the Rust resume options cannot safely receive a restored chat"
     );
+}
+
+#[test]
+fn the_chat_probe_gives_rich_enough_width_to_print_long_option_names() {
+    let dir = scratch("probe-rich-width");
+    let cli = fake_cli(
+        &dir,
+        r#"[ "$1 $2 $3" = "agent chat --help" ] && [ "$COLUMNS" = "200" ] && echo "Usage: agent chat --live --resume-decided-by-rust --resume-recap-file --rust-context-file" && exit 0; exit 2"#,
+    );
+    assert!(supports_chat(&cli));
 }
 
 #[test]
@@ -112,6 +122,10 @@ printf '%s
     );
     assert_eq!(turn.exit, Some(0));
     let args = fs::read_to_string(&log).unwrap();
+    assert!(
+        !args.contains("--rust-context-file"),
+        "resumed sessions do not rebuild context"
+    );
     for part in [
         "agent chat claude --path",
         "--cancel-on-stdin --live --mode workspace-write",
@@ -148,8 +162,51 @@ printf '%s
 }
 
 #[test]
+fn a_new_turn_sends_and_cleans_the_rust_prepared_context_file() {
+    let dir = scratch("turn-context");
+    let log = dir.join("args.log");
+    let cli = fake_cli(
+        &dir,
+        &format!(
+            "echo \"$@\" > '{log}'; printf '%s\\n' '{done}'",
+            log = log.display(),
+            done = event("done", ",\"exit_code\":0")
+        ),
+    );
+    let mut turn = Turn::start(&cli, &spec(&dir)).unwrap();
+    wait_done(&mut turn);
+
+    let args = fs::read_to_string(log).unwrap();
+    let context_path = args
+        .split_whitespace()
+        .skip_while(|arg| *arg != "--rust-context-file")
+        .nth(1)
+        .unwrap();
+    let context: Value = serde_json::from_slice(&fs::read(context_path).unwrap()).unwrap();
+    assert_eq!(context["schema"], "chxchx.studio-chat-context");
+    assert_eq!(context["schema_version"], 1);
+    assert_eq!(context["compacted_sections"], 0);
+    assert!(
+        context["context"]
+            .as_str()
+            .unwrap()
+            .contains("Ámbito de memoria obligatorio")
+    );
+    assert!(
+        context["context"]
+            .as_str()
+            .unwrap()
+            .contains("no los busques ni ejecutes comandos")
+    );
+
+    drop(turn);
+    assert!(!Path::new(context_path).exists());
+}
+
+#[test]
 fn raw_claude_control_records_become_live_cards_before_the_host_answers() {
     let dir = scratch("raw-control");
+    let response_path = dir.join("response.json");
     let record = serde_json::json!({
         "schema":"chxchx.agent-event", "schema_version":1, "type":"provider_record", "provider":"Claude",
         "record":{"type":"control_request", "request_id":"r1", "request":{
@@ -161,11 +218,14 @@ fn raw_claude_control_records_become_live_cards_before_the_host_answers() {
     let cli = fake_cli(
         &dir,
         &format!(
-            "printf '%s\\n' '{record}'; read answer; printf '%s\\n' '{done}'",
+            "printf '%s\\n' '{record}'; read answer; printf '%s' \"$answer\" > '{response_path}'; printf '%s\\n' '{done}'",
+            response_path = response_path.display(),
             done = event("done", r#","exit_code":0"#)
         ),
     );
-    let mut turn = Turn::start(&cli, &spec(&dir)).unwrap();
+    let mut wanted = spec(&dir);
+    wanted.provider = "Claude".into();
+    let mut turn = Turn::start(&cli, &wanted).unwrap();
     let mut seen = Vec::new();
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline
@@ -186,6 +246,43 @@ fn raw_claude_control_records_become_live_cards_before_the_host_answers() {
         .unwrap();
     seen.extend(wait_done(&mut turn));
     assert!(seen.iter().any(|event| event["type"] == "done"));
+    let response: Value = serde_json::from_slice(&fs::read(response_path).unwrap()).unwrap();
+    assert_eq!(response["type"], "control_response");
+    assert_eq!(response["response"]["request_id"], "r1");
+    assert_eq!(
+        response["response"]["response"]["updatedInput"]["command"],
+        "python3 -V"
+    );
+}
+
+#[test]
+fn unsupported_claude_live_requests_are_answered_by_rust() {
+    let dir = scratch("unsupported-control");
+    let response_path = dir.join("response.json");
+    let record = serde_json::json!({
+        "schema":"chxchx.agent-event", "schema_version":1, "type":"provider_record", "provider":"Claude",
+        "record":{"type":"control_request", "request_id":"unsupported-1", "request":{
+            "subtype":"initialize", "input":{}
+        }}
+    })
+    .to_string();
+    let cli = fake_cli(
+        &dir,
+        &format!(
+            "printf '%s\\n' '{record}'; read response; printf '%s' \"$response\" > '{response_path}'; printf '%s\\n' '{done}'",
+            response_path = response_path.display(),
+            done = event("done", r#","exit_code":0"#)
+        ),
+    );
+    let mut wanted = spec(&dir);
+    wanted.provider = "Claude".into();
+    let mut turn = Turn::start(&cli, &wanted).unwrap();
+    let events = wait_done(&mut turn);
+    assert!(events.iter().any(|event| event["type"] == "done"));
+    let response: Value = serde_json::from_slice(&fs::read(response_path).unwrap()).unwrap();
+    assert_eq!(response["type"], "control_response");
+    assert_eq!(response["response"]["subtype"], "error");
+    assert_eq!(response["response"]["request_id"], "unsupported-1");
 }
 
 #[test]
@@ -274,7 +371,7 @@ fn the_cli_is_found_through_the_environment_variable_first() {
     let dir = scratch("find");
     let good = fake_cli(
         &dir,
-        r#"echo "agent chat --live --resume-decided-by-rust --resume-recap-file"; exit 0"#,
+        r#"echo "agent chat --live --resume-decided-by-rust --resume-recap-file --rust-context-file"; exit 0"#,
     );
     let found = candidates(&dir, &OsString::new());
     assert!(found.is_empty() || found[0] != good);

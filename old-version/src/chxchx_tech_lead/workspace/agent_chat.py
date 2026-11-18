@@ -31,7 +31,8 @@ from .chat_options import agent_options_payload  # noqa: F401  (public name kept
 from .chat_attachments import remove_staged_images, stage_images, validated_image
 from .chat_process import delete_opencode_session, drain, watch_cancel
 from .chat_context import capture_after_session
-from .chat_first_message import first_message
+from .chat_first_message import prepare_turn_prompt
+from .chat_inputs import load_prompt
 from .chat_release import release_context
 from .chat_resume import load_resume_recap, resolve_resume
 from .chat_stream_protocol import json_line_emitter, rust_normalizes
@@ -73,18 +74,6 @@ class ChatTurnPlan:
     opencode_major: int | None = None
     # The session of a restored chat is gone: the saved conversation travels in the first message of a new one.
     recap: str = ""
-
-
-def load_prompt(prompt: str, prompt_file: Path | None) -> str:
-    """The turn's prompt, from the option or from a file (a long prompt would not fit a command line)."""
-    if prompt_file is not None:
-        try:
-            return prompt_file.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
-            raise WorkspaceOperationError(f"No pude leer el archivo del prompt: {exc}") from exc
-    if not prompt.strip():
-        raise WorkspaceOperationError("Indica el mensaje con --prompt o --prompt-file")
-    return prompt
 
 
 def plan_chat_turn(
@@ -152,7 +141,8 @@ def plan_chat_turn(
 
 
 def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: IO[str] | None = None,
-                  housekeeping: bool = False) -> int:
+                  housekeeping: bool = False, rust_context: str | None = None,
+                  rust_context_compacted_sections: int = 0) -> int:
     """Run the turn; a "cancel" line or EOF on `cancel_input` stops the agent.
 
     `housekeeping` is an internal turn (the hand-off): no start/done events, no context, journal or memory.
@@ -179,8 +169,19 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
         else:
             listed = "\n".join(f"- {path.relative_to(plan.project_root).as_posix()}" for path in staged)
             prompt += f"\n\nImágenes adjuntas por el usuario (ábrelas con la herramienta Read antes de responder):\n{listed}"
-    if plan.session_id is None and not plan.lean and not housekeeping:
-        prompt = first_message(plan.project_root, plan.provider, prompt, notify, handoff=plan.handoff, recap=plan.recap)
+    prompt = prepare_turn_prompt(
+        plan.project_root,
+        plan.provider,
+        prompt,
+        notify,
+        session_id=plan.session_id,
+        lean=plan.lean,
+        housekeeping=housekeeping,
+        handoff=plan.handoff,
+        recap=plan.recap,
+        rust_context=rust_context,
+        rust_context_compacted_sections=rust_context_compacted_sections,
+    )
     if remember:
         _remember(begin_turn, plan, plan.session_id or plan.continued_from, user_text)
     started_at = datetime.now(timezone.utc)
@@ -211,7 +212,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     stderr_tail: deque[str] = deque(maxlen=20)
     cancelled = threading.Event()
     assert process.stdin is not None
-    live = live_driver(plan, process, staged)
+    rust_stream = rust_normalizes(plan.provider, live=plan.live)
+    live = live_driver(plan, process, staged, rust_controls=rust_stream and plan.provider == "Claude")
     threading.Thread(target=drain, args=(process.stderr, stderr_tail), daemon=True).start()
     if cancel_input is not None:
         threading.Thread(target=watch_cancel, args=(cancel_input, process, cancelled, live), daemon=True).start()
@@ -223,8 +225,6 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
             process.stdin.close()
     except OSError:
         pass
-
-    rust_stream = rust_normalizes(plan.provider, live=plan.live)
 
     def deliver(event: dict[str, Any], *, publish: bool = True) -> None:
         event = watch.observe(event, getattr(live, "model_seen", None))
@@ -242,7 +242,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
             if live.done:
                 live.finish()  # the turn is over: let the agent exit
             if controls is not None:
-                if rust_stream and plan.provider == "Claude" and record.get("type") == "control_request":
+                if rust_stream and plan.provider == "Claude" and record.get("type") in {"control_request", "control_cancel_request"}:
                     emit({"type": "provider_record", "provider": plan.provider, "record": record})
                 else:
                     for event in controls:

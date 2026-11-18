@@ -78,11 +78,16 @@ pub fn list_conversations_in(
     query: &str,
     limit: usize,
 ) -> Vec<Conversation> {
+    let original_project_root = project_root.to_path_buf();
     let Ok(project_root) = project_root.canonicalize() else {
         return Vec::new();
     };
     let mut conversations = codex_conversations(&project_root, codex_home);
-    conversations.extend(claude_conversations(&project_root, claude_config_dir));
+    conversations.extend(claude_conversations(
+        &project_root,
+        &original_project_root,
+        claude_config_dir,
+    ));
     let query = query.trim().to_lowercase();
     if !query.is_empty() {
         conversations.retain(|conversation| searchable_text(conversation).contains(&query));
@@ -200,9 +205,21 @@ fn read_codex(
     )
 }
 
-fn claude_conversations(project_root: &Path, config_dir: &Path) -> Vec<Conversation> {
+fn claude_conversations(
+    project_root: &Path,
+    original_project_root: &Path,
+    config_dir: &Path,
+) -> Vec<Conversation> {
     let mut files = Vec::new();
-    for folder in claude_project_dirs(config_dir, project_root) {
+    let mut folders = Vec::new();
+    for root in [original_project_root, project_root] {
+        for folder in claude_project_dirs(config_dir, root) {
+            if !folders.contains(&folder) {
+                folders.push(folder);
+            }
+        }
+    }
+    for folder in folders {
         collect_jsonl(&folder, 0, &mut files);
     }
     files.retain(|(path, _)| path.extension().and_then(|ext| ext.to_str()) == Some("jsonl"));
@@ -219,28 +236,25 @@ fn claude_project_dirs(config_dir: &Path, project_root: &Path) -> Vec<PathBuf> {
     if !regular_directory(&projects) {
         return Vec::new();
     }
-    let raw = project_root.to_string_lossy();
-    let sanitized = raw
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character
-            } else {
-                '-'
+    let mut roots = vec![project_root.to_string_lossy().into_owned()];
+    if let Some(normalized) = without_windows_verbatim_prefix(project_root) {
+        roots.push(normalized);
+    }
+    let mut names = Vec::new();
+    for raw in roots {
+        let sanitized = sanitize_claude_project_path(&raw);
+        let legacy = raw.replace(['\\', '/', ':'], "-");
+        names.extend([sanitized.clone(), legacy]);
+        if sanitized.len() > 200 {
+            let prefix = &sanitized[..200];
+            if let Ok(entries) = fs::read_dir(&projects) {
+                names.extend(entries.flatten().filter_map(|entry| {
+                    let name = entry.file_name();
+                    let name = name.to_str()?;
+                    name.starts_with(&format!("{prefix}-"))
+                        .then(|| name.to_owned())
+                }));
             }
-        })
-        .collect::<String>();
-    let legacy = raw.replace(['\\', '/', ':'], "-");
-    let mut names = vec![sanitized.clone(), legacy];
-    if sanitized.len() > 200 {
-        let prefix = &sanitized[..200];
-        if let Ok(entries) = fs::read_dir(&projects) {
-            names.extend(entries.flatten().filter_map(|entry| {
-                let name = entry.file_name();
-                let name = name.to_str()?;
-                name.starts_with(&format!("{prefix}-"))
-                    .then(|| name.to_owned())
-            }));
         }
     }
     let mut folders = Vec::new();
@@ -251,6 +265,27 @@ fn claude_project_dirs(config_dir: &Path, project_root: &Path) -> Vec<PathBuf> {
         }
     }
     folders
+}
+
+fn sanitize_claude_project_path(path: &str) -> String {
+    path.chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
+fn without_windows_verbatim_prefix(path: &Path) -> Option<String> {
+    let raw = path.to_str()?;
+    if let Some(unc) = raw.strip_prefix(r"\\?\UNC\") {
+        Some(format!(r"\\{unc}"))
+    } else {
+        raw.strip_prefix(r"\\?\").map(str::to_owned)
+    }
 }
 
 fn read_claude(path: &Path, project_root: &Path, modified_at: SystemTime) -> Option<Conversation> {

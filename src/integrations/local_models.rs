@@ -1558,7 +1558,6 @@ pub fn run_cli(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     const SAMPLE: &str = r#"{"schema":"chxchx.local-models","schema_version":1,
       "hardware":{"total_ram_bytes":22975639552,"available_ram_bytes":13642752000,"cpu_cores":8,

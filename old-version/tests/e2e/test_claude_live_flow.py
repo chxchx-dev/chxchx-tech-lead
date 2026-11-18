@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 import os
 import threading
+from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from chxchx_tech_lead.workspace import agent_chat
+from chxchx_tech_lead.integrations.agent_live import LiveClaude
 
 
 def _service(root: Path):
@@ -126,7 +128,14 @@ def test_studio_receives_claude_live_control_requests_as_provider_records(tmp_pa
     _, events = _turn(
         tmp_path,
         "PERMISO",
-        lambda event: {"type": "answer", "request_id": event["request_id"], "behavior": "allow"},
+        lambda event: {
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": event["request_id"],
+                "response": {"behavior": "allow", "updatedInput": {"command": "python3 -V"}},
+            },
+        },
     )
 
     requests = [
@@ -137,6 +146,46 @@ def test_studio_receives_claude_live_control_requests_as_provider_records(tmp_pa
     assert not [event for event in events if event["type"] == "permission"]
     response = next(row["response"] for row in fake_bin("claude") if "response" in row)
     assert response["behavior"] == "allow" and response["updatedInput"]["command"] == "python3 -V"
+
+
+def test_rust_built_claude_control_response_is_forwarded_without_rewriting(tmp_path: Path, fake_bin, monkeypatch) -> None:
+    monkeypatch.setenv("CHXCHX_RUST_CHAT_STATE", "1")
+    monkeypatch.setenv("CHXCHX_RUST_AGENT_STREAM", "1")
+
+    def answer(event):
+        return {
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": event["request_id"],
+                "response": {"behavior": "allow", "updatedInput": {"command": "python3 -V"}},
+            },
+        }
+
+    _, events = _turn(tmp_path, "PERMISO", answer)
+
+    assert events[-1]["type"] == "done" and events[-1]["exit_code"] == 0
+    response = next(row["response"] for row in fake_bin("claude") if "response" in row)
+    assert response["behavior"] == "allow" and response["updatedInput"]["command"] == "python3 -V"
+
+
+def test_rust_control_mode_leaves_pending_ids_and_response_validation_to_rust() -> None:
+    sink = StringIO()
+    live = LiveClaude(sink, rust_controls=True)
+    record = {
+        "type": "control_request",
+        "request_id": "rust-owned",
+        "request": {"subtype": "can_use_tool", "input": {"command": "ls"}},
+    }
+    response = {
+        "type": "control_response",
+        "response": {"subtype": "success", "request_id": "rust-owned", "response": {"behavior": "deny"}},
+    }
+
+    assert live.handle(record) == []
+    assert live._pending == {}
+    live.forward_response(response)
+    assert json.loads(sink.getvalue()) == response
 
 
 def test_lean_turns_are_never_live(tmp_path: Path) -> None:

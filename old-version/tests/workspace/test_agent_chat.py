@@ -10,6 +10,8 @@ from types import SimpleNamespace
 import pytest
 
 from chxchx_tech_lead.workspace import agent_chat
+from chxchx_tech_lead.workspace.agent_commands import CHAT_PANEL_REQUEST_MARKER
+from chxchx_tech_lead.workspace.chat_context_bridge import load_rust_context
 from chxchx_tech_lead.workspace.service import WorkspaceOperationError
 
 FAKE_CODEX = r"""
@@ -95,6 +97,28 @@ def test_new_chat_turn_streams_events_with_context(tmp_path: Path, isolated_home
     assert [event["type"] for event in events] == ["start", "session", "message", "done"]
     assert events[2]["text"] == "eco: ¿Qué imprime app.py?"
     assert events[-1] == {"type": "done", "exit_code": 0, "cancelled": False, "session_id": "t-fake"}
+
+
+def test_rust_context_is_used_once_for_a_fresh_studio_turn(tmp_path: Path, isolated_home) -> None:
+    script = tmp_path / "capture_prompt.py"
+    script.write_text(
+        "import json,sys\n"
+        "prompt=sys.stdin.buffer.read().decode('utf-8')\n"
+        "print(json.dumps({'type':'thread.started','thread_id':'t-rust'}),flush=True)\n"
+        "print(json.dumps({'type':'item.completed','item':{'id':'i0','type':'agent_message','text':prompt}}),flush=True)\n",
+        encoding="utf-8",
+    )
+    plan = agent_chat.ChatTurnPlan(
+        "codex", "Codex", tmp_path, tmp_path, [sys.executable, str(script)], "read-only", None
+    )
+    events: list[dict] = []
+
+    assert agent_chat.run_chat_turn(plan, "pregunta", events.append, rust_context="CONTEXTO_RUST") == 0
+
+    prompt = next(event["text"] for event in events if event["type"] == "message")
+    assert prompt.count("CONTEXTO_RUST") == 1
+    assert "Studio ya leyó por ti" not in prompt
+    assert prompt.replace("\r\n", "\n").endswith(f"{CHAT_PANEL_REQUEST_MARKER}\npregunta")
 
 
 def test_cancel_line_stops_the_agent(tmp_path: Path, isolated_home) -> None:
@@ -239,6 +263,26 @@ def test_load_prompt_prefers_the_file_and_rejects_empty_input(tmp_path: Path) ->
         agent_chat.load_prompt("  ", None)
     with pytest.raises(WorkspaceOperationError, match="No pude leer"):
         agent_chat.load_prompt("", tmp_path / "no-existe.txt")
+
+
+def test_rust_context_file_uses_the_versioned_bridge_contract(tmp_path: Path) -> None:
+    context_file = tmp_path / "context.json"
+    context_file.write_text(
+        json.dumps({
+            "schema": "chxchx.studio-chat-context",
+            "schema_version": 1,
+            "context": "Contexto preparado por Rust",
+            "compacted_sections": 3,
+        }),
+        encoding="utf-8",
+    )
+
+    assert load_rust_context(context_file) == ("Contexto preparado por Rust", 3)
+    assert load_rust_context(None) == (None, 0)
+
+    context_file.write_text('{"schema":"unknown"}', encoding="utf-8")
+    with pytest.raises(WorkspaceOperationError, match="contrato v1"):
+        load_rust_context(context_file)
 
 
 def test_a_lean_plan_is_always_read_only_and_ephemeral(tmp_path: Path, monkeypatch) -> None:

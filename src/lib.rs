@@ -7,6 +7,7 @@ pub mod features {
     pub mod catalog_view;
     pub mod chat_model;
     pub mod chat_state;
+    pub mod context_compaction;
     pub mod doctor;
     pub mod git;
     pub mod mcp_connectors;
