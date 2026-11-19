@@ -31,7 +31,12 @@ _MAX_CONTEXT_CHARS = 36_000
 
 
 def prepare_new_chat(
-    project_root: Path, notify: Notifier, *, opencode_executable: str | None = None, compact: bool = True
+    project_root: Path,
+    notify: Notifier,
+    *,
+    opencode_executable: str | None = None,
+    compact: bool = True,
+    include_journal: bool = True,
 ) -> str:
     """Compact context files and return the text to append to a new-chat prompt.
 
@@ -49,10 +54,11 @@ def prepare_new_chat(
             notify(f"Memoria explícita recuperada: {len(memories)} solicitud(es) del proyecto.", False)
     except OSError as exc:
         notify(f"No pude recuperar la memoria local del proyecto: {exc}", True)
-    try:
-        extra += recent_sessions_prompt(project_root)
-    except OSError as exc:
-        notify(f"No pude leer el diario de sesiones: {exc}", True)
+    if include_journal:
+        try:
+            extra += recent_sessions_prompt(project_root)
+        except OSError as exc:
+            notify(f"No pude leer el diario de sesiones: {exc}", True)
     return extra
 
 
@@ -94,6 +100,7 @@ def capture_after_session(
     provider: str | None,
     started_at: datetime,
     opencode_executable: str | None = None,
+    write_journal: bool = True,
 ) -> None:
     """Persist explicit memories and the session summary once an agent exits."""
     try:
@@ -101,7 +108,7 @@ def capture_after_session(
         persist_explicit_memories(project_root, memories)
     except OSError as exc:
         notify(f"No pude guardar la memoria local del proyecto: {exc}", True)
-    if provider is None:
+    if provider is None or not write_journal:
         return
     try:
         journal_options = {"opencode_executable": opencode_executable} if provider == "OpenCode" and opencode_executable else {}

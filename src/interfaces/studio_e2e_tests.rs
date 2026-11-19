@@ -303,6 +303,11 @@ fn a_conversation_from_opening_the_chat_to_the_answer() {
         saved["messages"][1]["text"],
         "Hola, soy el agente de prueba."
     );
+    let journal = std::fs::read_to_string(dir.join(".ai/history/SESSIONS.md")).unwrap();
+    assert!(journal.contains("Claude"));
+    assert!(journal.contains("`s-1`"));
+    assert!(journal.contains("- Inicio: hola"));
+    assert!(journal.contains("- Cierre del agente: Hola, soy el agente de prueba."));
     let commands = std::fs::read_to_string(dir.join("prompts.log.commands")).unwrap();
     assert!(commands.contains("agent chat claude"), "{commands}");
     assert!(!commands.contains("bridge agent-options"), "{commands}");

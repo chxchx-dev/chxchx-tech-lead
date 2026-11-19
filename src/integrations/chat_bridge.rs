@@ -291,6 +291,8 @@ impl Turn {
             .current_dir(&spec.project)
             // Rust Studio owns the visible transcript; the Python adapter only runs the provider.
             .env("CHXCHX_RUST_CHAT_STATE", "1")
+            // Rust also prepares and records the Studio session journal.
+            .env("CHXCHX_RUST_CHAT_JOURNAL", "1")
             // Claude stream-json and non-live Codex JSONL are normalized by Rust at this boundary.
             .env("CHXCHX_RUST_AGENT_STREAM", "1")
             .stdin(Stdio::piped())

@@ -91,6 +91,9 @@ pub fn inline_project_context(project_root: &Path, provider: &str) -> String {
 pub fn initial_context(project_root: &Path, provider: &str) -> String {
     let mut context = new_chat_prompt(project_root);
     context.push_str(&inline_project_context(project_root, provider));
+    context.push_str(&crate::features::chat_journal::recent_sessions_prompt(
+        project_root,
+    ));
     context
 }
 

@@ -68,6 +68,15 @@ def test_studio_can_delegate_visible_chat_state_persistence_to_rust(tmp_path: Pa
     assert load_state(tmp_path, "opencode") is None
 
 
+def test_studio_can_delegate_session_journal_writes_to_rust(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CHXCHX_RUST_CHAT_JOURNAL", "1")
+
+    _, code, _ = _turn(tmp_path, "hola desde Studio", monkeypatch)
+
+    assert code == 0
+    assert not (tmp_path / ".ai" / "history" / "SESSIONS.md").exists()
+
+
 def test_studio_resume_decision_and_recap_cross_the_python_cli_boundary(
     tmp_path: Path, fake_bin, monkeypatch
 ) -> None:

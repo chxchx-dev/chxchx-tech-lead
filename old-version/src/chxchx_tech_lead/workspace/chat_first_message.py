@@ -20,7 +20,12 @@ def first_message(
     rust_context: str | None = None,
     rust_context_compacted_sections: int = 0,
 ) -> str:
-    recovered = prepare_new_chat(project_root, notify, compact=rust_context is None)
+    recovered = prepare_new_chat(
+        project_root,
+        notify,
+        compact=rust_context is None,
+        include_journal=rust_context is None,
+    )
     if rust_context is None:
         context = new_chat_prompt(str(project_root)) + inline_project_context(project_root, provider=provider)
     else:

@@ -1,5 +1,12 @@
 # Handoff
 
+## Diario de sesiones Studio en Rust (2026-11-18)
+
+- Studio ahora escribe `.ai/history/SESSIONS.md` desde `features/chat_journal.rs` a partir del transcript visible que Rust persiste; no consulta la base de datos privada del proveedor. Al iniciar otra sesión Rust agrega los dos resúmenes más recientes al contexto v1. El adapter Python mantiene su ruta normal para el CLI independiente y omite lectura/escritura duplicada cuando Studio entrega el contrato Rust.
+- El resumen limita el archivo a 30 entradas y 256 KiB de lectura; el prompt se limita a dos entradas y 8.000 caracteres. Deduplica por proveedor/sesión, omite sesión vacía, usa el detector de secretos del estado visible y no sigue symlinks del diario.
+- Verificado en Fedora/Linux: formato, Clippy estricto, `cargo test --locked` (307 + 6 + 16), `git diff --check`; pytest completo (559 passed, 1 skipped, 10 deselected). El e2e de Studio afirma inicio/cierre y sesión escritos; siete unitarias cubren límites, deduplicación, continuidad del contexto, respuesta interrumpida y symlink. Sin smoke de proveedor real ni validación macOS/Windows/CI remoto.
+- Próximo: portar recuperación de memoria explícita y handoff persistido a Rust, luego reemplazar la ejecución Python por runners Rust (Claude, Codex app-server y OpenCode live). Mantener `old-version/` hasta cerrar comportamiento, distribución y pruebas multiplataforma; no crear servicio Python/C++ sin una necesidad técnica demostrada.
+
 ## Checkpoint Windows → Fedora (2026-11-18)
 
 - Continuar en la rama `migration/rust-chat-bridge`, creada desde `dev` en `716e6a5`. Este checkpoint agrupa el port del contexto inicial/compactación de Studio, ownership Rust del control Claude live y ajustes de rutas/smokes Rust→helper. `old-version/` se conserva porque todavía ejecuta los turnos de los proveedores.

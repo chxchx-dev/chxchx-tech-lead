@@ -402,13 +402,20 @@ fn tick(state: &mut Dashboard) {
             let stderr = turn.stderr_tail();
             chat.turn = None;
             let replies = std::mem::take(&mut chat.turn_replies);
-            let _ = crate::features::chat_state::end_turn(
+            let saved_state = crate::features::chat_state::end_turn(
                 &state.root,
                 &chat.agent.id,
                 turns::state_provider(chat.agent.provider),
                 Some(&chat.model.session_id),
                 replies.iter().map(String::as_str),
             );
+            if let Err(error) = saved_state {
+                state.message = format!("No pude guardar el historial del chat: {error}");
+            } else if let Err(error) =
+                crate::features::chat_journal::record_latest_chat(&state.root, &chat.agent.id)
+            {
+                state.message = format!("No pude guardar el resumen de la sesión: {error}");
+            }
             if let Some(started) = chat.turn_started.take()
                 && let Some(last) = chat
                     .model
