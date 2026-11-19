@@ -244,3 +244,33 @@ fn recent_codex_and_claude_requests_are_backfilled_before_a_new_studio_chat() {
     assert!(!memory.contains("no-guardar-esta"));
     assert!(!memory.contains("likes green"));
 }
+
+#[test]
+fn explicit_opencode_requests_are_backfilled_before_codex_and_claude_history() {
+    let project = Project::new("provider-history-opencode-project");
+    let codex = Project::new("provider-history-opencode-codex");
+    let claude = Project::new("provider-history-opencode-claude");
+    let conversation = chat_history::Conversation {
+        provider: "OpenCode".to_owned(),
+        session_id: "opencode-session".to_owned(),
+        title: "Recuerda usar pnpm".to_owned(),
+        modified_at: SystemTime::UNIX_EPOCH,
+        project_root: project.path().to_path_buf(),
+        transcript_path: project.path().to_path_buf(),
+        messages: vec![chat_history::ConversationMessage {
+            role: "user".to_owned(),
+            text: "Recuerda que el proyecto usa pnpm.".to_owned(),
+        }],
+    };
+
+    let (context, persisted) =
+        prepare_provider_history_from(project.path(), codex.path(), claude.path(), |_| {
+            vec![conversation]
+        });
+
+    assert_eq!(persisted.unwrap(), 1);
+    assert!(context.contains("el proyecto usa pnpm"));
+    let memory = fs::read_to_string(project.path().join(".ai/memory/PROJECT_MEMORY.md")).unwrap();
+    assert!(memory.contains("OpenCode"));
+    assert!(memory.contains("el proyecto usa pnpm"));
+}

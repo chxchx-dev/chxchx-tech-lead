@@ -205,9 +205,10 @@ inicia ningún turno.
 
 Studio guarda en `.ai/memory/PROJECT_MEMORY.md` las solicitudes directas de recordar que aparecen en sus
 transcripts visibles, omitiendo bloques inyectados y posibles secretos. Al abrir un chat y al iniciar **Nuevo chat**,
-también recupera en segundo plano solicitudes explícitas desde hasta diez conversaciones recientes de Codex y Claude
-del proyecto actual. Lee solo mensajes del usuario, con límites por transcript, y las deduplica antes de agregarlas.
-El historial privado de OpenCode aún no se incluye. Para revisar capturas automáticas antiguas:
+también recupera en segundo plano solicitudes explícitas desde hasta diez conversaciones recientes por proveedor,
+Codex, Claude y OpenCode, del proyecto actual. Lee solo mensajes del usuario, con límites por transcript, y las
+deduplica antes de agregarlas. OpenCode usa su CLI oficial con export sanitizado. Para revisar capturas automáticas
+antiguas:
 
 ```bash
 chxchx-tech workspace memory-prune . --dry-run # previsualiza sin escribir

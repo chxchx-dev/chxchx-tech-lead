@@ -216,8 +216,8 @@ cargo run --release --features visual-installer --bin chxchx-installer
 ```
 
 > **Migración en curso:** el historial visual (`agent chat-state`) ya se lee y reinicia en Rust. Studio también recupera
-> en segundo plano solicitudes explícitas de memoria desde historiales Codex y Claude del proyecto actual; OpenCode sigue
-> pendiente. Esta versión aún delega
+> en segundo plano solicitudes explícitas de memoria desde historiales Codex, Claude y OpenCode del proyecto actual.
+> Esta versión aún delega
 > los turnos del chat y algunos comandos al CLI Python de [`old-version/`](old-version/), que es temporal y se retirará
 > al completar el port y las pruebas. La arquitectura final no deja código de producto allí; cualquier runtime Python o
 > C++ indispensable vivirá como servicio independiente fuera de esa carpeta y se integrará mediante Rust. Los modelos
@@ -274,4 +274,4 @@ los procesos e integraciones externas viven en `integrations/`. Más reglas en [
 
 ## Estado
 
-Versión `0.6.3`. Los modelos locales ya tienen diagnóstico, instalación, retirada y configuración nativos en Rust. El historial de chat se restaura y reinicia en Rust, y Studio backfillea en segundo plano solicitudes explícitas desde Codex y Claude; OpenCode sigue pendiente. Falta portar los turnos y adapters del chat, actualización y comandos Python restantes, retirar el runtime Python del empaquetado y eliminar `old-version/` después de la verificación completa. También faltan QA nativa en Windows/macOS y verificar los builds de release.
+Versión `0.6.3`. Los modelos locales ya tienen diagnóstico, instalación, retirada y configuración nativos en Rust. El historial de chat se restaura y reinicia en Rust, y Studio backfillea en segundo plano solicitudes explícitas desde Codex, Claude y OpenCode. Falta portar los turnos y adapters del chat, actualización y comandos Python restantes, retirar el runtime Python del empaquetado y eliminar `old-version/` después de la verificación completa. También faltan QA nativa en Windows/macOS y verificar los builds de release.

@@ -18,6 +18,7 @@ pub mod local_models;
 pub mod mcp_clients;
 pub mod mcp_codex;
 pub mod mcp_files;
+pub mod opencode_history;
 pub mod process_memory;
 #[cfg(feature = "studio")]
 pub mod slash_commands;

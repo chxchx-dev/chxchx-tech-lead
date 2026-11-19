@@ -119,7 +119,7 @@ pub fn capture_studio_memories(project: &Path) -> Result<usize, String> {
     persist_explicit_memories(project, &memories)
 }
 
-/// Recover recent Codex and Claude memory requests off-thread before Studio's first new turn.
+/// Recover recent provider memory requests off-thread before Studio's first new turn.
 pub fn prepare_provider_history(project: &Path) -> (String, Result<usize, String>) {
     let codex_home = std::env::var_os("CODEX_HOME")
         .map(std::path::PathBuf::from)
@@ -127,13 +127,25 @@ pub fn prepare_provider_history(project: &Path) -> (String, Result<usize, String
     let claude_config = std::env::var_os("CLAUDE_CONFIG_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::env::home_dir().unwrap_or_default().join(".claude"));
-    prepare_provider_history_in(project, &codex_home, &claude_config)
+    prepare_provider_history_from(project, &codex_home, &claude_config, |root| {
+        crate::integrations::opencode_history::recent_user_conversations(root)
+    })
 }
 
+#[cfg(test)]
 fn prepare_provider_history_in(
     project: &Path,
     codex_home: &Path,
     claude_config: &Path,
+) -> (String, Result<usize, String>) {
+    prepare_provider_history_from(project, codex_home, claude_config, |_| Vec::new())
+}
+
+fn prepare_provider_history_from(
+    project: &Path,
+    codex_home: &Path,
+    claude_config: &Path,
+    opencode_history: impl FnOnce(&Path) -> Vec<chat_history::Conversation>,
 ) -> (String, Result<usize, String>) {
     let mut memories = recover_studio_memories(project);
     let studio_count = memories.len();
@@ -142,9 +154,13 @@ fn prepare_provider_history_in(
         .map(|memory| memory.message.to_lowercase())
         .collect::<HashSet<_>>();
 
-    'conversations: for conversation in
-        chat_history::recent_user_conversations_in(project, codex_home, claude_config)
-    {
+    let mut conversations = opencode_history(project);
+    conversations.extend(chat_history::recent_user_conversations_in(
+        project,
+        codex_home,
+        claude_config,
+    ));
+    'conversations: for conversation in conversations {
         let requested_at = history_date(conversation.modified_at);
         for message in conversation.messages {
             append_if_explicit(
