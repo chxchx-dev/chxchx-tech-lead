@@ -201,6 +201,20 @@ arquitectura final no conserva código en `old-version/`; cualquier runtime Pyth
 como servicio independiente, con contrato y pruebas, enlazado desde un adapter Rust. Sin confianza del proyecto no se
 inicia ningún turno.
 
+### Memoria explícita
+
+Studio guarda en `.ai/memory/PROJECT_MEMORY.md` las solicitudes directas de recordar que aparecen en sus
+transcripts visibles, omitiendo bloques inyectados y posibles secretos. Para revisar capturas automáticas antiguas:
+
+```bash
+chxchx-tech workspace memory-prune . --dry-run # previsualiza sin escribir
+chxchx-tech workspace memory-prune .            # aplica y guarda un backup fuera del proyecto
+```
+
+El comando solo evalúa secciones que ChxChx marcó como capturas automáticas; mantiene las notas manuales y
+elimina entradas inválidas o duplicadas. Si la escritura falla, el original permanece respaldado en
+`$CHXCHX_TECH_HOME/backups/` (o `~/.chxchx-tech-lead/backups/`).
+
 ## Windows
 
 Studio de Rust funciona en Windows 10/11 x64 sin instalar nada más que el propio binario

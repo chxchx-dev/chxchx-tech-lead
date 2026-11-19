@@ -120,6 +120,70 @@ fn minimal_init_previews_without_writes_and_apply_is_idempotent() {
 }
 
 #[test]
+fn rust_cli_previews_and_prunes_automatic_memory_with_a_recoverable_backup() {
+    let sandbox = Sandbox::new();
+    let memory_path = sandbox.path(".ai/memory/PROJECT_MEMORY.md");
+    fs::create_dir_all(memory_path.parent().unwrap()).unwrap();
+    let entry = |text: &str| {
+        format!(
+            "### Petición explícita de memoria — 2026-11-18\n\n<!-- explicit-memory:Claude:s1:0123456789ab -->\nOrigen: Claude, conversación `s1`.\n\n> {text}\n"
+        )
+    };
+    let original = format!(
+        "# Memoria\n\n## Notas propias\n\nUsamos Qt 6.8.\n\n{}\n{}\n{}\n{}\n## Más notas\n\nNo tocar.\n",
+        entry("Revisa el uso de memoria RAM."),
+        entry("Recuerda que el deploy es los viernes."),
+        entry("recuerda que el deploy es los viernes."),
+        entry("Recuerda mi contraseña: no-guardar-esta.")
+    );
+    fs::write(&memory_path, &original).unwrap();
+
+    let mut preview_args = command(&["workspace", "memory-prune"], &sandbox.project);
+    preview_args.push("--dry-run".into());
+    let preview = sandbox.cli(preview_args);
+    let preview_text = assert_success(&preview);
+    assert!(
+        preview_text.contains("se retirarían 3 entrada(s)"),
+        "{preview_text}"
+    );
+    assert!(preview_text.contains("memoria RAM"));
+    assert_eq!(fs::read_to_string(&memory_path).unwrap(), original);
+    assert!(!sandbox.home.join("backups").exists());
+
+    let applied = sandbox.cli(command(&["workspace", "memory-prune"], &sandbox.project));
+    let applied_text = assert_success(&applied);
+    assert!(
+        applied_text.contains("Retiradas 3 entrada(s)"),
+        "{applied_text}"
+    );
+    assert!(applied_text.contains("Backup:"), "{applied_text}");
+    let pruned = fs::read_to_string(&memory_path).unwrap();
+    assert!(pruned.contains("Usamos Qt 6.8."));
+    assert!(pruned.contains("No tocar."));
+    assert_eq!(pruned.matches("Recuerda que el deploy").count(), 1);
+    assert!(!pruned.contains("memoria RAM"));
+    assert!(!pruned.contains("no-guardar-esta"));
+
+    let project_backup = fs::read_dir(sandbox.home.join("backups"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let backup_dir = fs::read_dir(project_backup.join("memory"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let backup_file = backup_dir.join("PROJECT_MEMORY.md");
+    assert_eq!(fs::read_to_string(&backup_file).unwrap(), original);
+
+    let repeated = sandbox.cli(command(&["workspace", "memory-prune"], &sandbox.project));
+    assert!(assert_success(&repeated).contains("ya está limpia"));
+}
+
+#[test]
 fn trust_requires_apply_and_untrust_removes_only_the_project_entry() {
     let sandbox = Sandbox::new();
     let trust_file = sandbox.home.join("trusted_projects.json");

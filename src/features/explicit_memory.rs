@@ -12,7 +12,7 @@ use time::OffsetDateTime;
 const MAX_MEMORIES: usize = 8;
 const MAX_CHAT_STATE_FILES: usize = 10;
 const MAX_CHAT_STATE_BYTES: u64 = 1024 * 1024;
-const MAX_MEMORY_FILE_BYTES: u64 = 1024 * 1024;
+pub(crate) const MAX_MEMORY_FILE_BYTES: u64 = 1024 * 1024;
 const MAX_MESSAGE_CHARS: usize = 1_200;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -190,7 +190,7 @@ fn studio_chat_states(project: &Path) -> Vec<ChatState> {
         .collect()
 }
 
-fn is_explicit_request(text: &str) -> bool {
+pub(crate) fn is_explicit_request(text: &str) -> bool {
     if text.is_empty()
         || text.chars().count() > MAX_MESSAGE_CHARS
         || chat_state::contains_secret(text)
@@ -433,7 +433,7 @@ fn is_boundary_after(text: &str, index: usize) -> bool {
             .is_some_and(|character| !character.is_alphanumeric())
 }
 
-fn user_visible_text(message: &str) -> String {
+pub(crate) fn user_visible_text(message: &str) -> String {
     let mut output = String::new();
     let mut cursor = 0;
     while cursor < message.len() {

@@ -37,6 +37,7 @@ Ejemplos:
   chxchx-tech status .             Resume el proyecto sin escribir nada
   chxchx-tech init . --apply       Prepara el proyecto (antes, sin --apply, solo la vista previa)
   chxchx-tech workspace trust .    Decide si los agentes pueden ejecutar procesos aquí
+  chxchx-tech workspace memory-prune . --dry-run  Previsualiza capturas automáticas inválidas
   chxchx-tech skills list .        Skills recomendadas para tu stack
   chxchx-tech doctor .             Qué herramientas faltan
   chxchx-tech resources .          RAM, swap y procesos de proyectos registrados
@@ -241,6 +242,14 @@ enum WorkspaceCommand {
         #[arg(long)]
         apply: bool,
     },
+    /// Previsualiza o limpia capturas automáticas inválidas de memoria explícita.
+    MemoryPrune {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Muestra las entradas que se retirarían sin modificar el archivo.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -400,6 +409,44 @@ pub fn run() -> Result<(), String> {
             }
             WorkspaceCommand::Trust { path, apply } => view::trust(&ui, &path, true, apply),
             WorkspaceCommand::Untrust { path, apply } => view::trust(&ui, &path, false, apply),
+            WorkspaceCommand::MemoryPrune { path, dry_run } => {
+                let result = crate::features::explicit_memory_prune::prune(&path, dry_run)?;
+                if result.removed.is_empty() {
+                    println!(
+                        "✓ La memoria explícita ya está limpia: {}",
+                        result.path.display()
+                    );
+                    return Ok(());
+                }
+                let prefix = if dry_run {
+                    "DRY RUN: se retirarían"
+                } else {
+                    "Retiradas"
+                };
+                println!(
+                    "✓ {prefix} {} entrada(s) de {}",
+                    result.removed.len(),
+                    result.path.display()
+                );
+                for message in &result.removed {
+                    let preview = message.chars().take(160).collect::<String>();
+                    println!(
+                        "  - {}",
+                        if preview.is_empty() {
+                            "(entrada vacía)"
+                        } else {
+                            &preview
+                        }
+                    );
+                }
+                if let Some(backup) = result.backup {
+                    println!("Backup: {}", backup.display());
+                }
+                if dry_run {
+                    println!("No se realizaron cambios (--dry-run).");
+                }
+                Ok(())
+            }
         },
         Command::Projects { command } => match command {
             ProjectsCommand::List => view::projects_list(&ui),

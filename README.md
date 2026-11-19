@@ -49,7 +49,7 @@ del proyecto y comparten la lógica:
 
 Atajos: `st` (status) · `dr` (doctor) · `sk` (skills) · `ws` (workspace) · `pr` (projects). El CLI Rust incluye
 `local-models status|setup|remove`, `process list|start|stop|log`,
-`workspace start|stop|suspend|resume`, `resources` y `agent chat-state` para restaurar o reiniciar el historial. Studio lee y guarda el historial en Rust, y obtiene en Rust los modelos y niveles de esfuerzo disponibles; la ejecución de turnos y los comandos pendientes (`agent`,
+`workspace start|stop|suspend|resume|memory-prune`, `resources` y `agent chat-state` para restaurar o reiniciar el historial. `workspace memory-prune --dry-run` muestra capturas automáticas inválidas antes de quitarlas; al aplicar, conserva notas propias y deja un backup. Studio lee y guarda el historial en Rust, y obtiene en Rust los modelos y niveles de esfuerzo disponibles; la ejecución de turnos y los comandos pendientes (`agent`,
 `bridge`, `run`, `ci`, `deploy`…) todavía dependen del CLI Python que acompaña a la instalación mientras se
 completa la migración.
 
@@ -153,7 +153,7 @@ símbolos y tablas; si la rediriges o usas `NO_COLOR`, sigue siendo el texto pla
 | `status` | Resume el proyecto sin escribir ni iniciar procesos |
 | `init` | Previsualiza (y con `--apply` crea) configuración y guías |
 | `rollback` | Restaura los archivos administrados desde el último respaldo |
-| `workspace` | Gestiona la confianza local del proyecto |
+| `workspace` | Gestiona confianza, ciclo de procesos y poda de memoria explícita (`memory-prune --dry-run` previsualiza) |
 | `skills` · `packs` · `mods` | Catálogo de skills, Tech Packs y Mods |
 | `integrate` | Configura los servidores de memoria y código (basic-memory, Serena) |
 | `connectors` (`conn`) | Conecta tus agentes con Excel, Power BI, bases de datos… (`list`, `add`, `remove`, `custom`); ver [CONECTORES.md](CONECTORES.md) |
