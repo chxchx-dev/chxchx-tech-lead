@@ -67,9 +67,17 @@ def test_memory_capture_ignores_the_inlined_notes(tmp_path: Path) -> None:
 def test_studio_uses_rust_context_without_rebuilding_or_compacting_it(tmp_path: Path, monkeypatch) -> None:
     notices: list[tuple[str, bool]] = []
 
-    def recovered(_root: Path, _notify, *, compact: bool = True, include_journal: bool = True) -> str:
+    def recovered(
+        _root: Path,
+        _notify,
+        *,
+        compact: bool = True,
+        include_journal: bool = True,
+        include_memories: bool = True,
+    ) -> str:
         assert compact is False
         assert include_journal is False
+        assert include_memories is False
         return "\nmemoria recuperada"
 
     def python_rebuild(*_args, **_kwargs):

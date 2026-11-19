@@ -187,9 +187,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     started_at = datetime.now(timezone.utc)
     provider_env = with_search_path({**os.environ, **plan.env})
     # These markers belong to the ChxChx adapter and must not reach provider processes.
-    provider_env.pop("CHXCHX_RUST_CHAT_STATE", None)
-    provider_env.pop("CHXCHX_RUST_AGENT_STREAM", None)
-    provider_env.pop("CHXCHX_RUST_CHAT_JOURNAL", None)
+    for marker in ("CHXCHX_RUST_CHAT_STATE", "CHXCHX_RUST_AGENT_STREAM", "CHXCHX_RUST_CHAT_JOURNAL", "CHXCHX_RUST_EXPLICIT_MEMORY"):
+        provider_env.pop(marker, None)
     try:
         process = subprocess.Popen(
             argv,
@@ -284,7 +283,8 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
     else:
         capture_after_session(plan.project_root, notify, provider=plan.provider, started_at=started_at,
                               opencode_executable=resolve_executable(plan.command[0]) if plan.provider == "OpenCode" and plan.command else None,
-                              write_journal=os.environ.get("CHXCHX_RUST_CHAT_JOURNAL") != "1")
+                              write_journal=os.environ.get("CHXCHX_RUST_CHAT_JOURNAL") != "1",
+                              write_memories=os.environ.get("CHXCHX_RUST_EXPLICIT_MEMORY") != "1")
     if remember:
         _remember(end_turn, plan, session_id, replies)
     emit({"type": "done", "exit_code": exit_code, "cancelled": cancelled.is_set(), "session_id": session_id})

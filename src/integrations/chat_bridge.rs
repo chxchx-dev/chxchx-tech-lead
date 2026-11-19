@@ -293,6 +293,8 @@ impl Turn {
             .env("CHXCHX_RUST_CHAT_STATE", "1")
             // Rust also prepares and records the Studio session journal.
             .env("CHXCHX_RUST_CHAT_JOURNAL", "1")
+            // Rust recovers and persists explicit project-memory requests for Studio.
+            .env("CHXCHX_RUST_EXPLICIT_MEMORY", "1")
             // Claude stream-json and non-live Codex JSONL are normalized by Rust at this boundary.
             .env("CHXCHX_RUST_AGENT_STREAM", "1")
             .stdin(Stdio::piped())

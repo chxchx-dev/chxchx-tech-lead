@@ -102,6 +102,8 @@ def test_studio_resume_decision_and_recap_cross_the_python_cli_boundary(
 def test_studio_rust_context_contract_crosses_the_python_cli_boundary(
     tmp_path: Path, fake_bin, monkeypatch
 ) -> None:
+    monkeypatch.setenv("CHXCHX_RUST_EXPLICIT_MEMORY", "1")
+    monkeypatch.setenv("CHXCHX_RUST_CHAT_JOURNAL", "1")
     context_file = tmp_path / "rust-context.json"
     context_file.write_text(json.dumps({
         "schema": "chxchx.studio-chat-context",
@@ -118,6 +120,11 @@ def test_studio_rust_context_contract_crosses_the_python_cli_boundary(
         "_compact",
         lambda *_args: pytest.fail("Rust ya compactó el contexto que entrega"),
     )
+    monkeypatch.setattr(
+        chat_context,
+        "recover_explicit_memories",
+        lambda *_args, **_kwargs: pytest.fail("Rust ya recuperó la memoria explícita"),
+    )
     events: list[dict] = []
     monkeypatch.setattr(
         "chxchx_tech_lead.commands.agent_chat.json_line_emitter",
@@ -125,7 +132,7 @@ def test_studio_rust_context_contract_crosses_the_python_cli_boundary(
     )
 
     result = CliRunner().invoke(app, [
-        "agent", "chat", "opencode", "--path", str(tmp_path), "--prompt", "pregunta",
+        "agent", "chat", "opencode", "--path", str(tmp_path), "--prompt", "Recuerda que staging usa Postgres 16.",
         "--resume-decided-by-rust", "--rust-context-file", str(context_file),
     ])
 
@@ -134,6 +141,7 @@ def test_studio_rust_context_contract_crosses_the_python_cli_boundary(
     assert run["stdin"].count("CONTEXTO_RUST_PREPARADO") == 1
     assert "Studio ya leyó por ti" not in run["stdin"]
     assert any("Contexto compactado: 2" in event.get("message", "") for event in events)
+    assert not (tmp_path / ".ai" / "memory" / "PROJECT_MEMORY.md").exists()
 
 
 def test_the_persons_message_survives_a_turn_that_never_finished(tmp_path: Path, monkeypatch) -> None:

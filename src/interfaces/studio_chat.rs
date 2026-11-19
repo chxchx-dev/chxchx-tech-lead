@@ -411,10 +411,18 @@ fn tick(state: &mut Dashboard) {
             );
             if let Err(error) = saved_state {
                 state.message = format!("No pude guardar el historial del chat: {error}");
-            } else if let Err(error) =
-                crate::features::chat_journal::record_latest_chat(&state.root, &chat.agent.id)
-            {
-                state.message = format!("No pude guardar el resumen de la sesión: {error}");
+            } else {
+                if let Err(error) =
+                    crate::features::explicit_memory::capture_studio_memories(&state.root)
+                {
+                    state.message =
+                        format!("No pude guardar la memoria explícita del proyecto: {error}");
+                }
+                if let Err(error) =
+                    crate::features::chat_journal::record_latest_chat(&state.root, &chat.agent.id)
+                {
+                    state.message = format!("No pude guardar el resumen de la sesión: {error}");
+                }
             }
             if let Some(started) = chat.turn_started.take()
                 && let Some(last) = chat

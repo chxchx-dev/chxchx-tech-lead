@@ -25,6 +25,7 @@ def first_message(
         notify,
         compact=rust_context is None,
         include_journal=rust_context is None,
+        include_memories=rust_context is None,
     )
     if rust_context is None:
         context = new_chat_prompt(str(project_root)) + inline_project_context(project_root, provider=provider)
