@@ -87,6 +87,7 @@ pub(super) struct Chat {
     pub effort: Option<String>,
     /// Recap supplied to the adapter for a provider session Rust found missing.
     pub resume_recap: String,
+    pub recovered_memories: String,
     pub preparing: bool,
     /// Images waiting in the composer.
     pub images: Vec<Image>,
@@ -145,6 +146,7 @@ type Prepared = (
     SavedChat,
     Result<AgentOptions, String>,
     Vec<crate::integrations::slash_commands::Found>,
+    (String, Result<usize, String>),
 );
 
 #[derive(Clone, Debug)]
@@ -184,6 +186,7 @@ pub(super) enum Event {
     Permissions,
     /// Opens or closes the model picker.
     ModelMenu,
+    ProviderMemoriesPrepared(String, String, Result<usize, String>),
     /// A `/command` picked in the menu.
     Slash(String),
     /// Enter while the `/` menu is open.
@@ -229,6 +232,15 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             return task;
         }
         Event::Prepared(id, prepared) => prepared_for(state, &id, &prepared.0),
+        Event::ProviderMemoriesPrepared(id, context, result) => {
+            with_agent(state, &id, |chat| {
+                chat.preparing = false;
+                chat.recovered_memories = context;
+            });
+            if let Err(error) = result {
+                state.message = format!("No pude recuperar memorias del historial local: {error}");
+            }
+        }
         Event::For(id, inner) => {
             if let Some(index) = state.chat.chats.iter().position(|c| c.agent.id == id) {
                 state.chat.active = index;
@@ -364,7 +376,7 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             chat.models_open = false;
         }),
         Event::Effort(effort) => with_chat(state, |chat| chat.effort = Some(effort)),
-        Event::NewChat => new_chat(state),
+        Event::NewChat => return new_chat(state),
     }
     Task::none()
 }

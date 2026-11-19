@@ -178,6 +178,8 @@ pub struct TurnSpec {
     pub prompt: String,
     /// Recap built by Rust when a restored provider session no longer exists.
     pub resume_recap: String,
+    /// Recent provider memory requests recovered before opening a new Studio session.
+    pub recovered_memories: String,
     pub session: Option<String>,
     /// `read-only`, `workspace-write`, `workspace-commands` or `full-access`.
     pub mode: String,
@@ -219,8 +221,11 @@ impl Turn {
                 Ok(result) => {
                     let compacted_sections = result.moved_count();
                     let path = temporary_chat_file("context");
-                    let context =
-                        super::chat_context::initial_context(&spec.project, &spec.provider);
+                    let context = super::chat_context::initial_context_with_memories(
+                        &spec.project,
+                        &spec.provider,
+                        &spec.recovered_memories,
+                    );
                     let payload = serde_json::json!({
                         "schema": "chxchx.studio-chat-context",
                         "schema_version": 1,

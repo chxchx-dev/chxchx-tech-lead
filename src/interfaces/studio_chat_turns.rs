@@ -71,6 +71,7 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         project: root,
         prompt: with_images(prompt, attached.len()),
         resume_recap: chat.resume_recap.clone(),
+        recovered_memories: chat.recovered_memories.clone(),
         images: attached.iter().map(|i| i.prepared.path.clone()).collect(),
         session: Some(chat.model.session_id.clone()).filter(|s| !s.is_empty()),
         mode: chat.mode.clone(),
@@ -92,6 +93,9 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
                 );
                 chat.model.add_user(visible_prompt);
                 chat.resume_recap.clear();
+                if spec.session.as_deref().is_none_or(str::is_empty) {
+                    chat.recovered_memories.clear();
+                }
                 if !attached.is_empty() {
                     chat.sent.push((chat.model.entries.len() - 1, attached));
                 }
@@ -244,25 +248,54 @@ pub(super) fn reply(state: &mut Dashboard, index: usize) {
     chat.model.decide(index, &summary);
 }
 
-pub(super) fn new_chat(state: &mut Dashboard) {
+pub(super) fn new_chat(state: &mut Dashboard) -> Task<Message> {
+    let Some(chat) = state.chat.chats.get_mut(state.chat.active) else {
+        return Task::none();
+    };
+    // Opening a chat already recovers the provider history. Don't let its older Prepared event
+    // race with this reset and restore the session we are clearing.
+    if chat.preparing {
+        return Task::none();
+    }
+    chat.preparing = true;
+    chat.recovered_memories.clear();
+    let id = chat.agent.id.clone();
     let root = state.root.clone();
-    with_chat(state, |chat| {
-        if let Some(turn) = chat.turn.as_mut() {
-            turn.cancel();
-        }
-        chat.turn = None;
-        chat.model.clear();
-        chat.turn_replies.clear();
-        chat.resume_recap.clear();
-        chat.once.clear();
-        chat.approved.clear();
-        chat.composer = text_editor::Content::new();
-        chat.rendered.clear();
-        chat.selecting.clear();
-        chat.picks.clear();
-        let id = chat.agent.id.clone();
-        std::thread::spawn(move || bridge::reset_chat(&root, &id));
-    });
+    if let Some(turn) = chat.turn.as_mut() {
+        turn.cancel();
+    }
+    chat.turn = None;
+    chat.model.clear();
+    chat.turn_replies.clear();
+    chat.resume_recap.clear();
+    chat.once.clear();
+    chat.approved.clear();
+    chat.composer = text_editor::Content::new();
+    chat.rendered.clear();
+    chat.selecting.clear();
+    chat.picks.clear();
+
+    let job_id = id.clone();
+    Task::perform(
+        async move {
+            jobs::offload(move || {
+                // Recover before reset_chat removes this provider's Studio transcript.
+                let recovered = crate::features::explicit_memory::prepare_provider_history(&root);
+                bridge::reset_chat(&root, &job_id);
+                recovered
+            })
+            .await
+            .unwrap_or_else(|| {
+                (
+                    String::new(),
+                    Err("el trabajo en segundo plano terminó sin resultado".to_owned()),
+                )
+            })
+        },
+        move |(context, result)| {
+            Message::Chat(Event::ProviderMemoriesPrepared(id.clone(), context, result))
+        },
+    )
 }
 
 #[cfg(test)]

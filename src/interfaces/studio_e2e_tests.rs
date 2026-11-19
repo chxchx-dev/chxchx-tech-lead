@@ -193,6 +193,7 @@ fn open_chat(state: &mut Dashboard, cli: &Path, agent: &Agent) {
             &opencode_config,
         )),
         slash_commands::discover(&root, &agent.id),
+        (String::new(), Ok(0)),
     );
     let _ = chat::update(
         state,

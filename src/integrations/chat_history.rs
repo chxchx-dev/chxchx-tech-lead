@@ -18,6 +18,9 @@ const MAX_METADATA_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_RECORD_BYTES: usize = 1024 * 1024;
 const MAX_MESSAGES: usize = 2_000;
 const MAX_MESSAGE_CHARS: usize = 16_000;
+const MAX_MEMORY_TRANSCRIPTS_PER_PROVIDER: usize = 10;
+const MAX_MEMORY_TRANSCRIPT_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_MEMORY_MESSAGES: usize = 200;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConversationMessage {
@@ -97,7 +100,59 @@ pub fn list_conversations_in(
     conversations
 }
 
+/// Read only recent user messages for memory recovery, with tighter limits than the history UI.
+pub fn recent_user_conversations(project_root: &Path) -> Vec<Conversation> {
+    let codex_home = std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home().join(".codex"));
+    let claude_config = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home().join(".claude"));
+    recent_user_conversations_in(project_root, &codex_home, &claude_config)
+}
+
+/// Explicit roots make the bounded memory history scan deterministic in tests.
+pub fn recent_user_conversations_in(
+    project_root: &Path,
+    codex_home: &Path,
+    claude_config_dir: &Path,
+) -> Vec<Conversation> {
+    let original_project_root = project_root.to_path_buf();
+    let Ok(project_root) = project_root.canonicalize() else {
+        return Vec::new();
+    };
+    let mut conversations = codex_conversations_with_options(
+        &project_root,
+        codex_home,
+        MAX_MEMORY_TRANSCRIPTS_PER_PROVIDER,
+        true,
+    );
+    conversations.extend(claude_conversations_with_options(
+        &project_root,
+        &original_project_root,
+        claude_config_dir,
+        MAX_MEMORY_TRANSCRIPTS_PER_PROVIDER,
+        true,
+    ));
+    conversations.sort_by_key(|conversation| std::cmp::Reverse(conversation.modified_at));
+    conversations
+}
+
 fn codex_conversations(project_root: &Path, codex_home: &Path) -> Vec<Conversation> {
+    codex_conversations_with_options(
+        project_root,
+        codex_home,
+        MAX_TRANSCRIPTS_PER_PROVIDER,
+        false,
+    )
+}
+
+fn codex_conversations_with_options(
+    project_root: &Path,
+    codex_home: &Path,
+    limit: usize,
+    user_only: bool,
+) -> Vec<Conversation> {
     let sessions = codex_home.join("sessions");
     if !regular_directory(&sessions) {
         return Vec::new();
@@ -110,17 +165,21 @@ fn codex_conversations(project_root: &Path, codex_home: &Path) -> Vec<Conversati
             .is_some_and(|name| name.starts_with("rollout-") && name.ends_with(".jsonl"))
     });
     candidates.sort_by_key(|(_, modified)| std::cmp::Reverse(*modified));
-    candidates
+    let mut conversations = candidates
         .into_iter()
+        // Inspect a bounded recent window, then apply the project limit. Taking `limit` first
+        // could let other projects hide this project's older transcripts.
         .take(MAX_TRANSCRIPTS_PER_PROVIDER)
         .filter_map(|(path, modified_at)| {
             let (cwd, session_id) = codex_metadata(&path)?;
             if !same_path(Path::new(&cwd), project_root) {
                 return None;
             }
-            read_codex(&path, project_root, &session_id, modified_at)
+            read_codex(&path, project_root, &session_id, modified_at, user_only)
         })
-        .collect()
+        .collect::<Vec<_>>();
+    conversations.truncate(limit);
+    conversations
 }
 
 fn codex_metadata(path: &Path) -> Option<(String, String)> {
@@ -158,10 +217,21 @@ fn read_codex(
     project_root: &Path,
     session_id: &str,
     modified_at: SystemTime,
+    user_only: bool,
 ) -> Option<Conversation> {
     let mut messages = Vec::new();
-    for_each_jsonl(path, MAX_TRANSCRIPT_BYTES, |record| {
-        if messages.len() >= MAX_MESSAGES {
+    let byte_limit = if user_only {
+        MAX_MEMORY_TRANSCRIPT_BYTES
+    } else {
+        MAX_TRANSCRIPT_BYTES
+    };
+    let message_limit = if user_only {
+        MAX_MEMORY_MESSAGES
+    } else {
+        MAX_MESSAGES
+    };
+    for_each_jsonl(path, byte_limit, |record| {
+        if messages.len() >= message_limit {
             return;
         }
         let Some(payload) = record.get("payload").and_then(Value::as_object) else {
@@ -181,7 +251,9 @@ fn read_codex(
                 "agent_message" | "assistant_message" => "assistant",
                 _ => return,
             };
-            append_message(&mut messages, role, payload.get("message"));
+            if !user_only || role == "user" {
+                append_message_limited(&mut messages, role, payload.get("message"), message_limit);
+            }
         } else if record_type == "response_item" {
             let item = payload
                 .get("item")
@@ -190,8 +262,9 @@ fn read_codex(
             let role = item.get("role").and_then(Value::as_str).unwrap_or_default();
             if item.get("type").and_then(Value::as_str) == Some("message")
                 && matches!(role, "user" | "assistant")
+                && (!user_only || role == "user")
             {
-                append_message(&mut messages, role, item.get("content"));
+                append_message_limited(&mut messages, role, item.get("content"), message_limit);
             }
         }
     });
@@ -210,6 +283,22 @@ fn claude_conversations(
     original_project_root: &Path,
     config_dir: &Path,
 ) -> Vec<Conversation> {
+    claude_conversations_with_options(
+        project_root,
+        original_project_root,
+        config_dir,
+        MAX_TRANSCRIPTS_PER_PROVIDER,
+        false,
+    )
+}
+
+fn claude_conversations_with_options(
+    project_root: &Path,
+    original_project_root: &Path,
+    config_dir: &Path,
+    limit: usize,
+    user_only: bool,
+) -> Vec<Conversation> {
     let mut files = Vec::new();
     let mut folders = Vec::new();
     for root in [original_project_root, project_root] {
@@ -226,8 +315,8 @@ fn claude_conversations(
     files.sort_by_key(|(_, modified)| std::cmp::Reverse(*modified));
     files
         .into_iter()
-        .take(MAX_TRANSCRIPTS_PER_PROVIDER)
-        .filter_map(|(path, modified_at)| read_claude(&path, project_root, modified_at))
+        .take(limit)
+        .filter_map(|(path, modified_at)| read_claude(&path, project_root, modified_at, user_only))
         .collect()
 }
 
@@ -288,13 +377,28 @@ fn without_windows_verbatim_prefix(path: &Path) -> Option<String> {
     }
 }
 
-fn read_claude(path: &Path, project_root: &Path, modified_at: SystemTime) -> Option<Conversation> {
+fn read_claude(
+    path: &Path,
+    project_root: &Path,
+    modified_at: SystemTime,
+    user_only: bool,
+) -> Option<Conversation> {
     let mut messages = Vec::new();
     let mut cwd_checked = false;
     let mut custom_title = None;
     let mut belongs_to_project = true;
-    for_each_jsonl(path, MAX_TRANSCRIPT_BYTES, |record| {
-        if !belongs_to_project || messages.len() >= MAX_MESSAGES {
+    let byte_limit = if user_only {
+        MAX_MEMORY_TRANSCRIPT_BYTES
+    } else {
+        MAX_TRANSCRIPT_BYTES
+    };
+    let message_limit = if user_only {
+        MAX_MEMORY_MESSAGES
+    } else {
+        MAX_MESSAGES
+    };
+    for_each_jsonl(path, byte_limit, |record| {
+        if !belongs_to_project || messages.len() >= message_limit {
             return;
         }
         if !cwd_checked && let Some(cwd) = record.get("cwd").and_then(Value::as_str) {
@@ -341,7 +445,9 @@ fn read_claude(path: &Path, project_root: &Path, modified_at: SystemTime) -> Opt
         let content = message
             .and_then(|message| message.get("content"))
             .or(message);
-        append_message(&mut messages, role, content);
+        if !user_only || role == "user" {
+            append_message_limited(&mut messages, role, content, message_limit);
+        }
     });
     if !belongs_to_project {
         return None;
@@ -396,8 +502,13 @@ fn conversation(
     })
 }
 
-fn append_message(messages: &mut Vec<ConversationMessage>, role: &str, content: Option<&Value>) {
-    if messages.len() >= MAX_MESSAGES {
+fn append_message_limited(
+    messages: &mut Vec<ConversationMessage>,
+    role: &str,
+    content: Option<&Value>,
+    message_limit: usize,
+) {
+    if messages.len() >= message_limit {
         return;
     }
     let Some(content) = content else { return };

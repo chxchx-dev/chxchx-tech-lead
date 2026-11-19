@@ -1,5 +1,12 @@
 # Handoff
 
+## Backfill histórico Codex/Claude en Studio Rust (2026-11-19)
+
+- `chat_history.rs` ahora expone una lectura de memoria que toma hasta 500 candidatos recientes por proveedor, filtra por la raíz canónica del proyecto y devuelve como máximo 10 conversaciones. Solo recoge mensajes de usuario; cada transcript se limita a 8 MiB y 200 mensajes. `explicit_memory.rs` aplica el filtro de solicitud explícita y secretos, deduplica y conserva el archivo manual existente.
+- Studio hace la recuperación en background al abrir el chat y al iniciar `/nuevo`. El reset espera a que termine la persistencia para no borrar el estado de chat antes de recuperar su memoria; el contexto del siguiente chat nuevo recibe las solicitudes recuperadas. La UI permanece en `preparing` mientras corre el trabajo y no permite que el evento de apertura restaure una sesión después de `/nuevo`.
+- Verificado en Linux: formato, Clippy estricto y `cargo test --locked` (322 unitarias, 6 de catálogo y 17 de producto); `git diff --check`. Hay pruebas de Codex/Claude, selección por proyecto, secretos/bloques inyectados, transporte al contexto y los eventos de Studio. No se ejecutó un proveedor real ni QA nativa Windows/macOS/CI.
+- Sigue pendiente OpenCode: su historial depende de `opencode session list/export`, todavía no hay adapter Rust para esa ruta. Después, portar el handoff automático persistido y continuar con runners de proveedores. Mantener `old-version/` hasta cerrar esos flujos, actualización, CLI y distribución.
+
 ## Memoria explícita de Studio en Rust (2026-11-18)
 
 - `features/explicit_memory.rs` recupera solicitudes explícitas de hasta diez transcripts Rust visibles por proyecto, con máximo ocho entradas; descarta bloques inyectados, texto de recuperación, mensajes ambiguos y posibles secretos. Escribe `.ai/memory/PROJECT_MEMORY.md` con digest para deduplicar, conserva notas manuales, limita lectura/escritura a 1 MiB y protege directorios/archivo frente a symlinks. El contexto Rust recupera y persiste antes de inlinear la memoria; el adapter Python salta sus lecturas/escrituras en Studio y conserva la ruta de su CLI normal.

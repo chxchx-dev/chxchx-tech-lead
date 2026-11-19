@@ -22,6 +22,7 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
         model_id: None,
         effort: None,
         resume_recap: String::new(),
+        recovered_memories: String::new(),
         preparing: true,
         images: Vec::new(),
         sent: Vec::new(),
@@ -55,18 +56,22 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
             jobs::offload(move || -> Prepared {
                 let cli = known.or_else(|| bridge::find_cli(&root));
                 let options = crate::integrations::agent_catalog::options(&agent, &root);
+                let provider_memories =
+                    crate::features::explicit_memory::prepare_provider_history(&root);
                 match &cli {
                     Some(cli) => (
                         Some(cli.clone()),
                         bridge::restore_chat_for_provider(&root, &agent.id, &provider, &executable),
                         Ok(options),
                         slash_commands::discover(&root, &agent.id),
+                        provider_memories,
                     ),
                     None => (
                         None,
                         bridge::SavedChat::default(),
                         Ok(options),
                         slash_commands::discover(&root, &agent.id),
+                        provider_memories,
                     ),
                 }
             })
@@ -75,8 +80,12 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
                 (
                     None,
                     bridge::SavedChat::default(),
-                    Err(String::new()),
+                    Err("la preparación en segundo plano terminó sin resultado".to_owned()),
                     Vec::new(),
+                    (
+                        String::new(),
+                        Err("la recuperación de memoria terminó sin resultado".to_owned()),
+                    ),
                 )
             })
         },
@@ -90,7 +99,7 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
 }
 
 pub(super) fn prepared_for(state: &mut Dashboard, id: &str, prepared: &Prepared) {
-    let (cli, saved, options, commands) = prepared;
+    let (cli, saved, options, commands, (recovered_memories, memory_result)) = prepared;
     if cli.is_some() {
         state.chat.cli = cli.clone();
     }
@@ -99,6 +108,7 @@ pub(super) fn prepared_for(state: &mut Dashboard, id: &str, prepared: &Prepared)
     };
     chat.preparing = false;
     chat.commands = commands.clone();
+    chat.recovered_memories = recovered_memories.clone();
     chat.model.session_id = saved.session_id.clone();
     chat.resume_recap = saved.resume_recap.clone();
     for (role, body) in &saved.messages {
@@ -113,6 +123,9 @@ pub(super) fn prepared_for(state: &mut Dashboard, id: &str, prepared: &Prepared)
     }
     if cli.is_none() {
         chat.problem = Some(bridge::missing_cli_hint());
+    }
+    if let Err(error) = memory_result {
+        state.message = format!("No pude recuperar memorias del historial local: {error}");
     }
     if let Ok(options) = options {
         if !options.available {

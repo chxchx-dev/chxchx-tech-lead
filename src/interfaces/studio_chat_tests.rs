@@ -257,7 +257,13 @@ fn a_model_chosen_before_the_chat_is_ready_survives_its_preparation() {
     prepared_for(
         &mut state,
         "claude",
-        &(None, bridge::SavedChat::default(), Ok(options), Vec::new()),
+        &(
+            None,
+            bridge::SavedChat::default(),
+            Ok(options),
+            Vec::new(),
+            (String::new(), Ok(0)),
+        ),
     );
     let chat = &state.chat.chats[0];
     assert_eq!(
@@ -271,6 +277,46 @@ fn a_model_chosen_before_the_chat_is_ready_survives_its_preparation() {
             .iter()
             .any(|m| m.id == "ollama/qwen2.5-coder:7b-ctx32k")
     );
+}
+
+#[test]
+fn provider_memory_preparation_unblocks_the_chat_with_recovered_context() {
+    let mut state = dashboard();
+    state.chat.chats[0].preparing = true;
+
+    drop(update(
+        &mut state,
+        Event::ProviderMemoriesPrepared("claude".into(), "Memoria recuperada".into(), Ok(2)),
+    ));
+
+    let chat = &state.chat.chats[0];
+    assert!(!chat.preparing);
+    assert_eq!(chat.recovered_memories, "Memoria recuperada");
+}
+
+#[test]
+fn starting_a_new_chat_waits_for_background_memory_recovery() {
+    let mut state = dashboard();
+    state.chat.chats[0].model.add_user("conversación anterior");
+
+    drop(update(&mut state, Event::NewChat));
+
+    let chat = &state.chat.chats[0];
+    assert!(chat.preparing);
+    assert!(chat.model.entries.is_empty());
+}
+
+#[test]
+fn new_chat_does_not_race_the_initial_chat_preparation() {
+    let mut state = dashboard();
+    state.chat.chats[0].preparing = true;
+    state.chat.chats[0].model.add_user("conversación anterior");
+
+    drop(update(&mut state, Event::NewChat));
+
+    let chat = &state.chat.chats[0];
+    assert!(chat.preparing);
+    assert_eq!(chat.model.entries[0].text, "conversación anterior");
 }
 
 #[test]

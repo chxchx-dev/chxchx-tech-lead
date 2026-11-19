@@ -179,6 +179,18 @@ fn absent_memory_scope_disables_basic_memory() {
 }
 
 #[test]
+fn initial_context_includes_provider_history_recovered_by_studio() {
+    let project = Scratch::new();
+    project.write(".ai/PROJECT.md", "Arquitectura vigente");
+    let recovered = "\n\nMemoria histórica recuperada\n- Postgres 16";
+
+    let context = initial_context_with_memories(&project.0, "Claude", recovered);
+
+    assert!(context.contains("Memoria histórica recuperada"));
+    assert!(context.contains("Postgres 16"));
+}
+
+#[test]
 fn context_paths_are_project_relative_and_limited_to_the_known_set() {
     let project = Scratch::new();
     project.write("AGENTS.md", "instrucciones");

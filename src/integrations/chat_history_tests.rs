@@ -102,6 +102,92 @@ fn reads_codex_and_claude_histories_only_for_the_selected_project() {
 }
 
 #[test]
+fn memory_history_reads_recent_transcripts_with_user_messages_only() {
+    let project = Scratch::new("memory-project");
+    let codex = Scratch::new("memory-codex");
+    let claude = Scratch::new("memory-claude");
+    codex.write(
+        "sessions/rollout-memory-codex.jsonl",
+        &jsonl([
+            json!({"type":"session_meta", "payload":{"id":"codex-memory", "cwd":project.0}}),
+            json!({"type":"event_msg", "payload":{"type":"user_message", "message":"Remember that staging uses Postgres 16."}}),
+            json!({"type":"event_msg", "payload":{"type":"agent_message", "message":"I will remember."}}),
+        ]),
+    );
+    let claude_key = project
+        .0
+        .to_string_lossy()
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    claude.write(
+        &format!("projects/{claude_key}/claude-memory.jsonl"),
+        &jsonl([
+            json!({"type":"user", "cwd":project.0, "message":{"role":"user", "content":"Recuerda que el deploy es los viernes."}}),
+            json!({"type":"assistant", "message":{"role":"assistant", "content":"Listo."}}),
+        ]),
+    );
+
+    let conversations = recent_user_conversations_in(&project.0, &codex.0, &claude.0);
+
+    assert_eq!(conversations.len(), 2);
+    assert!(conversations.iter().all(|conversation| {
+        conversation
+            .messages
+            .iter()
+            .all(|message| message.role == "user")
+    }));
+    assert!(
+        conversations
+            .iter()
+            .flat_map(|conversation| &conversation.messages)
+            .any(|message| message.text.contains("Postgres 16"))
+    );
+    assert!(
+        conversations
+            .iter()
+            .flat_map(|conversation| &conversation.messages)
+            .any(|message| message.text.contains("los viernes"))
+    );
+}
+
+#[test]
+fn memory_history_picks_recent_transcripts_for_this_project_before_applying_its_limit() {
+    let project = Scratch::new("memory-project-limit");
+    let other_project = Scratch::new("memory-other-project-limit");
+    let codex = Scratch::new("memory-codex-limit");
+    let claude = Scratch::new("memory-claude-limit");
+    codex.write(
+        "sessions/rollout-target.jsonl",
+        &jsonl([
+            json!({"type":"session_meta", "payload":{"id":"target-session", "cwd":project.0}}),
+            json!({"type":"event_msg", "payload":{"type":"user_message", "message":"Recuerda que el deploy es los viernes."}}),
+        ]),
+    );
+    for index in 0..12 {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        codex.write(
+            &format!("sessions/rollout-other-{index}.jsonl"),
+            &jsonl([
+                json!({"type":"session_meta", "payload":{"id":format!("other-{index}"), "cwd":other_project.0}}),
+                json!({"type":"event_msg", "payload":{"type":"user_message", "message":"Una conversación de otro proyecto."}}),
+            ]),
+        );
+    }
+
+    let conversations = recent_user_conversations_in(&project.0, &codex.0, &claude.0);
+
+    assert_eq!(conversations.len(), 1);
+    assert_eq!(conversations[0].session_id, "target-session");
+}
+
+#[test]
 fn claude_title_sidechains_and_project_path_collisions_are_handled() {
     let project = Scratch::new("my_app.v2");
     let other = Scratch::new("my-app");

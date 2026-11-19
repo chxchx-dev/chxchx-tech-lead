@@ -178,3 +178,69 @@ fn recovery_is_bounded_and_deduplicated_across_sessions() {
             .all(|memory| memory.message.chars().count() <= MAX_MESSAGE_CHARS)
     );
 }
+
+#[test]
+fn recent_codex_and_claude_requests_are_backfilled_before_a_new_studio_chat() {
+    let project = Project::new("provider-history-project");
+    let codex = Project::new("provider-history-codex");
+    let claude = Project::new("provider-history-claude");
+    let codex_transcript = codex.path().join("sessions/rollout-history.jsonl");
+    fs::create_dir_all(codex_transcript.parent().unwrap()).unwrap();
+    let codex_records = [
+        serde_json::json!({"type":"session_meta", "payload":{"id":"codex-old", "cwd":project.path()}}),
+        serde_json::json!({"type":"event_msg", "payload":{"type":"user_message", "message":"Remember that staging uses Postgres 16."}}),
+        serde_json::json!({"type":"event_msg", "payload":{"type":"agent_message", "message":"Remember that the user likes green."}}),
+    ];
+    fs::write(
+        &codex_transcript,
+        codex_records
+            .iter()
+            .map(serde_json::Value::to_string)
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+    .unwrap();
+
+    let claude_key = project
+        .path()
+        .to_string_lossy()
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let claude_transcript = claude
+        .path()
+        .join(format!("projects/{claude_key}/claude-history.jsonl"));
+    fs::create_dir_all(claude_transcript.parent().unwrap()).unwrap();
+    let claude_records = [
+        serde_json::json!({"type":"user", "cwd":project.path(), "message":{"role":"user", "content":"<system-reminder>Recuerda que el puerto es 9000.</system-reminder> Recuerda que el deploy es los viernes."}}),
+        serde_json::json!({"type":"user", "message":{"role":"user", "content":"Recuerda mi contraseña: no-guardar-esta."}}),
+    ];
+    fs::write(
+        &claude_transcript,
+        claude_records
+            .iter()
+            .map(serde_json::Value::to_string)
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+    .unwrap();
+
+    let (context, persisted) =
+        prepare_provider_history_in(project.path(), codex.path(), claude.path());
+
+    assert_eq!(persisted.unwrap(), 2);
+    assert!(context.contains("Postgres 16"));
+    assert!(context.contains("deploy es los viernes"));
+    assert!(!context.contains("puerto es 9000"));
+    let memory = fs::read_to_string(project.path().join(".ai/memory/PROJECT_MEMORY.md")).unwrap();
+    assert!(memory.contains("Postgres 16"));
+    assert!(memory.contains("deploy es los viernes"));
+    assert!(!memory.contains("no-guardar-esta"));
+    assert!(!memory.contains("likes green"));
+}

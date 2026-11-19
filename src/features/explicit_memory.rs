@@ -1,12 +1,13 @@
 //! Recover and persist only explicit, project-scoped requests to remember something.
 
 use crate::features::chat_state::{self, ChatState};
+use crate::integrations::chat_history;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 use time::OffsetDateTime;
 
 const MAX_MEMORIES: usize = 8;
@@ -116,6 +117,64 @@ pub fn prepare_new_chat(project: &Path) -> String {
 pub fn capture_studio_memories(project: &Path) -> Result<usize, String> {
     let memories = recover_studio_memories(project);
     persist_explicit_memories(project, &memories)
+}
+
+/// Recover recent Codex and Claude memory requests off-thread before Studio's first new turn.
+pub fn prepare_provider_history(project: &Path) -> (String, Result<usize, String>) {
+    let codex_home = std::env::var_os("CODEX_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::home_dir().unwrap_or_default().join(".codex"));
+    let claude_config = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::home_dir().unwrap_or_default().join(".claude"));
+    prepare_provider_history_in(project, &codex_home, &claude_config)
+}
+
+fn prepare_provider_history_in(
+    project: &Path,
+    codex_home: &Path,
+    claude_config: &Path,
+) -> (String, Result<usize, String>) {
+    let mut memories = recover_studio_memories(project);
+    let studio_count = memories.len();
+    let mut seen = memories
+        .iter()
+        .map(|memory| memory.message.to_lowercase())
+        .collect::<HashSet<_>>();
+
+    'conversations: for conversation in
+        chat_history::recent_user_conversations_in(project, codex_home, claude_config)
+    {
+        let requested_at = history_date(conversation.modified_at);
+        for message in conversation.messages {
+            append_if_explicit(
+                &mut memories,
+                &mut seen,
+                &conversation.provider,
+                &conversation.session_id,
+                &requested_at,
+                &message.role,
+                &message.text,
+            );
+            if memories.len() == MAX_MEMORIES {
+                break 'conversations;
+            }
+        }
+    }
+
+    let recovered = memories[studio_count..].to_vec();
+    let persisted = persist_explicit_memories(project, &memories);
+    (format_recovered_memories(&recovered), persisted)
+}
+
+fn history_date(modified_at: SystemTime) -> String {
+    let seconds = modified_at
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    OffsetDateTime::from_unix_timestamp(seconds)
+        .map(|date| date.date().to_string())
+        .unwrap_or_else(|_| today())
 }
 
 pub fn format_recovered_memories(memories: &[ExplicitMemory]) -> String {
