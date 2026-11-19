@@ -9,7 +9,9 @@
 - Suite Rust verificada en Linux y Windows: en Linux (2026-11-19) pasan 338
   unitarias, 6 de catálogo y 17 flujos; en Windows (2026-11-18) pasan 267
   unitarias, 6 de catálogo y 11 flujos, además de formato y Clippy estricto.
-  El build empaquetado y la CI remota aún requieren confirmación.
+  `cargo check --locked --no-default-features --features cli` también pasa en
+  Linux después de habilitar `time/parsing` para las fechas RFC 3339. El build
+  empaquetado y la segunda ejecución de CI remota aún requieren confirmación.
 - Suite Python del helper: Linux (2026-11-19), 561 pasan, 1 omitida y 10
   deseleccionadas; Windows (2026-11-18), 500 pasan, 38 omitidas y 10
   deseleccionadas (`uv run --locked pytest -q`).

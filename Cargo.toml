@@ -55,7 +55,7 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.149", features = ["preserve_order"] }
 sha1 = "=0.10.6"
 sha2 = "=0.10.9"
-time = { version = "=0.3.55", features = ["formatting"] }
+time = { version = "=0.3.55", features = ["formatting", "parsing"] }
 toml = "=0.9.12"
 arboard = { version = "=3.7.0", features = ["image-data", "wayland-data-control"], optional = true }
 rfd = { version = "=0.18.0", default-features = false, features = ["xdg-portal"], optional = true }
