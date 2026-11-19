@@ -88,6 +88,26 @@ def test_rust_owned_resume_skips_the_python_session_lookup(tmp_path: Path, monke
     assert plan.recap.endswith("</archivo-de-contexto>")
 
 
+def test_rust_owned_handoff_skips_legacy_load_and_auto_release(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(agent_chat, "executable_available", lambda executable: True)
+
+    def unexpected_handoff(*_args):
+        raise AssertionError("Studio Rust owns persisted handoffs")
+
+    monkeypatch.setattr(agent_chat, "load_handoff", unexpected_handoff)
+    plan = agent_chat.plan_chat_turn(
+        _service(tmp_path),
+        "codex",
+        mode="read-only",
+        session_id="t-existing",
+        auto_release=True,
+        rust_chat_handoff=True,
+    )
+
+    assert plan.session_id == "t-existing"
+    assert not plan.handoff and not plan.auto_release
+
+
 def test_new_chat_turn_streams_events_with_context(tmp_path: Path, isolated_home) -> None:
     events: list[dict] = []
 

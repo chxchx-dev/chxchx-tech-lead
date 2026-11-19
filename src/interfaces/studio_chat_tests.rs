@@ -334,3 +334,116 @@ fn arrows_walk_back_through_sent_messages_and_return_to_the_draft() {
     assert_eq!(state.chat.chats[0].composer.text().trim_end(), "borrador");
     assert!(state.chat.chats[0].recall.is_none());
 }
+
+#[cfg(unix)]
+#[test]
+fn studio_releases_context_generates_a_hidden_handoff_and_consumes_it_after_a_fresh_turn() {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    let root = std::env::temp_dir().join(format!(
+        "chxchx-studio-handoff-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&root).unwrap();
+    let cli = root.join("fake-chat-cli");
+    fs::write(
+        &cli,
+        format!(
+            "#!/bin/sh\nif [ \"$2\" = \"chat-handoff\" ]; then\n  printf '%s\\n' '{handoff}'\n  exit 0\nfi\ncase \"$*\" in\n  *\"--mode read-only\"*) session=s-2; tokens=50;;\n  *) session=s-1; tokens=90;;\nesac\nfor arg in \"$@\"; do\n  if [ \"$arg\" = \"--resume-recap-file\" ]; then shift; cat \"$1\" > '{recap_log}'; break; fi\n  shift\ndone\nprintf '%s\\n' '{session}' '{message}' '{{\"schema\":\"chxchx.agent-event\",\"schema_version\":1,\"type\":\"limits\",\"context_tokens\":'\"$tokens\"',\"context_window\":100}}'\nprintf '%s\\n' '{{\"schema\":\"chxchx.agent-event\",\"schema_version\":1,\"type\":\"done\",\"exit_code\":0,\"cancelled\":false,\"session_id\":'\"$session\"'}}'\n",
+            handoff = r###"{"schema":"chxchx.agent-event","schema_version":1,"type":"handoff","text":"## Objetivo\nseguir"}"###,
+            recap_log = root.join("second-recap.txt").display(),
+            session = r#"{"schema":"chxchx.agent-event","schema_version":1,"type":"session","session_id":"'"$session"'"}"#,
+            message = r#"{"schema":"chxchx.agent-event","schema_version":1,"type":"message","role":"assistant","text":"respuesta visible"}"#,
+        ),
+    )
+    .unwrap();
+    let mut permissions = fs::metadata(&cli).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&cli, permissions).unwrap();
+
+    let mut state = dashboard();
+    state.root = root.clone();
+    state.chat.cli = Some(cli.clone());
+    state.chat.chats[0].model.add_user("primera pregunta");
+    let spec = TurnSpec {
+        agent: "claude".into(),
+        provider: "Claude".into(),
+        project: root.clone(),
+        prompt: "primera pregunta".into(),
+        mode: "workspace-write".into(),
+        ..Default::default()
+    };
+    state.chat.chats[0].turn = Some(Turn::start(&cli, &spec).unwrap());
+
+    let drain = |state: &mut Dashboard| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while state.chat.chats[0].turn.is_some() && Instant::now() < deadline {
+            super::tick(state);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            state.chat.chats[0].turn.is_none(),
+            "Studio chat turn timed out"
+        );
+    };
+    drain(&mut state);
+
+    let handoff_path = root.join(".ai/chat-handoffs/claude-s-1.md");
+    assert!(
+        fs::read_to_string(&handoff_path)
+            .unwrap()
+            .contains("seguir")
+    );
+    let chat = &state.chat.chats[0];
+    assert_eq!(chat.model.session_id, "s-1");
+    assert_eq!(
+        chat.model
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == model::Kind::Assistant)
+            .map(|entry| entry.text.as_str())
+            .collect::<Vec<_>>(),
+        ["respuesta visible"]
+    );
+
+    state.chat.chats[0].model.add_user("segunda pregunta");
+    let next = TurnSpec {
+        agent: "claude".into(),
+        provider: "Claude".into(),
+        project: root.clone(),
+        prompt: "segunda pregunta".into(),
+        session: Some("s-1".into()),
+        mode: "read-only".into(),
+        ..Default::default()
+    };
+    state.chat.chats[0].turn = Some(Turn::start(&cli, &next).unwrap());
+    drain(&mut state);
+
+    assert!(
+        !handoff_path.exists(),
+        "Rust consumes only after the new session succeeds"
+    );
+    assert!(
+        fs::read_to_string(root.join("second-recap.txt"))
+            .unwrap()
+            .contains("seguir")
+    );
+    assert_eq!(state.chat.chats[0].model.session_id, "s-2");
+    assert_eq!(
+        state.chat.chats[0]
+            .model
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == model::Kind::Assistant)
+            .count(),
+        2,
+        "the hidden summary never appears in the visible chat"
+    );
+    let _ = fs::remove_dir_all(root);
+}

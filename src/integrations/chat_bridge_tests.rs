@@ -49,7 +49,7 @@ fn only_a_cli_that_speaks_the_chat_protocol_is_accepted() {
     let dir = scratch("probe");
     let good = fake_cli(
         &dir,
-        r#"[ "$1 $2 $3" = "agent chat --help" ] && echo "Usage: agent chat --live --lean --resume-decided-by-rust --resume-recap-file --rust-context-file" && exit 0; exit 2"#,
+        r#"[ "$1 $2 $3" = "agent chat --help" ] && echo "Usage: agent chat --live --lean --resume-decided-by-rust --resume-recap-file --rust-context-file --rust-chat-handoff --no-auto-release" && exit 0; [ "$1 $2 $3" = "agent chat-handoff --help" ] && echo "Usage: --session --prompt-file" && exit 0; exit 2"#,
     );
     assert!(supports_chat(&good));
     let other = scratch("probe-other");
@@ -81,7 +81,7 @@ fn the_chat_probe_gives_rich_enough_width_to_print_long_option_names() {
     let dir = scratch("probe-rich-width");
     let cli = fake_cli(
         &dir,
-        r#"[ "$1 $2 $3" = "agent chat --help" ] && [ "$COLUMNS" = "200" ] && echo "Usage: agent chat --live --resume-decided-by-rust --resume-recap-file --rust-context-file" && exit 0; exit 2"#,
+        r#"[ "$1 $2 $3" = "agent chat --help" ] && [ "$COLUMNS" = "200" ] && echo "Usage: agent chat --live --resume-decided-by-rust --resume-recap-file --rust-context-file --rust-chat-handoff --no-auto-release" && exit 0; [ "$1 $2 $3" = "agent chat-handoff --help" ] && echo "Usage: --session --prompt-file" && exit 0; exit 2"#,
     );
     assert!(supports_chat(&cli));
 }
@@ -201,6 +201,118 @@ fn a_new_turn_sends_and_cleans_the_rust_prepared_context_file() {
 
     drop(turn);
     assert!(!Path::new(context_path).exists());
+}
+
+#[test]
+fn a_pending_handoff_starts_a_fresh_session_and_stays_until_rust_consumes_it() {
+    let dir = scratch("pending-handoff");
+    crate::features::chat_handoff::save(&dir, "Claude", "old-session", "Resumen anterior").unwrap();
+    let log = dir.join("args.log");
+    let cli = fake_cli(
+        &dir,
+        &format!(
+            "echo \"$@\" > '{log}'; printf '%s\\n' '{done}'",
+            log = log.display(),
+            done = event("done", r#","exit_code":0,"session_id":"new-session""#)
+        ),
+    );
+    let mut wanted = spec(&dir);
+    wanted.provider = "Claude".into();
+    wanted.session = Some("old-session".into());
+
+    let mut turn = Turn::start(&cli, &wanted).unwrap();
+    wait_done(&mut turn);
+
+    let args = fs::read_to_string(log).unwrap();
+    assert!(
+        !args.contains("--session"),
+        "the old provider session was released"
+    );
+    let recap_path = args
+        .split_whitespace()
+        .skip_while(|arg| *arg != "--resume-recap-file")
+        .nth(1)
+        .unwrap();
+    let recap = fs::read_to_string(recap_path).unwrap();
+    assert!(recap.contains("Resumen anterior"));
+    assert!(recap.contains("archivo-de-contexto"));
+    assert_eq!(
+        turn.take_consumed_handoff_session().as_deref(),
+        Some("old-session")
+    );
+    assert_eq!(
+        crate::features::chat_handoff::load(&dir, "Claude", "old-session").as_deref(),
+        Some("Resumen anterior")
+    );
+    crate::features::chat_handoff::consume(&dir, "Claude", "old-session").unwrap();
+    assert!(crate::features::chat_handoff::load(&dir, "Claude", "old-session").is_none());
+}
+
+#[test]
+fn a_hidden_handoff_turn_returns_only_a_bounded_versioned_summary() {
+    let dir = scratch("handoff-turn");
+    let log = dir.join("args.log");
+    let cli = fake_cli(
+        &dir,
+        &format!(
+            "echo \"$@\" > '{log}'; printf '%s\\n' '{error}' '{summary}'",
+            log = log.display(),
+            error = event("error", r#","message":"error interno oculto""#),
+            summary = event(
+                "handoff",
+                r#","text":"resumen secreto\n## Pendiente\ncontinuar""#
+            )
+        ),
+    );
+    let mut wanted = spec(&dir);
+    wanted.provider = "Claude".into();
+    wanted.session = Some("session-1".into());
+
+    let mut turn = Turn::start_handoff(&cli, &wanted).unwrap();
+    let events = wait_done(&mut turn);
+
+    assert!(
+        events.is_empty(),
+        "the handoff must not enter the visible transcript"
+    );
+    assert_eq!(
+        turn.take_handoff_text(),
+        "resumen secreto\n## Pendiente\ncontinuar"
+    );
+    let args = fs::read_to_string(log).unwrap();
+    assert!(args.contains("agent chat-handoff claude"));
+    assert!(args.contains("--cancel-on-stdin --session session-1"));
+    let prompt_path = args
+        .split_whitespace()
+        .skip_while(|arg| *arg != "--prompt-file")
+        .nth(1)
+        .unwrap();
+    assert!(
+        fs::read_to_string(prompt_path)
+            .unwrap()
+            .contains("Máximo 1500 palabras")
+    );
+    drop(turn);
+    assert!(!Path::new(prompt_path).exists());
+}
+
+#[test]
+fn context_limits_are_tracked_per_turn_for_release_decisions() {
+    let dir = scratch("limits");
+    let cli = fake_cli(
+        &dir,
+        &format!(
+            "printf '%s\\n' '{limits}' '{done}'",
+            limits = event("limits", r#","context_tokens":900,"context_window":1000"#),
+            done = event("done", r#","exit_code":0,"cancelled":false"#)
+        ),
+    );
+    let mut turn = Turn::start(&cli, &spec(&dir)).unwrap();
+
+    wait_done(&mut turn);
+
+    assert!(turn.needs_context_release());
+    assert!(!turn.was_cancelled());
 }
 
 #[test]
@@ -371,7 +483,7 @@ fn the_cli_is_found_through_the_environment_variable_first() {
     let dir = scratch("find");
     let good = fake_cli(
         &dir,
-        r#"echo "agent chat --live --resume-decided-by-rust --resume-recap-file --rust-context-file"; exit 0"#,
+        r#"[ "$1 $2 $3" = "agent chat --help" ] && echo "agent chat --live --resume-decided-by-rust --resume-recap-file --rust-context-file --rust-chat-handoff --no-auto-release" && exit 0; [ "$1 $2 $3" = "agent chat-handoff --help" ] && echo "Usage: --session --prompt-file" && exit 0; exit 2"#,
     );
     let found = candidates(&dir, &OsString::new());
     assert!(found.is_empty() || found[0] != good);

@@ -18,11 +18,13 @@ use std::time::{Duration, Instant};
 pub const CLI_ENV: &str = "CHXCHX_TECH_CLI";
 
 /// What a CLI must print for `agent chat --help` to be the one that speaks the chat protocol.
-const REQUIRED_CHAT_OPTIONS: [&str; 4] = [
+const REQUIRED_CHAT_OPTIONS: [&str; 6] = [
     "--live",
     "--resume-decided-by-rust",
     "--resume-recap-file",
     "--rust-context-file",
+    "--rust-chat-handoff",
+    "--no-auto-release",
 ];
 
 pub(super) fn command(cli: &Path) -> Command {
@@ -98,7 +100,13 @@ pub fn supports_chat(cli: &Path) -> bool {
     // look too old to Studio. The probe needs the complete option names, not a terminal layout.
     process.env("COLUMNS", "200");
     process.args(["agent", "chat", "--help"]);
-    matches!(run_short(process, Duration::from_secs(20)), Ok((0, text)) if REQUIRED_CHAT_OPTIONS.iter().all(|option| text.contains(option)))
+    let chat = matches!(run_short(process, Duration::from_secs(20)), Ok((0, text)) if REQUIRED_CHAT_OPTIONS.iter().all(|option| text.contains(option)));
+    if !chat {
+        return false;
+    }
+    let mut handoff = command(cli);
+    handoff.args(["agent", "chat-handoff", "--help"]);
+    matches!(run_short(handoff, Duration::from_secs(20)), Ok((0, text)) if text.contains("--session") && text.contains("--prompt-file"))
 }
 
 fn candidates(project: &Path, path: &OsString) -> Vec<PathBuf> {
@@ -198,11 +206,23 @@ pub struct Turn {
     events: Receiver<Value>,
     stderr: Arc<Mutex<VecDeque<String>>>,
     provider: String,
+    kind: TurnKind,
+    handoff_text: String,
+    consume_handoff_session: Option<String>,
+    context_tokens: Option<i64>,
+    context_window: Option<i64>,
+    cancelled: bool,
     pending_claude: Arc<Mutex<HashMap<String, Value>>>,
     prompt_file: PathBuf,
     resume_recap_file: Option<PathBuf>,
     rust_context_file: Option<PathBuf>,
     pub exit: Option<i32>,
+}
+
+#[derive(Clone, Debug)]
+enum TurnKind {
+    Chat,
+    Handoff { session_id: String },
 }
 
 impl Turn {
@@ -215,7 +235,18 @@ impl Turn {
         }
         // Studio prepares context only for a new provider session. If compaction cannot be done,
         // leave the option out so the Python adapter can use its existing fallback path.
-        let needs_new_context = spec.session.as_deref().is_none_or(str::is_empty);
+        let pending_handoff = spec.session.as_deref().and_then(|session| {
+            crate::features::chat_handoff::load(&spec.project, &spec.provider, session)
+                .map(|text| (session.to_owned(), text))
+        });
+        let effective_session = if pending_handoff.is_some() {
+            None
+        } else {
+            spec.session
+                .as_deref()
+                .filter(|session| !session.is_empty())
+        };
+        let needs_new_context = effective_session.is_none();
         let rust_context_file = if needs_new_context {
             match crate::features::context_compaction::compact_context(&spec.project) {
                 Ok(result) => {
@@ -245,11 +276,15 @@ impl Turn {
         } else {
             None
         };
-        let resume_recap_file = if spec.resume_recap.is_empty() {
+        let resume_recap = pending_handoff
+            .as_ref()
+            .map(|(_, text)| super::chat_context::handoff_block(text))
+            .unwrap_or_else(|| spec.resume_recap.clone());
+        let resume_recap_file = if resume_recap.is_empty() {
             None
         } else {
             let path = temporary_chat_file("recap");
-            if let Err(error) = std::fs::write(&path, &spec.resume_recap) {
+            if let Err(error) = std::fs::write(&path, &resume_recap) {
                 remove_turn_files(&prompt_file, Some(&path), rust_context_file.as_deref());
                 return Err(error.to_string());
             }
@@ -267,6 +302,8 @@ impl Turn {
                 "--mode",
                 &spec.mode,
                 "--resume-decided-by-rust",
+                "--rust-chat-handoff",
+                "--no-auto-release",
             ]);
         if let Some(path) = &resume_recap_file {
             process.arg("--resume-recap-file").arg(path);
@@ -283,8 +320,9 @@ impl Turn {
         for rule in &spec.allow {
             process.args(["--allow", rule]);
         }
+        let effective_session = effective_session.map(str::to_owned);
         for (flag, value) in [
-            ("--session", &spec.session),
+            ("--session", &effective_session),
             ("--model", &spec.model),
             ("--effort", &spec.effort),
         ] {
@@ -302,6 +340,8 @@ impl Turn {
             .env("CHXCHX_RUST_EXPLICIT_MEMORY", "1")
             // Claude stream-json and non-live Codex JSONL are normalized by Rust at this boundary.
             .env("CHXCHX_RUST_AGENT_STREAM", "1")
+            // Studio owns handoff persistence and release thresholds.
+            .env("CHXCHX_RUST_CHAT_HANDOFF", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -414,10 +454,114 @@ impl Turn {
             events,
             stderr: tail,
             provider: spec.provider.clone(),
+            kind: TurnKind::Chat,
+            handoff_text: String::new(),
+            consume_handoff_session: pending_handoff.map(|(session, _)| session),
+            context_tokens: None,
+            context_window: None,
+            cancelled: false,
             pending_claude,
             prompt_file,
             resume_recap_file,
             rust_context_file,
+            exit: None,
+        })
+    }
+
+    /// Starts the hidden, read-only provider turn that summarizes a nearly full session.
+    pub fn start_handoff(cli: &Path, spec: &TurnSpec) -> Result<Self, String> {
+        let session = spec
+            .session
+            .as_deref()
+            .filter(|session| !session.is_empty())
+            .ok_or("El handoff requiere una sesión activa")?;
+        let prompt_file = temporary_chat_file("handoff");
+        if let Err(error) = std::fs::write(&prompt_file, crate::features::chat_handoff::PROMPT) {
+            let _ = std::fs::remove_file(&prompt_file);
+            return Err(error.to_string());
+        }
+        let mut process = command(cli);
+        process
+            .args(["agent", "chat-handoff", &spec.agent, "--path"])
+            .arg(&spec.project)
+            .args(["--prompt-file"])
+            .arg(&prompt_file)
+            .arg("--cancel-on-stdin")
+            .args(["--session", session]);
+        for (flag, value) in [("--model", &spec.model), ("--effort", &spec.effort)] {
+            if let Some(value) = value.as_deref().filter(|value| !value.is_empty()) {
+                process.args([flag, value]);
+            }
+        }
+        let mut child = process
+            .current_dir(&spec.project)
+            .env("CHXCHX_RUST_CHAT_HANDOFF", "1")
+            // The adapter must normalize provider output so its internal command can capture text.
+            .env("CHXCHX_RUST_AGENT_STREAM", "0")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| {
+                let _ = std::fs::remove_file(&prompt_file);
+                format!("No pude iniciar el handoff del chat: {error}")
+            })?;
+        let stdin = child.stdin.take();
+        let Some(stdout) = child.stdout.take() else {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = std::fs::remove_file(&prompt_file);
+            return Err("sin salida para el handoff".into());
+        };
+        let Some(stderr) = child.stderr.take() else {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = std::fs::remove_file(&prompt_file);
+            return Err("sin errores para el handoff".into());
+        };
+        let (sender, events) = channel();
+        std::thread::spawn(move || {
+            let bounded =
+                stdout.take((crate::features::chat_handoff::MAX_HANDOFF_CHARS * 4 + 4096) as u64);
+            for line in BufReader::new(bounded).split(b'\n').map_while(Result::ok) {
+                if let Ok(value) = serde_json::from_slice::<Value>(&line)
+                    && sender.send(value).is_err()
+                {
+                    return;
+                }
+            }
+            super::wake::notify_after_end();
+        });
+        let tail = Arc::new(Mutex::new(VecDeque::new()));
+        let collector = tail.clone();
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
+                if let Ok(mut lines) = collector.lock() {
+                    if lines.len() == 20 {
+                        lines.pop_front();
+                    }
+                    lines.push_back(String::from_utf8_lossy(&line).into_owned());
+                }
+            }
+        });
+        Ok(Self {
+            child: Some(child),
+            stdin,
+            events,
+            stderr: tail,
+            provider: spec.provider.clone(),
+            kind: TurnKind::Handoff {
+                session_id: session.to_owned(),
+            },
+            handoff_text: String::new(),
+            consume_handoff_session: None,
+            context_tokens: None,
+            context_window: None,
+            cancelled: false,
+            pending_claude: Arc::new(Mutex::new(HashMap::new())),
+            prompt_file,
+            resume_recap_file: None,
+            rust_context_file: None,
             exit: None,
         })
     }
@@ -438,6 +582,33 @@ impl Turn {
 
     pub fn is_running(&self) -> bool {
         self.exit.is_none()
+    }
+
+    pub fn is_handoff(&self) -> bool {
+        matches!(self.kind, TurnKind::Handoff { .. })
+    }
+
+    pub fn handoff_target_session(&self) -> Option<&str> {
+        match &self.kind {
+            TurnKind::Handoff { session_id } => Some(session_id),
+            TurnKind::Chat => None,
+        }
+    }
+
+    pub fn take_handoff_text(&mut self) -> String {
+        std::mem::take(&mut self.handoff_text)
+    }
+
+    pub fn take_consumed_handoff_session(&mut self) -> Option<String> {
+        self.consume_handoff_session.take()
+    }
+
+    pub fn was_cancelled(&self) -> bool {
+        self.cancelled
+    }
+
+    pub fn needs_context_release(&self) -> bool {
+        crate::features::chat_handoff::needs_release(self.context_tokens, self.context_window)
     }
 
     fn write_line(&mut self, line: &str) -> Result<(), String> {
@@ -488,6 +659,37 @@ impl Turn {
     fn consume_internal_events(&mut self, events: Vec<Value>) -> Vec<Value> {
         let mut visible = Vec::with_capacity(events.len());
         for event in events {
+            if self.is_handoff() {
+                if event["type"].as_str() == Some("handoff")
+                    && event["schema"].as_str() == Some("chxchx.agent-event")
+                    && event["schema_version"].as_i64() == Some(1)
+                {
+                    self.handoff_text = event["text"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .chars()
+                        .take(crate::features::chat_handoff::MAX_HANDOFF_CHARS)
+                        .collect();
+                }
+                continue;
+            }
+            match event["type"].as_str() {
+                Some("handoff") => {
+                    continue;
+                }
+                Some("limits") => {
+                    if let Some(tokens) = event["context_tokens"].as_i64().filter(|n| *n > 0) {
+                        self.context_tokens = Some(tokens);
+                    }
+                    if let Some(window) = event["context_window"].as_i64().filter(|n| *n > 0) {
+                        self.context_window = Some(window);
+                    }
+                }
+                Some("done") => {
+                    self.cancelled = event["cancelled"].as_bool().unwrap_or(false);
+                }
+                _ => {}
+            }
             if event["type"].as_str() != Some("chxchx_internal_claude_control") {
                 visible.push(event);
                 continue;

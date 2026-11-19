@@ -37,6 +37,7 @@ from .chat_release import release_context
 from .chat_resume import load_resume_recap, resolve_resume
 from .chat_stream_protocol import json_line_emitter, rust_normalizes
 from .chat_state import begin_turn, end_turn
+from .chat_turn_state import remember
 from .service import WorkspaceOperationError
 
 Emit = Callable[[dict[str, Any]], None]
@@ -92,6 +93,7 @@ def plan_chat_turn(
     auto_release: bool = True,
     resume_decided_by_rust: bool = False,
     resume_recap: str = "",
+    rust_chat_handoff: bool = False,
 ) -> ChatTurnPlan:
     if lean:
         mode = "read-only"  # advice only: a lean turn must never be able to change files
@@ -117,7 +119,7 @@ def plan_chat_turn(
         )
     images = tuple(validated_image(path) for path in images)
     root = service.project.root.resolve()
-    handoff = "" if lean else load_handoff(root, provider, session_id)
+    handoff = "" if lean or rust_chat_handoff else load_handoff(root, provider, session_id)
     major = opencode_major(resolve_executable(config.command[0])) if provider == "OpenCode" else None
     can_live = live and not lean and provider in LIVE_PROVIDERS
     continued_from, session_id = (session_id, None) if handoff else (None, session_id)
@@ -137,22 +139,19 @@ def plan_chat_turn(
         env["OPENCODE_SERVER_PASSWORD"] = secrets.token_urlsafe(24)  # only this chat's host may drive the server
     return ChatTurnPlan(agent_id, provider, root, (root / config.cwd).resolve(), argv, mode, session_id,
                         tuple(config.command), model, effort, images, env, network, allow, live, lean, handoff, continued_from,
-                        auto_release, major, recap)
+                        auto_release and not rust_chat_handoff, major, recap)
 
 
 def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: IO[str] | None = None,
                   housekeeping: bool = False, rust_context: str | None = None,
                   rust_context_compacted_sections: int = 0) -> int:
-    """Run the turn; a "cancel" line or EOF on `cancel_input` stops the agent.
-
-    `housekeeping` is an internal turn (the hand-off): no start/done events, no context, journal or memory.
-    """
+    """Run a chat turn; internal housekeeping skips context and persistence."""
     if not housekeeping:
         emit({"type": "start", "agent": plan.agent_id, "provider": plan.provider, "mode": plan.mode})
     watch = UsageWatch(plan.provider, plan.model)
     user_text, replies = prompt, []
     # Rust Studio persists its visible transcript itself; avoid competing writes from this adapter.
-    remember = not plan.lean and not housekeeping and os.environ.get("CHXCHX_RUST_CHAT_STATE") != "1"
+    should_remember = not plan.lean and not housekeeping and os.environ.get("CHXCHX_RUST_CHAT_STATE") != "1"
 
     def notify(message: str, is_error: bool) -> None:
         emit({"type": "notice", "message": message, "error": is_error})
@@ -182,12 +181,18 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
         rust_context=rust_context,
         rust_context_compacted_sections=rust_context_compacted_sections,
     )
-    if remember:
-        _remember(begin_turn, plan, plan.session_id or plan.continued_from, user_text)
+    if should_remember:
+        remember(begin_turn, plan, plan.session_id or plan.continued_from, user_text)
     started_at = datetime.now(timezone.utc)
     provider_env = with_search_path({**os.environ, **plan.env})
     # These markers belong to the ChxChx adapter and must not reach provider processes.
-    for marker in ("CHXCHX_RUST_CHAT_STATE", "CHXCHX_RUST_AGENT_STREAM", "CHXCHX_RUST_CHAT_JOURNAL", "CHXCHX_RUST_EXPLICIT_MEMORY"):
+    for marker in (
+        "CHXCHX_RUST_CHAT_STATE",
+        "CHXCHX_RUST_AGENT_STREAM",
+        "CHXCHX_RUST_CHAT_JOURNAL",
+        "CHXCHX_RUST_EXPLICIT_MEMORY",
+        "CHXCHX_RUST_CHAT_HANDOFF",
+    ):
         provider_env.pop(marker, None)
     try:
         process = subprocess.Popen(
@@ -267,6 +272,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
         detail = "\n".join(stderr_tail).strip()
         emit({"type": "error", "message": detail or f"{plan.provider} terminó con código {exit_code}"})
     if housekeeping:
+        emit({"type": "housekeeping_done", "exit_code": exit_code, "cancelled": cancelled.is_set()})
         return exit_code
     if plan.provider == "Codex" and session_id:
         limits = codex_limits(session_id)
@@ -285,14 +291,7 @@ def run_chat_turn(plan: ChatTurnPlan, prompt: str, emit: Emit, *, cancel_input: 
                               opencode_executable=resolve_executable(plan.command[0]) if plan.provider == "OpenCode" and plan.command else None,
                               write_journal=os.environ.get("CHXCHX_RUST_CHAT_JOURNAL") != "1",
                               write_memories=os.environ.get("CHXCHX_RUST_EXPLICIT_MEMORY") != "1")
-    if remember:
-        _remember(end_turn, plan, session_id, replies)
+    if should_remember:
+        remember(end_turn, plan, session_id, replies)
     emit({"type": "done", "exit_code": exit_code, "cancelled": cancelled.is_set(), "session_id": session_id})
     return exit_code
-
-
-def _remember(write: Callable[..., None], plan: ChatTurnPlan, session_id: str | None, payload: Any) -> None:
-    try:
-        write(plan.project_root, plan.agent_id, plan.provider, session_id, payload)
-    except OSError:
-        pass  # a read-only project must not stop the chat; it just will not be restored

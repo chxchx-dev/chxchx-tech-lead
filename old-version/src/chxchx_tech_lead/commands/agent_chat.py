@@ -34,6 +34,8 @@ def agent_chat(
         help="Lee el recap de una sesión perdida preparado por Studio."),
     rust_context_file: Path | None = typer.Option(None, "--rust-context-file", exists=True, dir_okay=False, resolve_path=True,
         help="Lee el contexto inicial acotado preparado por Studio."),
+    rust_chat_handoff: bool = typer.Option(False, "--rust-chat-handoff",
+        help="Studio Rust gestiona la liberación y el consumo de traspasos."),
     mode: str = typer.Option("read-only", "--mode", help=f"Permisos del agente: {', '.join(MODES)}."),
     model: str = typer.Option("", "--model", help="Modelo; vacío usa el configurado en el agente."),
     effort: str = typer.Option("", "--effort", help="Nivel de razonamiento; vacío usa el configurado."),
@@ -57,7 +59,8 @@ def agent_chat(
         plan = plan_chat_turn(_workspace_service(path), agent_id, mode=mode, session_id=session or None,
                               model=model or None, effort=effort or None, images=tuple(images), lean=lean,
                               network=network, allow=tuple(allow), live=live and cancel_on_stdin, auto_release=auto_release,
-                              resume_decided_by_rust=resume_decided_by_rust, resume_recap=resume_recap)
+                              resume_decided_by_rust=resume_decided_by_rust, resume_recap=resume_recap,
+                              rust_chat_handoff=rust_chat_handoff)
     except WorkspaceOperationError as exc:
         _record_agent_error(path, "agent chat", str(exc))
         emit({"type": "error", "message": str(exc)})

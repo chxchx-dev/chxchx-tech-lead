@@ -7,7 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from typer.testing import CliRunner
 
+from chxchx_tech_lead.cli import app
 from chxchx_tech_lead.workspace import agent_chat, chat_release
 
 
@@ -20,7 +22,7 @@ def _service(root: Path):
 @pytest.fixture(autouse=True)
 def machine(isolated_home, fake_bin, tmp_path: Path, monkeypatch) -> None:
     cache = tmp_path / "cache" / "opencode"
-    cache.mkdir(parents=True)
+    cache.mkdir(parents=True, exist_ok=True)
     (cache / "models.json").write_text(json.dumps({"x": {"models": {"y": {"limit": {"context": 1000}}}}}), encoding="utf-8")
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))  # no default model of the person's own
@@ -102,3 +104,40 @@ def test_a_failed_hand_off_keeps_the_conversation_going(tmp_path: Path, fake_bin
 
     assert code == 0 and any("No pude liberar" in text for text in _notices(events)) and not _handoffs(tmp_path)
     assert events[-1]["type"] == "done" and events[-1]["exit_code"] == 0
+
+
+def test_hidden_adapter_command_generates_a_read_only_handoff_event(
+    tmp_path: Path, fake_bin, monkeypatch
+) -> None:
+    from chxchx_tech_lead.commands import agent_chat_handoff
+
+    prompt = tmp_path / "handoff-prompt.txt"
+    prompt.write_text("liberar tu ventana de contexto", encoding="utf-8")
+    events: list[dict] = []
+    monkeypatch.setattr(agent_chat_handoff, "workspace_service_for", lambda _path: _service(tmp_path))
+    monkeypatch.setattr(
+        agent_chat_handoff,
+        "json_line_emitter",
+        lambda: lambda event: events.append({"schema": "chxchx.agent-event", "schema_version": 1, **event}),
+    )
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    cache = tmp_path / "cache" / "opencode"
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / "models.json").write_text("{}", encoding="utf-8")
+    helper_help = CliRunner().invoke(app, ["agent", "chat-handoff", "--help"])
+    assert helper_help.exit_code == 0 and "--session" in helper_help.stdout and "--prompt-file" in helper_help.stdout
+    result = CliRunner().invoke(app, [
+        "agent", "chat-handoff", "opencode", "--path", str(tmp_path),
+        "--session", "ses_fake1", "--prompt-file", str(prompt), "--model", "x/y",
+    ])
+
+    payload = events[0]
+    run = _runs(fake_bin)[-1]
+    assert result.exit_code == 0, result.output
+    assert len(events) == 1, "the helper emits only its final hidden result"
+    assert payload["schema"] == "chxchx.agent-event" and payload["schema_version"] == 1
+    assert payload["type"] == "handoff" and "TRASPASO" in payload["text"]
+    assert "--session" in run["argv"] and run["argv"][run["argv"].index("--session") + 1] == "ses_fake1"
+    assert run["permission"] == '{"edit": "deny", "bash": "deny"}'
+    assert not (tmp_path / ".ai" / "chat-state").exists()
+    assert not (tmp_path / ".ai" / "chat-handoffs").exists()
