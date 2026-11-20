@@ -7,6 +7,7 @@
 use super::*;
 use crate::features::agents::Provider;
 use crate::integrations::agent_access::{Access, claude_turn_arguments};
+use crate::integrations::agent_adapter;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Longest handoff the hidden summary turn may produce.
@@ -18,19 +19,44 @@ pub(super) struct NativeRun {
     pid: u32,
     /// The session the turn resumed, reported again if Claude never announces another.
     planned_session: Option<String>,
-    session: Option<String>,
+    pub(super) session: Option<String>,
     /// Assistant text of a hidden handoff turn.
     summary: Vec<String>,
     /// Set before the process is stopped so its exit is reported as a cancellation, not a failure.
     stopping: Arc<AtomicBool>,
+    /// The provider is driven by the agent-adapter service instead of being the process itself.
+    pub(super) service: bool,
+    /// What the service reported when the turn ended (`adapter_done`).
+    pub(super) reported: Option<(i32, bool)>,
 }
 
-/// Whether this agent's turns can run without the Python CLI.
+/// Whether this agent's turns can run without the Python CLI: Claude directly, Codex and OpenCode
+/// through the agent-adapter service once it has been found (see `prepare_native`).
 pub fn runs_natively(agent: &crate::features::agents::Agent) -> bool {
-    agent.provider == Provider::Claude && agent.executable.is_some()
+    agent.executable.is_some()
+        && match agent.provider {
+            Provider::Claude => true,
+            Provider::Codex | Provider::OpenCode => agent_adapter::known().is_some(),
+            Provider::Other => false,
+        }
 }
 
-fn agent_event(kind: &str, fields: Value) -> Value {
+/// Looks for the service and reads what the agent needs to know before its first turn, so the
+/// answer of `runs_natively` is right afterwards. Runs processes: call it off the UI thread.
+pub fn prepare_native(agent: &crate::features::agents::Agent, project: &Path) -> bool {
+    if agent.executable.is_some() && matches!(agent.provider, Provider::Codex | Provider::OpenCode)
+    {
+        let _ = agent_adapter::locate(Some(project));
+        if agent.provider == Provider::OpenCode
+            && let Some(executable) = agent.executable.as_deref()
+        {
+            let _ = agent_adapter::opencode_major(executable);
+        }
+    }
+    runs_natively(agent)
+}
+
+pub(super) fn agent_event(kind: &str, fields: Value) -> Value {
     let mut event = serde_json::json!({
         "schema": "chxchx.agent-event", "schema_version": 1, "type": kind,
     });
@@ -40,11 +66,10 @@ fn agent_event(kind: &str, fields: Value) -> Value {
     event
 }
 
-/// Copies the turn's images inside the project (so every access mode can read them) and lists
-/// them for the prompt, because Claude takes attachments as paths in the text.
-fn stage_images(project: &Path, images: &[PathBuf]) -> Result<String, String> {
+/// Copies the turn's images inside the project, so every access mode can read them.
+pub(super) fn stage_images(project: &Path, images: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     if images.is_empty() {
-        return Ok(String::new());
+        return Ok(Vec::new());
     }
     let mut folder = project.to_path_buf();
     for part in ATTACHMENTS {
@@ -60,7 +85,7 @@ fn stage_images(project: &Path, images: &[PathBuf]) -> Result<String, String> {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_nanos());
-    let mut listed = String::new();
+    let mut staged = Vec::new();
     for (index, source) in images.iter().enumerate() {
         let name = source
             .file_name()
@@ -69,28 +94,52 @@ fn stage_images(project: &Path, images: &[PathBuf]) -> Result<String, String> {
         let target = folder.join(format!("{stamp}-{index}-{name}"));
         std::fs::copy(source, &target)
             .map_err(|error| format!("No pude adjuntar {name}: {error}"))?;
-        listed.push_str(&format!("\n- .ai/chat-attachments/{stamp}-{index}-{name}"));
+        staged.push(target);
     }
-    Ok(listed)
+    Ok(staged)
+}
+
+/// Claude takes attachments as paths in the text of the message.
+fn image_listing(staged: &[PathBuf]) -> String {
+    staged
+        .iter()
+        .filter_map(|path| path.file_name())
+        .map(|name| format!("\n- .ai/chat-attachments/{}", name.to_string_lossy()))
+        .collect()
 }
 
 /// The text written to Claude for a chat turn, plus what the person should be told about it.
 /// A new session starts with the project context; a resumed one only carries the request.
-fn chat_prompt(
+pub(super) struct ChatPrompt {
+    pub text: String,
+    pub notices: Vec<Value>,
+    /// The copies of the images inside the project.
+    pub staged: Vec<PathBuf>,
+}
+
+/// With `images_in_text` the listing of the images is part of the message (Claude reads them with
+/// its Read tool); otherwise the caller passes `staged` to the provider as attachments.
+pub(super) fn chat_prompt(
     spec: &TurnSpec,
     session: Option<&str>,
     handoff: Option<&str>,
-) -> Result<(String, Vec<Value>), String> {
+    images_in_text: bool,
+) -> Result<ChatPrompt, String> {
     let mut notices = Vec::new();
     let mut request = spec.prompt.clone();
     let staged = stage_images(&spec.project, &spec.images)?;
-    if !staged.is_empty() {
+    if images_in_text && !staged.is_empty() {
         request.push_str(&format!(
-            "\n\nImágenes adjuntas por el usuario (ábrelas con la herramienta Read antes de responder):{staged}"
+            "\n\nImágenes adjuntas por el usuario (ábrelas con la herramienta Read antes de responder):{}",
+            image_listing(&staged)
         ));
     }
     if session.is_some() {
-        return Ok((request, notices));
+        return Ok(ChatPrompt {
+            text: request,
+            notices,
+            staged,
+        });
     }
     let compacted = match crate::features::context_compaction::compact_context(&spec.project) {
         Ok(result) => result.moved_count(),
@@ -121,13 +170,14 @@ fn chat_prompt(
         Some(text) => context.push_str(&crate::integrations::chat_context::handoff_block(text)),
         None => context.push_str(&spec.resume_recap),
     }
-    Ok((
-        format!(
+    Ok(ChatPrompt {
+        text: format!(
             "{context}\n\n{}\n{request}",
             crate::integrations::chat_context::CHAT_PANEL_REQUEST_MARKER
         ),
         notices,
-    ))
+        staged,
+    })
 }
 
 fn spawn(spec: &TurnSpec, args: Vec<String>) -> Result<Child, String> {
@@ -164,7 +214,7 @@ fn spawn(spec: &TurnSpec, args: Vec<String>) -> Result<Child, String> {
         .map_err(|error| format!("No pude iniciar {}: {error}", executable.display()))
 }
 
-fn access_for(spec: &TurnSpec) -> Result<Access, String> {
+pub(super) fn access_for(spec: &TurnSpec) -> Result<Access, String> {
     Access::new(spec.mode.clone(), spec.network, spec.allow.clone())
 }
 
@@ -172,7 +222,7 @@ fn configured_arguments(spec: &TurnSpec) -> &[String] {
     spec.agent_command.get(1..).unwrap_or_default()
 }
 
-fn require_trust(spec: &TurnSpec) -> Result<(), String> {
+pub(super) fn require_trust(spec: &TurnSpec) -> Result<(), String> {
     if spec.trusted {
         Ok(())
     } else {
@@ -221,6 +271,9 @@ impl Turn {
         if spec.provider == "Claude" && spec.executable.is_some() {
             return Self::start_claude(spec);
         }
+        if let Some(adapter) = service_for(spec) {
+            return Self::start_service(&adapter, spec);
+        }
         Self::start(cli.ok_or_else(missing_cli_hint)?, spec)
     }
 
@@ -229,6 +282,9 @@ impl Turn {
         if spec.provider == "Claude" && spec.executable.is_some() {
             return Self::start_claude_handoff(spec);
         }
+        if let Some(adapter) = service_for(spec) {
+            return Self::start_service_handoff(&adapter, spec);
+        }
         Self::start_handoff(cli.ok_or_else(missing_cli_hint)?, spec)
     }
 
@@ -236,7 +292,11 @@ impl Turn {
         require_trust(spec)?;
         let access = access_for(spec)?;
         let (pending_handoff, session) = session_plan(spec);
-        let (prompt, notices) = chat_prompt(spec, session.as_deref(), pending_handoff.as_deref())?;
+        let ChatPrompt {
+            text: prompt,
+            notices,
+            ..
+        } = chat_prompt(spec, session.as_deref(), pending_handoff.as_deref(), true)?;
         let args = claude_turn_arguments(
             configured_arguments(spec),
             &access,
@@ -257,7 +317,7 @@ impl Turn {
                 .and_then(|()| stdin.write_all(b"\n"))
                 .and_then(|()| stdin.flush())
         });
-        let mut turn = Self::adopt(child, stdin, spec, TurnKind::Chat, session)?;
+        let mut turn = Self::adopt(child, stdin, spec, TurnKind::Chat, session, false)?;
         // The handoff is only retired once the new session has answered (see the Studio chat).
         turn.consume_handoff_session = pending_handoff.and(spec.session.clone());
         turn.pre_events = vec![agent_event(
@@ -307,16 +367,19 @@ impl Turn {
                 session_id: session.clone(),
             },
             Some(session),
+            false,
         )
     }
 
-    /// Wires the readers around a spawned Claude process.
-    fn adopt(
+    /// Wires the readers around a spawned process: Claude itself, or the agent-adapter service
+    /// (`service`), which already prints `chxchx.agent-event` lines instead of raw records.
+    pub(super) fn adopt(
         mut child: Child,
         stdin: Option<ChildStdin>,
         spec: &TurnSpec,
         kind: TurnKind,
         session: Option<String>,
+        service: bool,
     ) -> Result<Self, String> {
         let stopping = Arc::new(AtomicBool::new(false));
         let pid = child.id();
@@ -327,7 +390,12 @@ impl Turn {
         };
         let (sender, events) = channel();
         let pending_claude = Arc::new(Mutex::new(HashMap::new()));
-        spawn_event_reader(stdout, sender, pending_claude.clone(), Some("Claude"));
+        spawn_event_reader(
+            stdout,
+            sender,
+            pending_claude.clone(),
+            (!service).then_some("Claude"),
+        );
         let tail = Arc::new(Mutex::new(VecDeque::new()));
         spawn_stderr_reader(stderr, tail.clone());
         Ok(Self {
@@ -354,6 +422,8 @@ impl Turn {
                 session: None,
                 summary: Vec::new(),
                 stopping,
+                service,
+                reported: None,
             }),
         })
     }
@@ -363,9 +433,15 @@ impl Turn {
         let Some(native) = self.native.as_ref() else {
             return false;
         };
+        let (service, pid) = (native.service, native.pid);
         if self.exit.is_none() {
             native.stopping.store(true, Ordering::SeqCst);
-            stop(native.pid);
+            if service {
+                // The service stops the provider and everything it started, then reports it.
+                let _ = self.write_line("cancel");
+            } else {
+                stop(pid);
+            }
         }
         true
     }
@@ -396,7 +472,10 @@ impl Turn {
         let Some(native) = self.native.as_mut() else {
             return Vec::new();
         };
-        let cancelled = native.stopping.load(Ordering::SeqCst);
+        let reported = native.reported;
+        let code = reported.map_or(code, |(code, _)| code);
+        let cancelled = native.stopping.load(Ordering::SeqCst)
+            || reported.is_some_and(|(_, cancelled)| cancelled);
         if matches!(self.kind, TurnKind::Handoff { .. }) {
             let summary: String = native
                 .summary
@@ -410,6 +489,9 @@ impl Turn {
             }
             return Vec::new();
         }
+        if reported.is_some() {
+            return Vec::new(); // the service already said it, and `done` went out with it
+        }
         let session = native
             .session
             .clone()
@@ -421,8 +503,15 @@ impl Turn {
     }
 }
 
+/// The service that runs this turn, when the provider is one it drives and it was found.
+fn service_for(spec: &TurnSpec) -> Option<PathBuf> {
+    (matches!(spec.provider.as_str(), "Codex" | "OpenCode") && spec.executable.is_some())
+        .then(agent_adapter::known)
+        .flatten()
+}
+
 /// The handoff waiting for this session, and the session to resume (none when a handoff starts a new one).
-fn session_plan(spec: &TurnSpec) -> (Option<String>, Option<String>) {
+pub(super) fn session_plan(spec: &TurnSpec) -> (Option<String>, Option<String>) {
     let pending = spec.session.as_deref().and_then(|session| {
         crate::features::chat_handoff::load(&spec.project, &spec.provider, session)
     });

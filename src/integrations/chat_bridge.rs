@@ -6,8 +6,9 @@
 //! and Claude's live control responses.
 pub use crate::integrations::agent_catalog::{AgentOptions, ModelOption};
 mod claude_runner;
+mod service_runner;
 use crate::integrations::executable_search::{agent_path, find_executable, find_in};
-pub use claude_runner::runs_natively;
+pub use claude_runner::{prepare_native, runs_natively};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::OsString;
@@ -719,6 +720,9 @@ impl Turn {
                 self.stdin = None; // closing the input lets the provider exit
                 continue;
             }
+            let Some(event) = self.translate_service_event(event) else {
+                continue;
+            };
             self.observe_native(&event);
             if self.is_handoff() {
                 if event["type"].as_str() == Some("handoff")

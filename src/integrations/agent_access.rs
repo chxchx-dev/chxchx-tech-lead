@@ -208,6 +208,49 @@ pub fn opencode_environment(access: &Access) -> Vec<(String, String)> {
     )]
 }
 
+/// The environment OpenCode's server needs for this access level. OpenCode 2.x replaced the
+/// `OPENCODE_PERMISSION` map with an ordered ruleset in `OPENCODE_CONFIG_CONTENT`; anything older
+/// (or unknown) keeps the 1.x form.
+pub fn opencode_environment_for(access: &Access, major: Option<u32>) -> Vec<(String, String)> {
+    if major.is_none_or(|major| major < 2) {
+        return opencode_environment(access);
+    }
+    let rule = |action: &str, effect: &str, resource: &str| json!({"action": action, "resource": resource, "effect": effect});
+    let mut rules = Vec::new();
+    if access.mode == "read-only" {
+        rules.push(rule("edit", "deny", "*"));
+        rules.push(rule("shell", "deny", "*"));
+    } else if access.mode != "full-access" {
+        // `ask` has nobody to answer in a headless run: it is rejected and becomes a card.
+        let commands = if access.mode == "workspace-commands" {
+            "allow"
+        } else {
+            "ask"
+        };
+        let web = if access.network { "allow" } else { "ask" };
+        rules.push(rule("shell", commands, "*"));
+        rules.push(rule("webfetch", web, "*"));
+        rules.push(rule("websearch", web, "*"));
+    }
+    // The last matching rule wins: what the person approved goes after the defaults.
+    for item in &access.allow {
+        let (name, pattern) = item.split_once(':').unwrap_or((item.as_str(), ""));
+        let action = if name == "bash" { "shell" } else { name };
+        rules.push(rule(
+            action,
+            "allow",
+            if pattern.is_empty() { "*" } else { pattern },
+        ));
+    }
+    if rules.is_empty() {
+        return Vec::new();
+    }
+    vec![(
+        "OPENCODE_CONFIG_CONTENT".into(),
+        json!({"permissions": rules}).to_string(),
+    )]
+}
+
 fn deduplicate(values: &mut Vec<String>) {
     let mut unique = Vec::with_capacity(values.len());
     for value in values.drain(..) {

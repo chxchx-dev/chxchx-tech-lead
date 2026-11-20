@@ -46,7 +46,6 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
     let known = state.chat.cli.clone();
     let id = agent.id.clone();
     let provider = super::turns::state_provider(agent.provider).to_owned();
-    let native = bridge::runs_natively(&agent);
     let executable = agent
         .executable
         .as_deref()
@@ -55,7 +54,9 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
     Task::perform(
         async move {
             jobs::offload(move || -> Prepared {
-                // Claude does not need the Python CLI, so it is not searched for.
+                // Claude, and Codex/OpenCode through the agent-adapter service, do not need the
+                // Python CLI, so it is not searched for.
+                let native = bridge::prepare_native(&agent, &root);
                 let cli = known.or_else(|| {
                     if native {
                         None
