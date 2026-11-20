@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- **El explorador organiza el proyecto**: clic derecho en un archivo, una carpeta o el espacio vacío abre un menú con *Nuevo archivo*, *Nueva carpeta*, *Renombrar*, *Duplicar*, *Copiar*, *Cortar*, *Pegar*, *Copiar nombre / ruta / ruta relativa*, *Mostrar en el explorador de archivos* y *Eliminar*. Renombrar y crear se escriben en la propia fila (Enter confirma, Escape cancela) y validan el nombre mientras escribes. Ctrl+clic y Mayús+clic seleccionan varios elementos. `F2`, `Supr`, `Ctrl+C`, `Ctrl+X` y `Ctrl+V` actúan solo cuando el explorador tiene el teclado y se pueden cambiar en Ajustes. Eliminar mueve a una papelera de ChxChx con confirmación y se puede deshacer (las últimas 10 eliminaciones). Las pestañas abiertas y las carpetas expandidas siguen a los renombrados y movimientos. Nada sale del proyecto, no se siguen enlaces ni se tocan `.git`, `node_modules` o `.env`, y pegar nunca sobrescribe.
+
 ## 0.6.3 — Ajustes, temas y un Studio más fluido
 
 - **Ajustes** (*Archivo → Preferencias*, o `Ctrl+,`): seis temas (ChxChx Oscuro, Medianoche, Grafito, Bosque, Claro y Alto contraste), color de resalte propio, tamaño de la interfaz del 90 % al 150 % y atajos de teclado que se pueden cambiar o restaurar. Todo se guarda en `studio-preferences.json` y se aplica al instante.

@@ -101,6 +101,12 @@ credenciales y sin abrir ventanas.
 - **Ramas:** locales y remotas, cambiar, crear y eliminar (confirmación; nunca fuerza).
 - **Explorador:** archivos coloreados y con letra (M, N, D, R, !) y un punto en las carpetas
   con cambios. El estado se refresca al guardar, tras cada acción y cada 8 s.
+- **Gestión de archivos (explorador):** clic derecho o los atajos `F2` (renombrar), `Supr` (eliminar), `Ctrl+C` / `Ctrl+X` /
+  `Ctrl+V`. Crear, renombrar, duplicar, copiar, mover y eliminar viven en `features/project_fs.rs`: todo dentro del proyecto,
+  sin seguir enlaces, sin tocar lo que el explorador oculta (`.git`, `node_modules`, `target`, `.venv`, `__pycache__`, `.env*`),
+  con nombres válidos en cualquier sistema y límites (20 000 elementos / 2 GiB al copiar). Eliminar no borra: mueve el elemento
+  a `<home>/trash/<proyecto>/` y se deshace desde el explorador. Pegar un nombre que ya existe crea «nombre copia»; mover a un
+  destino con ese nombre se rechaza. Los atajos solo actúan mientras el explorador tiene el teclado.
 - **Seguridad:** rutas literales (`--literal-pathspecs`), nombres de rama validados con
   `git check-ref-format`, `core.fsmonitor` desactivado siempre, y en proyectos sin confianza
   local no se ejecutan los hooks del repositorio. Un solo comando que modifica corre a la
