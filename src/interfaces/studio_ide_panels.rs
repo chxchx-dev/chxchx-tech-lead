@@ -12,7 +12,14 @@ fn heading<'a>(label: &'a str) -> iced::widget::Text<'a> {
 }
 
 pub(super) fn explorer(state: &Dashboard) -> Element<'_, Message> {
-    iced::widget::responsive(move |size| explorer_panel(state, size)).into()
+    // `responsive` fills whatever it is given: without a fixed width the panel would share the
+    // row with the editor and leave a gap between them.
+    container(iced::widget::responsive(move |size| {
+        explorer_panel(state, size)
+    }))
+    .width(state.shell.explorer_width)
+    .height(Fill)
+    .into()
 }
 
 fn header_button<'a>(
@@ -270,4 +277,20 @@ fn folder_rows<'a>(
         }
     }
     rows
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_explorer_takes_exactly_its_width_so_no_gap_opens_beside_the_editor() {
+        let mut state = super::super::editor::fixture();
+        for width in [180.0, 248.0, 520.0] {
+            state.shell.explorer_width = width;
+            let size = explorer(&state).as_widget().size();
+            assert_eq!(size.width, iced::Length::Fixed(width));
+            assert_eq!(size.height, Fill);
+        }
+    }
 }
