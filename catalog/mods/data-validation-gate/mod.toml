@@ -1,0 +1,3 @@
+name = "chxchx-data-validation-gate"
+description = "Los datos de entrenamiento se validan y versionan antes de usarse."
+stacks = ["ml"]

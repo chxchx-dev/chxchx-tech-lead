@@ -1,0 +1,3 @@
+name = "chxchx-kubernetes-safety"
+description = "Cambios en Kubernetes con vista previa, sin tocar producción a mano."
+stacks = ["kubernetes"]

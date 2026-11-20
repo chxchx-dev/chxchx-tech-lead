@@ -1,0 +1,6 @@
+name = "go-engineering"
+description = "Go idiomático para servicios: errores, contextos y cancelación, concurrencia segura, módulos y verificación con vet, race y pruebas."
+stacks = ["go"]
+languages = ["go"]
+tags = ["go", "concurrency", "services"]
+origin = "chxchx"

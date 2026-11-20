@@ -1,0 +1,6 @@
+name = "rust-engineering"
+description = "Rust idiomático y seguro: errores explícitos, propiedad clara, concurrencia, `unsafe` justificado y verificación con fmt, clippy y pruebas."
+stacks = ["rust"]
+languages = ["rust"]
+tags = ["rust", "safety", "cargo", "concurrency"]
+origin = "chxchx"

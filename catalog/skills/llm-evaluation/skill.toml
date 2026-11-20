@@ -1,0 +1,6 @@
+name = "llm-evaluation"
+description = "Evaluar modelos de lenguaje con rigor: conjuntos retenidos, contaminación, protocolos fijos, intervalos de confianza y compuertas contra regresiones."
+stacks = ["ml", "ai"]
+languages = []
+tags = ["evaluation", "benchmarks", "llm", "regression"]
+origin = "chxchx"

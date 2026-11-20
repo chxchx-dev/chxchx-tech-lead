@@ -1,0 +1,6 @@
+name = "terraform"
+description = "Infraestructura como código con Terraform: estado remoto y bloqueo, módulos, planes revisados, secretos y control de cambios destructivos."
+stacks = ["terraform"]
+languages = []
+tags = ["terraform", "iac", "infrastructure", "cloud"]
+origin = "chxchx"

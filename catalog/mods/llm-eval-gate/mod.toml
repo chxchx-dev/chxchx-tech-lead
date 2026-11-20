@@ -1,0 +1,3 @@
+name = "chxchx-llm-eval-gate"
+description = "No afirmar una mejora de un modelo sin evaluación comparada con su línea base."
+stacks = ["ml", "ai"]

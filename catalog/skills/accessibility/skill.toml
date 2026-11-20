@@ -1,0 +1,6 @@
+name = "accessibility"
+description = "Accesibilidad de interfaces: semántica, teclado, contraste, lectores de pantalla, movimiento y verificación con herramientas y pruebas manuales."
+stacks = ["react", "nextjs", "react-native", "react-vite", "qt"]
+languages = []
+tags = ["a11y", "wcag", "ui", "keyboard", "contrast"]
+origin = "chxchx"

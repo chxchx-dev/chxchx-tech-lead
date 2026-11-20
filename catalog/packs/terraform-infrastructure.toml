@@ -1,0 +1,5 @@
+name = "terraform-infrastructure"
+description = "Infraestructura como código con Terraform: estado remoto, planes revisados y seguridad."
+stacks = ["terraform"]
+languages = []
+skills = ["terraform", "security-review", "ci-cd-pipelines", "observability"]

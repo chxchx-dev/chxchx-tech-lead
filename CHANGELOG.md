@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+- **Marcas de los agentes**: Claude, Codex (OpenAI) y OpenCode se reconocen por su marca en el panel de agentes y en los chats, en vez de una letra. Los dibujos vienen de simple-icons (CC0) y del repositorio de OpenCode (MIT); ver `assets/brands/README.md`.
+- **Catálogo para desarrollar y operar modelos de lenguaje** (40 skills, 22 packs, 31 mods): entrenar desde cero, datos, tokenizador, ajuste fino, evaluación, inferencia y servicio, PyTorch, rendimiento en GPU, reproducibilidad, validación de seguridad y RAG; además Rust, Go, Kubernetes, Terraform, observabilidad, ingeniería de datos, CI/CD y accesibilidad. Nuevos packs (`llm-from-scratch`, `llm-fine-tuning`, `llm-inference`, `llm-applications`, `rust-service`, `go-service`, `kubernetes-platform`, `terraform-infrastructure`, `data-platform`) y mods de guardia (`llm-training-guard`, `llm-eval-gate`, `data-validation-gate`, `model-release-checklist`, `inference-benchmark`, `kubernetes-safety`, `terraform-plan-first`, `accessibility-check`).
+- **Detección de proyectos**: nuevos stacks `ml` (entrenan o sirven modelos: PyTorch, Transformers, vLLM, wandb…), `kubernetes` (Helm, kustomize o manifiestos) y `terraform`, para que el catálogo recomiende lo adecuado y no a todo proyecto Python.
+
 ## 0.6.3 — Ajustes, temas y un Studio más fluido
 
 - **Ajustes** (*Archivo → Preferencias*, o `Ctrl+,`): seis temas (ChxChx Oscuro, Medianoche, Grafito, Bosque, Claro y Alto contraste), color de resalte propio, tamaño de la interfaz del 90 % al 150 % y atajos de teclado que se pueden cambiar o restaurar. Todo se guarda en `studio-preferences.json` y se aplica al instante.

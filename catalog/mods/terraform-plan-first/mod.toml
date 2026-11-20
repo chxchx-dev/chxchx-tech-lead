@@ -1,0 +1,3 @@
+name = "chxchx-terraform-plan-first"
+description = "Terraform: planificar y revisar antes de aplicar, con cuidado con lo destructivo."
+stacks = ["terraform"]

@@ -1,0 +1,6 @@
+name = "ci-cd-pipelines"
+description = "Integración y entrega continuas: pipelines rápidos y deterministas, cachés, matrices, secretos, publicación segura y reversión."
+stacks = []
+languages = []
+tags = ["ci", "cd", "github-actions", "release", "automation"]
+origin = "chxchx"

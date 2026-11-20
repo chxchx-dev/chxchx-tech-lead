@@ -1,0 +1,5 @@
+name = "llm-inference"
+description = "Ejecutar y servir modelos: cuantización validada, memoria, motores, carga, seguridad y observabilidad."
+stacks = ["ml"]
+languages = []
+skills = ["llm-inference-serving", "gpu-performance", "llm-evaluation", "model-safety-validation", "observability", "api-design", "docker"]

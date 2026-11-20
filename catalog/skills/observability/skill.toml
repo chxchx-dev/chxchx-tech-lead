@@ -1,0 +1,6 @@
+name = "observability"
+description = "Observabilidad útil: registros estructurados, métricas y trazas, objetivos de nivel de servicio, alertas sobre síntomas y trazabilidad de errores."
+stacks = []
+languages = []
+tags = ["observability", "logging", "metrics", "tracing", "slo", "operations"]
+origin = "chxchx"

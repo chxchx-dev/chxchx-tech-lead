@@ -1,0 +1,6 @@
+name = "kubernetes"
+description = "Despliegues en Kubernetes seguros y operables: recursos, sondas, seguridad de pods, configuración y secretos, despliegues graduales y validación de manifiestos."
+stacks = ["kubernetes"]
+languages = []
+tags = ["kubernetes", "helm", "kustomize", "deploy", "operations"]
+origin = "chxchx"

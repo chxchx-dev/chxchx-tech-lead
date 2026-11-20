@@ -1,0 +1,6 @@
+name = "tokenizer-engineering"
+description = "Diseñar y validar tokenizadores: entrenamiento BPE, tamaño de vocabulario, tokens especiales, plantillas de chat y pruebas de ida y vuelta."
+stacks = ["ml"]
+languages = []
+tags = ["tokenizer", "bpe", "llm"]
+origin = "chxchx"

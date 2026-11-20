@@ -1,0 +1,6 @@
+name = "llm-training-from-scratch"
+description = "Entrenar un modelo de lenguaje desde cero: alcance, arquitectura, optimización, estabilidad, checkpoints y comprobaciones antes de gastar cómputo."
+stacks = ["ml"]
+languages = []
+tags = ["llm", "training", "pretraining", "pytorch"]
+origin = "chxchx"

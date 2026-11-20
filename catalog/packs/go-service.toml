@@ -1,0 +1,5 @@
+name = "go-service"
+description = "Servicios en Go: contextos, concurrencia segura, observabilidad y contenedores."
+stacks = ["go"]
+languages = ["go"]
+skills = ["go-engineering", "testing", "api-design", "security-review", "observability", "docker"]

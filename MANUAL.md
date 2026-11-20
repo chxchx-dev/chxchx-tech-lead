@@ -42,7 +42,7 @@ luego `y`) y Studio usan el mismo caso de uso. `projects switch` espera al runti
 de workspace/agentes.
 
 Skills, Tech Packs y Mods están portados (CLI y Studio). El catálogo del legado
-(21 skills, 13 packs, 23 mods) se empaqueta en el binario al compilar leyendo
+(40 skills, 22 packs, 31 mods) se empaqueta en el binario al compilar leyendo
 `src/chxchx_tech_lead/`, sin copiarlo. Todo cambio se previsualiza y solo se aplica
 con `--apply` (botón Confirmar en Studio):
 
