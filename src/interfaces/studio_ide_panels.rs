@@ -123,10 +123,14 @@ fn explorer_panel(state: &Dashboard, size: iced::Size) -> Element<'_, Message> {
         .height(Fill)
         .style(styles::surface(design::bg_panel()));
     let tracked = mouse_area(panel).on_move(|point| Message::Explorer(Explore::Pointer(point)));
-    match explorer::view::context_menu(state, size) {
-        Some(menu) => iced::widget::stack![tracked, menu].into(),
-        None => tracked.into(),
+    let mut layers = iced::widget::stack![tracked];
+    if let Some(menu) = explorer::view::context_menu(state, size) {
+        layers = layers.push(menu);
     }
+    if let Some(ghost) = explorer::view::drag_ghost(state) {
+        layers = layers.push(ghost);
+    }
+    layers.into()
 }
 
 fn folder_rows<'a>(
@@ -170,7 +174,14 @@ fn folder_rows<'a>(
                 }
                 continue;
             }
-            let selected = state.explorer.selection.contains(&entry.relative)
+            let drop_here = state.explorer.dragging
+                && state
+                    .explorer
+                    .hover
+                    .as_ref()
+                    .is_some_and(|(path, directory)| path == &entry.relative && *directory);
+            let selected = drop_here
+                || state.explorer.selection.contains(&entry.relative)
                 || (state.explorer.selection.is_empty()
                     && active == Some(entry.relative.as_path()));
             let cut = state
@@ -209,44 +220,50 @@ fn folder_rows<'a>(
             } else {
                 tint.unwrap_or(design::fg())
             };
-            rows = rows.push(
-                mouse_area(
-                    button(
-                        row![
-                            Space::new().width(f32::from(depth) * 12.0),
-                            chevron,
-                            icon,
-                            text(name)
-                                .size(12)
-                                .color(label_color)
-                                .wrapping(iced::widget::text::Wrapping::None),
-                            Space::new().width(Fill),
-                            text(badge.map(String::from).unwrap_or_default())
-                                .size(10)
-                                .font(design::UI_BOLD)
-                                .color(tint.unwrap_or(design::fg())),
-                            text(if changed { "●" } else { "" })
-                                .size(8)
-                                .color(design::warning()),
-                        ]
-                        .spacing(6)
-                        .align_y(iced::Center),
-                    )
-                    .width(Fill)
-                    .padding([4, 6])
-                    .style(styles::ghost(selected))
-                    .on_press(Message::Explorer(Explore::Click(
+            let mut row_area = mouse_area(
+                button(
+                    row![
+                        Space::new().width(f32::from(depth) * 12.0),
+                        chevron,
+                        icon,
+                        text(name)
+                            .size(12)
+                            .color(label_color)
+                            .wrapping(iced::widget::text::Wrapping::None),
+                        Space::new().width(Fill),
+                        text(badge.map(String::from).unwrap_or_default())
+                            .size(10)
+                            .font(design::UI_BOLD)
+                            .color(tint.unwrap_or(design::fg())),
+                        text(if changed { "●" } else { "" })
+                            .size(8)
+                            .color(design::warning()),
+                    ]
+                    .spacing(6)
+                    .align_y(iced::Center),
+                )
+                .width(Fill)
+                .padding([4, 6])
+                .style(styles::ghost(selected))
+                .on_press(Message::Explorer(Explore::Press(
+                    entry.relative.clone(),
+                    entry.directory,
+                ))),
+            )
+            .on_right_press(Message::Explorer(Explore::Context(Target::Item {
+                path: entry.relative.clone(),
+                directory: entry.directory,
+            })));
+            // While a row is held down, rows report the pointer so a drop knows where it lands.
+            if state.explorer.pressed.is_some() {
+                row_area = row_area
+                    .on_enter(Message::Explorer(Explore::Hover(Some((
                         entry.relative.clone(),
                         entry.directory,
-                    ))),
-                )
-                .on_right_press(Message::Explorer(Explore::Context(
-                    Target::Item {
-                        path: entry.relative.clone(),
-                        directory: entry.directory,
-                    },
-                ))),
-            );
+                    )))))
+                    .on_exit(Message::Explorer(Explore::Hover(None)));
+            }
+            rows = rows.push(row_area);
         }
         if entry.directory && expanded {
             rows = folder_rows(state, &entry.relative, depth + 1, filter, active, rows);

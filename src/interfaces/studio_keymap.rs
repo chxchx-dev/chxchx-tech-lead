@@ -17,7 +17,13 @@ pub(super) enum Action {
     OpenSettings,
     NewChat,
     CopyLastAnswer,
-    ExplorerNewFile,
+    NewFile,
+    OpenProject,
+    SaveAll,
+    ZoomIn,
+    ZoomOut,
+    ZoomReset,
+    Fullscreen,
     ExplorerRename,
     ExplorerDelete,
     ExplorerCopy,
@@ -26,7 +32,7 @@ pub(super) enum Action {
 }
 
 impl Action {
-    pub const ALL: [Action; 14] = [
+    pub const ALL: [Action; 20] = [
         Action::ToggleSidebar,
         Action::ToggleDock,
         Action::SearchProject,
@@ -35,7 +41,13 @@ impl Action {
         Action::OpenSettings,
         Action::NewChat,
         Action::CopyLastAnswer,
-        Action::ExplorerNewFile,
+        Action::NewFile,
+        Action::OpenProject,
+        Action::SaveAll,
+        Action::ZoomIn,
+        Action::ZoomOut,
+        Action::ZoomReset,
+        Action::Fullscreen,
         Action::ExplorerRename,
         Action::ExplorerDelete,
         Action::ExplorerCopy,
@@ -53,7 +65,13 @@ impl Action {
             Action::OpenSettings => "settings",
             Action::NewChat => "new-chat",
             Action::CopyLastAnswer => "copy-last-answer",
-            Action::ExplorerNewFile => "explorer-new-file",
+            Action::NewFile => "new-file",
+            Action::OpenProject => "open-project",
+            Action::SaveAll => "save-all",
+            Action::ZoomIn => "zoom-in",
+            Action::ZoomOut => "zoom-out",
+            Action::ZoomReset => "zoom-reset",
+            Action::Fullscreen => "fullscreen",
             Action::ExplorerRename => "explorer-rename",
             Action::ExplorerDelete => "explorer-delete",
             Action::ExplorerCopy => "explorer-copy",
@@ -72,7 +90,13 @@ impl Action {
             Action::OpenSettings => "Abrir los ajustes",
             Action::NewChat => "Nuevo chat (en el chat activo)",
             Action::CopyLastAnswer => "Copiar la última respuesta del agente",
-            Action::ExplorerNewFile => "Explorador: nuevo archivo",
+            Action::NewFile => "Nuevo archivo",
+            Action::OpenProject => "Abrir proyecto",
+            Action::SaveAll => "Guardar todo",
+            Action::ZoomIn => "Acercar la interfaz",
+            Action::ZoomOut => "Alejar la interfaz",
+            Action::ZoomReset => "Restablecer el tamaño de la interfaz",
+            Action::Fullscreen => "Pantalla completa",
             Action::ExplorerRename => "Explorador: renombrar",
             Action::ExplorerDelete => "Explorador: eliminar",
             Action::ExplorerCopy => "Explorador: copiar",
@@ -91,7 +115,13 @@ impl Action {
             Action::OpenSettings => "mod+,",
             Action::NewChat => "mod+shift+n",
             Action::CopyLastAnswer => "mod+shift+y",
-            Action::ExplorerNewFile => "",
+            Action::NewFile => "mod+n",
+            Action::OpenProject => "mod+o",
+            Action::SaveAll => "mod+alt+s",
+            Action::ZoomIn => "mod+=",
+            Action::ZoomOut => "mod+-",
+            Action::ZoomReset => "mod+0",
+            Action::Fullscreen => "f11",
             Action::ExplorerRename => "f2",
             Action::ExplorerDelete => "delete",
             Action::ExplorerCopy => "mod+c",
@@ -106,7 +136,6 @@ impl Action {
             self,
             Action::Save
                 | Action::CloseTab
-                | Action::ExplorerNewFile
                 | Action::ExplorerRename
                 | Action::ExplorerDelete
                 | Action::ExplorerCopy

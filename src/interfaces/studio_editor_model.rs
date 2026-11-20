@@ -22,6 +22,8 @@ pub(in crate::interfaces::studio) struct State {
     pub search: bool,
     pub explorer: bool,
     pub saving: bool,
+    /// Saving every file: the tab that was open when it began, to return to it.
+    pub save_all: Option<usize>,
     pub closing: Option<usize>,
     pub exiting: bool,
     /// Match to select once the file requested by a search result has loaded.
@@ -44,6 +46,7 @@ impl State {
             search: false,
             explorer: true,
             saving: false,
+            save_all: None,
             closing: None,
             exiting: false,
             pending_cursor: None,
@@ -369,5 +372,78 @@ mod tests {
             state.editor.tabs[0].dirty,
             "no recomparison without an edit"
         );
+    }
+
+    #[test]
+    fn save_all_with_nothing_unsaved_says_so_and_close_all_keeps_what_is_unsaved() {
+        let mut state = fixture();
+        open(&mut state, "a.rs");
+        open(&mut state, "b.rs");
+        open(&mut state, "c.rs");
+        let _ = update(&mut state, Event::SaveAll);
+        assert!(state.message.contains("No hay cambios") && state.editor.save_all.is_none());
+
+        state.editor.tabs[1].dirty = true;
+        let _ = update(&mut state, Event::CloseAllTabs);
+        let left: Vec<_> = state
+            .editor
+            .tabs
+            .iter()
+            .map(|t| t.document.relative.clone())
+            .collect();
+        assert_eq!(left, [PathBuf::from("b.rs")]);
+        assert_eq!(state.editor.selected, Some(0));
+        assert!(!state.editor.home && state.message.contains("sin guardar"));
+
+        state.editor.tabs[0].dirty = false;
+        let _ = update(&mut state, Event::CloseAllTabs);
+        assert!(
+            state.editor.tabs.is_empty() && state.editor.home && state.editor.selected.is_none()
+        );
+    }
+
+    #[test]
+    fn select_all_cut_and_paste_work_on_the_open_file() {
+        let mut state = fixture();
+        open(&mut state, "a.rs");
+        let _ = update(&mut state, Event::SelectAll);
+        assert_eq!(
+            state.editor.tabs[0].content.selection().as_deref(),
+            Some("abc")
+        );
+
+        let _ = update(&mut state, Event::Cut);
+        assert_eq!(
+            state.editor.tabs[0].content.text().trim_end(),
+            "",
+            "a cut removes the selection"
+        );
+        assert!(state.editor.tabs[0].dirty);
+
+        let _ = update(&mut state, Event::Pasted(Some("pegado".into())));
+        assert_eq!(state.editor.tabs[0].content.text().trim_end(), "pegado");
+        let _ = update(&mut state, Event::Pasted(None));
+        let _ = update(&mut state, Event::Pasted(Some(String::new())));
+        assert_eq!(
+            state.editor.tabs[0].content.text().trim_end(),
+            "pegado",
+            "nothing on the clipboard changes nothing"
+        );
+    }
+
+    #[test]
+    fn copy_and_cut_without_a_selection_or_a_file_do_nothing() {
+        let mut state = fixture();
+        let _ = update(&mut state, Event::Copy);
+        let _ = update(&mut state, Event::Cut);
+        assert!(state.editor.tabs.is_empty());
+        open(&mut state, "a.rs");
+        let _ = update(&mut state, Event::Cut);
+        assert_eq!(
+            state.editor.tabs[0].content.text().trim_end(),
+            "abc",
+            "no selection, nothing cut"
+        );
+        assert!(!state.editor.tabs[0].dirty);
     }
 }

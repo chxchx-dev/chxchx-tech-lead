@@ -314,6 +314,34 @@ fn move_path(source: &Path, target: &Path) -> Result<(), String> {
     })
 }
 
+/// Copies something from outside the project (dropped or pasted from the system) into
+/// `destination`. A link is refused, a name that is not allowed is refused, and a name already
+/// there gets a free variant. Returns the new relative path.
+pub fn import(root: &Path, external: &Path, destination: &Path) -> Result<PathBuf, String> {
+    let metadata = fs::symlink_metadata(external)
+        .map_err(|_| format!("`{}` ya no existe", external.display()))?;
+    if metadata.file_type().is_symlink() {
+        return Err("No se importan enlaces simbólicos".into());
+    }
+    let name = external
+        .file_name()
+        .ok_or("El elemento no tiene nombre")?
+        .to_string_lossy()
+        .into_owned();
+    validate_name(&name).map_err(|why| format!("No se puede importar `{name}`: {why}"))?;
+    let folder = directory(root, destination)?;
+    let canonical_root = root.canonicalize().map_err(|e| e.to_string())?;
+    if let Ok(inside) = external.canonicalize()
+        && metadata.is_dir()
+        && (folder.starts_with(&inside) || inside == canonical_root)
+    {
+        return Err("No se puede importar una carpeta dentro de sí misma".into());
+    }
+    let target = folder.join(unique_name(&folder, &name));
+    copy_tree(external, &target, &mut Budget::default())?;
+    relative_to(root, &target)
+}
+
 pub fn duplicate(root: &Path, relative: &Path) -> Result<PathBuf, String> {
     let parent = relative.parent().unwrap_or(Path::new("")).to_path_buf();
     copy_into(root, &[relative.to_path_buf()], &parent)?

@@ -5,7 +5,7 @@ use super::{Menu, *};
 pub(super) enum Entry {
     Separator,
     Item {
-        label: &'static str,
+        label: std::borrow::Cow<'static, str>,
         /// The shortcut, as it is bound right now.
         hint: String,
         /// `None` shows the item disabled.
@@ -62,7 +62,7 @@ fn preferences(state: &Dashboard) -> Entry {
 
 fn item(label: &'static str, hint: impl Into<String>, message: Message) -> Entry {
     Entry::Item {
-        label,
+        label: label.into(),
         hint: hint.into(),
         message: Some(message),
     }
@@ -70,10 +70,53 @@ fn item(label: &'static str, hint: impl Into<String>, message: Message) -> Entry
 
 fn gated(label: &'static str, hint: impl Into<String>, enabled: bool, message: Message) -> Entry {
     Entry::Item {
-        label,
+        label: label.into(),
         hint: hint.into(),
         message: enabled.then_some(message),
     }
+}
+
+/// The projects opened before, other than this one, ready to open in place of it.
+fn recent_projects(state: &Dashboard) -> Entry {
+    let here = state.root.canonicalize().ok();
+    let mut entries: Vec<Entry> = state
+        .session
+        .recent_projects()
+        .iter()
+        .filter(|path| Path::new(path).canonicalize().ok() != here && Path::new(path).is_dir())
+        .take(10)
+        .map(|path| Entry::Item {
+            label: Path::new(path)
+                .file_name()
+                .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned())
+                .into(),
+            hint: path.clone(),
+            message: Some(Message::Session(session::Event::OpenFolder {
+                path: PathBuf::from(path),
+                new_window: false,
+            })),
+        })
+        .collect();
+    if entries.is_empty() {
+        entries.push(gated(
+            "Ningún proyecto reciente",
+            "",
+            false,
+            Message::Refresh,
+        ));
+    }
+    Entry::Submenu {
+        label: "Abrir reciente",
+        entries,
+    }
+}
+
+/// Selects the open file in the explorer and runs an explorer action on it.
+fn on_open_file(path: &Path, action: explorer::Action) -> Message {
+    Message::Sequence(vec![
+        Message::Explorer(explorer::Event::Select(path.to_path_buf())),
+        Message::Explorer(explorer::Event::Do(action)),
+    ])
 }
 
 /// The keys an action has right now (empty when it has none).
@@ -97,35 +140,96 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
     let editing = tab.is_some();
     let root = state.root.display().to_string();
     match menu {
-        Menu::File => vec![
-            gated(
-                "Guardar",
-                key(keymap::Action::Save),
-                tab.is_some_and(|tab| tab.dirty) && !state.editor.saving,
-                Message::Editor(editor::Event::Save),
-            ),
-            gated(
-                "Cerrar pestaña",
-                key(keymap::Action::CloseTab),
-                editing,
-                Message::Editor(editor::Event::Close(state.editor.selected.unwrap_or(0))),
-            ),
-            Separator,
-            preferences(state),
-            Separator,
-            item(
-                "Nueva ventana",
-                "",
-                Message::Session(session::Event::OpenProject(root)),
-            ),
-            item(
-                "Actualizar explorador",
-                "",
-                Message::Editor(editor::Event::RefreshTree),
-            ),
-            Separator,
-            item("Salir", "", Message::Editor(editor::Event::Exit)),
-        ],
+        Menu::File => {
+            let current = tab.map(|tab| tab.document.relative.clone());
+            let in_explorer = |action: explorer::Action| {
+                Message::Sequence(vec![
+                    Message::Shell(ShellEvent::ShowSide(Side::Explorer)),
+                    Message::Explorer(explorer::Event::Do(action)),
+                ])
+            };
+            vec![
+                item(
+                    "Nuevo archivo",
+                    key(keymap::Action::NewFile),
+                    in_explorer(explorer::Action::NewFile),
+                ),
+                item(
+                    "Nueva carpeta",
+                    "",
+                    in_explorer(explorer::Action::NewFolder),
+                ),
+                Separator,
+                item(
+                    "Abrir proyecto…",
+                    key(keymap::Action::OpenProject),
+                    Message::Session(session::Event::PickProject { new_window: false }),
+                ),
+                item(
+                    "Abrir proyecto en ventana nueva…",
+                    "",
+                    Message::Session(session::Event::PickProject { new_window: true }),
+                ),
+                recent_projects(state),
+                Separator,
+                gated(
+                    "Guardar",
+                    key(keymap::Action::Save),
+                    tab.is_some_and(|tab| tab.dirty) && !state.editor.saving,
+                    Message::Editor(editor::Event::Save),
+                ),
+                gated(
+                    "Guardar todo",
+                    key(keymap::Action::SaveAll),
+                    state.editor.tabs.iter().any(|tab| tab.dirty) && !state.editor.saving,
+                    Message::Editor(editor::Event::SaveAll),
+                ),
+                gated(
+                    "Cerrar pestaña",
+                    key(keymap::Action::CloseTab),
+                    editing,
+                    Message::Editor(editor::Event::Close(state.editor.selected.unwrap_or(0))),
+                ),
+                gated(
+                    "Cerrar todas las pestañas",
+                    "",
+                    !state.editor.tabs.is_empty(),
+                    Message::Editor(editor::Event::CloseAllTabs),
+                ),
+                Separator,
+                gated(
+                    "Copiar la ruta del archivo",
+                    "",
+                    current.is_some(),
+                    current.as_deref().map_or(Message::Refresh, |path| {
+                        on_open_file(path, explorer::Action::CopyPath)
+                    }),
+                ),
+                gated(
+                    "Mostrar en el explorador de archivos",
+                    "",
+                    current.is_some(),
+                    current.as_deref().map_or(Message::Refresh, |path| {
+                        on_open_file(path, explorer::Action::Reveal)
+                    }),
+                ),
+                Separator,
+                preferences(state),
+                Separator,
+                item(
+                    "Nueva ventana",
+                    "",
+                    Message::Session(session::Event::OpenProject(root)),
+                ),
+                item(
+                    "Actualizar explorador",
+                    "",
+                    Message::Editor(editor::Event::RefreshTree),
+                ),
+                Separator,
+                item("Salir", "", Message::Editor(editor::Event::Exit)),
+            ]
+        }
         Menu::Edit => vec![
             gated(
                 "Deshacer",
@@ -138,6 +242,31 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
                 "Ctrl+Y",
                 editing,
                 Message::Editor(editor::Event::Redo),
+            ),
+            Separator,
+            gated(
+                "Cortar",
+                "Ctrl+X",
+                editing,
+                Message::Editor(editor::Event::Cut),
+            ),
+            gated(
+                "Copiar",
+                "Ctrl+C",
+                editing,
+                Message::Editor(editor::Event::Copy),
+            ),
+            gated(
+                "Pegar",
+                "Ctrl+V",
+                editing,
+                Message::Editor(editor::Event::Paste),
+            ),
+            gated(
+                "Seleccionar todo",
+                "Ctrl+A",
+                editing,
+                Message::Editor(editor::Event::SelectAll),
             ),
             Separator,
             gated(
@@ -188,6 +317,27 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
                 "Actividad",
                 "",
                 Message::Shell(ShellEvent::Dock(DockTab::Activity)),
+            ),
+            Separator,
+            item(
+                "Acercar",
+                key(keymap::Action::ZoomIn),
+                Message::Settings(settings::Event::Zoom(1)),
+            ),
+            item(
+                "Alejar",
+                key(keymap::Action::ZoomOut),
+                Message::Settings(settings::Event::Zoom(-1)),
+            ),
+            item(
+                "Tamaño normal",
+                key(keymap::Action::ZoomReset),
+                Message::Settings(settings::Event::Zoom(0)),
+            ),
+            item(
+                "Pantalla completa",
+                key(keymap::Action::Fullscreen),
+                Message::Shell(ShellEvent::ToggleFullscreen),
             ),
             Separator,
             item(

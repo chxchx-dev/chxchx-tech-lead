@@ -143,10 +143,15 @@ fn escape_closes_the_menu_then_the_question_then_the_name_box() {
 }
 
 #[test]
-fn copy_and_cut_fill_the_clipboard_and_a_paste_without_one_says_so() {
+fn copy_and_cut_fill_the_clipboard_and_a_paste_without_one_looks_at_the_system() {
     let mut p = project("clipboard");
+    let before = p.state.pending;
     let _ = update(&mut p.state, Event::Do(Action::Paste));
-    assert!(p.state.message.contains("nada copiado"));
+    assert_eq!(
+        p.state.pending,
+        before + 1,
+        "the system clipboard is read off the UI thread"
+    );
 
     p.state.explorer.selection = BTreeSet::from([PathBuf::from("README.md")]);
     let _ = update(&mut p.state, Event::Do(Action::Cut));
@@ -447,4 +452,167 @@ fn names_and_paths_are_what_the_clipboard_actions_offer() {
     assert!(
         is_directory(&p.state, Path::new("src")) && !is_directory(&p.state, Path::new("README.md"))
     );
+}
+
+fn press(p: &mut Project, path: &str, directory: bool) {
+    let _ = update(&mut p.state, Event::Press(path.into(), directory));
+}
+
+#[test]
+fn a_press_selects_and_a_release_in_place_is_a_click_that_opens() {
+    let mut p = project("press-click");
+    p.state.explorer.pointer = Point::new(10.0, 10.0);
+    press(&mut p, "README.md", false);
+    assert_eq!(
+        p.state.explorer.selection,
+        BTreeSet::from([PathBuf::from("README.md")])
+    );
+    assert!(p.state.explorer.pressed.is_some() && !p.state.explorer.dragging);
+
+    // A little jitter is still a click.
+    let _ = update(&mut p.state, Event::Pointer(Point::new(13.0, 12.0)));
+    assert!(!p.state.explorer.dragging);
+    let _ = update(&mut p.state, Event::Release);
+    assert!(p.state.explorer.pressed.is_none() && p.state.pending == 0);
+}
+
+#[test]
+fn moving_the_pointer_far_enough_with_a_row_held_starts_a_drag() {
+    let mut p = project("press-drag");
+    p.state.explorer.pointer = Point::new(10.0, 10.0);
+    press(&mut p, "README.md", false);
+    let _ = update(&mut p.state, Event::Pointer(Point::new(40.0, 10.0)));
+
+    assert!(p.state.explorer.dragging);
+    // Rows only report hovering while something is held.
+    let _ = update(&mut p.state, Event::Hover(Some(("src".into(), true))));
+    assert_eq!(p.state.explorer.hover, Some((PathBuf::from("src"), true)));
+    let mut idle = project("hover-idle");
+    let _ = update(&mut idle.state, Event::Hover(Some(("src".into(), true))));
+    assert!(idle.state.explorer.hover.is_none());
+}
+
+#[test]
+fn dropping_moves_the_row_into_the_folder_under_the_pointer_or_copies_with_ctrl() {
+    let mut p = project("drop");
+    p.state.explorer.pointer = Point::new(10.0, 10.0);
+    press(&mut p, "README.md", false);
+    let _ = update(&mut p.state, Event::Pointer(Point::new(50.0, 40.0)));
+    let _ = update(&mut p.state, Event::Hover(Some(("src".into(), true))));
+    let before = p.state.pending;
+    let _ = update(&mut p.state, Event::Release);
+    assert_eq!(p.state.pending, before + 1, "the move runs as a job");
+    assert!(
+        !p.state.explorer.dragging
+            && p.state.explorer.pressed.is_none()
+            && p.state.explorer.hover.is_none()
+    );
+    assert!(p.state.editor.expanded.contains(Path::new("src")));
+
+    // The jobs themselves, as the drop builds them.
+    run_job(
+        &mut p,
+        ops::Job::Paste(
+            Clipboard {
+                paths: vec!["README.md".into()],
+                cut: true,
+            },
+            "src".into(),
+        ),
+    );
+    assert!(p.root.join("src/README.md").is_file() && !p.root.join("README.md").exists());
+    run_job(
+        &mut p,
+        ops::Job::Paste(
+            Clipboard {
+                paths: vec!["src/main.rs".into()],
+                cut: false,
+            },
+            "".into(),
+        ),
+    );
+    assert!(p.root.join("main.rs").is_file() && p.root.join("src/main.rs").is_file());
+}
+
+#[test]
+fn a_drag_over_a_file_lands_in_its_folder_and_over_nothing_in_the_project_root() {
+    let target = |hover: Option<(&str, bool)>| {
+        hover.map_or_else(PathBuf::new, |(path, directory)| {
+            folder_of(&Target::Item {
+                path: path.into(),
+                directory,
+            })
+        })
+    };
+    assert_eq!(target(Some(("src/lib.rs", false))), Path::new("src"));
+    assert_eq!(target(Some(("src", true))), Path::new("src"));
+    assert_eq!(target(None), Path::new(""));
+}
+
+#[test]
+fn dragging_a_selection_drags_all_of_it_and_a_ctrl_press_only_extends() {
+    let mut p = project("drag-many");
+    p.state.explorer.selection = ["README.md", "src/lib.rs"].map(PathBuf::from).into();
+    press(&mut p, "README.md", false);
+    assert_eq!(
+        p.state.explorer.selection.len(),
+        2,
+        "pressing inside the selection keeps it"
+    );
+
+    let _ = update(&mut p.state, Event::Release);
+    assert_eq!(
+        p.state.explorer.selection,
+        BTreeSet::from([PathBuf::from("README.md")]),
+        "a click narrows it"
+    );
+
+    p.state.explorer.modifiers = Modifiers::CTRL;
+    press(&mut p, "src/main.rs", false);
+    assert_eq!(p.state.explorer.selection.len(), 2);
+    assert!(!p.state.explorer.pressed.as_ref().unwrap().plain);
+    let _ = update(&mut p.state, Event::Release);
+    assert_eq!(
+        p.state.explorer.selection.len(),
+        2,
+        "releasing a ctrl press opens nothing and changes nothing"
+    );
+}
+
+#[test]
+fn a_drop_from_outside_is_copied_in_only_while_the_explorer_is_showing() {
+    let mut p = project("outside");
+    let outside = p.root.parent().unwrap().join("fuera.txt");
+    std::fs::write(&outside, "F").unwrap();
+
+    p.state.editor.explorer = false;
+    let before = p.state.pending;
+    let _ = update(&mut p.state, Event::Dropped(outside.clone()));
+    assert_eq!(p.state.pending, before, "a hidden explorer ignores drops");
+
+    p.state.editor.explorer = true;
+    p.state.shell.side = shell::Side::Explorer;
+    p.state.explorer.selection = BTreeSet::from([PathBuf::from("src/lib.rs")]);
+    let _ = update(&mut p.state, Event::Dropped(outside.clone()));
+    assert_eq!(p.state.pending, before + 1);
+
+    // The job it starts: into the folder of the selected file.
+    run_job(&mut p, ops::Job::Import(vec![outside], "src".into()));
+    assert_eq!(
+        std::fs::read_to_string(p.root.join("src/fuera.txt")).unwrap(),
+        "F"
+    );
+    assert_eq!(
+        p.state.explorer.selection,
+        BTreeSet::from([PathBuf::from("src/fuera.txt")])
+    );
+}
+
+#[test]
+fn importing_nothing_or_something_unsafe_fails_with_a_reason_instead_of_doing_it() {
+    let p = project("import-fail");
+    let nothing = ops::import_all(&p.root, &[], Path::new(""));
+    assert!(matches!(nothing, ops::Outcome::Failed(why) if why.contains("nada copiado")));
+    let missing = ops::import_all(&p.root, &[p.root.join("../no-existe")], Path::new(""));
+    assert!(matches!(missing, ops::Outcome::Failed(_)));
 }

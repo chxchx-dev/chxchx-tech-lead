@@ -66,7 +66,24 @@ pub(super) struct Clipboard {
     pub cut: bool,
 }
 
+/// A row held down: a click when it is released in place, a drag once the pointer has moved.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Pressed {
+    pub path: PathBuf,
+    pub directory: bool,
+    pub origin: Point,
+    /// No Ctrl/Shift was held: releasing in place opens it.
+    pub plain: bool,
+}
+
+/// How far the pointer must move with a row held down before it counts as a drag.
+const DRAG_DISTANCE: f32 = 6.0;
+
 pub(super) struct State {
+    pub pressed: Option<Pressed>,
+    pub dragging: bool,
+    /// The row under the pointer while something is held down: where a drop would land.
+    pub hover: Option<(PathBuf, bool)>,
     pub selection: BTreeSet<PathBuf>,
     pub anchor: Option<PathBuf>,
     /// The explorer owns the keyboard: its shortcuts apply, not those of an editor or chat.
@@ -86,6 +103,9 @@ pub(super) struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
+            pressed: None,
+            dragging: false,
+            hover: None,
             selection: BTreeSet::new(),
             anchor: None,
             focused: false,
@@ -104,8 +124,19 @@ impl Default for State {
 pub(super) enum Event {
     Pointer(Point),
     Modifiers(Modifiers),
-    /// A left click on a row: selects it (with Ctrl/Shift extending) and opens it.
+    /// The left button went down on a row: it becomes selected, and a drag may start.
+    Press(PathBuf, bool),
+    /// The left button went up anywhere: ends a drag (dropping), or completes a click.
+    Release,
+    /// The pointer entered or left a row while something is held down.
+    Hover(Option<(PathBuf, bool)>),
+    /// A left click on a row, as a press and release in place amount to.
+    #[cfg(test)]
     Click(PathBuf, bool),
+    /// A file or folder dropped on the window from outside.
+    Dropped(PathBuf),
+    /// Selects one item (a menu acting on the open file).
+    Select(PathBuf),
     /// A click on the empty area.
     ClickRoot,
     Context(Target),
@@ -203,8 +234,31 @@ fn slashes(path: &Path) -> String {
 
 pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     match event {
-        Event::Pointer(point) => state.explorer.pointer = point,
+        Event::Pointer(point) => {
+            state.explorer.pointer = point;
+            if let Some(pressed) = &state.explorer.pressed
+                && !state.explorer.dragging
+                && pressed.origin.distance(point) > DRAG_DISTANCE
+            {
+                state.explorer.dragging = true;
+                state.explorer.menu = None;
+            }
+        }
+        Event::Press(path, directory) => press(state, path, directory),
+        Event::Release => return release(state),
+        Event::Hover(target) => {
+            if state.explorer.pressed.is_some() {
+                state.explorer.hover = target;
+            }
+        }
+        Event::Dropped(path) => return dropped(state, path),
+        Event::Select(path) => {
+            state.explorer.selection = BTreeSet::from([path.clone()]);
+            state.explorer.anchor = Some(path);
+        }
         Event::Modifiers(modifiers) => state.explorer.modifiers = modifiers,
+        #[cfg(test)]
+        #[cfg(test)]
         Event::Click(path, directory) => return click(state, path, directory),
         Event::ClickRoot => {
             state.explorer.menu = None;
@@ -283,6 +337,77 @@ fn escape(explorer: &mut State) {
         return;
     }
     explorer.edit = None;
+}
+
+fn press(state: &mut Dashboard, path: PathBuf, directory: bool) {
+    state.explorer.menu = None;
+    state.explorer.edit = None;
+    state.explorer.focused = true;
+    let modifiers = state.explorer.modifiers;
+    let plain = !(modifiers.command() || modifiers.shift());
+    if plain {
+        // Pressing inside a multiple selection keeps it, so all of it can be dragged.
+        if !state.explorer.selection.contains(&path) {
+            state.explorer.selection = BTreeSet::from([path.clone()]);
+            state.explorer.anchor = Some(path.clone());
+        }
+    } else {
+        // Extending a selection is done on press; there is nothing to open afterwards.
+        let _ = click(state, path.clone(), directory);
+    }
+    state.explorer.dragging = false;
+    state.explorer.hover = None;
+    state.explorer.pressed = Some(Pressed {
+        path,
+        directory,
+        origin: state.explorer.pointer,
+        plain,
+    });
+}
+
+fn release(state: &mut Dashboard) -> Task<Message> {
+    let Some(pressed) = state.explorer.pressed.take() else {
+        return Task::none();
+    };
+    let dragging = std::mem::take(&mut state.explorer.dragging);
+    let hover = state.explorer.hover.take();
+    if !dragging {
+        return if pressed.plain {
+            click(state, pressed.path, pressed.directory)
+        } else {
+            Task::none()
+        };
+    }
+    let items = if state.explorer.selection.contains(&pressed.path) {
+        state.explorer.selection.iter().cloned().collect()
+    } else {
+        vec![pressed.path]
+    };
+    let destination = hover.map_or_else(PathBuf::new, |(path, directory)| {
+        folder_of(&Target::Item { path, directory })
+    });
+    let copy = state.explorer.modifiers.command();
+    state.editor.expanded.insert(destination.clone());
+    ops::spawn(
+        state,
+        ops::Job::Paste(
+            Clipboard {
+                paths: items,
+                cut: !copy,
+            },
+            destination,
+        ),
+    )
+}
+
+/// Something from outside was dropped on the window: it is copied into the folder in use.
+fn dropped(state: &mut Dashboard, path: PathBuf) -> Task<Message> {
+    if !state.editor.explorer || state.shell.side != shell::Side::Explorer {
+        return Task::none();
+    }
+    let destination = folder_of(&target_of(state));
+    state.editor.expanded.insert(destination.clone());
+    ops::spawn(state, ops::Job::Import(vec![path], destination))
 }
 
 fn click(state: &mut Dashboard, path: PathBuf, directory: bool) -> Task<Message> {
@@ -415,11 +540,12 @@ fn run(state: &mut Dashboard, action: Action) -> Task<Message> {
             });
         }
         Action::Paste => {
-            let Some(clipboard) = state.explorer.clipboard.clone() else {
-                state.message = "No hay nada copiado para pegar.".into();
-                return Task::none();
-            };
             let destination = folder_of(&target);
+            let Some(clipboard) = state.explorer.clipboard.clone() else {
+                // Nothing copied inside Studio: files copied in a file manager are pasted instead.
+                state.editor.expanded.insert(destination.clone());
+                return ops::spawn(state, ops::Job::PasteSystem(destination));
+            };
             if state.editor.expanded.insert(destination.clone()) {
                 // The folder opens so the pasted items are visible once they land.
             }

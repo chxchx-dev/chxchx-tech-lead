@@ -15,6 +15,10 @@ pub(super) enum Job {
     Delete(Vec<PathBuf>),
     Restore(Vec<Trashed>),
     Reveal(PathBuf),
+    /// Copies things from outside the project into a folder of it.
+    Import(Vec<PathBuf>, PathBuf),
+    /// Pastes the files the system clipboard holds (copied in a file manager).
+    PasteSystem(PathBuf),
 }
 
 #[derive(Debug)]
@@ -43,6 +47,25 @@ pub(super) enum Outcome {
 fn home() -> Result<PathBuf, String> {
     crate::features::project_profiles::application_home()
         .ok_or_else(|| "No se pudo localizar la carpeta de la aplicación".to_owned())
+}
+
+/// Copies each outside path into `destination`; the first one that cannot be brought in stops it.
+pub(super) fn import_all(root: &Path, sources: &[PathBuf], destination: &Path) -> Outcome {
+    if sources.is_empty() {
+        return Outcome::Failed("No hay nada copiado para pegar.".into());
+    }
+    let mut made = Vec::new();
+    for source in sources {
+        match project_fs::import(root, source, destination) {
+            Ok(path) => made.push(path),
+            Err(error) => return Outcome::Failed(error),
+        }
+    }
+    Outcome::Pasted {
+        moved: false,
+        from: Vec::new(),
+        to: made,
+    }
 }
 
 pub(super) fn execute(root: &Path, job: Job) -> Outcome {
@@ -121,6 +144,12 @@ pub(super) fn execute(root: &Path, job: Job) -> Outcome {
             }
             Outcome::Restored(back, problem)
         }
+        Job::Import(sources, destination) => import_all(root, &sources, &destination),
+        Job::PasteSystem(destination) => import_all(
+            root,
+            &crate::integrations::system_clipboard::files(),
+            &destination,
+        ),
         Job::Reveal(path) => match crate::integrations::system_open::reveal(&path) {
             Ok(()) => Outcome::Revealed,
             Err(error) => fail(error),

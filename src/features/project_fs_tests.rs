@@ -364,3 +364,71 @@ fn the_trash_must_be_an_absolute_folder_without_links() {
     assert!(trash(&s.root, Path::new("relativa"), Path::new("a.txt")).is_err());
     assert!(s.has("a.txt"));
 }
+
+#[test]
+fn files_and_folders_from_outside_are_copied_in_without_replacing_anything() {
+    let s = Sandbox::new("import");
+    let outside = s.root.parent().unwrap().join("fuera");
+    fs::create_dir_all(outside.join("carpeta/sub")).unwrap();
+    fs::write(outside.join("foto.txt"), "F").unwrap();
+    fs::write(outside.join("carpeta/sub/a.txt"), "A").unwrap();
+    fs::write(outside.join("carpeta/.env"), "TOKEN=1").unwrap();
+    s.write("foto.txt", "mío");
+
+    assert_eq!(
+        import(&s.root, &outside.join("foto.txt"), Path::new("")).unwrap(),
+        Path::new("foto copia.txt")
+    );
+    assert_eq!(s.read("foto.txt"), "mío");
+    assert_eq!(s.read("foto copia.txt"), "F");
+    assert_eq!(
+        import(&s.root, &outside.join("carpeta"), Path::new("")).unwrap(),
+        Path::new("carpeta")
+    );
+    assert_eq!(s.read("carpeta/sub/a.txt"), "A");
+    assert!(!s.has("carpeta/.env"), "environment files stay out");
+    assert!(
+        outside.join("foto.txt").exists(),
+        "the original is untouched"
+    );
+}
+
+#[test]
+fn importing_refuses_what_is_not_safe_to_bring_in() {
+    let s = Sandbox::new("import-refuse");
+    let outside = s.root.parent().unwrap().join("fuera");
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join(".env"), "S").unwrap();
+    fs::write(outside.join("con"), "x").unwrap();
+    fs::write(outside.join("ok.txt"), "ok").unwrap();
+
+    assert!(
+        import(&s.root, &outside.join(".env"), Path::new(""))
+            .unwrap_err()
+            .contains("No se puede importar")
+    );
+    assert!(import(&s.root, &outside.join("con"), Path::new("")).is_err());
+    assert!(
+        import(&s.root, &outside.join("no-existe"), Path::new(""))
+            .unwrap_err()
+            .contains("ya no existe")
+    );
+    assert!(import(&s.root, &outside.join("ok.txt"), Path::new("../")).is_err());
+    assert!(import(&s.root, &outside.join("ok.txt"), Path::new(".git")).is_err());
+    // The project folder itself cannot be pulled into one of its own folders.
+    fs::create_dir_all(s.root.join("dentro")).unwrap();
+    assert!(
+        import(&s.root, &s.root, Path::new("dentro"))
+            .unwrap_err()
+            .contains("dentro de sí misma")
+    );
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(outside.join("ok.txt"), outside.join("enlace")).unwrap();
+        assert!(
+            import(&s.root, &outside.join("enlace"), Path::new(""))
+                .unwrap_err()
+                .contains("enlaces")
+        );
+    }
+}

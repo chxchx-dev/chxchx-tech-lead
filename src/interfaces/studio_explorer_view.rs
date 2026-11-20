@@ -50,12 +50,7 @@ pub(in crate::interfaces::studio) fn rows(state: &Dashboard, target: &Target) ->
     match target {
         Target::Root => {
             rows.extend([
-                item(
-                    "Nuevo archivo",
-                    Action::NewFile,
-                    true,
-                    Some(Key::ExplorerNewFile),
-                ),
+                item("Nuevo archivo", Action::NewFile, true, Some(Key::NewFile)),
                 item("Nueva carpeta", Action::NewFolder, true, None),
                 Row::Separator,
                 item("Pegar", Action::Paste, can_paste, Some(Key::ExplorerPaste)),
@@ -84,12 +79,7 @@ pub(in crate::interfaces::studio) fn rows(state: &Dashboard, target: &Target) ->
             if count == 1 {
                 if *directory {
                     rows.extend([
-                        item(
-                            "Nuevo archivo",
-                            Action::NewFile,
-                            true,
-                            Some(Key::ExplorerNewFile),
-                        ),
+                        item("Nuevo archivo", Action::NewFile, true, Some(Key::NewFile)),
                         item("Nueva carpeta", Action::NewFolder, true, None),
                         Row::Separator,
                         item(
@@ -225,6 +215,39 @@ pub(in crate::interfaces::studio) fn context_menu(
         .on_press(Message::Explorer(Event::Escape))
         .on_right_press(Message::Explorer(Event::Escape));
     Some(stack![catcher, pin(panel).x(corner.x).y(corner.y)].into())
+}
+
+/// The label that follows the pointer while something is dragged: what moves or copies.
+pub(in crate::interfaces::studio) fn drag_ghost(state: &Dashboard) -> Option<Element<'_, Message>> {
+    let pressed = state
+        .explorer
+        .pressed
+        .as_ref()
+        .filter(|_| state.explorer.dragging)?;
+    let count = if state.explorer.selection.contains(&pressed.path) {
+        state.explorer.selection.len()
+    } else {
+        1
+    };
+    let what = if count > 1 {
+        format!("{count} elementos")
+    } else {
+        super::name_of(&pressed.path)
+    };
+    let verb = if state.explorer.modifiers.command() {
+        "Copiar"
+    } else {
+        "Mover"
+    };
+    let at = state.explorer.pointer;
+    Some(
+        pin(container(text(format!("{verb} {what}")).size(11))
+            .padding([3, 8])
+            .style(styles::menu_panel))
+        .x(at.x + 14.0)
+        .y(at.y + 10.0)
+        .into(),
+    )
 }
 
 /// The name box of a rename or of a new entry, drawn where the entry will be.
