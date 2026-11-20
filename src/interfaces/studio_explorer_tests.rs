@@ -509,18 +509,18 @@ fn dropping_moves_the_row_into_the_folder_under_the_pointer_or_copies_with_ctrl(
     );
     assert!(p.state.editor.expanded.contains(Path::new("src")));
 
-    // The jobs themselves, as the drop builds them.
+    // The jobs the drop builds, on other files: the one it started runs on its own thread.
     run_job(
         &mut p,
         ops::Job::Paste(
             Clipboard {
-                paths: vec!["README.md".into()],
+                paths: vec!["src/lib.rs".into()],
                 cut: true,
             },
-            "src".into(),
+            "".into(),
         ),
     );
-    assert!(p.root.join("src/README.md").is_file() && !p.root.join("README.md").exists());
+    assert!(p.root.join("lib.rs").is_file() && !p.root.join("src/lib.rs").exists());
     run_job(
         &mut p,
         ops::Job::Paste(
@@ -583,7 +583,9 @@ fn dragging_a_selection_drags_all_of_it_and_a_ctrl_press_only_extends() {
 fn a_drop_from_outside_is_copied_in_only_while_the_explorer_is_showing() {
     let mut p = project("outside");
     let outside = p.root.parent().unwrap().join("fuera.txt");
+    let other = p.root.parent().unwrap().join("otro-fuera.txt");
     std::fs::write(&outside, "F").unwrap();
+    std::fs::write(&other, "O").unwrap();
 
     p.state.editor.explorer = false;
     let before = p.state.pending;
