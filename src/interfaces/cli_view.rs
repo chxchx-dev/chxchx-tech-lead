@@ -255,6 +255,28 @@ pub(super) fn report_error(
     Ok(())
 }
 
+pub(super) fn tools_install(ui: &Ui, names: &[String], dry_run: bool) -> Result<(), String> {
+    use crate::features::tools_install::{Outcome, TOOLS, install};
+    let wanted: Vec<&str> = if names.is_empty() {
+        TOOLS.iter().map(|tool| tool.name).collect()
+    } else {
+        names.iter().map(String::as_str).collect()
+    };
+    for name in wanted {
+        match install(name, dry_run)? {
+            Outcome::AlreadyInstalled => println!(
+                "{}",
+                ui.done(&format!("{name}: ya está instalado")).trim_start()
+            ),
+            Outcome::Installed => {
+                println!("{}", ui.done(&format!("{name}: instalado")).trim_start())
+            }
+            Outcome::Preview(command) => println!("DRY RUN: {}", command.join(" ")),
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn projects_switch(ui: &Ui, alias: &str, dry_run: bool) -> Result<(), String> {
     let switched = crate::features::project_switch::switch(alias, dry_run)?;
     let prefix = if dry_run { "DRY RUN: " } else { "" };

@@ -1243,3 +1243,48 @@ fn a_failing_workspace_command_leaves_its_error_in_the_list() {
         "{listed}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn tools_install_previews_skips_what_is_present_and_runs_uv_for_the_rest() {
+    use std::os::unix::fs::PermissionsExt;
+    let sandbox = Sandbox::new();
+    let tools = sandbox.root.join("tool-bin");
+    fs::create_dir_all(&tools).unwrap();
+    fs::write(tools.join("basic-memory"), "").unwrap();
+    let uv = sandbox.bin.join("uv");
+    fs::write(
+        &uv,
+        "#!/bin/sh\necho \"$*\" >> \"$UV_TOOL_BIN_DIR/uv.log\"\n: > \"$UV_TOOL_BIN_DIR/serena\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(&uv, fs::Permissions::from_mode(0o755)).unwrap();
+    let run = |args: &[&str]| {
+        let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_chxchx-tech"));
+        cmd.args(args)
+            .env("CHXCHX_TECH_HOME", &sandbox.home)
+            .env("PATH", &sandbox.bin)
+            .env("UV_TOOL_BIN_DIR", &tools);
+        cmd.output().unwrap()
+    };
+
+    let preview = run(&["tools", "install", "--dry-run"]);
+    let text = assert_success(&preview);
+    assert!(text.contains("basic-memory: ya está instalado"), "{text}");
+    assert!(
+        text.contains("DRY RUN:") && text.contains("serena-agent"),
+        "{text}"
+    );
+    assert!(!tools.join("serena").exists());
+
+    let real = assert_success(&run(&["tools", "install"]));
+    assert!(real.contains("serena: instalado"), "{real}");
+    assert!(
+        fs::read_to_string(tools.join("uv.log"))
+            .unwrap()
+            .contains("tool install -p 3.13 serena-agent")
+    );
+    let again = assert_success(&run(&["tools", "install", "serena"]));
+    assert!(again.contains("serena: ya está instalado"), "{again}");
+    assert!(!run(&["tools", "install", "nada"]).status.success());
+}

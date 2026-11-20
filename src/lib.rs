@@ -42,6 +42,7 @@ pub mod features {
     pub mod project_trust;
     pub mod startup_log;
     pub mod studio_preferences;
+    pub mod tools_install;
     pub mod workspace_lifecycle;
     pub mod workspace_processes;
     pub mod workspace_resources;

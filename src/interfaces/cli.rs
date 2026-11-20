@@ -191,6 +191,11 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Instala las herramientas que usan las integraciones de memoria y código (Basic Memory, Serena).
+    Tools {
+        #[command(subcommand)]
+        command: ToolsCommand,
+    },
     /// Una carpeta se abre; cualquier otra palabra es un comando del CLI anterior ya retirado.
     #[command(external_subcommand)]
     External(Vec<OsString>),
@@ -267,6 +272,18 @@ enum WorkspaceCommand {
         #[arg(default_value = ".")]
         path: PathBuf,
         /// Muestra las entradas que se retirarían sin modificar el archivo.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ToolsCommand {
+    /// Instala con `uv` lo que falte; lo ya instalado no se toca.
+    Install {
+        /// Solo estas (`basic-memory`, `serena`); sin nombres, las dos.
+        names: Vec<String>,
+        /// Muestra los comandos sin ejecutarlos.
         #[arg(long)]
         dry_run: bool,
     },
@@ -532,6 +549,9 @@ pub fn run() -> Result<(), String> {
             }
             Some(AgentCommand::External(arguments)) => Err(launch::retired("agent", &arguments)),
             None => Err(launch::retired("agent", &[])),
+        },
+        Command::Tools { command } => match command {
+            ToolsCommand::Install { names, dry_run } => view::tools_install(&ui, &names, dry_run),
         },
         Command::Doctor { path } => view::doctor(&ui, &path),
         #[cfg(feature = "tui")]
