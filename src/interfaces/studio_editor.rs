@@ -47,6 +47,16 @@ pub(super) enum Event {
     Discard,
     Cancel,
     Filter(String),
+    /// Saves every file with unsaved changes, one after another.
+    SaveAll,
+    /// Closes every tab without unsaved changes; the others stay.
+    CloseAllTabs,
+    Copy,
+    Cut,
+    Paste,
+    /// The text the clipboard held, as read for a Paste.
+    Pasted(Option<String>),
+    SelectAll,
     Exit,
     ExitDiscard,
 }
@@ -274,6 +284,10 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         }
         Event::Saved(path, result) => {
             editor.saving = false;
+            let continuing = editor.save_all.is_some();
+            if result.is_err() {
+                editor.save_all = None;
+            }
             match result {
                 Ok(document) => {
                     if let Some(tab) = editor.tabs.iter_mut().find(|t| t.document.relative == path)
@@ -282,6 +296,9 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                         tab.document = document;
                     }
                     state.message = "Archivo guardado. Respaldo anterior conservado.".into();
+                    if continuing {
+                        return Task::batch([save_next(state), git::poll(state)]);
+                    }
                     return git::poll(state);
                 }
                 Err(error) => state.message = error,
@@ -310,6 +327,46 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             editor.exiting = false;
         }
         Event::Filter(value) => editor.filter = value,
+        Event::SaveAll => {
+            if editor.saving {
+                return Task::none();
+            }
+            if !editor.tabs.iter().any(|tab| tab.dirty && !tab.readonly) {
+                state.message = "No hay cambios que guardar.".into();
+                return Task::none();
+            }
+            editor.save_all = Some(editor.selected.unwrap_or(0));
+            return save_next(state);
+        }
+        Event::CloseAllTabs => {
+            editor.tabs.retain(|tab| tab.dirty);
+            let kept = editor.tabs.len();
+            editor.selected = (kept > 0).then_some(0);
+            editor.closing = None;
+            editor.home = kept == 0;
+            if kept > 0 {
+                state.message =
+                    format!("{kept} archivo(s) con cambios sin guardar siguen abiertos.");
+            }
+        }
+        Event::SelectAll => {
+            return update(state, Event::Edit(text_editor::Action::SelectAll));
+        }
+        Event::Copy => return copy_selection(state, false),
+        Event::Cut => return copy_selection(state, true),
+        Event::Paste => {
+            return iced::clipboard::read().map(|text| Message::Editor(Event::Pasted(text)));
+        }
+        Event::Pasted(text) => {
+            if let Some(text) = text.filter(|text| !text.is_empty()) {
+                return update(
+                    state,
+                    Event::Edit(text_editor::Action::Edit(text_editor::Edit::Paste(
+                        std::sync::Arc::new(text),
+                    ))),
+                );
+            }
+        }
         Event::Exit => {
             if editor.saving {
                 state.message = "Espera a que termine el guardado.".into();
@@ -330,6 +387,54 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     }
     tools::refresh_preview(&mut state.editor);
     Task::none()
+}
+
+/// Puts the selected text of the open file on the clipboard; a cut also removes it.
+fn copy_selection(state: &mut Dashboard, cut: bool) -> Task<Message> {
+    let editor = &state.editor;
+    if editor.home {
+        return Task::none();
+    }
+    let Some(text) = editor
+        .selected
+        .and_then(|i| editor.tabs.get(i))
+        .and_then(|tab| tab.content.selection())
+        .filter(|text| !text.is_empty())
+    else {
+        return Task::none();
+    };
+    let write = iced::clipboard::write(text);
+    if !cut {
+        return write;
+    }
+    Task::batch([
+        write,
+        update(
+            state,
+            Event::Edit(text_editor::Action::Edit(text_editor::Edit::Delete)),
+        ),
+    ])
+}
+
+/// Saves the next file with unsaved changes (by way of the usual Save, formatting included)
+/// and, when none is left, goes back to the tab that was open.
+fn save_next(state: &mut Dashboard) -> Task<Message> {
+    let editor = &mut state.editor;
+    let Some(index) = editor
+        .tabs
+        .iter()
+        .position(|tab| tab.dirty && !tab.readonly)
+    else {
+        if let Some(original) = editor.save_all.take() {
+            editor.selected =
+                (!editor.tabs.is_empty()).then(|| original.min(editor.tabs.len() - 1));
+        }
+        state.message = "Todos los archivos están guardados.".into();
+        return Task::none();
+    };
+    editor.selected = Some(index);
+    editor.home = false;
+    update(state, Event::Save)
 }
 
 fn close(editor: &mut State, index: usize) {

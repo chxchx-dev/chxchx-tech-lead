@@ -23,11 +23,23 @@ pub(super) enum Event {
     AccentInput(String),
     AccentApply,
     Scale(f32),
+    /// Zoom in (+1), out (-1) or back to 100 % (0).
+    Zoom(i32),
     Rebind(Action),
     Captured(String),
     Cancel,
     ResetKey(Action),
     ResetKeys,
+}
+
+/// The next interface size up (`step` > 0) or down, within the sizes Settings offers.
+pub(super) fn stepped_scale(current: f32, step: i32) -> f32 {
+    let index = SCALES
+        .iter()
+        .position(|(_, value)| (current - value).abs() < 0.01)
+        .unwrap_or(1);
+    let moved = (index as i32 + step).clamp(0, SCALES.len() as i32 - 1) as usize;
+    SCALES[moved].1
 }
 
 pub(super) const SCALES: [(&str, f32); 5] = [
@@ -71,6 +83,15 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             }
         }
         Event::Scale(scale) => state.session.edit(|p| p.appearance.scale = scale),
+        Event::Zoom(step) => {
+            let current = state.session.preferences().appearance.scale;
+            let next = if step == 0 {
+                1.0
+            } else {
+                stepped_scale(current, step)
+            };
+            state.session.edit(|p| p.appearance.scale = next);
+        }
         Event::Rebind(action) => {
             state.settings.capturing = Some(action);
             state.settings.notice.clear();
@@ -427,5 +448,28 @@ mod tests {
         assert!(!state.settings.notice.is_empty());
         let _ = update(&mut state, Event::Theme("chxchx".into()));
         let _ = update(&mut state, Event::Accent(None));
+    }
+
+    #[test]
+    fn zooming_steps_through_the_offered_sizes_and_stops_at_the_ends() {
+        assert_eq!(stepped_scale(1.0, 1), 1.1);
+        assert_eq!(stepped_scale(1.0, -1), 0.9);
+        assert_eq!(stepped_scale(0.9, -1), 0.9);
+        assert_eq!(stepped_scale(1.5, 1), 1.5);
+        assert_eq!(stepped_scale(1.25, 1), 1.5);
+        // A size that is not on the list counts as 100 %.
+        assert_eq!(stepped_scale(1.07, 1), 1.1);
+    }
+
+    #[test]
+    fn the_zoom_event_changes_the_saved_size_and_zero_restores_it() {
+        let mut state = super::super::editor::fixture();
+        let _ = update(&mut state, Event::Zoom(1));
+        let _ = update(&mut state, Event::Zoom(1));
+        assert_eq!(state.session.preferences().appearance.scale, 1.25);
+        let _ = update(&mut state, Event::Zoom(-1));
+        assert_eq!(state.session.preferences().appearance.scale, 1.1);
+        let _ = update(&mut state, Event::Zoom(0));
+        assert_eq!(state.session.preferences().appearance.scale, 1.0);
     }
 }

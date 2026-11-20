@@ -26,6 +26,8 @@ mod dock;
 mod e2e_tests;
 #[path = "studio_editor.rs"]
 mod editor;
+#[path = "studio_explorer.rs"]
+mod explorer;
 #[path = "studio_file_types.rs"]
 mod file_types;
 #[path = "studio_git.rs"]
@@ -134,6 +136,7 @@ struct Dashboard {
     terminal: terminal::State,
     agents: agents::State,
     editor: editor::State,
+    explorer: explorer::State,
     shell: shell::State,
     catalog: catalog::State,
     session: session::State,
@@ -172,6 +175,7 @@ enum Message {
     /// A reader thread has data (terminal output, an agent's answer).
     Wake,
     Editor(editor::Event),
+    Explorer(explorer::Event),
     Shell(shell::Event),
     Catalog(catalog::Event),
     Session(session::Event),
@@ -276,6 +280,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 update: update::State::default(),
                 panes: panes::State::default(),
                 editor: editor::State::new(),
+                explorer: explorer::State::default(),
                 shell: shell::State::default(),
                 catalog: catalog::State::default(),
                 session,

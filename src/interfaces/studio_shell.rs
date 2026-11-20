@@ -37,6 +37,7 @@ pub(super) struct State {
     memory_trimmed: std::time::Instant,
     /// The window has the focus: timers that only keep the screen fresh pause while it does not.
     pub focused: bool,
+    pub fullscreen: bool,
 }
 
 impl Default for State {
@@ -51,6 +52,7 @@ impl Default for State {
             memory_read: None,
             memory_trimmed: std::time::Instant::now(),
             focused: true,
+            fullscreen: false,
         }
     }
 }
@@ -70,6 +72,7 @@ pub(super) enum Event {
     ToggleSide(Side),
     ResetLayout,
     About,
+    ToggleFullscreen,
     ClearMessage,
     WindowFocus(bool),
 }
@@ -154,6 +157,18 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             state.editor.explorer = true;
             show_dock(state, None);
             state.message = "Diseño restablecido.".into();
+        }
+        Event::ToggleFullscreen => {
+            state.shell.fullscreen = !state.shell.fullscreen;
+            let mode = if state.shell.fullscreen {
+                iced::window::Mode::Fullscreen
+            } else {
+                iced::window::Mode::Windowed
+            };
+            return iced::window::oldest().then(move |id| match id {
+                Some(id) => iced::window::set_mode(id, mode),
+                None => Task::none(),
+            });
         }
         Event::About => {
             state.message = format!(
@@ -246,14 +261,40 @@ pub(super) fn subscription(state: &Dashboard) -> Subscription<Message> {
             iced::Event::Window(iced::window::Event::Unfocused) => {
                 Some(Message::Shell(Event::WindowFocus(false)))
             }
+            iced::Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+                Some(Message::Explorer(explorer::Event::Modifiers(modifiers)))
+            }
             _ => None,
         }),
     ]);
+    let mut subscriptions = vec![shortcuts];
     if state.shell.drag.is_some() {
-        Subscription::batch([shortcuts, iced::event::listen_with(drag)])
-    } else {
-        shortcuts
+        subscriptions.push(iced::event::listen_with(drag));
     }
+    // A row of the explorer is held down: the button going up anywhere ends the click or the drag.
+    if state.explorer.pressed.is_some() {
+        subscriptions.push(iced::event::listen_with(|event, _, _| match event {
+            iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                Some(Message::Explorer(explorer::Event::Release))
+            }
+            _ => None,
+        }));
+    }
+    // Files dropped from a file manager go to the explorer, unless a chat is showing (it takes them).
+    let chat_shown = state
+        .chat
+        .chats
+        .iter()
+        .any(|chat| state.panes.shows_chat(&chat.agent.id));
+    if state.editor.explorer && state.shell.side == Side::Explorer && !chat_shown {
+        subscriptions.push(iced::event::listen_with(|event, _, _| match event {
+            iced::Event::Window(iced::window::Event::FileDropped(path)) => {
+                Some(Message::Explorer(explorer::Event::Dropped(path)))
+            }
+            _ => None,
+        }));
+    }
+    Subscription::batch(subscriptions)
 }
 
 fn drag(event: iced::Event, _: iced::event::Status, _: iced::window::Id) -> Option<Message> {
@@ -280,7 +321,10 @@ fn shortcut(
         key.as_ref(),
         keyboard::Key::Named(keyboard::key::Named::Escape)
     ) {
-        return Some(Message::Menu(menu::Event::Close));
+        return Some(Message::Sequence(vec![
+            Message::Menu(menu::Event::Close),
+            Message::Explorer(explorer::Event::Escape),
+        ]));
     }
     if keymap::capturing() {
         return None;
@@ -304,6 +348,29 @@ fn shortcut(
         Action::OpenSettings => Message::Navigate(Page::Settings),
         Action::NewChat => Message::Chat(chat::Event::NewChat),
         Action::CopyLastAnswer => Message::Chat(chat::Event::CopyLast),
+        Action::NewFile => Message::Sequence(vec![
+            Message::Shell(Event::ShowSide(Side::Explorer)),
+            Message::Explorer(explorer::Event::Do(explorer::Action::NewFile)),
+        ]),
+        Action::OpenProject => Message::Session(session::Event::PickProject { new_window: false }),
+        Action::SaveAll => Message::Editor(editor::Event::SaveAll),
+        Action::ZoomIn => Message::Settings(settings::Event::Zoom(1)),
+        Action::ZoomOut => Message::Settings(settings::Event::Zoom(-1)),
+        Action::ZoomReset => Message::Settings(settings::Event::Zoom(0)),
+        Action::Fullscreen => Message::Shell(Event::ToggleFullscreen),
+        Action::ExplorerRename => {
+            Message::Explorer(explorer::Event::Shortcut(explorer::Action::Rename))
+        }
+        Action::ExplorerDelete => {
+            Message::Explorer(explorer::Event::Shortcut(explorer::Action::Delete))
+        }
+        Action::ExplorerCopy => {
+            Message::Explorer(explorer::Event::Shortcut(explorer::Action::Copy))
+        }
+        Action::ExplorerCut => Message::Explorer(explorer::Event::Shortcut(explorer::Action::Cut)),
+        Action::ExplorerPaste => {
+            Message::Explorer(explorer::Event::Shortcut(explorer::Action::Paste))
+        }
     })
 }
 

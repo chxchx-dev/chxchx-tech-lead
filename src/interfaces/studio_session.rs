@@ -21,6 +21,15 @@ pub(super) enum Event {
     Resized(iced::Size),
     Save,
     OpenProject(String),
+    /// Asks for a folder with the system's picker and opens it.
+    PickProject {
+        new_window: bool,
+    },
+    /// Opens a folder as the project: in a window of its own, or in place of this one.
+    OpenFolder {
+        path: PathBuf,
+        new_window: bool,
+    },
 }
 
 pub(super) fn boot(root: &Path, loaded: LoadedPreferences) -> (State, Option<String>) {
@@ -238,6 +247,22 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                 },
             );
         }
+        Event::PickProject { new_window } => {
+            return Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .set_title("Abrir proyecto")
+                        .pick_folder()
+                        .await
+                        .map(|folder| folder.path().to_path_buf())
+                },
+                move |picked| match picked {
+                    Some(path) => Message::Session(Event::OpenFolder { path, new_window }),
+                    None => Message::Sequence(Vec::new()),
+                },
+            );
+        }
+        Event::OpenFolder { path, new_window } => return open_folder(state, path, new_window),
         Event::OpenProject(path) => {
             let target = PathBuf::from(&path);
             if !target.is_dir() {
@@ -250,6 +275,31 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         }
     }
     Task::none()
+}
+
+/// Starts Studio on `path`. In place of this window, this one then closes (asking about unsaved
+/// work first); if the person cancels that, both stay open.
+fn open_folder(state: &mut Dashboard, path: PathBuf, new_window: bool) -> Task<Message> {
+    if !path.is_dir() {
+        state.message = format!("La carpeta ya no existe: {}", path.display());
+        return Task::none();
+    }
+    let same = path.canonicalize().ok() == state.root.canonicalize().ok();
+    if same && !new_window {
+        state.message = "Ese proyecto ya está abierto en esta ventana.".into();
+        return Task::none();
+    }
+    if let Err(error) =
+        std::env::current_exe().and_then(|exe| std::process::Command::new(exe).arg(&path).spawn())
+    {
+        state.message = format!("No se pudo abrir el proyecto: {error}");
+        return Task::none();
+    }
+    if new_window {
+        Task::none()
+    } else {
+        Task::done(Message::Editor(editor::Event::Exit))
+    }
 }
 
 /// Writes pending preferences right away; used while the window is closing.
@@ -352,5 +402,23 @@ mod tests {
         assert!(!state.editor.explorer);
         assert_eq!(state.shell.side, shell::Side::Workspace);
         assert_eq!(state.shell.dock_height, 300.0);
+    }
+
+    #[test]
+    fn a_folder_that_vanished_or_is_already_open_is_not_launched() {
+        let base = std::env::temp_dir().join(format!("chxchx-open-{}", std::process::id()));
+        std::fs::create_dir_all(&base).unwrap();
+        let mut state = super::super::editor::fixture();
+        state.root = base.clone();
+
+        let _ = open_folder(&mut state, base.join("no-existe"), false);
+        assert!(state.message.contains("ya no existe"));
+        let task = open_folder(&mut state, base.clone(), false);
+        drop(task);
+        assert!(
+            state.message.contains("ya está abierto"),
+            "{}",
+            state.message
+        );
     }
 }
