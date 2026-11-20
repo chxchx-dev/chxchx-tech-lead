@@ -3,6 +3,7 @@
 //! A theme is a full set of colors. The person may also pick an accent color that replaces the
 //! theme's own highlight. The active palette is global because every widget style reads it.
 use iced::Color;
+#[cfg(not(test))]
 use std::sync::RwLock;
 
 pub(in crate::interfaces::studio) const fn hex(value: u32) -> Color {
@@ -187,16 +188,35 @@ pub(in crate::interfaces::studio) const ACCENTS: &[(&str, u32)] = &[
     ("Verde", 0x34D399),
 ];
 
+#[cfg(not(test))]
 static ACTIVE: RwLock<Palette> = RwLock::new(DARK);
 
+#[cfg(test)]
+thread_local! {
+    // Every test runs on its own thread: a palette set by one test never leaks into another.
+    static ACTIVE: std::cell::Cell<Palette> = const { std::cell::Cell::new(DARK) };
+}
+
+#[cfg(not(test))]
 pub(in crate::interfaces::studio) fn active() -> Palette {
     ACTIVE.read().map_or(DARK, |palette| *palette)
 }
 
+#[cfg(not(test))]
 pub(in crate::interfaces::studio) fn set_palette(palette: Palette) {
     if let Ok(mut slot) = ACTIVE.write() {
         *slot = palette;
     }
+}
+
+#[cfg(test)]
+pub(in crate::interfaces::studio) fn active() -> Palette {
+    ACTIVE.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(in crate::interfaces::studio) fn set_palette(palette: Palette) {
+    ACTIVE.with(|slot| slot.set(palette));
 }
 
 /// `#RRGGBB` (or `RRGGBB`) as a color.

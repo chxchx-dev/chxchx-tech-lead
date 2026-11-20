@@ -450,16 +450,21 @@ mod tests {
             command.args(["-NoLogo", "-NoProfile"]);
         }
         let mut session = Session::spawn(command).unwrap();
-        session
-            .send(if cfg!(windows) {
-                b"Write-Output CHXCHX_INPUT_SMOKE\r"
-            } else {
-                b"printf '\\nCHXCHX_INPUT_SMOKE\\n'\r"
-            })
-            .unwrap();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let line: &[u8] = if cfg!(windows) {
+            b"Write-Output CHXCHX_INPUT_SMOKE\r"
+        } else {
+            b"printf '\\nCHXCHX_INPUT_SMOKE\\n'\r"
+        };
+        // A slow shell (PowerShell under ConPTY) can drop input typed before its prompt
+        // exists, so the line is sent again every few seconds until it has run.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         let mut observed = false;
+        let mut last_sent: Option<std::time::Instant> = None;
         while std::time::Instant::now() < deadline {
+            if last_sent.is_none_or(|at| at.elapsed() >= std::time::Duration::from_secs(4)) {
+                session.send(line).unwrap();
+                last_sent = Some(std::time::Instant::now());
+            }
             observed = session
                 .poll()
                 .unwrap()
