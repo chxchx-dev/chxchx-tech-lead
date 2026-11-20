@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import threading
@@ -16,8 +17,10 @@ _STOP_TIMEOUT_SECONDS = 3.0
 
 def start(argv: list[str], cwd: Any, env: dict[str, str]) -> subprocess.Popen[str]:
     """The provider process, alone in its own group so stopping it stops what it launched."""
+    # A bare name is looked up in the PATH the process will get; on Windows that also finds `codex.cmd`.
+    resolved = shutil.which(argv[0], path=env.get("PATH") or env.get("Path")) or argv[0]
     return subprocess.Popen(
-        argv,
+        [resolved, *argv[1:]],
         cwd=cwd,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
