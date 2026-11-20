@@ -129,13 +129,22 @@ fn fake_ollama(dir: &Path) -> PathBuf {
     path
 }
 
+/// `true` lives in `/bin` on Linux but in `/usr/bin` on macOS; any real file will do.
+fn an_existing_executable() -> PathBuf {
+    ["/bin/true", "/usr/bin/true"]
+        .into_iter()
+        .map(PathBuf::from)
+        .find(|path| path.is_file())
+        .expect("a `true` executable")
+}
+
 fn agent(id: &str, provider: Provider) -> Agent {
     Agent {
         id: id.into(),
         provider,
         command: vec![id.into()],
         cwd: PathBuf::new(),
-        executable: Some(PathBuf::from("/bin/true")),
+        executable: Some(an_existing_executable()),
         configured: false,
     }
 }
