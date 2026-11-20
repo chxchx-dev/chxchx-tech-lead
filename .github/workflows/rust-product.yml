@@ -28,8 +28,15 @@ jobs:
       - name: Install the service and its test dependency
         run: python -m pip install pytest ./services/agent-adapter
       - name: Run the service tests
+        shell: bash
         working-directory: services/agent-adapter
-        run: python -m pytest -q
+        run: |
+          # The end of the output goes into the annotation: the job log is not visible from outside.
+          set -o pipefail
+          python -m pytest -q -x 2>&1 | tee test.log && exit 0
+          code=${PIPESTATUS[0]}
+          echo "::error title=pytest del servicio falló ($code)::$(tail -n 45 test.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          exit "$code"
 
   packaging:
     name: Installers and release manifest (${{ matrix.os }})

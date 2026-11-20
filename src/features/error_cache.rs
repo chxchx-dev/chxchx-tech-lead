@@ -202,6 +202,9 @@ pub fn record(
 ) -> Result<(), String> {
     let path = cache_path(home);
     let mut entries = read_entries(&path);
+    // The same canonical form `list` filters by, whatever way the folder was named.
+    let project_path =
+        fs::canonicalize(project_path).unwrap_or_else(|_| project_path.to_path_buf());
     entries.push(json!({
         "occurred_at": OffsetDateTime::now_utc().format(&Rfc3339).map_err(|error| error.to_string())?,
         "project": clip(project, 120),
