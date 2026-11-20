@@ -543,25 +543,33 @@ fn local_models_from_the_diagnosis_to_a_chat_with_the_installed_model() {
 }
 
 #[test]
-fn updating_studio_from_the_menu_to_the_restart_notice() {
+fn checking_for_updates_from_the_menu_offers_the_download_of_a_newer_release() {
     let dir = sandbox();
-    let cli = fake_cli(&dir);
     let mut state = studio(&dir);
 
     let _ = updater::update(&mut state, updater::Event::Open);
     assert_eq!(state.update.phase, updater::Phase::Checking);
-    let _ = updater::update(&mut state, updater::Event::Checked(updates::check(&cli)));
-    assert!(matches!(state.update.phase, updater::Phase::Available(_)));
+    let found = updates::check_with("0.6.3", || Ok("v0.7.0".into()));
+    let _ = updater::update(&mut state, updater::Event::Checked(found));
+    assert!(matches!(&state.update.phase, updater::Phase::Available(i) if i.latest == "0.7.0"));
     assert!(updater::dialog(&state).is_some());
 
-    let _ = updater::update(&mut state, updater::Event::Apply);
-    let _ = updater::update(&mut state, updater::Event::Close);
+    let _ = updater::update(&mut state, updater::Event::Opened(Ok(())));
     assert!(
-        matches!(state.update.phase, updater::Phase::Applying(_)),
-        "cannot be dismissed mid-install"
+        updater::dialog(&state).is_none(),
+        "the page opened: the dialog goes away"
     );
-    let _ = updater::update(&mut state, updater::Event::Applied(updates::apply(&cli)));
-    assert!(matches!(&state.update.phase, updater::Phase::Done(i) if i.latest == "0.6.0a1"));
+
+    let _ = updater::update(
+        &mut state,
+        updater::Event::Checked(updates::check_with("0.7.0", || Ok("v0.7.0".into()))),
+    );
+    assert!(matches!(state.update.phase, updater::Phase::UpToDate(_)));
+    let _ = updater::update(
+        &mut state,
+        updater::Event::Checked(updates::check_with("0.7.0", || Err("sin red".into()))),
+    );
+    assert!(matches!(&state.update.phase, updater::Phase::Failed(e) if e == "sin red"));
     let _ = updater::update(&mut state, updater::Event::Close);
     assert!(updater::dialog(&state).is_none());
 }

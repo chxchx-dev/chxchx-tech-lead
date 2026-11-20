@@ -1,5 +1,11 @@
 # Handoff
 
+## Actualizador de Studio en Rust: avisa y abre la descarga (2026-11-19)
+
+- `integrations/studio_update.rs` ya no usa el CLI Python: lee el último release por la redirección de `github.com/chxchx-dev/chxchx-tech-lead/releases/latest` con el `curl` del sistema (solo HTTPS, 15 s, sin token ni API), compara versiones (un prerelease es anterior a su release) y abre la página del release con el abridor del sistema (`xdg-open`, `open`, `rundll32`); solo abre páginas de los releases del proyecto. Studio muestra "Hay una versión nueva · Ver la descarga". No reemplaza binarios: se instala con los instaladores del release. Comprobado contra GitHub real (devuelve `v0.6.3`).
+- Verificado en Linux: formato, Clippy estricto y `cargo test --locked` (381 unitarias, 6 catálogo, 21 flujos).
+- Con esto el CLI Python ya solo lo usa la ruta heredada del chat (Codex/OpenCode sin servicio). Siguiente: empaquetar el servicio con su runtime en el release, retirar esa ruta y las piezas de `old-version/` del flujo de release.
+
 ## Comandos centrales portados y heredados retirados (2026-11-19)
 
 - Portados a Rust: `projects switch ALIAS [--dry-run]` (suspende los workspaces activos de los demás proyectos registrados, activa el destino con su trust y recuerda `last_project` con backup del registro; comprueba el trust del destino antes de suspender nada) y `workspace errors [PATH] [--limit N]` / `workspace report-error` (registro acotado a 200 entradas en `cache/errors.jsonl`, con recorte y redacción de secretos —corregida una fuga del original con `Authorization: Bearer <token>`—, escritura atómica y sin seguir enlaces). Los fallos de `workspace start/resume` y `projects switch` quedan registrados.
