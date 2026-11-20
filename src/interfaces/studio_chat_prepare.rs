@@ -46,6 +46,7 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
     let known = state.chat.cli.clone();
     let id = agent.id.clone();
     let provider = super::turns::state_provider(agent.provider).to_owned();
+    let native = bridge::runs_natively(&agent);
     let executable = agent
         .executable
         .as_deref()
@@ -54,11 +55,25 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
     Task::perform(
         async move {
             jobs::offload(move || -> Prepared {
-                let cli = known.or_else(|| bridge::find_cli(&root));
+                // Claude does not need the Python CLI, so it is not searched for.
+                let cli = known.or_else(|| {
+                    if native {
+                        None
+                    } else {
+                        bridge::find_cli(&root)
+                    }
+                });
                 let options = crate::integrations::agent_catalog::options(&agent, &root);
                 let provider_memories =
                     crate::features::explicit_memory::prepare_provider_history(&root);
                 match &cli {
+                    _ if native => (
+                        cli.clone(),
+                        bridge::restore_chat_for_provider(&root, &agent.id, &provider, &executable),
+                        Ok(options),
+                        slash_commands::discover(&root, &agent.id),
+                        provider_memories,
+                    ),
                     Some(cli) => (
                         Some(cli.clone()),
                         bridge::restore_chat_for_provider(&root, &agent.id, &provider, &executable),
@@ -121,7 +136,7 @@ pub(super) fn prepared_for(state: &mut Dashboard, id: &str, prepared: &Prepared)
             }));
         }
     }
-    if cli.is_none() {
+    if cli.is_none() && !bridge::runs_natively(&chat.agent) {
         chat.problem = Some(bridge::missing_cli_hint());
     }
     if let Err(error) = memory_result {

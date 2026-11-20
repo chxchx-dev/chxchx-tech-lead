@@ -521,9 +521,9 @@ fn tick(state: &mut Dashboard) {
                 state.message = format!("No pude retirar el traspaso ya recibido: {error}");
             }
             if release_context {
-                if let Some(cli) = chat_cli.as_deref() {
+                if chat_cli.is_some() || bridge::runs_natively(&chat.agent) {
                     let spec = handoff_turn_spec(chat, &state.root);
-                    match Turn::start_handoff(cli, &spec) {
+                    match Turn::launch_handoff(chat_cli.as_deref(), &spec) {
                         Ok(handoff) => chat.turn = Some(handoff),
                         Err(error) => {
                             let _ = chat.model.apply(&json!({
@@ -553,6 +553,11 @@ fn handoff_turn_spec(chat: &Chat, root: &std::path::Path) -> TurnSpec {
         mode: "read-only".to_owned(),
         model: chat.model_id.clone(),
         effort: chat.effort.clone(),
+        agent_command: chat.agent.command.clone(),
+        executable: chat.agent.executable.clone(),
+        agent_cwd: chat.agent.cwd.clone(),
+        // A summary only follows a turn Studio already ran in this trusted project.
+        trusted: true,
         ..Default::default()
     }
 }

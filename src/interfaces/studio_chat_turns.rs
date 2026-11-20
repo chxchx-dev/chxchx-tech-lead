@@ -54,10 +54,11 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
     if chat.turn.is_some() || chat.preparing || chat.problem.is_some() {
         return false;
     }
-    let Some(cli) = cli else {
+    // Claude runs without the Python CLI; every other provider still needs it.
+    if cli.is_none() && !bridge::runs_natively(&chat.agent) {
         state.message = bridge::missing_cli_hint();
         return false;
-    };
+    }
     let mut allow = chat.approved.clone();
     allow.append(&mut chat.once);
     let attached = if show {
@@ -79,9 +80,13 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         allow,
         model: chat.model_id.clone(),
         effort: chat.effort.clone(),
+        agent_command: chat.agent.command.clone(),
+        executable: chat.agent.executable.clone(),
+        agent_cwd: chat.agent.cwd.clone(),
+        trusted: true, // checked above: nothing starts in an untrusted project
     };
     let visible_prompt = shown(display.unwrap_or(prompt), attached.len());
-    match Turn::start(&cli, &spec) {
+    match Turn::launch(cli.as_deref(), &spec) {
         Ok(turn) => {
             if show {
                 let _ = crate::features::chat_state::begin_turn(

@@ -1,5 +1,12 @@
 # Current State
 
+## Runner nativo de Claude y CI en verde (2026-11-19)
+
+- La CI remota pasa en Ubuntu, Windows y macOS. Los fallos de las dos últimas rondas eran de los tests, no del producto: rutas temporales no canónicas (`RUNNER~1` en Windows, `/var` frente a `/private/var` en macOS), `/bin/true` inexistente en macOS, y `ps`/`sysctl`/`vm_stat` buscados en un `PATH` vacío (ahora se llaman por ruta absoluta del sistema).
+- Studio ejecuta los turnos de Claude Code directamente desde Rust (`integrations/chat_bridge/claude_runner.rs`), sin el CLI Python: argumentos (`agent_access`), primer mensaje con contexto/recap/handoff (`chat_context`), imágenes copiadas a `.ai/chat-attachments/`, entrada stream-json en vivo, respuestas a permisos, cancelación del grupo de procesos y eventos `start`/`done`. El resumen de handoff de Claude también corre aquí, en solo lectura y sin entrada live. Trust: Studio lo verifica y el runner exige `TurnSpec.trusted`.
+- Sin CLI Python Studio ya abre y conversa con Claude; Codex y OpenCode siguen necesitándolo. Verificado en Linux: formato, Clippy estricto, `cargo test --locked` (350 unitarias, 6 catálogo, 17 flujos), `cargo check --no-default-features --features cli` y una llamada real de una línea al `claude` instalado para confirmar el formato del stream. La CI remota de este cambio queda pendiente.
+- Siguiente: runners Rust de Codex (JSONL no-live y app-server) y OpenCode (no-live y servidor), luego retirar el CLI Python delegado, el actualizador y los instaladores.
+
 ## Handoff automático de Studio en Rust (2026-11-19)
 
 - Studio ahora calcula el umbral de liberación de contexto (90%), guarda y redacciona el handoff en `.ai/chat-handoffs/`, y lo pasa a una sesión nueva sin reanudar la anterior. Rust controla la validación, los límites, la compatibilidad de archivos previos y el consumo solo después de que la nueva sesión termina correctamente.

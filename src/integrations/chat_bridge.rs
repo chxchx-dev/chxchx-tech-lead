@@ -1,9 +1,13 @@
-//! The visual chat's connection to `chxchx-tech agent chat`.
+//! The visual chat's connection to the agents.
 //!
-//! The Python CLI still runs provider turns. Rust owns the visible transcript and Claude's live
-//! control responses while this module finds a compatible CLI, runs a turn and answers its cards.
+//! Claude Code turns (and its hidden handoff summary) run directly from Rust: see
+//! `claude_runner`. Codex and OpenCode still go through `chxchx-tech agent chat` of the Python
+//! CLI, which this module finds, probes and drives. Either way Rust owns the visible transcript
+//! and Claude's live control responses.
 pub use crate::integrations::agent_catalog::{AgentOptions, ModelOption};
+mod claude_runner;
 use crate::integrations::executable_search::{agent_path, find_executable, find_in};
+pub use claude_runner::runs_natively;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::OsString;
@@ -198,6 +202,13 @@ pub struct TurnSpec {
     pub effort: Option<String>,
     /// Images attached to this turn, already prepared (`--image`).
     pub images: Vec<PathBuf>,
+    /// The agent as configured (program and arguments) and where it was found, for providers
+    /// Rust runs itself.
+    pub agent_command: Vec<String>,
+    pub executable: Option<PathBuf>,
+    pub agent_cwd: PathBuf,
+    /// The caller verified local trust for this project; nothing runs without it.
+    pub trusted: bool,
 }
 
 pub struct Turn {
@@ -217,6 +228,10 @@ pub struct Turn {
     resume_recap_file: Option<PathBuf>,
     rust_context_file: Option<PathBuf>,
     pub exit: Option<i32>,
+    /// Events produced by Rust itself before the provider printed anything.
+    pre_events: Vec<Value>,
+    /// Present when Rust runs the provider directly.
+    native: Option<claude_runner::NativeRun>,
 }
 
 #[derive(Clone, Debug)]
@@ -224,6 +239,105 @@ enum TurnKind {
     Chat,
     Handoff { session_id: String },
 }
+
+/// Reads a provider's output on its own thread and forwards what Studio shows.
+///
+/// Without `wrap`, each line is already a `chxchx.agent-event` (what the Python CLI prints);
+/// with a provider name, each line is that provider's raw record, as a process run by Rust prints.
+/// Claude's control requests are remembered here so answers can be built from the original input.
+fn spawn_event_reader(
+    stdout: impl Read + Send + 'static,
+    sender: std::sync::mpsc::Sender<Value>,
+    pending_claude: Arc<Mutex<HashMap<String, Value>>>,
+    wrap: Option<&'static str>,
+) {
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).split(b'\n').map_while(Result::ok) {
+            let Ok(mut value) = serde_json::from_slice::<Value>(&line) else {
+                continue;
+            };
+            if let Some(provider) = wrap {
+                value = serde_json::json!({
+                    "type": "provider_record", "provider": provider, "record": value
+                });
+            }
+            if value["type"] == "provider_record" {
+                let provider = value["provider"].as_str().unwrap_or_default();
+                let record = &value["record"];
+                if provider == "Claude"
+                    && let Some(request_id) = record["request_id"].as_str()
+                {
+                    match record["type"].as_str() {
+                        Some("control_request") => {
+                            if let Ok(mut pending) = pending_claude.lock() {
+                                pending.insert(request_id.to_owned(), record.clone());
+                            }
+                            if !request_id.is_empty()
+                                && record["request"]["subtype"].as_str() != Some("can_use_tool")
+                            {
+                                let internal = serde_json::json!({
+                                    "type":"chxchx_internal_claude_control",
+                                    "request_id":request_id
+                                });
+                                if sender.send(internal).is_err() {
+                                    return;
+                                }
+                                super::wake::notify();
+                                continue;
+                            }
+                        }
+                        Some("control_cancel_request") => {
+                            if let Ok(mut pending) = pending_claude.lock() {
+                                pending.remove(request_id);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if provider == "Claude"
+                    && record["type"].as_str() == Some("result")
+                    && let Ok(mut pending) = pending_claude.lock()
+                {
+                    pending.clear();
+                }
+                for event in super::agent_stream::normalize(provider, record) {
+                    if sender.send(event).is_err() {
+                        return;
+                    }
+                    super::wake::notify();
+                }
+                // The turn is over: the host closes the input so the provider can exit.
+                if wrap.is_some() && record["type"].as_str() == Some("result") {
+                    let _ = sender.send(serde_json::json!({"type": INTERNAL_TURN_RESULT}));
+                    super::wake::notify();
+                }
+                continue;
+            }
+            if sender.send(value).is_err() {
+                break;
+            }
+            super::wake::notify();
+        }
+        super::wake::notify_after_end();
+    });
+}
+
+/// Keeps the last lines a provider wrote to stderr, for the message when it fails.
+fn spawn_stderr_reader(stderr: impl Read + Send + 'static, tail: Arc<Mutex<VecDeque<String>>>) {
+    std::thread::spawn(move || {
+        for line in BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
+            if let Ok(mut lines) = tail.lock() {
+                if lines.len() == 20 {
+                    lines.pop_front();
+                }
+                lines.push_back(String::from_utf8_lossy(&line).into_owned());
+            }
+        }
+    });
+}
+
+/// Printed by the reader when a natively run turn delivered its result.
+const INTERNAL_TURN_RESULT: &str = "chxchx_internal_turn_result";
 
 impl Turn {
     pub fn start(cli: &Path, spec: &TurnSpec) -> Result<Self, String> {
@@ -377,77 +491,9 @@ impl Turn {
         };
         let (sender, events) = channel();
         let pending_claude = Arc::new(Mutex::new(HashMap::new()));
-        let reader_pending_claude = pending_claude.clone();
-        std::thread::spawn(move || {
-            for line in BufReader::new(stdout).split(b'\n').map_while(Result::ok) {
-                if let Ok(value) = serde_json::from_slice::<Value>(&line) {
-                    if value["type"] == "provider_record" {
-                        let provider = value["provider"].as_str().unwrap_or_default();
-                        let record = &value["record"];
-                        if provider == "Claude"
-                            && let Some(request_id) = record["request_id"].as_str()
-                        {
-                            match record["type"].as_str() {
-                                Some("control_request") => {
-                                    if let Ok(mut pending) = reader_pending_claude.lock() {
-                                        pending.insert(request_id.to_owned(), record.clone());
-                                    }
-                                    if !request_id.is_empty()
-                                        && record["request"]["subtype"].as_str()
-                                            != Some("can_use_tool")
-                                    {
-                                        let internal = serde_json::json!({
-                                            "type":"chxchx_internal_claude_control",
-                                            "request_id":request_id
-                                        });
-                                        if sender.send(internal).is_err() {
-                                            return;
-                                        }
-                                        super::wake::notify();
-                                        continue;
-                                    }
-                                }
-                                Some("control_cancel_request") => {
-                                    if let Ok(mut pending) = reader_pending_claude.lock() {
-                                        pending.remove(request_id);
-                                    }
-                                }
-                                Some("result") => {
-                                    if let Ok(mut pending) = reader_pending_claude.lock() {
-                                        pending.clear();
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                        for event in super::agent_stream::normalize(provider, record) {
-                            if sender.send(event).is_err() {
-                                return;
-                            }
-                            super::wake::notify();
-                        }
-                        continue;
-                    }
-                    if sender.send(value).is_err() {
-                        break;
-                    }
-                    super::wake::notify();
-                }
-            }
-            super::wake::notify_after_end();
-        });
+        spawn_event_reader(stdout, sender, pending_claude.clone(), None);
         let tail = Arc::new(Mutex::new(VecDeque::new()));
-        let collector = tail.clone();
-        std::thread::spawn(move || {
-            for line in BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
-                if let Ok(mut lines) = collector.lock() {
-                    if lines.len() == 20 {
-                        lines.pop_front();
-                    }
-                    lines.push_back(String::from_utf8_lossy(&line).into_owned());
-                }
-            }
-        });
+        spawn_stderr_reader(stderr, tail.clone());
         Ok(Self {
             child: Some(child),
             stdin,
@@ -465,6 +511,8 @@ impl Turn {
             resume_recap_file,
             rust_context_file,
             exit: None,
+            pre_events: Vec::new(),
+            native: None,
         })
     }
 
@@ -563,12 +611,15 @@ impl Turn {
             resume_recap_file: None,
             rust_context_file: None,
             exit: None,
+            pre_events: Vec::new(),
+            native: None,
         })
     }
 
     /// Events printed since the last call.
     pub fn poll(&mut self) -> Vec<Value> {
-        let mut found = self.consume_internal_events(self.events.try_iter().collect());
+        let mut found = std::mem::take(&mut self.pre_events);
+        found.extend(self.consume_internal_events(self.events.try_iter().collect()));
         if self.exit.is_none()
             && let Some(child) = self.child.as_mut()
             && let Ok(Some(status)) = child.try_wait()
@@ -576,6 +627,8 @@ impl Turn {
             self.exit = Some(status.code().unwrap_or(-1));
             // Whatever was printed right before exiting.
             found.extend(self.consume_internal_events(drain_after_exit(&self.events)));
+            let closing = self.closing_events();
+            found.extend(self.consume_internal_events(closing));
         }
         found
     }
@@ -644,6 +697,9 @@ impl Turn {
     }
 
     pub fn cancel(&mut self) {
+        if self.stop_native() {
+            return;
+        }
         let _ = self.write_line("cancel");
     }
 
@@ -659,6 +715,11 @@ impl Turn {
     fn consume_internal_events(&mut self, events: Vec<Value>) -> Vec<Value> {
         let mut visible = Vec::with_capacity(events.len());
         for event in events {
+            if event["type"].as_str() == Some(INTERNAL_TURN_RESULT) {
+                self.stdin = None; // closing the input lets the provider exit
+                continue;
+            }
+            self.observe_native(&event);
             if self.is_handoff() {
                 if event["type"].as_str() == Some("handoff")
                     && event["schema"].as_str() == Some("chxchx.agent-event")

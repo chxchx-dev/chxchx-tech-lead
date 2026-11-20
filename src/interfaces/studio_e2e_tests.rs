@@ -129,6 +129,38 @@ fn fake_ollama(dir: &Path) -> PathBuf {
     path
 }
 
+/// The `claude` the app now runs itself: it records what it receives and answers like the real
+/// one does with `--output-format stream-json`.
+fn fake_claude(dir: &Path) -> PathBuf {
+    let log = dir.join("prompts.log");
+    let records = [
+        r#"{"type":"system","subtype":"init","session_id":"s-1"}"#,
+        r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Hola, soy el agente de prueba."}]}}"#,
+        r#"{"type":"result","is_error":false,"total_cost_usd":0.01,"usage":{"input_tokens":12,"output_tokens":7}}"#,
+    ]
+    .map(shell_quote)
+    .join(" ");
+    let path = dir.join("claude");
+    std::fs::write(
+        &path,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"{log}.commands\"\nread line\nprintf '%s\\n' \"$line\" >> \"{log}\"\nprintf '%s\\n' {records}\ncat >/dev/null\n",
+            log = log.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+/// The Claude agent of a sandbox, pointing at its `claude`.
+fn claude_agent(dir: &Path) -> Agent {
+    Agent {
+        executable: Some(fake_claude(dir)),
+        ..agent("claude", Provider::Claude)
+    }
+}
+
 /// `true` lives in `/bin` on Linux but in `/usr/bin` on macOS; any real file will do.
 fn an_existing_executable() -> PathBuf {
     ["/bin/true", "/usr/bin/true"]
@@ -260,7 +292,7 @@ fn a_conversation_from_opening_the_chat_to_the_answer() {
     let dir = sandbox();
     let cli = fake_cli(&dir);
     let mut state = studio(&dir);
-    let claude = agent("claude", Provider::Claude);
+    let claude = claude_agent(&dir);
 
     open_chat(&mut state, &cli, &claude);
     let chat = &state.chat.chats[0];
@@ -319,9 +351,12 @@ fn a_conversation_from_opening_the_chat_to_the_answer() {
     assert!(journal.contains("- Inicio: hola"));
     assert!(journal.contains("- Cierre del agente: Hola, soy el agente de prueba."));
     let commands = std::fs::read_to_string(dir.join("prompts.log.commands")).unwrap();
-    assert!(commands.contains("agent chat claude"), "{commands}");
-    assert!(!commands.contains("bridge agent-options"), "{commands}");
-    assert!(!commands.contains("agent chat-state"), "{commands}");
+    assert!(
+        commands.contains("--output-format stream-json"),
+        "{commands}"
+    );
+    // Claude runs without the Python CLI: it never goes through `agent chat`.
+    assert!(!commands.contains("agent chat"), "{commands}");
     assert!(
         chat.composer.text().trim().is_empty(),
         "the box is cleared after sending"
@@ -337,7 +372,7 @@ fn studio_persists_explicit_memory_requests_but_skips_secrets_and_injected_text(
     let dir = sandbox();
     let cli = fake_cli(&dir);
     let mut state = studio(&dir);
-    open_chat(&mut state, &cli, &agent("claude", Provider::Claude));
+    open_chat(&mut state, &cli, &claude_agent(&dir));
 
     say(
         &mut state,
@@ -396,7 +431,7 @@ fn a_project_command_travels_as_typed_and_a_chat_command_stays_in_the_app() {
     let dir = sandbox();
     let cli = fake_cli(&dir);
     let mut state = studio(&dir);
-    open_chat(&mut state, &cli, &agent("claude", Provider::Claude));
+    open_chat(&mut state, &cli, &claude_agent(&dir));
 
     say(&mut state, "/revisar src");
     wait_for_answer(&mut state);

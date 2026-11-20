@@ -351,25 +351,43 @@ fn studio_releases_context_generates_a_hidden_handoff_and_consumes_it_after_a_fr
             .as_nanos()
     ));
     fs::create_dir_all(&root).unwrap();
-    let cli = root.join("fake-chat-cli");
+    // The `claude` Studio runs itself: a summary turn (no live input) answers with the summary;
+    // a chat turn in read-only mode is the fresh session that must receive the handoff.
+    let claude = root.join("claude");
+    let line = |json: &str| format!("printf '%s\\n' '{json}'\n");
+    let init = |session: &str| {
+        line(&format!(
+            r#"{{"type":"system","subtype":"init","session_id":"{session}"}}"#
+        ))
+    };
+    let reply = |text: &str| {
+        line(&format!(
+            r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"{text}"}}]}}}}"#
+        ))
+    };
+    let result = |tokens: u32| {
+        line(&format!(
+            r#"{{"type":"result","is_error":false,"usage":{{"input_tokens":{tokens},"output_tokens":1}},"modelUsage":{{"m":{{"contextWindow":100}}}}}}"#
+        ))
+    };
     fs::write(
-        &cli,
+        &claude,
         format!(
-            "#!/bin/sh\nif [ \"$2\" = \"chat-handoff\" ]; then\n  printf '%s\\n' '{handoff}'\n  exit 0\nfi\ncase \"$*\" in\n  *\"--mode read-only\"*) session=s-2; tokens=50;;\n  *) session=s-1; tokens=90;;\nesac\nfor arg in \"$@\"; do\n  if [ \"$arg\" = \"--resume-recap-file\" ]; then shift; cat \"$1\" > '{recap_log}'; break; fi\n  shift\ndone\nprintf '%s\\n' '{session}' '{message}' '{{\"schema\":\"chxchx.agent-event\",\"schema_version\":1,\"type\":\"limits\",\"context_tokens\":'\"$tokens\"',\"context_window\":100}}'\nprintf '%s\\n' '{{\"schema\":\"chxchx.agent-event\",\"schema_version\":1,\"type\":\"done\",\"exit_code\":0,\"cancelled\":false,\"session_id\":'\"$session\"'}}'\n",
-            handoff = r###"{"schema":"chxchx.agent-event","schema_version":1,"type":"handoff","text":"## Objetivo\nseguir"}"###,
+            "#!/bin/sh\ncase \"$*\" in\n  *--input-format*) ;;\n  *) cat >/dev/null\n{summary}exit 0;;\nesac\nread line\ncase \"$*\" in\n  *\"--permission-mode plan\"*) printf '%s\\n' \"$line\" > '{recap_log}'\n{fresh};;\n  *)\n{first};;\nesac\ncat >/dev/null\n",
+            summary = reply(r"## Objetivo\nseguir") + &result(1),
             recap_log = root.join("second-recap.txt").display(),
-            session = r#"{"schema":"chxchx.agent-event","schema_version":1,"type":"session","session_id":"'"$session"'"}"#,
-            message = r#"{"schema":"chxchx.agent-event","schema_version":1,"type":"message","role":"assistant","text":"respuesta visible"}"#,
+            fresh = init("s-2") + &reply("respuesta visible") + &result(50),
+            first = init("s-1") + &reply("respuesta visible") + &result(90),
         ),
     )
     .unwrap();
-    let mut permissions = fs::metadata(&cli).unwrap().permissions();
+    let mut permissions = fs::metadata(&claude).unwrap().permissions();
     permissions.set_mode(0o755);
-    fs::set_permissions(&cli, permissions).unwrap();
+    fs::set_permissions(&claude, permissions).unwrap();
 
     let mut state = dashboard();
     state.root = root.clone();
-    state.chat.cli = Some(cli.clone());
+    state.chat.chats[0].agent.executable = Some(claude.clone());
     state.chat.chats[0].model.add_user("primera pregunta");
     let spec = TurnSpec {
         agent: "claude".into(),
@@ -377,9 +395,12 @@ fn studio_releases_context_generates_a_hidden_handoff_and_consumes_it_after_a_fr
         project: root.clone(),
         prompt: "primera pregunta".into(),
         mode: "workspace-write".into(),
+        agent_command: vec!["claude".into()],
+        executable: Some(claude.clone()),
+        trusted: true,
         ..Default::default()
     };
-    state.chat.chats[0].turn = Some(Turn::start(&cli, &spec).unwrap());
+    state.chat.chats[0].turn = Some(Turn::launch(None, &spec).unwrap());
 
     let drain = |state: &mut Dashboard| {
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -420,9 +441,12 @@ fn studio_releases_context_generates_a_hidden_handoff_and_consumes_it_after_a_fr
         prompt: "segunda pregunta".into(),
         session: Some("s-1".into()),
         mode: "read-only".into(),
+        agent_command: vec!["claude".into()],
+        executable: Some(claude.clone()),
+        trusted: true,
         ..Default::default()
     };
-    state.chat.chats[0].turn = Some(Turn::start(&cli, &next).unwrap());
+    state.chat.chats[0].turn = Some(Turn::launch(None, &next).unwrap());
     drain(&mut state);
 
     assert!(
