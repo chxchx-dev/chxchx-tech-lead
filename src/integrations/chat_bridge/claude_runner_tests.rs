@@ -68,7 +68,7 @@ fn answering(records: &[&str]) -> String {
 fn a_new_session_runs_claude_directly_with_the_project_context() {
     let dir = scratch("new");
     let claude = fake_claude(&dir, &answering(&[INIT, REPLY, RESULT]));
-    let mut turn = Turn::launch(None, &spec(&dir, &claude)).unwrap();
+    let mut turn = Turn::launch(&spec(&dir, &claude)).unwrap();
     let events = wait_done(&mut turn);
 
     assert_eq!(
@@ -127,7 +127,7 @@ fn a_resumed_session_sends_only_the_request() {
     resumed.session = Some("sesion-previa".into());
     resumed.model = Some("opus".into());
     resumed.effort = Some("high".into());
-    let mut turn = Turn::launch(None, &resumed).unwrap();
+    let mut turn = Turn::launch(&resumed).unwrap();
     wait_done(&mut turn);
 
     let args = fs::read_to_string(dir.join("claude.log.args")).unwrap();
@@ -148,9 +148,9 @@ fn nothing_runs_without_the_trust_the_caller_verified() {
     let mut untrusted = spec(&dir, &claude);
     untrusted.trusted = false;
 
-    let error = Turn::launch(None, &untrusted).err().unwrap();
+    let error = Turn::launch(&untrusted).err().unwrap();
     assert!(error.contains("confianza"), "{error}");
-    let error = Turn::launch_handoff(None, &untrusted).err().unwrap();
+    let error = Turn::launch_handoff(&untrusted).err().unwrap();
     assert!(error.contains("confianza"), "{error}");
     assert!(!dir.join("claude.log.ran").exists());
 }
@@ -161,7 +161,7 @@ fn an_invalid_access_mode_is_refused_before_starting() {
     let claude = fake_claude(&dir, "echo should-not-run > \"$LOG.ran\"");
     let mut wrong = spec(&dir, &claude);
     wrong.mode = "todo-permitido".into();
-    assert!(Turn::launch(None, &wrong).is_err());
+    assert!(Turn::launch(&wrong).is_err());
     assert!(!dir.join("claude.log.ran").exists());
 }
 
@@ -169,7 +169,7 @@ fn an_invalid_access_mode_is_refused_before_starting() {
 fn a_failing_claude_reports_its_exit_code_and_what_it_wrote_to_stderr() {
     let dir = scratch("failure");
     let claude = fake_claude(&dir, "read line\necho 'sin sesión de login' >&2\nexit 3");
-    let mut turn = Turn::launch(None, &spec(&dir, &claude)).unwrap();
+    let mut turn = Turn::launch(&spec(&dir, &claude)).unwrap();
     let events = wait_done(&mut turn);
 
     let done = events.last().unwrap();
@@ -193,7 +193,7 @@ fn cancelling_stops_claude_and_what_it_started_and_is_not_a_failure() {
             "echo '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s\"}'"
         ),
     );
-    let mut turn = Turn::launch(None, &spec(&dir, &claude)).unwrap();
+    let mut turn = Turn::launch(&spec(&dir, &claude)).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     while !dir.join("claude.log.child").exists() && Instant::now() < deadline {
         turn.poll();
@@ -231,7 +231,7 @@ fn a_permission_request_is_answered_through_claudes_own_stdin() {
             "read line\necho '{INIT}'\necho '{request}'\nread answer\nprintf '%s\\n' \"$answer\" > \"$LOG.answer\"\necho '{REPLY}'\necho '{RESULT}'\ncat >/dev/null"
         ),
     );
-    let mut turn = Turn::launch(None, &spec(&dir, &claude)).unwrap();
+    let mut turn = Turn::launch(&spec(&dir, &claude)).unwrap();
 
     let mut seen = Vec::new();
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -270,7 +270,7 @@ fn images_are_copied_into_the_project_and_listed_in_the_prompt() {
     let mut with_image = spec(&dir, &claude);
     with_image.session = Some("sesion-previa".into());
     with_image.images = vec![picture];
-    let mut turn = Turn::launch(None, &with_image).unwrap();
+    let mut turn = Turn::launch(&with_image).unwrap();
     wait_done(&mut turn);
 
     let sent: Value =
@@ -299,7 +299,7 @@ fn attachments_never_follow_a_symlinked_folder() {
     with_image.session = Some("sesion-previa".into());
     with_image.images = vec![picture];
 
-    assert!(Turn::launch(None, &with_image).is_err());
+    assert!(Turn::launch(&with_image).is_err());
     assert!(fs::read_dir(&outside).unwrap().next().is_none());
 }
 
@@ -315,7 +315,7 @@ fn the_summary_turn_is_read_only_plain_text_and_returns_only_the_summary() {
     let mut summary = spec(&dir, &claude);
     summary.session = Some("sesion-llena".into());
     summary.mode = "full-access".into(); // whatever the chat used, the summary reads only
-    let mut turn = Turn::launch_handoff(None, &summary).unwrap();
+    let mut turn = Turn::launch_handoff(&summary).unwrap();
     assert!(turn.is_handoff());
     let events = wait_done(&mut turn);
 
@@ -343,16 +343,48 @@ fn a_summary_turn_that_fails_leaves_no_handoff() {
     let claude = fake_claude(&dir, "cat >/dev/null\nexit 1");
     let mut summary = spec(&dir, &claude);
     summary.session = Some("sesion-llena".into());
-    let mut turn = Turn::launch_handoff(None, &summary).unwrap();
+    let mut turn = Turn::launch_handoff(&summary).unwrap();
     wait_done(&mut turn);
     assert_eq!(turn.take_handoff_text(), "");
 }
 
 #[test]
-fn other_providers_still_need_the_cli() {
+fn a_turn_that_cannot_run_says_why_in_terms_of_what_is_missing() {
     let dir = scratch("others");
     let mut codex = spec(&dir, Path::new("/bin/true"));
     codex.provider = "Codex".into();
-    let error = Turn::launch(None, &codex).err().unwrap();
-    assert!(error.contains("CLI"), "{error}");
+    // Installed, but the service that drives Codex is the thing missing.
+    assert!(unavailable(&codex).contains("servicio de agentes"));
+    codex.executable = None;
+    assert!(
+        Turn::launch(&codex)
+            .err()
+            .unwrap()
+            .contains("Codex no está instalado")
+    );
+    let mut other = spec(&dir, Path::new("/bin/true"));
+    other.provider = "Gemini".into();
+    assert!(Turn::launch(&other).err().unwrap().contains("no conduce"));
+}
+
+#[test]
+fn control_requests_rust_cannot_serve_are_refused_so_claude_never_waits() {
+    let dir = scratch("unsupported");
+    let request = r#"{"type":"control_request","request_id":"unsupported-1","request":{"subtype":"initialize","input":{}}}"#;
+    let claude = fake_claude(
+        &dir,
+        &format!(
+            "read line\necho '{request}'\nread -r response\nprintf '%s' \"$response\" > \"$LOG.response\"\necho '{REPLY}'\necho '{RESULT}'\ncat >/dev/null"
+        ),
+    );
+    let mut turn = Turn::launch(&spec(&dir, &claude)).unwrap();
+    let events = wait_done(&mut turn);
+
+    assert_eq!(events.last().unwrap()["type"], "done");
+    let response: Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("claude.log.response")).unwrap())
+            .unwrap();
+    assert_eq!(response["type"], "control_response");
+    assert_eq!(response["response"]["subtype"], "error");
+    assert_eq!(response["response"]["request_id"], "unsupported-1");
 }

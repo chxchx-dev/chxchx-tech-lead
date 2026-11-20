@@ -7,46 +7,16 @@
 pub use crate::integrations::agent_catalog::{AgentOptions, ModelOption};
 mod claude_runner;
 mod service_runner;
-use crate::integrations::executable_search::{agent_path, find_executable, find_in};
-pub use claude_runner::{prepare_native, runs_natively};
+use crate::integrations::executable_search::agent_path;
+pub use claude_runner::{missing_runner_hint, prepare_native, runs_natively};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
-use std::ffi::OsString;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-
-/// Variable that points Studio at the CLI to use (the same one the legacy Studio reads).
-pub const CLI_ENV: &str = "CHXCHX_TECH_CLI";
-
-/// What a CLI must print for `agent chat --help` to be the one that speaks the chat protocol.
-const REQUIRED_CHAT_OPTIONS: [&str; 6] = [
-    "--live",
-    "--resume-decided-by-rust",
-    "--resume-recap-file",
-    "--rust-context-file",
-    "--rust-chat-handoff",
-    "--no-auto-release",
-];
-
-pub(super) fn command(cli: &Path) -> Command {
-    let mut command = Command::new(cli);
-    // Python writes the console's code page to a pipe on Windows; the protocol is UTF-8.
-    command
-        .env("PYTHONIOENCODING", "utf-8")
-        .env("PYTHONUTF8", "1");
-    command.env("PATH", agent_path());
-    command.envs(super::process_memory::LEAN_ENV);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
-    command
-}
 
 /// What a finished process printed last. The process can be gone before the thread that reads
 /// its output has passed the final lines on, so this waits for that thread to end (its sender
@@ -98,90 +68,6 @@ pub(super) fn run_short(mut process: Command, limit: Duration) -> Result<(i32, S
     Ok((code, String::from_utf8_lossy(&bytes).into_owned()))
 }
 
-/// Whether this CLI is the one that runs chat turns (the Rust CLI, also named `chxchx-tech`, is not).
-pub fn supports_chat(cli: &Path) -> bool {
-    let mut process = command(cli);
-    // Typer/Rich shortens long options in narrow piped help output, which made a compatible CLI
-    // look too old to Studio. The probe needs the complete option names, not a terminal layout.
-    process.env("COLUMNS", "200");
-    process.args(["agent", "chat", "--help"]);
-    let chat = matches!(run_short(process, Duration::from_secs(20)), Ok((0, text)) if REQUIRED_CHAT_OPTIONS.iter().all(|option| text.contains(option)));
-    if !chat {
-        return false;
-    }
-    let mut handoff = command(cli);
-    handoff.args(["agent", "chat-handoff", "--help"]);
-    matches!(run_short(handoff, Duration::from_secs(20)), Ok((0, text)) if text.contains("--session") && text.contains("--prompt-file"))
-}
-
-fn candidates(project: &Path, path: &OsString) -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> = Vec::new();
-    if let Some(explicit) = std::env::var_os(CLI_ENV) {
-        found.push(PathBuf::from(explicit));
-    }
-    if let Some(on_path) = find_in("chxchx-tech", path) {
-        found.push(on_path);
-    }
-    // A checkout's own environment, next to the project or above the running binary.
-    let venv = |root: &Path| {
-        let folder = if cfg!(windows) { "Scripts" } else { "bin" };
-        root.join(".venv").join(folder).join(if cfg!(windows) {
-            "chxchx-tech.exe"
-        } else {
-            "chxchx-tech"
-        })
-    };
-    // The Python CLI that still serves the chat lives in `old-version/` until it is ported.
-    let old = |root: &Path| venv(&root.join("old-version"));
-    found.push(venv(project));
-    found.push(old(project));
-    if let Ok(exe) = std::env::current_exe() {
-        for root in exe.ancestors().skip(1).take(6) {
-            found.push(venv(root));
-            found.push(old(root));
-        }
-    }
-    // Never ourselves: `chxchx-tech` on the PATH may be this very program, which hands the
-    // legacy commands to the CLI this function is looking for.
-    let own = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.canonicalize().ok());
-    let mut unique: Vec<PathBuf> = Vec::new();
-    for candidate in found {
-        let is_own = own
-            .as_ref()
-            .is_some_and(|own| candidate.canonicalize().ok().as_ref() == Some(own));
-        if candidate.is_file() && !is_own && !unique.contains(&candidate) {
-            unique.push(candidate);
-        }
-    }
-    unique
-}
-
-/// The legacy CLI that serves the commands not ported yet, without probing it.
-pub fn legacy_cli(project: &Path) -> Option<PathBuf> {
-    let found = candidates(project, &agent_path());
-    // The one the installer names, then an environment of its own (`.venv`), and only then
-    // whatever `chxchx-tech` the PATH offers, which may be a shim that leads back here.
-    let explicit = std::env::var_os(CLI_ENV).map(PathBuf::from);
-    explicit
-        .filter(|path| found.contains(path))
-        .or_else(|| {
-            found
-                .iter()
-                .find(|c| c.components().any(|part| part.as_os_str() == ".venv"))
-                .cloned()
-        })
-        .or_else(|| found.into_iter().next())
-}
-
-/// The first CLI that speaks the chat protocol, or `None`.
-pub fn find_cli(project: &Path) -> Option<PathBuf> {
-    candidates(project, &agent_path())
-        .into_iter()
-        .find(|cli| supports_chat(cli))
-}
-
 /// Everything one chat turn needs; the same options `agent chat` takes.
 #[derive(Clone, Debug, Default)]
 pub struct TurnSpec {
@@ -225,9 +111,6 @@ pub struct Turn {
     context_window: Option<i64>,
     cancelled: bool,
     pending_claude: Arc<Mutex<HashMap<String, Value>>>,
-    prompt_file: PathBuf,
-    resume_recap_file: Option<PathBuf>,
-    rust_context_file: Option<PathBuf>,
     pub exit: Option<i32>,
     /// Events produced by Rust itself before the provider printed anything.
     pre_events: Vec<Value>,
@@ -341,282 +224,6 @@ fn spawn_stderr_reader(stderr: impl Read + Send + 'static, tail: Arc<Mutex<VecDe
 const INTERNAL_TURN_RESULT: &str = "chxchx_internal_turn_result";
 
 impl Turn {
-    pub fn start(cli: &Path, spec: &TurnSpec) -> Result<Self, String> {
-        // The prompt travels in a file: a command line has length limits and quoting rules.
-        let prompt_file = temporary_chat_file("prompt");
-        if let Err(error) = std::fs::write(&prompt_file, &spec.prompt) {
-            remove_turn_files(&prompt_file, None, None);
-            return Err(error.to_string());
-        }
-        // Studio prepares context only for a new provider session. If compaction cannot be done,
-        // leave the option out so the Python adapter can use its existing fallback path.
-        let pending_handoff = spec.session.as_deref().and_then(|session| {
-            crate::features::chat_handoff::load(&spec.project, &spec.provider, session)
-                .map(|text| (session.to_owned(), text))
-        });
-        let effective_session = if pending_handoff.is_some() {
-            None
-        } else {
-            spec.session
-                .as_deref()
-                .filter(|session| !session.is_empty())
-        };
-        let needs_new_context = effective_session.is_none();
-        let rust_context_file = if needs_new_context {
-            match crate::features::context_compaction::compact_context(&spec.project) {
-                Ok(result) => {
-                    let compacted_sections = result.moved_count();
-                    let path = temporary_chat_file("context");
-                    let context = super::chat_context::initial_context_with_memories(
-                        &spec.project,
-                        &spec.provider,
-                        &spec.recovered_memories,
-                    );
-                    let payload = serde_json::json!({
-                        "schema": "chxchx.studio-chat-context",
-                        "schema_version": 1,
-                        "context": context,
-                        "compacted_sections": compacted_sections,
-                    });
-                    match std::fs::write(&path, payload.to_string()) {
-                        Ok(()) => Some(path),
-                        Err(_) => {
-                            let _ = std::fs::remove_file(path);
-                            None
-                        }
-                    }
-                }
-                Err(_) => None,
-            }
-        } else {
-            None
-        };
-        let resume_recap = pending_handoff
-            .as_ref()
-            .map(|(_, text)| super::chat_context::handoff_block(text))
-            .unwrap_or_else(|| spec.resume_recap.clone());
-        let resume_recap_file = if resume_recap.is_empty() {
-            None
-        } else {
-            let path = temporary_chat_file("recap");
-            if let Err(error) = std::fs::write(&path, &resume_recap) {
-                remove_turn_files(&prompt_file, Some(&path), rust_context_file.as_deref());
-                return Err(error.to_string());
-            }
-            Some(path)
-        };
-        let mut process = command(cli);
-        process
-            .args(["agent", "chat", &spec.agent, "--path"])
-            .arg(&spec.project)
-            .arg("--prompt-file")
-            .arg(&prompt_file)
-            .args([
-                "--cancel-on-stdin",
-                "--live",
-                "--mode",
-                &spec.mode,
-                "--resume-decided-by-rust",
-                "--rust-chat-handoff",
-                "--no-auto-release",
-            ]);
-        if let Some(path) = &resume_recap_file {
-            process.arg("--resume-recap-file").arg(path);
-        }
-        if let Some(path) = &rust_context_file {
-            process.arg("--rust-context-file").arg(path);
-        }
-        if spec.network {
-            process.arg("--network");
-        }
-        for image in &spec.images {
-            process.arg("--image").arg(image);
-        }
-        for rule in &spec.allow {
-            process.args(["--allow", rule]);
-        }
-        let effective_session = effective_session.map(str::to_owned);
-        for (flag, value) in [
-            ("--session", &effective_session),
-            ("--model", &spec.model),
-            ("--effort", &spec.effort),
-        ] {
-            if let Some(value) = value.as_deref().filter(|v| !v.is_empty()) {
-                process.args([flag, value]);
-            }
-        }
-        let mut child = process
-            .current_dir(&spec.project)
-            // Rust Studio owns the visible transcript; the Python adapter only runs the provider.
-            .env("CHXCHX_RUST_CHAT_STATE", "1")
-            // Rust also prepares and records the Studio session journal.
-            .env("CHXCHX_RUST_CHAT_JOURNAL", "1")
-            // Rust recovers and persists explicit project-memory requests for Studio.
-            .env("CHXCHX_RUST_EXPLICIT_MEMORY", "1")
-            // Claude stream-json and non-live Codex JSONL are normalized by Rust at this boundary.
-            .env("CHXCHX_RUST_AGENT_STREAM", "1")
-            // Studio owns handoff persistence and release thresholds.
-            .env("CHXCHX_RUST_CHAT_HANDOFF", "1")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|error| {
-                remove_turn_files(
-                    &prompt_file,
-                    resume_recap_file.as_deref(),
-                    rust_context_file.as_deref(),
-                );
-                format!("No pude iniciar el CLI: {error}")
-            })?;
-        let stdin = child.stdin.take();
-        let Some(stdout) = child.stdout.take() else {
-            let _ = child.kill();
-            let _ = child.wait();
-            remove_turn_files(
-                &prompt_file,
-                resume_recap_file.as_deref(),
-                rust_context_file.as_deref(),
-            );
-            return Err("sin salida".into());
-        };
-        let Some(stderr) = child.stderr.take() else {
-            let _ = child.kill();
-            let _ = child.wait();
-            remove_turn_files(
-                &prompt_file,
-                resume_recap_file.as_deref(),
-                rust_context_file.as_deref(),
-            );
-            return Err("sin errores".into());
-        };
-        let (sender, events) = channel();
-        let pending_claude = Arc::new(Mutex::new(HashMap::new()));
-        spawn_event_reader(stdout, sender, pending_claude.clone(), None);
-        let tail = Arc::new(Mutex::new(VecDeque::new()));
-        spawn_stderr_reader(stderr, tail.clone());
-        Ok(Self {
-            child: Some(child),
-            stdin,
-            events,
-            stderr: tail,
-            provider: spec.provider.clone(),
-            kind: TurnKind::Chat,
-            handoff_text: String::new(),
-            consume_handoff_session: pending_handoff.map(|(session, _)| session),
-            context_tokens: None,
-            context_window: None,
-            cancelled: false,
-            pending_claude,
-            prompt_file,
-            resume_recap_file,
-            rust_context_file,
-            exit: None,
-            pre_events: Vec::new(),
-            native: None,
-        })
-    }
-
-    /// Starts the hidden, read-only provider turn that summarizes a nearly full session.
-    pub fn start_handoff(cli: &Path, spec: &TurnSpec) -> Result<Self, String> {
-        let session = spec
-            .session
-            .as_deref()
-            .filter(|session| !session.is_empty())
-            .ok_or("El handoff requiere una sesión activa")?;
-        let prompt_file = temporary_chat_file("handoff");
-        if let Err(error) = std::fs::write(&prompt_file, crate::features::chat_handoff::PROMPT) {
-            let _ = std::fs::remove_file(&prompt_file);
-            return Err(error.to_string());
-        }
-        let mut process = command(cli);
-        process
-            .args(["agent", "chat-handoff", &spec.agent, "--path"])
-            .arg(&spec.project)
-            .args(["--prompt-file"])
-            .arg(&prompt_file)
-            .arg("--cancel-on-stdin")
-            .args(["--session", session]);
-        for (flag, value) in [("--model", &spec.model), ("--effort", &spec.effort)] {
-            if let Some(value) = value.as_deref().filter(|value| !value.is_empty()) {
-                process.args([flag, value]);
-            }
-        }
-        let mut child = process
-            .current_dir(&spec.project)
-            .env("CHXCHX_RUST_CHAT_HANDOFF", "1")
-            // The adapter must normalize provider output so its internal command can capture text.
-            .env("CHXCHX_RUST_AGENT_STREAM", "0")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|error| {
-                let _ = std::fs::remove_file(&prompt_file);
-                format!("No pude iniciar el handoff del chat: {error}")
-            })?;
-        let stdin = child.stdin.take();
-        let Some(stdout) = child.stdout.take() else {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = std::fs::remove_file(&prompt_file);
-            return Err("sin salida para el handoff".into());
-        };
-        let Some(stderr) = child.stderr.take() else {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = std::fs::remove_file(&prompt_file);
-            return Err("sin errores para el handoff".into());
-        };
-        let (sender, events) = channel();
-        std::thread::spawn(move || {
-            let bounded =
-                stdout.take((crate::features::chat_handoff::MAX_HANDOFF_CHARS * 4 + 4096) as u64);
-            for line in BufReader::new(bounded).split(b'\n').map_while(Result::ok) {
-                if let Ok(value) = serde_json::from_slice::<Value>(&line)
-                    && sender.send(value).is_err()
-                {
-                    return;
-                }
-            }
-            super::wake::notify_after_end();
-        });
-        let tail = Arc::new(Mutex::new(VecDeque::new()));
-        let collector = tail.clone();
-        std::thread::spawn(move || {
-            for line in BufReader::new(stderr).split(b'\n').map_while(Result::ok) {
-                if let Ok(mut lines) = collector.lock() {
-                    if lines.len() == 20 {
-                        lines.pop_front();
-                    }
-                    lines.push_back(String::from_utf8_lossy(&line).into_owned());
-                }
-            }
-        });
-        Ok(Self {
-            child: Some(child),
-            stdin,
-            events,
-            stderr: tail,
-            provider: spec.provider.clone(),
-            kind: TurnKind::Handoff {
-                session_id: session.to_owned(),
-            },
-            handoff_text: String::new(),
-            consume_handoff_session: None,
-            context_tokens: None,
-            context_window: None,
-            cancelled: false,
-            pending_claude: Arc::new(Mutex::new(HashMap::new())),
-            prompt_file,
-            resume_recap_file: None,
-            rust_context_file: None,
-            exit: None,
-            pre_events: Vec::new(),
-            native: None,
-        })
-    }
-
     /// Events printed since the last call.
     pub fn poll(&mut self) -> Vec<Value> {
         let mut found = std::mem::take(&mut self.pre_events);
@@ -780,11 +387,6 @@ impl Turn {
 
 impl Drop for Turn {
     fn drop(&mut self) {
-        remove_turn_files(
-            &self.prompt_file,
-            self.resume_recap_file.as_deref(),
-            self.rust_context_file.as_deref(),
-        );
         if self.exit.is_some() {
             return;
         }
@@ -805,22 +407,6 @@ impl Drop for Turn {
             });
         }
     }
-}
-
-fn remove_turn_files(prompt: &Path, recap: Option<&Path>, context: Option<&Path>) {
-    for file in [Some(prompt), recap, context].into_iter().flatten() {
-        let _ = std::fs::remove_file(file);
-    }
-}
-
-fn temporary_chat_file(kind: &str) -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "chxchx-chat-{kind}-{}-{}.txt",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_nanos())
-    ))
 }
 
 fn text(value: &Value, key: &str) -> String {
@@ -905,21 +491,6 @@ pub fn restore_chat_for_provider(
 /// A new chat starts from nothing.
 pub fn reset_chat(project: &Path, agent: &str) {
     crate::features::chat_state::reset(project, agent);
-}
-
-/// Where Studio would look for the CLI, for the message when none is found.
-pub fn missing_cli_hint() -> String {
-    let path = find_executable("chxchx-tech")
-        .map(|found| {
-            format!(
-                " (en el PATH está {}, pero no habla el protocolo del chat)",
-                found.display()
-            )
-        })
-        .unwrap_or_default();
-    format!(
-        "No encontré el CLI de agentes (chxchx-tech con `agent chat`){path}. Instala ChxChx Studio 0.5 o define {CLI_ENV} con su ruta."
-    )
 }
 
 #[cfg(all(test, unix))]

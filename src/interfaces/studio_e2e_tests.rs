@@ -8,7 +8,6 @@ use crate::integrations::chat_bridge as bridge;
 use crate::integrations::local_models as models;
 use crate::integrations::slash_commands;
 use crate::integrations::studio_update as updates;
-use serde_json::json;
 use std::os::unix::fs::PermissionsExt;
 use std::time::{Duration, Instant};
 
@@ -31,87 +30,32 @@ fn sandbox() -> PathBuf {
     dir
 }
 
-const EVENT: &str = r#"{"schema":"chxchx.agent-event","schema_version":1,"type":"#;
-
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-/// The CLI the app talks to, answering every command it uses with canned but realistic JSON.
-fn fake_cli(dir: &Path) -> PathBuf {
-    let log = dir.join("prompts.log");
-    let session = shell_quote(&serde_json::json!({
-        "schema":"chxchx.agent-event", "schema_version":1, "type":"provider_record", "provider":"Claude",
-        "record":{"type":"system", "subtype":"init", "session_id":"s-1"}
-    }).to_string());
-    let reply = shell_quote(&serde_json::json!({
-        "schema":"chxchx.agent-event", "schema_version":1, "type":"provider_record", "provider":"Claude",
-        "record":{"type":"assistant", "message":{"content":[{"type":"text", "text":"Hola, soy el agente de prueba."}]}}
-    }).to_string());
-    let usage = shell_quote(&serde_json::json!({
-        "schema":"chxchx.agent-event", "schema_version":1, "type":"provider_record", "provider":"Claude",
-        "record":{"type":"result", "is_error":false, "total_cost_usd":0.01,
-            "usage":{"input_tokens":12, "output_tokens":7}}
-    }).to_string());
-    let script = format!(
-        r##"#!/bin/sh
-printf '%s\n' "$*" >> "{log}.commands"
-case "$1 $2" in
-  "bridge local-models") echo '{{"schema":"chxchx.local-models","schema_version":1,"hardware":{{"total_ram_bytes":17179869184,"available_ram_bytes":8589934592,"cpu_cores":8,"disk_free_bytes":500000000000,"models_dir":"/m","accelerator":"sin GPU"}},"ollama":{{"installed":true,"running":true,"version":"0.9","base_url":"http://127.0.0.1:11434","install":{{"command":null,"url":"u"}},"models":[],"loaded":[]}},"opencode":{{"installed":true,"install_hint":"h","configured_models":[]}},"context":32768,"models":[{{"tag":"qwen2.5-coder:7b","label":"Qwen2.5 Coder 7B","size_bytes":5000000000,"context_k":32,"note":"n","fit":"cpu","required_bytes":7000000000,"disk_ok":true,"summary":"s","recommended":true,"downloaded":false,"loaded":false,"configured":false}}]}}';;
-  "local-models setup")
-    printf '%s\n' '{{"type":"step","step":"download","model":"qwen2.5-coder:7b"}}' '{{"type":"progress","model":"qwen2.5-coder:7b","status":"pulling","completed":50,"total":100}}' '{{"type":"done","model":"ollama/qwen2.5-coder:7b-ctx32k","changed":true}}';;
-  "bridge studio-update")
-    if [ "$3" = "--apply" ]; then echo '{{"schema":"chxchx.studio-update","current_version":"0.5.3","latest_version":"0.6.0a1","available":true,"updated":true}}';
-    else echo '{{"schema":"chxchx.studio-update","current_version":"0.5.3","latest_version":"0.6.0a1","available":true,"updated":false}}'; fi;;
-  "agent chat")
-    if [ "$3" = "--help" ]; then echo "Usage: agent chat --live"; exit 0; fi
-    [ "$CHXCHX_RUST_CHAT_STATE" = "1" ] || exit 91
-    [ "$CHXCHX_RUST_AGENT_STREAM" = "1" ] || exit 92
-    file=$(echo "$@" | sed 's/.*--prompt-file \([^ ]*\).*/\1/'); cat "$file" >> "{log}"; echo >> "{log}"
-    printf '%s\n' '{e}"start"}}' {session} {reply} {usage} '{e}"done","exit_code":0,"session_id":"s-1"}}';;
-  *) echo "comando inesperado: $*" >&2; exit 2;;
-esac
-"##,
-        log = log.display(),
-        e = EVENT,
-        session = session,
-        reply = reply,
-        usage = usage
-    );
-    let path = dir.join("chxchx-tech");
-    std::fs::write(&path, script).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    path
-}
-
-/// A minimal chat adapter whose provider stdout contains raw OpenCode JSONL records.
-fn fake_opencode_cli(dir: &Path) -> PathBuf {
-    let records = [
-        json!({"type":"step_start", "sessionID":"ses-e2e"}),
-        json!({"type":"text", "part":{"text":"OpenCode respondió."}}),
-        json!({"type":"tool_use", "part":{"callID":"tool-e2e", "tool":"shell", "state":{
-            "status":"error", "input":{"command":"echo hola"},
-            "error":"This non-interactive run cannot ask the user for permission; request rejected."}}}),
-        json!({"type":"step_finish", "part":{"cost":0.02,
-            "tokens":{"input":40, "output":9, "cache":{"read":10, "write":5}}}}),
+/// The agent-adapter service as Studio sees it: it answers `contract` and, for `run`, prints the
+/// events the real service prints for an OpenCode turn.
+fn fake_adapter(dir: &Path) -> PathBuf {
+    let events = [
+        r#"{"type":"session","session_id":"ses-e2e"}"#,
+        r#"{"type":"message","role":"assistant","text":"OpenCode respondió."}"#,
+        r#"{"type":"permission","live":false,"id":"tool-e2e","tool":"shell","summary":"echo hola","detail":"","certain":true,"choices":[{"label":"Permitir esta vez","allow":["bash"],"network":false,"mode":null,"persist":false}]}"#,
+        r#"{"type":"usage","input_tokens":55,"output_tokens":9,"cost_usd":0.02}"#,
+        r#"{"type":"adapter_done","exit_code":0,"cancelled":false,"session_id":"ses-e2e"}"#,
     ]
-    .iter()
-    .map(|record| {
-        shell_quote(
-            &json!({
-                "schema":"chxchx.agent-event", "schema_version":1, "type":"provider_record",
-                "provider":"OpenCode", "record":record
-            })
-            .to_string(),
-        )
+    .map(|event| {
+        let mut full = serde_json::from_str::<serde_json::Value>(event).unwrap();
+        full["schema"] = "chxchx.agent-event".into();
+        full["schema_version"] = 1.into();
+        shell_quote(&full.to_string())
     })
-    .collect::<Vec<_>>()
     .join(" ");
     let script = format!(
-        "#!/bin/sh\nif [ \"$3\" = \"--help\" ]; then echo 'Usage: agent chat --live'; exit 0; fi\nprintf '%s\\n' {records}\nprintf '%s\\n' '{{\"schema\":\"chxchx.agent-event\",\"schema_version\":1,\"type\":\"done\",\"exit_code\":0}}'\n",
-        records = records,
+        "#!/bin/sh\nif [ \"$1\" = contract ]; then echo '{{\"schema\":\"chxchx.agent-adapter\",\"contract_version\":1,\"version\":\"test\",\"providers\":[\"Codex\",\"OpenCode\"]}}'; exit 0; fi\nread -r request\nprintf '%s\\n' \"$request\" > \"{log}\"\nprintf '%s\\n' {events}\ncat >/dev/null\n",
+        log = dir.join("adapter-request.json").display(),
     );
-    let path = dir.join("chxchx-tech-opencode");
+    let path = dir.join("chxchx-agent-adapter");
     std::fs::write(&path, script).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
     path
@@ -212,7 +156,7 @@ fn until(what: &str, mut done: impl FnMut() -> bool) {
 }
 
 /// What `chat::open` does off the UI thread, then the message it sends back.
-fn open_chat(state: &mut Dashboard, cli: &Path, agent: &Agent) {
+fn open_chat(state: &mut Dashboard, agent: &Agent) {
     let _ = chat::update(state, chat::Event::Open(agent.clone()));
     let root = state.root.clone();
     let provider_root = root.join(".provider-fixtures");
@@ -224,7 +168,6 @@ fn open_chat(state: &mut Dashboard, cli: &Path, agent: &Agent) {
     std::fs::create_dir_all(opencode_config.join("opencode")).unwrap();
     std::fs::write(claude_config.join("settings.json"), r#"{"model":"sonnet"}"#).unwrap();
     let prepared = (
-        Some(cli.to_path_buf()),
         bridge::restore_chat(&root, &agent.id),
         Ok(crate::integrations::agent_catalog::options_in(
             agent,
@@ -248,7 +191,6 @@ fn open_chat(state: &mut Dashboard, cli: &Path, agent: &Agent) {
 #[test]
 fn studio_restores_chat_state_in_rust_without_calling_python_chat_state() {
     let dir = sandbox();
-    let cli = fake_cli(&dir);
     let saved = dir.join(".ai/chat-state/claude.json");
     std::fs::create_dir_all(saved.parent().unwrap()).unwrap();
     std::fs::write(
@@ -258,7 +200,7 @@ fn studio_restores_chat_state_in_rust_without_calling_python_chat_state() {
     .unwrap();
 
     let mut state = studio(&dir);
-    open_chat(&mut state, &cli, &agent("claude", Provider::Claude));
+    open_chat(&mut state, &agent("claude", Provider::Claude));
 
     let chat = &state.chat.chats[0];
     assert_eq!(chat.model.session_id, "session-1");
@@ -290,11 +232,10 @@ fn wait_for_answer(state: &mut Dashboard) {
 #[test]
 fn a_conversation_from_opening_the_chat_to_the_answer() {
     let dir = sandbox();
-    let cli = fake_cli(&dir);
     let mut state = studio(&dir);
     let claude = claude_agent(&dir);
 
-    open_chat(&mut state, &cli, &claude);
+    open_chat(&mut state, &claude);
     let chat = &state.chat.chats[0];
     assert!(
         !chat.preparing && chat.problem.is_none(),
@@ -370,9 +311,8 @@ fn a_conversation_from_opening_the_chat_to_the_answer() {
 #[test]
 fn studio_persists_explicit_memory_requests_but_skips_secrets_and_injected_text() {
     let dir = sandbox();
-    let cli = fake_cli(&dir);
     let mut state = studio(&dir);
-    open_chat(&mut state, &cli, &claude_agent(&dir));
+    open_chat(&mut state, &claude_agent(&dir));
 
     say(
         &mut state,
@@ -394,9 +334,9 @@ fn studio_persists_explicit_memory_requests_but_skips_secrets_and_injected_text(
 #[test]
 fn opencode_raw_events_flow_through_the_studio_chat() {
     let dir = sandbox();
-    let cli = fake_opencode_cli(&dir);
+    crate::integrations::agent_adapter::set_known_for_tests(fake_adapter(&dir));
     let mut state = studio(&dir);
-    open_chat(&mut state, &cli, &agent("opencode", Provider::OpenCode));
+    open_chat(&mut state, &agent("opencode", Provider::OpenCode));
 
     say(&mut state, "Revisa el proyecto");
     wait_for_answer(&mut state);
@@ -429,9 +369,8 @@ use crate::features::chat_model::Kind as model_kind;
 #[test]
 fn a_project_command_travels_as_typed_and_a_chat_command_stays_in_the_app() {
     let dir = sandbox();
-    let cli = fake_cli(&dir);
     let mut state = studio(&dir);
-    open_chat(&mut state, &cli, &claude_agent(&dir));
+    open_chat(&mut state, &claude_agent(&dir));
 
     say(&mut state, "/revisar src");
     wait_for_answer(&mut state);
@@ -456,10 +395,9 @@ fn a_project_command_travels_as_typed_and_a_chat_command_stays_in_the_app() {
 #[test]
 fn two_chats_keep_their_own_model() {
     let dir = sandbox();
-    let cli = fake_cli(&dir);
     let mut state = studio(&dir);
-    open_chat(&mut state, &cli, &agent("claude", Provider::Claude));
-    open_chat(&mut state, &cli, &agent("opencode", Provider::OpenCode));
+    open_chat(&mut state, &agent("claude", Provider::Claude));
+    open_chat(&mut state, &agent("opencode", Provider::OpenCode));
     let _ = chat::update(
         &mut state,
         chat::Event::For(
@@ -577,9 +515,8 @@ fn checking_for_updates_from_the_menu_offers_the_download_of_a_newer_release() {
 #[test]
 fn opening_a_file_brings_the_editor_back_over_chats_and_a_markdown_file_previews() {
     let dir = sandbox();
-    let cli = fake_cli(&dir);
     let mut state = studio(&dir);
-    open_chat(&mut state, &cli, &agent("claude", Provider::Claude));
+    open_chat(&mut state, &agent("claude", Provider::Claude));
     let pane = state.panes.find(|c| *c == panes::Content::Editor).unwrap();
     assert_ne!(
         state.panes.grid.get(pane).unwrap().current(),

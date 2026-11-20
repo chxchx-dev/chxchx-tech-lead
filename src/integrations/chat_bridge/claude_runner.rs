@@ -41,6 +41,15 @@ pub fn runs_natively(agent: &crate::features::agents::Agent) -> bool {
         }
 }
 
+/// Why Codex or OpenCode cannot chat even though they are installed: the service that drives
+/// them was not found. `None` when the agent can run, or is not installed at all.
+pub fn missing_runner_hint(agent: &crate::features::agents::Agent) -> Option<String> {
+    (agent.executable.is_some()
+        && matches!(agent.provider, Provider::Codex | Provider::OpenCode)
+        && !runs_natively(agent))
+    .then(agent_adapter::missing_hint)
+}
+
 /// Looks for the service and reads what the agent needs to know before its first turn, so the
 /// answer of `runs_natively` is right afterwards. Runs processes: call it off the UI thread.
 pub fn prepare_native(agent: &crate::features::agents::Agent, project: &Path) -> bool {
@@ -266,26 +275,26 @@ fn stop(pid: u32) {
 }
 
 impl Turn {
-    /// Starts a chat turn: Claude runs here, any other provider goes through `cli`.
-    pub fn launch(cli: Option<&Path>, spec: &TurnSpec) -> Result<Self, String> {
+    /// Starts a chat turn: Claude runs here; Codex and OpenCode go through the agent-adapter service.
+    pub fn launch(spec: &TurnSpec) -> Result<Self, String> {
         if spec.provider == "Claude" && spec.executable.is_some() {
             return Self::start_claude(spec);
         }
         if let Some(adapter) = service_for(spec) {
             return Self::start_service(&adapter, spec);
         }
-        Self::start(cli.ok_or_else(missing_cli_hint)?, spec)
+        Err(unavailable(spec))
     }
 
     /// Starts the hidden summary turn of a nearly full session.
-    pub fn launch_handoff(cli: Option<&Path>, spec: &TurnSpec) -> Result<Self, String> {
+    pub fn launch_handoff(spec: &TurnSpec) -> Result<Self, String> {
         if spec.provider == "Claude" && spec.executable.is_some() {
             return Self::start_claude_handoff(spec);
         }
         if let Some(adapter) = service_for(spec) {
             return Self::start_service_handoff(&adapter, spec);
         }
-        Self::start_handoff(cli.ok_or_else(missing_cli_hint)?, spec)
+        Err(unavailable(spec))
     }
 
     fn start_claude(spec: &TurnSpec) -> Result<Self, String> {
@@ -411,9 +420,6 @@ impl Turn {
             context_window: None,
             cancelled: false,
             pending_claude,
-            prompt_file: PathBuf::new(),
-            resume_recap_file: None,
-            rust_context_file: None,
             exit: None,
             pre_events: Vec::new(),
             native: Some(NativeRun {
@@ -500,6 +506,15 @@ impl Turn {
             "done",
             serde_json::json!({"exit_code": code, "cancelled": cancelled, "session_id": session}),
         )]
+    }
+}
+
+/// Why this agent cannot run a turn: its program is missing, or the service that drives it.
+fn unavailable(spec: &TurnSpec) -> String {
+    match spec.provider.as_str() {
+        "Codex" | "OpenCode" if spec.executable.is_some() => agent_adapter::missing_hint(),
+        "Codex" | "OpenCode" => format!("{} no está instalado.", spec.provider),
+        other => format!("El chat visual no conduce a `{other}`."),
     }
 }
 

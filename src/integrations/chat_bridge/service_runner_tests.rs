@@ -362,3 +362,16 @@ fn the_real_service_drives_a_fake_codex_for_a_rust_turn() {
     assert_eq!(done["session_id"], "thread-fake-1");
     assert_eq!(turn.exit, Some(0));
 }
+
+#[test]
+fn context_usage_from_the_service_decides_when_the_context_is_released() {
+    let dir = scratch("limits");
+    let limits = r#"{"schema":"chxchx.agent-event","schema_version":1,"type":"limits","context_tokens":900,"context_window":1000}"#;
+    let adapter = fake_adapter(&dir, &format!("{}{}cat >/dev/null", say(limits), say(DONE)));
+    let mut turn = Turn::start_service(&adapter, &spec(&dir, "Codex")).unwrap();
+
+    wait_done(&mut turn);
+
+    assert!(turn.needs_context_release());
+    assert!(!turn.was_cancelled());
+}

@@ -258,7 +258,6 @@ fn a_model_chosen_before_the_chat_is_ready_survives_its_preparation() {
         &mut state,
         "claude",
         &(
-            None,
             bridge::SavedChat::default(),
             Ok(options),
             Vec::new(),
@@ -400,7 +399,7 @@ fn studio_releases_context_generates_a_hidden_handoff_and_consumes_it_after_a_fr
         trusted: true,
         ..Default::default()
     };
-    state.chat.chats[0].turn = Some(Turn::launch(None, &spec).unwrap());
+    state.chat.chats[0].turn = Some(Turn::launch(&spec).unwrap());
 
     let drain = |state: &mut Dashboard| {
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -446,7 +445,7 @@ fn studio_releases_context_generates_a_hidden_handoff_and_consumes_it_after_a_fr
         trusted: true,
         ..Default::default()
     };
-    state.chat.chats[0].turn = Some(Turn::launch(None, &next).unwrap());
+    state.chat.chats[0].turn = Some(Turn::launch(&next).unwrap());
     drain(&mut state);
 
     assert!(

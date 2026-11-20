@@ -147,6 +147,22 @@ pub fn locate(project: Option<&Path>) -> Option<PathBuf> {
     found
 }
 
+/// What to tell someone whose Codex or OpenCode chat cannot start because the service is missing.
+pub fn missing_hint() -> String {
+    format!(
+        "No encontré el servicio de agentes de ChxChx (`{PROGRAM}`), que conduce a Codex y OpenCode. \
+         Reinstala ChxChx, o en un checkout ejecuta `uv sync` en services/agent-adapter, o define {ENV} con su ruta."
+    )
+}
+
+/// Tests: pretend this is the service found on this machine.
+#[cfg(test)]
+pub fn set_known_for_tests(path: PathBuf) {
+    if let Ok(mut known) = located().lock() {
+        *known = Some(path);
+    }
+}
+
 /// The service if it was already found, without looking again (safe on the UI thread).
 pub fn known() -> Option<PathBuf> {
     located().lock().ok().and_then(|known| known.clone())

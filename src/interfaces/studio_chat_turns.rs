@@ -47,16 +47,11 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         state.message = "Concede confianza al proyecto para hablar con un agente.".into();
         return false;
     }
-    let (root, cli) = (state.root.clone(), state.chat.cli.clone());
+    let root = state.root.clone();
     let Some(chat) = state.chat.chats.get_mut(state.chat.active) else {
         return false;
     };
     if chat.turn.is_some() || chat.preparing || chat.problem.is_some() {
-        return false;
-    }
-    // Claude runs without the Python CLI; every other provider still needs it.
-    if cli.is_none() && !bridge::runs_natively(&chat.agent) {
-        state.message = bridge::missing_cli_hint();
         return false;
     }
     let mut allow = chat.approved.clone();
@@ -86,7 +81,7 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         trusted: true, // checked above: nothing starts in an untrusted project
     };
     let visible_prompt = shown(display.unwrap_or(prompt), attached.len());
-    match Turn::launch(cli.as_deref(), &spec) {
+    match Turn::launch(&spec) {
         Ok(turn) => {
             if show {
                 let _ = crate::features::chat_state::begin_turn(

@@ -124,7 +124,6 @@ pub(super) struct Chat {
 pub(super) struct State {
     pub chats: Vec<Chat>,
     pub active: usize,
-    cli: Option<PathBuf>,
 }
 
 impl State {
@@ -142,7 +141,6 @@ impl State {
 }
 
 type Prepared = (
-    Option<PathBuf>,
     SavedChat,
     Result<AgentOptions, String>,
     Vec<crate::integrations::slash_commands::Found>,
@@ -395,7 +393,6 @@ fn with_chat(state: &mut Dashboard, apply: impl FnOnce(&mut Chat)) {
 }
 
 fn tick(state: &mut Dashboard) {
-    let chat_cli = state.chat.cli.clone();
     for chat in &mut state.chat.chats {
         if let Some(turn) = chat.turn.as_mut() {
             for event in turn.poll() {
@@ -521,22 +518,15 @@ fn tick(state: &mut Dashboard) {
                 state.message = format!("No pude retirar el traspaso ya recibido: {error}");
             }
             if release_context {
-                if chat_cli.is_some() || bridge::runs_natively(&chat.agent) {
-                    let spec = handoff_turn_spec(chat, &state.root);
-                    match Turn::launch_handoff(chat_cli.as_deref(), &spec) {
-                        Ok(handoff) => chat.turn = Some(handoff),
-                        Err(error) => {
-                            let _ = chat.model.apply(&json!({
-                                "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
-                                "type": "notice", "message": format!("No pude liberar el contexto; sigo con la conversación actual. {error}"),
-                            }));
-                        }
+                let spec = handoff_turn_spec(chat, &state.root);
+                match Turn::launch_handoff(&spec) {
+                    Ok(handoff) => chat.turn = Some(handoff),
+                    Err(error) => {
+                        let _ = chat.model.apply(&json!({
+                            "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
+                            "type": "notice", "message": format!("No pude liberar el contexto; sigo con la conversación actual. {error}"),
+                        }));
                     }
-                } else {
-                    chat.model.apply(&json!({
-                        "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
-                        "type": "notice", "message": "No pude liberar el contexto; sigo con la conversación actual.",
-                    }));
                 }
             }
         }
