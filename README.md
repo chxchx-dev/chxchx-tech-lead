@@ -49,7 +49,7 @@ del proyecto y comparten la lógica:
 
 Atajos: `st` (status) · `dr` (doctor) · `sk` (skills) · `ws` (workspace) · `pr` (projects). El CLI Rust incluye
 `local-models status|setup|remove`, `process list|start|stop|log`,
-`workspace start|stop|suspend|resume`, `resources` y `agent chat-state` para restaurar o reiniciar el historial. Studio lee y guarda el historial en Rust, y obtiene en Rust los modelos y niveles de esfuerzo disponibles; la ejecución de turnos y los comandos pendientes (`agent`,
+`workspace start|stop|suspend|resume|memory-prune`, `resources` y `agent chat-state` para restaurar o reiniciar el historial. `workspace memory-prune --dry-run` muestra capturas automáticas inválidas antes de quitarlas; al aplicar, conserva notas propias y deja un backup. Studio lee y guarda el historial en Rust, y obtiene en Rust los modelos y niveles de esfuerzo disponibles; la ejecución de turnos y los comandos pendientes (`agent`,
 `bridge`, `run`, `ci`, `deploy`…) todavía dependen del CLI Python que acompaña a la instalación mientras se
 completa la migración.
 
@@ -153,7 +153,7 @@ símbolos y tablas; si la rediriges o usas `NO_COLOR`, sigue siendo el texto pla
 | `status` | Resume el proyecto sin escribir ni iniciar procesos |
 | `init` | Previsualiza (y con `--apply` crea) configuración y guías |
 | `rollback` | Restaura los archivos administrados desde el último respaldo |
-| `workspace` | Gestiona la confianza local del proyecto |
+| `workspace` | Gestiona confianza, ciclo de procesos y poda de memoria explícita (`memory-prune --dry-run` previsualiza) |
 | `skills` · `packs` · `mods` | Catálogo de skills, Tech Packs y Mods |
 | `integrate` | Configura los servidores de memoria y código (basic-memory, Serena) |
 | `connectors` (`conn`) | Conecta tus agentes con Excel, Power BI, bases de datos… (`list`, `add`, `remove`, `custom`); ver [CONECTORES.md](CONECTORES.md) |
@@ -215,11 +215,12 @@ cargo run --release --features visual-installer --bin chxchx-installer
 # o, de una vez: ./scripts/studio-rust.sh
 ```
 
-> **Migración en curso:** el historial visual (`agent chat-state`) ya se lee y reinicia en Rust. Esta versión aún delega
-> los turnos del chat y algunos comandos al CLI Python de [`old-version/`](old-version/), que es temporal y se retirará
-> al completar el port y las pruebas. La arquitectura final no deja código de producto allí; cualquier runtime Python o
-> C++ indispensable vivirá como servicio independiente fuera de esa carpeta y se integrará mediante Rust. Los modelos
-> locales ya se diagnostican y configuran desde Rust y Ollama.
+> **Migración en curso:** el historial visual (`agent chat-state`) ya se lee y reinicia en Rust. Studio también recupera
+> en segundo plano solicitudes explícitas de memoria desde historiales Codex, Claude y OpenCode del proyecto actual.
+> Claude Code corre desde Rust; Codex y OpenCode los conduce el servicio
+> [`services/agent-adapter/`](services/agent-adapter/) mediante un contrato versionado. Los comandos del CLI Python
+> anterior se portaron o se retiraron, y `old-version/` ya no existe. Los modelos locales se diagnostican y configuran
+> desde Rust y Ollama.
 
 ## Actualizaciones
 
@@ -255,8 +256,8 @@ libera, recorta lo que el chat no necesita y lanza los agentes con ajustes que r
 ├── MANUAL.md       Manual técnico: capacidades, seguridad y decisiones
 ├── MEMORIA.md      Guía de gestión de memoria
 ├── CONECTORES.md   Guía de los conectores MCP (Excel, Power BI, bases de datos…)
-├── old-version/    fuente temporal de capacidades todavía en migración; se elimina al cerrar paridad
-└── services/       servicios auxiliares solo si un runtime externo resulta imprescindible
+├── packaging/      Instaladores (install.sh, install.ps1), manifiesto del release y sus pruebas
+└── services/       Servicios con runtime ajeno a Rust (agent-adapter), con contrato versionado y pruebas propias
 ```
 
 ## Desarrollo
@@ -272,4 +273,4 @@ los procesos e integraciones externas viven en `integrations/`. Más reglas en [
 
 ## Estado
 
-Versión `0.6.3`. Los modelos locales ya tienen diagnóstico, instalación, retirada y configuración nativos en Rust. El historial de chat también se restaura y reinicia en Rust, con pruebas unitarias y e2e. Sigue pendiente portar los turnos y adapters del chat, actualización y comandos Python restantes, retirar el runtime Python del empaquetado y eliminar `old-version/` después de la verificación completa. También falta completar la QA en macOS y Linux.
+Versión `0.6.3`. Los modelos locales ya tienen diagnóstico, instalación, retirada y configuración nativos en Rust. El historial de chat se restaura y reinicia en Rust, y Studio backfillea en segundo plano solicitudes explícitas desde Codex, Claude y OpenCode. `old-version/` se eliminó: el chat de Claude corre desde Rust, el de Codex y OpenCode desde el servicio `agent-adapter`, y el actualizador avisa y abre la descarga. Falta QA nativa en Windows/macOS y verificar los builds de release con el servicio empaquetado.

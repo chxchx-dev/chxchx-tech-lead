@@ -1,4 +1,0 @@
-name = "chxchx-dotnet-csharp"
-description = "C# y .NET: nulabilidad, async correcto, inyección de dependencias y pruebas."
-stacks = ["dotnet"]
-languages = ["csharp"]

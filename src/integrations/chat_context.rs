@@ -87,6 +87,28 @@ pub fn inline_project_context(project_root: &Path, provider: &str) -> String {
     )
 }
 
+/// Context prepared by Rust for a fresh Studio chat, after context compaction has run.
+pub fn initial_context(project_root: &Path, provider: &str) -> String {
+    initial_context_with_memories(project_root, provider, "")
+}
+
+/// Add provider history recovered by Studio's background preparation task.
+pub fn initial_context_with_memories(
+    project_root: &Path,
+    provider: &str,
+    provider_memories: &str,
+) -> String {
+    let recovered = crate::features::explicit_memory::prepare_new_chat(project_root);
+    let mut context = new_chat_prompt(project_root);
+    context.push_str(&inline_project_context(project_root, provider));
+    context.push_str(&recovered);
+    context.push_str(provider_memories);
+    context.push_str(&crate::features::chat_journal::recent_sessions_prompt(
+        project_root,
+    ));
+    context
+}
+
 fn read_prefix(path: &Path, max_bytes: usize) -> Option<(String, bool)> {
     let mut file = fs::File::open(path).ok()?;
     let length = file.metadata().ok()?.len();
@@ -124,8 +146,7 @@ pub fn first_message(
     handoff: &str,
     recap: &str,
 ) -> String {
-    let mut context = new_chat_prompt(project_root);
-    context.push_str(&inline_project_context(project_root, provider));
+    let mut context = initial_context(project_root, provider);
     context.push_str(recovered);
     if !handoff.is_empty() {
         context.push_str(&handoff_block(handoff));

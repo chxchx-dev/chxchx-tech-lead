@@ -1,14 +1,11 @@
 //! One command to open everything: `chxchx-tech` alone, or with a folder, opens the best
-//! interface for where it runs; commands that belong to the legacy CLI (agent, bridge,
-//! local-models…) are handed to it, so a single name serves the whole product.
-use crate::integrations::chat_bridge::legacy_cli;
+//! interface for where it runs. Commands of the earlier Python CLI that were not carried over say
+//! where their function lives now instead of failing with a bare "unknown command".
 use std::ffi::OsString;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
+#[cfg(feature = "studio")]
 use std::process::Command;
-
-/// Set on the legacy CLI we start, so a command it does not know can never come back here.
-const DELEGATED: &str = "CHXCHX_DELEGATED";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Choice {
@@ -107,30 +104,57 @@ pub fn folder_argument(arguments: &[OsString]) -> Option<PathBuf> {
     (arguments.len() == 1 && Path::new(first).is_dir()).then(|| PathBuf::from(first))
 }
 
-/// Runs a command the legacy CLI owns and returns its exit code.
-pub fn delegate(arguments: &[OsString]) -> Result<i32, String> {
+/// What to tell someone who types a command of the earlier CLI that this product no longer has.
+/// `scope` is the command group it was typed under (`""`, `workspace`, `projects`, `agent`).
+pub fn retired(scope: &str, arguments: &[OsString]) -> String {
     let name = arguments
         .first()
-        .map(|a| a.to_string_lossy().into_owned())
+        .map(|argument| argument.to_string_lossy().into_owned())
         .unwrap_or_default();
-    if std::env::var_os(DELEGATED).is_some() {
-        return Err(format!(
-            "`{name}` no es un comando de ChxChx. Mira `chxchx-tech --help`."
-        ));
-    }
-    let project = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let Some(cli) = legacy_cli(&project) else {
-        return Err(format!(
-            "`{name}` no es un comando de esta versión. Los comandos heredados (agent, bridge, local-models…) \
-             necesitan el CLI de Python que acompaña a la instalación (o CHXCHX_TECH_CLI); mira `chxchx-tech --help`."
-        ));
+    let studio = "abre el Studio (`chxchx-tech studio .`)";
+    let guidance = match (scope, name.as_str()) {
+        ("", "run" | "attach" | "stop") => {
+            format!("usa `workspace start` y `workspace stop`, o {studio}")
+        }
+        ("", "ci" | "deploy") => {
+            "ya no existe: la integración CI/CD de proyectos no forma parte del producto".to_owned()
+        }
+        ("", "editor") => format!("el editor está en el Studio: {studio}"),
+        ("", "bridge") => "era el contrato interno del Studio anterior; ya no existe".to_owned(),
+        ("", "install" | "setup") => {
+            "usa `init . --apply` para preparar un proyecto, o el instalador visual".to_owned()
+        }
+        ("", "sync") => "usa `projects sync`".to_owned(),
+        ("", "skill") => "ahora es `skills`".to_owned(),
+        ("", "pack") => "ahora es `packs`".to_owned(),
+        ("", "mod") => "ahora es `mods`".to_owned(),
+        ("workspace", "attach" | "terminal" | "open") => {
+            format!("las terminales y sesiones viven en el Studio: {studio}")
+        }
+        ("workspace", "status") => "usa `status`".to_owned(),
+        ("workspace", "handoff") => {
+            "el traspaso de contexto lo hace el Studio al llenarse el chat".to_owned()
+        }
+        ("projects", "prepare") => "usa `init . --apply`".to_owned(),
+        ("agent" | "", "chat" | "chat-handoff")
+        | ("agent", "add" | "start" | "attach" | "preflight" | "list" | "status")
+        | ("agent", "") => {
+            "los agentes se abren desde el Studio o el TUI (`chxchx-tech tui .`); `agent chat-state` sigue disponible".to_owned()
+        }
+        _ => {
+            let command = if scope.is_empty() {
+                name.clone()
+            } else {
+                format!("{scope} {name}")
+            };
+            return format!("`{command}` no es un comando de ChxChx. Mira `chxchx-tech --help`.");
+        }
     };
-    Command::new(cli)
-        .args(arguments)
-        .env(DELEGATED, "1")
-        .status()
-        .map(|status| status.code().unwrap_or(1))
-        .map_err(|error| format!("No se pudo ejecutar `{name}`: {error}"))
+    let command = match (scope, name.as_str()) {
+        ("", _) | ("agent", "") => name,
+        _ => format!("{scope} {name}"),
+    };
+    format!("`{}` se retiró: {guidance}.", command.trim())
 }
 
 #[cfg(test)]

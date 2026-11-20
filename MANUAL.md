@@ -194,12 +194,30 @@ panel Agentes y en la página de inicio. Abre una pestaña «Chat · agente» en
 (Markdown), tarjetas de herramientas y razonamiento, **permisos en vivo** (permitir, permitir y recordar,
 denegar), preguntas del agente, nivel de acceso (solo lectura, editar, editar y ejecutar, acceso total), red,
 modelo y esfuerzo, **uso de tokens y coste**, contexto con su liberación automática al 90 % y límites del plan.
-La conversación se guarda y se recupera al reabrir; «Nuevo chat» empieza de cero. En esta versión, Studio delega los
-turnos en `chxchx-tech agent chat --live` del CLI Python temporal (se busca en `$CHXCHX_TECH_CLI`, el PATH y el
-`.venv` de `old-version/`). Esta dependencia se retirará cuando el runner Rust tenga paridad y pruebas completas. La
-arquitectura final no conserva código en `old-version/`; cualquier runtime Python o C++ imprescindible se distribuirá
-como servicio independiente, con contrato y pruebas, enlazado desde un adapter Rust. Sin confianza del proyecto no se
-inicia ningún turno.
+La conversación se guarda y se recupera al reabrir; «Nuevo chat» empieza de cero. Claude Code corre directamente desde
+Rust. Codex y OpenCode los conduce el servicio `services/agent-adapter/` (Python, solo biblioteca estándar) mediante un
+contrato versionado (`chxchx.agent-adapter` v1): Rust decide la política (trust, acceso, contexto) y el servicio solo
+habla el protocolo en vivo de cada proveedor. Studio lo busca en `$CHXCHX_AGENT_ADAPTER`, junto al binario, en el
+`.venv` de un checkout (`uv sync` en `services/agent-adapter`) y en el PATH. Sin confianza del proyecto no se inicia
+ningún turno.
+
+### Memoria explícita
+
+Studio guarda en `.ai/memory/PROJECT_MEMORY.md` las solicitudes directas de recordar que aparecen en sus
+transcripts visibles, omitiendo bloques inyectados y posibles secretos. Al abrir un chat y al iniciar **Nuevo chat**,
+también recupera en segundo plano solicitudes explícitas desde hasta diez conversaciones recientes por proveedor,
+Codex, Claude y OpenCode, del proyecto actual. Lee solo mensajes del usuario, con límites por transcript, y las
+deduplica antes de agregarlas. OpenCode usa su CLI oficial con export sanitizado. Para revisar capturas automáticas
+antiguas:
+
+```bash
+chxchx-tech workspace memory-prune . --dry-run # previsualiza sin escribir
+chxchx-tech workspace memory-prune .            # aplica y guarda un backup fuera del proyecto
+```
+
+El comando solo evalúa secciones que ChxChx marcó como capturas automáticas; mantiene las notas manuales y
+elimina entradas inválidas o duplicadas. Si la escritura falla, el original permanece respaldado en
+`$CHXCHX_TECH_HOME/backups/` (o `~/.chxchx-tech-lead/backups/`).
 
 ## Windows
 

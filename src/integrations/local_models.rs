@@ -534,14 +534,14 @@ fn memory_bytes() -> (u64, u64) {
     }
     #[cfg(target_os = "macos")]
     {
-        let total = std::process::Command::new("sysctl")
+        let total = std::process::Command::new("/usr/sbin/sysctl")
             .args(["-n", "hw.memsize"])
             .output()
             .ok()
             .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse().ok())
             .unwrap_or(0);
         let page = 4096_u64;
-        let free = std::process::Command::new("vm_stat")
+        let free = std::process::Command::new("/usr/bin/vm_stat")
             .output()
             .ok()
             .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
@@ -563,7 +563,7 @@ fn memory_bytes() -> (u64, u64) {
                     .saturating_mul(page)
             })
             .unwrap_or(0);
-        return (total, free);
+        (total, free)
     }
     #[cfg(windows)]
     {
@@ -1558,7 +1558,6 @@ pub fn run_cli(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     const SAMPLE: &str = r#"{"schema":"chxchx.local-models","schema_version":1,
       "hardware":{"total_ram_bytes":22975639552,"available_ram_bytes":13642752000,"cpu_cores":8,

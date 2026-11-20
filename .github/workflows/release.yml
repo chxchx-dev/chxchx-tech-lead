@@ -1,7 +1,7 @@
 name: Studio release (Rust)
 
 # Builds the Rust product and visual installers for every supported platform in the layout the installed updater expects
-# (bin/chxchx-studio, a macOS .app, a Windows zip and MSI, plus the CLI wheel) and, only when asked,
+# (bin/chxchx-studio, a macOS .app, a Windows zip and MSI, plus the agent-adapter service wheel) and, only when asked,
 # replaces the rolling `studio-dev-preview` release that machines on the `dev` channel read.
 # `dev` replaces the rolling `studio-dev-preview` prerelease; `stable` publishes the release
 # `v<version>` that every installed Studio on the stable channel updates to. Run it by hand:
@@ -32,7 +32,7 @@ env:
 
 jobs:
   check-version:
-    name: Cargo and the CLI wheel report the same version
+    name: The tag and Cargo.toml report a releasable version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,16 +41,11 @@ jobs:
         run: |
           version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
           [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "El tag $GITHUB_REF_NAME no coincide con la versión $version de Cargo.toml."; exit 1; }
-      - name: Compare versions
+      - name: A stable release is X.Y.Z
         run: |
           python3 - <<'PY'
           import re, tomllib
           cargo = tomllib.load(open("Cargo.toml", "rb"))["package"]["version"]
-          py = tomllib.load(open("old-version/pyproject.toml", "rb"))["project"]["version"]
-          # 0.6.0-alpha.1 (semver) is 0.6.0a1 (PEP 440).
-          normalized = re.sub(r"-(alpha|beta|rc)\.?(\d+)", lambda m: {"alpha": "a", "beta": "b", "rc": "rc"}[m[1]] + m[2], cargo)
-          if normalized != py:
-              raise SystemExit(f"Cargo.toml ({cargo}) y pyproject.toml ({py}) no son la misma versión.")
           if "${{ (inputs.channel || (github.ref_type == 'tag' && 'stable' || 'dev')) }}" == "stable" and not re.fullmatch(r"\d+\.\d+\.\d+", cargo):
               raise SystemExit(f"Una versión estable debe ser X.Y.Z; Cargo.toml dice {cargo}.")
           print("Versión del producto:", cargo)
@@ -74,8 +69,9 @@ jobs:
             libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev
       - uses: astral-sh/setup-uv@v5
       - name: Test the Linux installer, managed PATH and future command shims
-        run: uv run --locked pytest tests/installers/test_install_sh.py
-        working-directory: old-version
+        run: |
+          python3 -m pip install pytest
+          python3 -m pytest packaging/tests/test_install_sh.py
       - run: cargo build --locked --release --features visual-installer
       - name: Package (bin/chxchx-studio inside one folder)
         run: |
@@ -86,7 +82,7 @@ jobs:
           for binary in target/release/chxchx target/release/chxchx-*; do
             [ -x "$binary" ] || continue
             case "${binary##*/}" in
-              chxchx-studio|chxchx-installer|chxchx-python-helper) continue ;;
+              chxchx-studio|chxchx-installer|chxchx-agent-adapter) continue ;;
             esac
             cp "$binary" "$root/bin/"
           done
@@ -171,7 +167,7 @@ jobs:
           New-Item -ItemType Directory -Force "$root/bin" | Out-Null
           Copy-Item target/release/chxchx-studio.exe "$root/bin/"
           Get-ChildItem target/release -File -Filter 'chxchx*.exe' |
-            Where-Object { $_.Name -notin @('chxchx-studio.exe', 'chxchx-installer.exe', 'chxchx-python-helper.exe') } |
+            Where-Object { $_.Name -notin @('chxchx-studio.exe', 'chxchx-installer.exe', 'chxchx-agent-adapter.exe') } |
             ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination "$root/bin/" }
           foreach ($Name in 'chxchx-tech.exe', 'chxchx.exe') {
             if (-not (Test-Path "$root/bin/$Name")) { throw "Falta $Name en el ZIP." }
@@ -214,7 +210,7 @@ jobs:
           for binary in target/${{ matrix.target }}/release/chxchx target/${{ matrix.target }}/release/chxchx-*; do
             [ -x "$binary" ] || continue
             case "${binary##*/}" in
-              chxchx-studio|chxchx-installer|chxchx-python-helper) continue ;;
+              chxchx-studio|chxchx-installer|chxchx-agent-adapter) continue ;;
             esac
             cp "$binary" "$app/Contents/MacOS/"
           done
@@ -287,24 +283,24 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-  cli-wheel:
-    name: CLI wheel (chat, local models and the updater)
+  agent-adapter-wheel:
+    name: Agent-adapter service wheel (Codex and OpenCode)
     needs: check-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv build --wheel --out-dir dist
-        working-directory: old-version
+        working-directory: services/agent-adapter
       - uses: actions/upload-artifact@v4
         with:
-          name: cli-wheel
-          path: old-version/dist/*.whl
+          name: agent-adapter-wheel
+          path: services/agent-adapter/dist/*.whl
           if-no-files-found: error
 
   stage:
     name: Stage the assets and the manifest
-    needs: [linux, windows, macos, cli-wheel]
+    needs: [linux, windows, macos, agent-adapter-wheel]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -328,7 +324,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: macos-x86_64-installer-package, path: dist/downloads/macos-installer-x86_64 }
       - uses: actions/download-artifact@v4
-        with: { name: cli-wheel, path: dist/downloads/cli-wheel }
+        with: { name: agent-adapter-wheel, path: dist/downloads/agent-adapter-wheel }
       - name: Write the manifest and checksums
         run: |
           if [ "${{ (inputs.channel || (github.ref_type == 'tag' && 'stable' || 'dev')) }}" = "stable" ]; then
@@ -337,7 +333,7 @@ jobs:
           else
             channel=dev; tag=studio-dev-preview
           fi
-          python3 old-version/scripts/release_assets.py --root old-version \
+          python3 packaging/release_assets.py --root . \
             --channel "$channel" --tag "$tag" --commit "$GITHUB_SHA" \
             --downloads dist/downloads --output dist/release \
             --skip windows-setup --skip windows-arm64
@@ -361,7 +357,7 @@ jobs:
           grep -q 'bin/chxchx-tech.exe' <<<"$windows" || { echo "El paquete Windows no trae bin/chxchx-tech.exe"; exit 1; }
           grep -q 'bin/chxchx.exe' <<<"$windows" || { echo "El paquete Windows no trae bin/chxchx.exe"; exit 1; }
           ls chxchx-studio-windows-x86_64.msi chxchx-studio-macos-arm64.dmg chxchx-studio-macos-x86_64.dmg \
-            chxchx-installer-macos-arm64.dmg chxchx-installer-macos-x86_64.dmg chxchx_tech_lead-*.whl
+            chxchx-installer-macos-arm64.dmg chxchx-installer-macos-x86_64.dmg chxchx_agent_adapter-*.whl
       - uses: actions/upload-artifact@v4
         with:
           name: release-assets

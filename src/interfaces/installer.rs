@@ -7,7 +7,7 @@ use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 use std::time::Duration;
 
-const INSTALL_SCRIPT: &str = include_str!("../../old-version/scripts/install.sh");
+const INSTALL_SCRIPT: &str = include_str!("../../packaging/install.sh");
 const MAX_LOG_LINES: usize = 500;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

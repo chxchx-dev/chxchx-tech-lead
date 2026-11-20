@@ -133,3 +133,53 @@ fn opencode_permission_maps_cover_read_only_full_and_chat_allow_rules() {
         "OPENCODE_PERMISSION"
     );
 }
+
+#[test]
+fn opencode_two_gets_an_ordered_ruleset_where_approved_rules_win() {
+    let rules = |mode: &str, network: bool, allow: &[&str]| -> Vec<serde_json::Value> {
+        let access = Access::new(
+            mode,
+            network,
+            allow.iter().map(|rule| (*rule).to_owned()).collect(),
+        )
+        .unwrap();
+        let env = opencode_environment_for(&access, Some(2));
+        let (name, value) = env.first().cloned().unwrap_or_default();
+        assert_eq!(name, "OPENCODE_CONFIG_CONTENT");
+        serde_json::from_str::<serde_json::Value>(&value).unwrap()["permissions"]
+            .as_array()
+            .unwrap()
+            .clone()
+    };
+    let rule = |action: &str, effect: &str, resource: &str| serde_json::json!({"action": action, "resource": resource, "effect": effect});
+
+    assert_eq!(
+        rules("read-only", false, &[]),
+        [rule("edit", "deny", "*"), rule("shell", "deny", "*")]
+    );
+    assert!(rules("workspace-write", false, &[]).contains(&rule("shell", "ask", "*")));
+    let commands = rules("workspace-commands", true, &[]);
+    assert!(commands.contains(&rule("shell", "allow", "*")));
+    assert!(commands.contains(&rule("webfetch", "allow", "*")));
+    let approved = rules("workspace-write", false, &["bash:git *", "webfetch"]);
+    assert_eq!(
+        approved[approved.len() - 2..],
+        [
+            rule("shell", "allow", "git *"),
+            rule("webfetch", "allow", "*")
+        ]
+    );
+}
+
+#[test]
+fn opencode_two_full_access_sets_nothing_and_older_versions_keep_the_map() {
+    let full = Access::new("full-access", false, Vec::new()).unwrap();
+    assert!(opencode_environment_for(&full, Some(2)).is_empty());
+    let read = Access::new("read-only", false, Vec::new()).unwrap();
+    for major in [None, Some(1)] {
+        assert_eq!(
+            opencode_environment_for(&read, major)[0].0,
+            "OPENCODE_PERMISSION"
+        );
+    }
+}

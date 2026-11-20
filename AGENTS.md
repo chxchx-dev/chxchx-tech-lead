@@ -7,7 +7,7 @@ Este repositorio construye un bootstrapper cross-platform para preparar reposito
 ## Estructura del repositorio
 
 - La raíz es el producto **Rust** (`Cargo.toml`, `src/`, `tests/`, `assets/`, `catalog/`, `build.rs`): CLI, TUI y Studio (Iced).
-- `old-version/` es una fuente temporal durante la migración; el estado final del repositorio no debe contener código, instaladores, pruebas ni artefactos del producto en esa carpeta. Las capacidades pendientes se portan a Rust o se retiran explícitamente. Si una dependencia requiere Python o C++ sin alternativa viable, su implementación vive como servicio independiente en `services/<nombre>/`, fuera de `old-version/`, con un contrato versionado, ciclo de vida y empaquetado propios, pruebas del servicio y e2e desde Rust. Su adapter pertenece a `src/integrations/` y el producto Rust conserva trust, configuración, validación de entradas, límites de proceso, cancelación y reporte de errores.
+- `old-version/` ya no existe y no debe volver a crearse. Las capacidades que falten se portan a Rust o se retiran explícitamente. Si una dependencia requiere Python o C++ sin alternativa viable, su implementación vive como servicio independiente en `services/<nombre>/` (hoy `services/agent-adapter/`), con un contrato versionado, ciclo de vida y empaquetado propios, pruebas del servicio y e2e desde Rust. Su adapter pertenece a `src/integrations/` y el producto Rust conserva trust, configuración, validación de entradas, límites de proceso, cancelación y reporte de errores.
 
 ## Cómo se guía a la IA
 
@@ -88,7 +88,7 @@ el plan de trabajo vigente está en `.ai/ROADMAP.md`.
 El producto es un paquete Rust (`chxchx-tech`) con CLI, TUI y Studio nativo en
 Iced. Las interfaces invocan capacidades compartidas y adapters; no duplican
 lógica de procesos, confianza, recursos o integraciones. No se conserva una
-segunda aplicación en `old-version/`. Si una dependencia obliga a mantener código
+segunda aplicación. Si una dependencia obliga a mantener código
 Python o C++, se aísla como servicio en `services/<nombre>/`, con contrato
 versionado, distribución y pruebas propias, y se conecta mediante un adapter
 Rust en `src/integrations/`. Consulta `.ai/PROJECT.md`,

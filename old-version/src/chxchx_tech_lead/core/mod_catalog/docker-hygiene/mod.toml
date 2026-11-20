@@ -1,3 +1,0 @@
-name = "chxchx-docker-hygiene"
-description = "Imágenes y composes pequeños, reproducibles y sin secretos."
-stacks = ["docker"]

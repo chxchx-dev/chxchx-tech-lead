@@ -699,7 +699,7 @@ fn pid_matches(pid: u32, command: &Value, shell: bool) -> bool {
     }
     #[cfg(all(unix, not(target_os = "linux")))]
     {
-        if let Ok(output) = Command::new("ps")
+        if let Ok(output) = Command::new("/bin/ps")
             .args(["-p", &pid.to_string(), "-o", "command="])
             .output()
         {

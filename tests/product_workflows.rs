@@ -120,6 +120,70 @@ fn minimal_init_previews_without_writes_and_apply_is_idempotent() {
 }
 
 #[test]
+fn rust_cli_previews_and_prunes_automatic_memory_with_a_recoverable_backup() {
+    let sandbox = Sandbox::new();
+    let memory_path = sandbox.path(".ai/memory/PROJECT_MEMORY.md");
+    fs::create_dir_all(memory_path.parent().unwrap()).unwrap();
+    let entry = |text: &str| {
+        format!(
+            "### Petición explícita de memoria — 2026-11-18\n\n<!-- explicit-memory:Claude:s1:0123456789ab -->\nOrigen: Claude, conversación `s1`.\n\n> {text}\n"
+        )
+    };
+    let original = format!(
+        "# Memoria\n\n## Notas propias\n\nUsamos Qt 6.8.\n\n{}\n{}\n{}\n{}\n## Más notas\n\nNo tocar.\n",
+        entry("Revisa el uso de memoria RAM."),
+        entry("Recuerda que el deploy es los viernes."),
+        entry("recuerda que el deploy es los viernes."),
+        entry("Recuerda mi contraseña: no-guardar-esta.")
+    );
+    fs::write(&memory_path, &original).unwrap();
+
+    let mut preview_args = command(&["workspace", "memory-prune"], &sandbox.project);
+    preview_args.push("--dry-run".into());
+    let preview = sandbox.cli(preview_args);
+    let preview_text = assert_success(&preview);
+    assert!(
+        preview_text.contains("se retirarían 3 entrada(s)"),
+        "{preview_text}"
+    );
+    assert!(preview_text.contains("memoria RAM"));
+    assert_eq!(fs::read_to_string(&memory_path).unwrap(), original);
+    assert!(!sandbox.home.join("backups").exists());
+
+    let applied = sandbox.cli(command(&["workspace", "memory-prune"], &sandbox.project));
+    let applied_text = assert_success(&applied);
+    assert!(
+        applied_text.contains("Retiradas 3 entrada(s)"),
+        "{applied_text}"
+    );
+    assert!(applied_text.contains("Backup:"), "{applied_text}");
+    let pruned = fs::read_to_string(&memory_path).unwrap();
+    assert!(pruned.contains("Usamos Qt 6.8."));
+    assert!(pruned.contains("No tocar."));
+    assert_eq!(pruned.matches("Recuerda que el deploy").count(), 1);
+    assert!(!pruned.contains("memoria RAM"));
+    assert!(!pruned.contains("no-guardar-esta"));
+
+    let project_backup = fs::read_dir(sandbox.home.join("backups"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let backup_dir = fs::read_dir(project_backup.join("memory"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let backup_file = backup_dir.join("PROJECT_MEMORY.md");
+    assert_eq!(fs::read_to_string(&backup_file).unwrap(), original);
+
+    let repeated = sandbox.cli(command(&["workspace", "memory-prune"], &sandbox.project));
+    assert!(assert_success(&repeated).contains("ya está limpia"));
+}
+
+#[test]
 fn trust_requires_apply_and_untrust_removes_only_the_project_entry() {
     let sandbox = Sandbox::new();
     let trust_file = sandbox.home.join("trusted_projects.json");
@@ -707,45 +771,28 @@ fn one_command_serves_everything_and_a_pipe_gets_the_help() {
     }
 }
 
-#[cfg(unix)]
 #[test]
-fn commands_of_the_legacy_cli_are_handed_over_with_their_arguments_and_exit_code() {
-    use std::os::unix::fs::PermissionsExt;
+fn commands_of_the_earlier_cli_fail_with_the_place_their_function_moved_to() {
     let sandbox = Sandbox::new();
-    let legacy = sandbox.root.join("legacy-cli");
-    fs::write(
-        &legacy,
-        "#!/bin/sh\necho \"legacy: $* (delegated=$CHXCHX_DELEGATED)\"\nexit 3\n",
-    )
-    .unwrap();
-    fs::set_permissions(&legacy, fs::Permissions::from_mode(0o755)).unwrap();
-    let tech = env!("CARGO_BIN_EXE_chxchx-tech");
-    let env = [("CHXCHX_TECH_CLI", legacy.to_str().unwrap())];
-
-    let out = headless(&sandbox, tech, &["agent", "chat", "claude", "--live"], &env);
-    assert_eq!(out.status.code(), Some(3), "the legacy exit code is ours");
-    assert!(
-        text(&out).contains("legacy: agent chat claude --live (delegated=1)"),
-        "{}",
-        text(&out)
-    );
-
-    // A legacy CLI that sends the command back must not start a loop.
-    let looped = headless(
-        &sandbox,
-        tech,
-        &["agent"],
-        &[
-            ("CHXCHX_DELEGATED", "1"),
-            ("CHXCHX_TECH_CLI", legacy.to_str().unwrap()),
-        ],
-    );
-    assert_eq!(looped.status.code(), Some(1));
-    assert!(
-        text(&looped).contains("no es un comando de ChxChx"),
-        "{}",
-        text(&looped)
-    );
+    for (words, expected) in [
+        (vec!["ci", "run"], "CI/CD"),
+        (vec!["deploy", "status"], "CI/CD"),
+        (vec!["sync"], "projects sync"),
+        (vec!["workspace", "terminal"], "Studio"),
+        (vec!["projects", "prepare"], "init"),
+        (vec!["agent", "chat", "claude", "--live"], "chat-state"),
+        (vec!["agent"], "tui"),
+    ] {
+        let out = sandbox.cli(words.iter().map(OsString::from));
+        assert_eq!(out.status.code(), Some(1), "{words:?}");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("se retiró") && stderr.contains(expected),
+            "{words:?}: {stderr}"
+        );
+    }
+    let unknown = sandbox.cli(["quizas"].map(OsString::from));
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("no es un comando de ChxChx"));
 }
 
 #[test]
@@ -1015,4 +1062,229 @@ fn a_secret_never_reaches_the_project_and_custom_servers_and_mistakes_are_handle
     );
     assert!(!broken.status.success());
     assert_eq!(read(&sandbox.path("opencode.json")), "{ roto");
+}
+
+/// Registers a project in the sandbox's catalog next to the ones already there.
+#[cfg(unix)]
+fn register_project(sandbox: &Sandbox, alias: &str, folder: &Path) {
+    let file = sandbox.home.join("projects.json");
+    let mut document: serde_json::Value = fs::read(&file)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_else(|| serde_json::json!({"projects": []}));
+    document["projects"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "alias": alias, "name": alias, "path": folder, "profile": "generic", "stacks": []
+        }));
+    fs::write(file, document.to_string()).unwrap();
+}
+
+#[cfg(unix)]
+fn worker_project(sandbox: &Sandbox, name: &str) -> PathBuf {
+    let folder = sandbox.root.join(name);
+    fs::create_dir_all(folder.join(".ai")).unwrap();
+    fs::write(
+        folder.join(".ai/chxchx-tech.toml"),
+        format!("version=2\n[workspace]\nname='{name}'\nauto_start=true\n[[workspace.processes]]\nid='worker'\nlabel='Worker'\ncommand=['/bin/sleep','30']\ncwd='.'\nauto_start=true\n"),
+    )
+    .unwrap();
+    let folder = folder.canonicalize().unwrap();
+    let trust = sandbox.cli(command(&["workspace", "trust", "--apply"], &folder));
+    assert_success(&trust);
+    folder
+}
+
+#[cfg(unix)]
+#[test]
+fn switching_projects_suspends_the_active_one_starts_the_target_and_remembers_it() {
+    let sandbox = Sandbox::new();
+    let (first, second) = (
+        worker_project(&sandbox, "uno"),
+        worker_project(&sandbox, "dos"),
+    );
+    register_project(&sandbox, "uno", &first);
+    register_project(&sandbox, "dos", &second);
+    let status = |folder: &Path| -> String {
+        let state: serde_json::Value =
+            serde_json::from_slice(&fs::read(sandbox.home.join("workspace-state.json")).unwrap())
+                .unwrap();
+        state["workspaces"][folder.display().to_string()]["status"]
+            .as_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+
+    assert_success(&sandbox.cli(["projects", "switch", "uno"].map(OsString::from)));
+    assert_eq!(status(&first), "ACTIVE");
+
+    let preview = sandbox.cli(["projects", "switch", "dos", "--dry-run"].map(OsString::from));
+    let text = assert_success(&preview);
+    assert!(text.contains("DRY RUN: workspace suspendido"), "{text}");
+    assert_eq!(status(&first), "ACTIVE", "a preview changes nothing");
+    let registry: serde_json::Value =
+        serde_json::from_slice(&fs::read(sandbox.home.join("projects.json")).unwrap()).unwrap();
+    assert_eq!(registry["last_project"], first.display().to_string());
+
+    let switched = assert_success(&sandbox.cli(["projects", "switch", "dos"].map(OsString::from)));
+    assert!(
+        switched.contains("proyecto activo: dos (dos)"),
+        "{switched}"
+    );
+    assert_eq!(status(&first), "SUSPENDED");
+    assert_eq!(status(&second), "ACTIVE");
+    let registry: serde_json::Value =
+        serde_json::from_slice(&fs::read(sandbox.home.join("projects.json")).unwrap()).unwrap();
+    assert_eq!(registry["last_project"], second.display().to_string());
+    assert_eq!(
+        registry["projects"].as_array().unwrap().len(),
+        2,
+        "the catalog is kept"
+    );
+    assert_success(
+        &sandbox.cli(
+            ["workspace", "stop"]
+                .into_iter()
+                .map(OsString::from)
+                .chain([second.as_os_str().to_owned()]),
+        ),
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_switch_that_cannot_start_the_target_leaves_the_others_alone() {
+    let sandbox = Sandbox::new();
+    let active = worker_project(&sandbox, "activo");
+    register_project(&sandbox, "activo", &active);
+    let untrusted = sandbox.root.join("sin-confianza");
+    fs::create_dir_all(untrusted.join(".ai")).unwrap();
+    fs::write(
+        untrusted.join(".ai/chxchx-tech.toml"),
+        "version=2\n[workspace]\nname='x'\n",
+    )
+    .unwrap();
+    register_project(
+        &sandbox,
+        "sin-confianza",
+        &untrusted.canonicalize().unwrap(),
+    );
+    assert_success(&sandbox.cli(["projects", "switch", "activo"].map(OsString::from)));
+
+    let refused = sandbox.cli(["projects", "switch", "sin-confianza"].map(OsString::from));
+
+    assert!(!refused.status.success());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("no es confiable"));
+    let state: serde_json::Value =
+        serde_json::from_slice(&fs::read(sandbox.home.join("workspace-state.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        state["workspaces"][active.display().to_string()]["status"],
+        "ACTIVE"
+    );
+    let unknown = sandbox.cli(["projects", "switch", "nadie"].map(OsString::from));
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("alias"));
+    assert_success(
+        &sandbox.cli(
+            ["workspace", "stop"]
+                .into_iter()
+                .map(OsString::from)
+                .chain([active.as_os_str().to_owned()]),
+        ),
+    );
+}
+
+#[test]
+fn reported_errors_are_listed_redacted_and_scoped_to_their_project() {
+    let sandbox = Sandbox::new();
+    let report = sandbox.cli(
+        [
+            "workspace",
+            "report-error",
+            "--operation",
+            "login",
+            "--message",
+            "falló con token=abc123 al entrar",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .chain([sandbox.project.as_os_str().to_owned()]),
+    );
+    assert_success(&report);
+
+    let all = assert_success(&sandbox.cli(["workspace", "errors"].map(OsString::from)));
+    assert!(
+        all.contains("login") && all.contains("token=[REDACTED]"),
+        "{all}"
+    );
+    assert!(!all.contains("abc123"), "{all}");
+    let scoped = assert_success(&sandbox.cli(command(&["workspace", "errors"], &sandbox.project)));
+    assert!(scoped.contains("login"), "{scoped}");
+    let other = sandbox.root.join("otro");
+    fs::create_dir_all(&other).unwrap();
+    let none = assert_success(&sandbox.cli(command(&["workspace", "errors"], &other)));
+    assert!(none.contains("No hay errores guardados"), "{none}");
+}
+
+#[test]
+fn a_failing_workspace_command_leaves_its_error_in_the_list() {
+    let sandbox = Sandbox::new();
+    let refused = sandbox.cli(command(&["workspace", "start"], &sandbox.project));
+    assert!(
+        !refused.status.success(),
+        "an untrusted project cannot start"
+    );
+
+    let listed = assert_success(&sandbox.cli(["workspace", "errors"].map(OsString::from)));
+
+    assert!(
+        listed.contains("workspace start") && listed.contains("no es confiable"),
+        "{listed}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn tools_install_previews_skips_what_is_present_and_runs_uv_for_the_rest() {
+    use std::os::unix::fs::PermissionsExt;
+    let sandbox = Sandbox::new();
+    let tools = sandbox.root.join("tool-bin");
+    fs::create_dir_all(&tools).unwrap();
+    fs::write(tools.join("basic-memory"), "").unwrap();
+    let uv = sandbox.bin.join("uv");
+    fs::write(
+        &uv,
+        "#!/bin/sh\necho \"$*\" >> \"$UV_TOOL_BIN_DIR/uv.log\"\n: > \"$UV_TOOL_BIN_DIR/serena\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(&uv, fs::Permissions::from_mode(0o755)).unwrap();
+    let run = |args: &[&str]| {
+        let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_chxchx-tech"));
+        cmd.args(args)
+            .env("CHXCHX_TECH_HOME", &sandbox.home)
+            .env("PATH", &sandbox.bin)
+            .env("UV_TOOL_BIN_DIR", &tools);
+        cmd.output().unwrap()
+    };
+
+    let preview = run(&["tools", "install", "--dry-run"]);
+    let text = assert_success(&preview);
+    assert!(text.contains("basic-memory: ya está instalado"), "{text}");
+    assert!(
+        text.contains("DRY RUN:") && text.contains("serena-agent"),
+        "{text}"
+    );
+    assert!(!tools.join("serena").exists());
+
+    let real = assert_success(&run(&["tools", "install"]));
+    assert!(real.contains("serena: instalado"), "{real}");
+    assert!(
+        fs::read_to_string(tools.join("uv.log"))
+            .unwrap()
+            .contains("tool install -p 3.13 serena-agent")
+    );
+    let again = assert_success(&run(&["tools", "install", "serena"]));
+    assert!(again.contains("serena: ya está instalado"), "{again}");
+    assert!(!run(&["tools", "install", "nada"]).status.success());
 }

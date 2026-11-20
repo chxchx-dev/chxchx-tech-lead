@@ -1,3 +1,0 @@
-name = "chxchx-llm-apps"
-description = "Aplicaciones con modelos de lenguaje: prompts versionados, evaluación y seguridad."
-stacks = ["ai"]

@@ -1,0 +1,342 @@
+"""Fake `codex` and `opencode` live servers that behave like the real CLIs' contracts.
+
+They are real processes found through PATH, so argv, stdin, environment,
+exit codes and JSON-lines output are exercised exactly as in production.
+Each writes what it received to the JSON-lines file named by FAKE_CLI_LOG.
+"""
+
+from __future__ import annotations
+
+import os
+import stat
+import sys
+from pathlib import Path
+
+
+# `opencode serve`, picking the 1.x or 2.x fake by FAKE_OPENCODE_VERSION as the real binary would differ.
+OPENCODE = r'''
+import os, runpy, sys
+if sys.argv[1:2] != ["serve"]:
+    sys.exit("the service only runs `opencode serve`")
+name = "opencode-serve-v2-fake.py" if os.environ.get("FAKE_OPENCODE_VERSION", "1").startswith("2") else "opencode-serve-fake.py"
+runpy.run_path(os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), name), run_name="__main__")
+'''
+
+
+# A `opencode serve` (HTTP + server-sent events) that asks the host before it acts, like the real one.
+OPENCODE_SERVE = r'''
+import base64, http.server, json, os, queue, sys, threading, time
+log = os.environ.get("FAKE_CLI_LOG")
+password = os.environ.get("OPENCODE_SERVER_PASSWORD", "")
+def note(**fields):
+    if log:
+        with open(log, "a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"tool": "opencode-serve", **fields}) + "\n")
+note(argv=sys.argv[1:], permission=os.environ.get("OPENCODE_PERMISSION"), has_password=bool(password))
+listeners, lock = [], threading.Lock()
+replies = {}
+def publish(kind, **props):
+    with lock:
+        for q in listeners:
+            q.put({"type": kind, "properties": props})
+def wait_reply(request_id):
+    for _ in range(300):
+        if request_id in replies:
+            return replies[request_id]
+        time.sleep(0.05)
+    return None
+def scenario(session, text):
+    base = {"sessionID": session}
+    publish("session.status", **base, status={"type": "busy"})
+    publish("message.updated", **base, info={"id": "msg_u", "role": "user"})
+    publish("message.updated", **base, info={"id": "msg_a", "role": "assistant"})
+    reply = None
+    if "PERMISO" in text:
+        publish("permission.asked", id="per_1", sessionID=session, permission="bash", patterns=["python3 -V"],
+                metadata={"command": "python3 -V"}, always=["python3 *"], tool={"messageID": "msg_a", "callID": "call_1"})
+        reply = wait_reply("per_1")
+        part = {"id": "prt_t", "messageID": "msg_a", "sessionID": session, "type": "tool", "tool": "bash", "callID": "call_1",
+                "state": {"status": "completed" if reply == "once" else "error", "input": {"command": "python3 -V"}, "output": "Python 3.11",
+                          "error": "The user rejected permission to use this specific tool call."}}
+        publish("message.part.updated", **base, part=part)
+        answer = "decision: " + json.dumps(reply)
+    elif "PREGUNTA" in text:
+        publish("question.asked", id="que_1", sessionID=session, questions=[
+            {"question": "Color?", "header": "Color", "options": [{"label": "Rojo", "description": ""}, {"label": "Azul", "description": ""}], "multiple": False}])
+        reply = wait_reply("que_1")
+        answer = "respuesta: " + json.dumps(reply, ensure_ascii=False)
+    else:
+        answer = "eco: " + text.strip().splitlines()[-1]
+    publish("message.part.updated", **base, part={"id": "prt_x", "messageID": "msg_a", "sessionID": session, "type": "text", "text": answer, "time": {"start": 1, "end": 2}})
+    publish("message.part.updated", **base, part={"id": "prt_s", "messageID": "msg_a", "sessionID": session, "type": "step-finish",
+            "cost": 0.001, "tokens": {"input": 100, "output": 7, "reasoning": 0, "cache": {"read": 50, "write": 0}}})
+    publish("session.status", **base, status={"type": "idle"})
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def authorized(self):
+        expected = "Basic " + base64.b64encode(("opencode:" + password).encode()).decode()
+        if password and self.headers.get("Authorization") != expected:
+            self.send_response(401); self.end_headers(); return False
+        return True
+    def body(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        return json.loads(self.rfile.read(n) or b"null") if n else None
+    def send_json(self, obj, code=200):
+        raw = json.dumps(obj).encode()
+        self.send_response(code); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.write(raw)
+    def do_GET(self):
+        if not self.authorized(): return
+        if self.path == "/event":
+            q = queue.Queue()
+            with lock: listeners.append(q)
+            self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
+            self.wfile.write(b'data: {"type":"server.connected","properties":{}}\n\n'); self.wfile.flush()
+            try:
+                while True:
+                    self.wfile.write(("data: " + json.dumps(q.get()) + "\n\n").encode()); self.wfile.flush()
+            except OSError:
+                return
+        if self.path.startswith("/session/"):
+            if self.path.endswith("ses_gone"): return self.send_json({"error": "not found"}, 404)
+            return self.send_json({"id": self.path.rsplit("/", 1)[1]})
+        self.send_json({"healthy": True})
+    def do_POST(self):
+        if not self.authorized(): return
+        body = self.body()
+        if self.path == "/session":
+            return self.send_json({"id": "ses_fake_live"})
+        if self.path.endswith("/prompt_async"):
+            session = self.path.split("/")[2]
+            note(prompt=body)
+            text = body["parts"][0]["text"]
+            threading.Thread(target=scenario, args=(session, text), daemon=True).start()
+            self.send_response(204); self.end_headers(); return
+        if self.path.startswith("/permission/") or self.path.startswith("/question/"):
+            request_id = self.path.split("/")[2]
+            kind = self.path.rsplit("/", 1)[1]
+            note(reply_to=request_id, action=kind, body=body)
+            replies[request_id] = (body or {}).get("reply") if request_id.startswith("per_") else ((body or {}).get("answers") if kind == "reply" else "rejected")
+            return self.send_json(True)
+        self.send_json({})
+class Server(http.server.ThreadingHTTPServer):
+    def server_bind(self):
+        # The stock version resolves the host name (`getfqdn`), which takes tens of seconds on macOS runners.
+        import socketserver
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = "127.0.0.1", self.socket.getsockname()[1]
+server = Server(("127.0.0.1", 0), Handler)
+print("opencode server listening on http://127.0.0.1:%d" % server.server_port, flush=True)
+server.serve_forever()
+'''
+
+
+# A `opencode serve` of OpenCode 2.x (`/api/...` + server-sent events) that asks the host before it acts.
+OPENCODE_SERVE_V2 = r'''
+import base64, http.server, json, os, queue, sys, threading, time
+log = os.environ.get("FAKE_CLI_LOG")
+password = os.environ.get("OPENCODE_SERVER_PASSWORD", "")
+def note(**fields):
+    if log:
+        with open(log, "a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"tool": "opencode-serve-v2", **fields}) + "\n")
+note(argv=sys.argv[1:], config=os.environ.get("OPENCODE_CONFIG_CONTENT"), has_password=bool(password), cwd=os.getcwd())
+listeners, lock, replies = [], threading.Lock(), {}
+def publish(kind, **data):
+    with lock:
+        for q in listeners:
+            q.put({"type": kind, "data": data})
+def wait_reply(key):
+    for _ in range(300):
+        if key in replies:
+            return replies[key]
+        time.sleep(0.05)
+    return None
+def scenario(session, text):
+    base = {"sessionID": session, "assistantMessageID": "msg_a"}
+    publish("session.execution.started", sessionID=session)
+    publish("session.step.started", **base, agent="build", model={"id": "y", "providerID": "x"})
+    reply, interrupted = None, False
+    if "PERMISO" in text:
+        publish("session.tool.input.started", **base, id="call_1", name="shell")
+        publish("session.tool.called", **base, id="call_1", input={"command": "python3 -V"}, executed=False)
+        publish("permission.asked", id="per_1", sessionID=session, action="shell", resources=["python3 -V"], save=["python3 *"],
+                source={"type": "tool", "messageID": "msg_a", "id": "call_1"})
+        reply = wait_reply("per_1")
+        if reply == "once":
+            publish("session.tool.success", **base, id="call_1", content=[{"type": "text", "text": "Python 3.12\n"}], metadata={}, executed=True)
+        else:
+            publish("session.tool.failed", **base, id="call_1", error={"type": "permission.rejected", "message": "The user rejected permission"}, content=[], executed=False)
+            publish("session.step.failed", **base, error={"type": "x", "message": "Step interrupted"})
+            publish("session.execution.interrupted", sessionID=session, reason="rejected")
+            return
+    elif "PREGUNTA" in text:
+        publish("form.created", form={"id": "frm_1", "sessionID": session, "title": "Questions", "metadata": {"kind": "question"}, "fields": [
+            {"key": "q0", "title": "Color", "description": "¿Cuál color?", "type": "string", "custom": True,
+             "options": [{"value": "Rojo", "label": "Rojo"}, {"value": "Azul", "label": "Azul"}]},
+            {"key": "q1", "title": "Letras", "description": "¿Cuáles letras?", "type": "multiselect",
+             "options": [{"value": "a", "label": "A"}, {"value": "b", "label": "B"}]}]})
+        reply = wait_reply("frm_1")
+    if reply is not None:
+        answer = "respuesta: " + json.dumps(reply, ensure_ascii=False)
+    else:
+        answer = "eco: " + text.strip().splitlines()[-1]
+    publish("session.text.ended", **base, ordinal=0, text=answer)
+    publish("session.step.ended", **base, finish="stop", cost=0.001, tokens={"input": 100, "output": 7, "reasoning": 0, "cache": {"read": 50, "write": 0}})
+    publish("session.execution.succeeded", sessionID=session)
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def authorized(self):
+        expected = "Basic " + base64.b64encode(("opencode:" + password).encode()).decode()
+        if password and self.headers.get("Authorization") != expected:
+            self.send_response(401); self.end_headers(); return False
+        return True
+    def body(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        return json.loads(self.rfile.read(n) or b"null") if n else None
+    def send_json(self, obj, code=200):
+        raw = json.dumps(obj).encode()
+        self.send_response(code); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.write(raw)
+    def do_GET(self):
+        if not self.authorized(): return
+        if self.path == "/api/event":
+            q = queue.Queue()
+            with lock: listeners.append(q)
+            self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
+            self.wfile.write(b'data: {"type":"server.connected","data":{}}\n\n'); self.wfile.flush()
+            try:
+                while True:
+                    self.wfile.write(("data: " + json.dumps(q.get()) + "\n\n").encode()); self.wfile.flush()
+            except OSError:
+                return
+        if self.path.startswith("/api/session/"):
+            if self.path.endswith("ses_gone"): return self.send_json({"_tag": "SessionNotFound", "message": "not found"}, 404)
+            return self.send_json({"data": {"id": self.path.rsplit("/", 1)[1]}})
+        self.send_json({"data": []})
+    def do_DELETE(self):
+        if not self.authorized(): return
+        if "/form/" in self.path:
+            note(skipped_form=self.path.rsplit("/", 1)[1]); replies[self.path.rsplit("/", 1)[1]] = "skipped"
+        self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers()
+    def do_POST(self):
+        if not self.authorized(): return
+        body = self.body()
+        if self.path == "/api/session":
+            note(create=body)
+            return self.send_json({"data": {"id": "ses_fake_v2"}})
+        if self.path.endswith("/agent") or self.path.endswith("/model"):
+            note(switch=self.path.rsplit("/", 1)[1], body=body)
+            return self.send_json({"data": {}})
+        if self.path.endswith("/prompt"):
+            note(prompt=body)
+            threading.Thread(target=scenario, args=(self.path.split("/")[3], body["text"]), daemon=True).start()
+            return self.send_json({"data": {"id": "msg_u", "type": "user"}})
+        if "/permission/" in self.path and self.path.endswith("/reply"):
+            rid = self.path.split("/")[5]
+            note(permission_reply=rid, body=body); replies[rid] = body["decision"]
+            self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers(); return
+        if "/form/" in self.path and self.path.endswith("/reply"):
+            fid = self.path.split("/")[5]
+            note(form_reply=fid, body=body); replies[fid] = body["answer"]
+            self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers(); return
+        self.send_json({"data": {}})
+class Server(http.server.ThreadingHTTPServer):
+    def server_bind(self):
+        import socketserver
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = "127.0.0.1", self.socket.getsockname()[1]
+server = Server(("127.0.0.1", 0), Handler)
+print("server listening on http://127.0.0.1:%d" % server.server_port, flush=True)
+server.serve_forever()
+'''
+
+# A `claude -p --input-format stream-json` that asks the host before it acts, like the real CLI.
+
+# A `codex app-server` (JSON-RPC over stdio) that asks the host before it acts, like the real one.
+CODEX = r'''
+import json, os, sys
+sys.stdin.reconfigure(encoding="utf-8")
+args = sys.argv[1:]
+log = os.environ.get("FAKE_CLI_LOG")
+def note(**fields):
+    if log:
+        with open(log, "a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"tool": "codex", **fields}) + "\n")
+def send(obj):
+    print(json.dumps(obj), flush=True)
+def read():
+    line = sys.stdin.readline()
+    return json.loads(line) if line else None
+note(argv=args)
+if args[:1] != ["app-server"]:
+    sys.exit(2)
+def item(kind, identifier, **fields):
+    return {"type": kind, "id": identifier, **fields}
+next_server_id = [0]
+def ask(method, params):
+    request_id = next_server_id[0]; next_server_id[0] += 1
+    send({"id": request_id, "method": method, "params": params})
+    while True:
+        message = read()
+        if message is None:
+            sys.exit(3)
+        if "id" in message and "method" not in message:
+            note(response=message["result"])
+            return message["result"]
+thread = "thread-fake-1"
+while True:
+    message = read()
+    if message is None:
+        break
+    method = message.get("method")
+    if method == "initialize":
+        note(initialize=message["params"])
+        send({"id": message["id"], "result": {"userAgent": "fake"}})
+    elif method in ("thread/start", "thread/resume"):
+        note(thread=method, params=message["params"])
+        send({"id": message["id"], "result": {"thread": {"id": message["params"].get("threadId", thread)}}})
+    elif method == "turn/start":
+        params = message["params"]
+        note(turn=params)
+        prompt = params["input"][0]["text"]
+        send({"id": message["id"], "result": {"turn": {"id": "turn-1", "status": "inProgress"}}})
+        send({"method": "turn/started", "params": {"threadId": thread, "turn": {"id": "turn-1"}}})
+        text = "eco: " + prompt.strip().splitlines()[-1]
+        base = {"threadId": thread, "turnId": "turn-1"}
+        if "PERMISO" in prompt:
+            result = ask("item/commandExecution/requestApproval", {**base, "itemId": "c1", "command": "/bin/bash -lc 'python3 -V'",
+                         "reason": "version", "startedAtMs": 1})
+            send({"method": "item/completed", "params": {**base, "item": item("commandExecution", "c1", command="/bin/bash -lc 'python3 -V'",
+                  status="completed" if result["decision"] != "decline" else "declined", aggregatedOutput="Python 3.11\n", exitCode=0)}})
+            text = "decision: " + json.dumps(result["decision"])
+        elif "ARCHIVO" in prompt:
+            result = ask("item/fileChange/requestApproval", {**base, "itemId": "f1", "reason": "fuera del proyecto", "startedAtMs": 1})
+            text = "decision: " + json.dumps(result["decision"])
+        elif "RED" in prompt:
+            result = ask("item/permissions/requestApproval", {**base, "itemId": "p1", "cwd": "/x", "startedAtMs": 1,
+                         "permissions": {"network": {"enabled": True}}})
+            text = "permisos: " + json.dumps(result)
+        elif "PREGUNTA" in prompt:
+            result = ask("item/tool/requestUserInput", {**base, "itemId": "q1", "isBlocking": True, "questions": [
+                {"id": "color", "header": "Color", "question": "Color?", "options": [{"label": "Rojo", "description": "r"}, {"label": "Azul", "description": "a"}]}]})
+            text = "respuesta: " + json.dumps(result["answers"], ensure_ascii=False)
+        send({"method": "item/completed", "params": {**base, "item": item("agentMessage", "m1", text=text, phase="final_answer")}})
+        usage = {"inputTokens": 120, "outputTokens": 8, "cachedInputTokens": 0, "totalTokens": 128, "reasoningOutputTokens": 0, "cacheWriteInputTokens": 0}
+        send({"method": "thread/tokenUsage/updated", "params": {**base, "tokenUsage": {"total": {**usage, "inputTokens": 1120}, "last": usage, "modelContextWindow": 200000}}})
+        send({"method": "turn/completed", "params": {"threadId": thread, "turn": {"id": "turn-1", "status": "completed", "error": None}}})
+'''
+
+
+def install(directory: Path, name: str, source: str) -> Path:
+    """Write an executable `name` into `directory` (plus a .cmd shim on Windows)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    script = directory / f"{name}-fake.py"
+    script.write_text(source, encoding="utf-8")
+    if os.name == "nt":
+        shim = directory / f"{name}.cmd"
+        shim.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
+        return shim
+    launcher = directory / name
+    launcher.write_text(f"#!{sys.executable}\nimport runpy, sys\nsys.argv[0] = {str(script)!r}\nrunpy.run_path({str(script)!r}, run_name='__main__')\n",
+                        encoding="utf-8")
+    launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return launcher

@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 #[cfg(any(target_os = "macos", windows))]
+#[cfg(target_os = "macos")]
 use std::process::Command;
 #[cfg(target_os = "linux")]
 use std::sync::{Mutex, OnceLock};
@@ -265,7 +266,7 @@ pub fn resources_overview_payload(current_path: &Path) -> Result<Value, String> 
             current.display()
         ));
     }
-    let mut paths = BTreeMap::<String, (String, std::path::PathBuf)>::new();
+    let mut paths = BTreeMap::<String, (String, std::path::PathBuf, String)>::new();
     for project in catalog
         .projects
         .into_iter()
@@ -277,7 +278,7 @@ pub fn resources_overview_payload(current_path: &Path) -> Result<Value, String> 
         let Ok(path) = fs::canonicalize(&raw_path) else {
             continue;
         };
-        paths.insert(path.display().to_string(), (project.alias, path));
+        paths.insert(path.display().to_string(), (project.alias, path, raw_path));
     }
     paths
         .entry(current.display().to_string())
@@ -286,12 +287,12 @@ pub fn resources_overview_payload(current_path: &Path) -> Result<Value, String> 
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_else(|| current.display().to_string());
-            (name, current.clone())
+            (name, current.clone(), current_path.display().to_string())
         });
 
     let system = read_system_resources();
     let mut projects = Vec::with_capacity(paths.len());
-    for (key, (alias, root)) in paths {
+    for (_canonical_key, (alias, root, display_path)) in paths {
         let config = config_from_project(&root).unwrap_or_default();
         let mut process_map = crate::features::workspace_processes::list_readonly(&root)
             .unwrap_or_default()
@@ -325,7 +326,7 @@ pub fn resources_overview_payload(current_path: &Path) -> Result<Value, String> 
         projects.push(json!({
             "alias": alias,
             "name": root.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default(),
-            "path": key,
+            "path": display_path,
             "status": read_workspace_status(&root),
             "trusted": trusted,
             "running_count": summary.running_count,
@@ -353,7 +354,7 @@ pub fn resources_overview_payload(current_path: &Path) -> Result<Value, String> 
     }))
 }
 
-fn read_workspace_status(root: &Path) -> String {
+pub(crate) fn read_workspace_status(root: &Path) -> String {
     let Some(home) = crate::features::project_profiles::application_home() else {
         return "STOPPED".to_owned();
     };
@@ -481,16 +482,16 @@ fn libc_page_size() -> Option<u64> {
 
 #[cfg(target_os = "macos")]
 fn read_macos_system_resources() -> SystemResources {
-    let total = command_text("sysctl", &["-n", "hw.memsize"])
+    let total = command_text("/usr/sbin/sysctl", &["-n", "hw.memsize"])
         .and_then(|value| value.trim().parse::<u64>().ok())
         .unwrap_or_default();
-    let page_data = Command::new("vm_stat").output().ok();
+    let page_data = Command::new("/usr/bin/vm_stat").output().ok();
     let (free, speculative, used) = page_data
         .filter(|output| output.status.success())
         .map(|output| parse_vm_stat(&String::from_utf8_lossy(&output.stdout)))
         .unwrap_or_default();
     let page_size = page_data_page_size().unwrap_or(4096);
-    let swap = command_text("sysctl", &["vm.swapusage"])
+    let swap = command_text("/usr/sbin/sysctl", &["vm.swapusage"])
         .map(|text| parse_swap_usage(&text))
         .unwrap_or_default();
     let available = free.saturating_add(speculative).saturating_mul(page_size);
@@ -506,7 +507,7 @@ fn read_macos_system_resources() -> SystemResources {
 
 #[cfg(target_os = "macos")]
 fn page_data_page_size() -> Option<u64> {
-    let output = Command::new("vm_stat").output().ok()?;
+    let output = Command::new("/usr/bin/vm_stat").output().ok()?;
     let first = String::from_utf8_lossy(&output.stdout);
     let marker = "page size of ";
     let rest = first.split_once(marker)?.1;
@@ -576,7 +577,7 @@ fn parse_macos_size(raw: &str) -> Option<u64> {
 
 #[cfg(target_os = "macos")]
 fn read_process_resources(pid: u32) -> Option<(u64, Option<f64>)> {
-    let output = Command::new("ps")
+    let output = Command::new("/bin/ps")
         .args(["-o", "rss=", "-o", "%cpu=", "-p", &pid.to_string()])
         .output()
         .ok()?;

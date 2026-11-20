@@ -103,7 +103,7 @@ fn project_key(root: &Path) -> String {
     format!("{name}-{}", &digest[..8])
 }
 
-fn resolve_future_path(path: &Path) -> Result<PathBuf, String> {
+pub(crate) fn resolve_future_path(path: &Path) -> Result<PathBuf, String> {
     let absolute = if path.is_absolute() {
         path.to_owned()
     } else {
