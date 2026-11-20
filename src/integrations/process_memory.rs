@@ -145,7 +145,7 @@ mod imp {
     pub fn lean_allocator() {}
 
     pub fn resident_bytes() -> Option<u64> {
-        let output = std::process::Command::new("ps")
+        let output = std::process::Command::new("/bin/ps")
             .args(["-o", "rss=", "-p", &std::process::id().to_string()])
             .output()
             .ok()?;

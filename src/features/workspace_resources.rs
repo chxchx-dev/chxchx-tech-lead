@@ -482,16 +482,16 @@ fn libc_page_size() -> Option<u64> {
 
 #[cfg(target_os = "macos")]
 fn read_macos_system_resources() -> SystemResources {
-    let total = command_text("sysctl", &["-n", "hw.memsize"])
+    let total = command_text("/usr/sbin/sysctl", &["-n", "hw.memsize"])
         .and_then(|value| value.trim().parse::<u64>().ok())
         .unwrap_or_default();
-    let page_data = Command::new("vm_stat").output().ok();
+    let page_data = Command::new("/usr/bin/vm_stat").output().ok();
     let (free, speculative, used) = page_data
         .filter(|output| output.status.success())
         .map(|output| parse_vm_stat(&String::from_utf8_lossy(&output.stdout)))
         .unwrap_or_default();
     let page_size = page_data_page_size().unwrap_or(4096);
-    let swap = command_text("sysctl", &["vm.swapusage"])
+    let swap = command_text("/usr/sbin/sysctl", &["vm.swapusage"])
         .map(|text| parse_swap_usage(&text))
         .unwrap_or_default();
     let available = free.saturating_add(speculative).saturating_mul(page_size);
@@ -507,7 +507,7 @@ fn read_macos_system_resources() -> SystemResources {
 
 #[cfg(target_os = "macos")]
 fn page_data_page_size() -> Option<u64> {
-    let output = Command::new("vm_stat").output().ok()?;
+    let output = Command::new("/usr/bin/vm_stat").output().ok()?;
     let first = String::from_utf8_lossy(&output.stdout);
     let marker = "page size of ";
     let rest = first.split_once(marker)?.1;
@@ -577,7 +577,7 @@ fn parse_macos_size(raw: &str) -> Option<u64> {
 
 #[cfg(target_os = "macos")]
 fn read_process_resources(pid: u32) -> Option<(u64, Option<f64>)> {
-    let output = Command::new("ps")
+    let output = Command::new("/bin/ps")
         .args(["-o", "rss=", "-o", "%cpu=", "-p", &pid.to_string()])
         .output()
         .ok()?;

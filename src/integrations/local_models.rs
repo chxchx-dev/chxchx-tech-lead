@@ -534,14 +534,14 @@ fn memory_bytes() -> (u64, u64) {
     }
     #[cfg(target_os = "macos")]
     {
-        let total = std::process::Command::new("sysctl")
+        let total = std::process::Command::new("/usr/sbin/sysctl")
             .args(["-n", "hw.memsize"])
             .output()
             .ok()
             .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse().ok())
             .unwrap_or(0);
         let page = 4096_u64;
-        let free = std::process::Command::new("vm_stat")
+        let free = std::process::Command::new("/usr/bin/vm_stat")
             .output()
             .ok()
             .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
