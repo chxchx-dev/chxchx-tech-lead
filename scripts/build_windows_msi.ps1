@@ -70,7 +70,6 @@ try {
     $ScriptsDirectory = Join-Path $Payload '.venv\Scripts'
     $SitePackages = Join-Path $RuntimeDirectory 'Lib\site-packages'
     $WheelDirectory = Join-Path $Work 'wheel'
-    $Requirements = Join-Path $Work 'requirements.txt'
     New-Item -ItemType Directory -Path $Payload, $RuntimeExtract, $ScriptsDirectory, $WheelDirectory -Force | Out-Null
 
     # Pinned CPython 3.11 standalone x64 distribution; its digest is published in the
@@ -99,33 +98,29 @@ try {
     Copy-Item -LiteralPath $Uv.Source -Destination (Join-Path $RuntimeDirectory 'uv.exe')
     New-Item -ItemType Directory -Path $SitePackages -Force | Out-Null
 
-    Push-Location (Join-Path $Repository 'old-version')
+    Push-Location (Join-Path $Repository 'services\agent-adapter')
     try {
-        & $Uv.Source export --quiet --no-progress --locked --no-dev --no-emit-project --no-annotate --format requirements.txt --output-file $Requirements
-        if ($LASTEXITCODE -ne 0) { throw "uv export falló con código $LASTEXITCODE." }
         & $Uv.Source build --quiet --no-build-logs --wheel --out-dir $WheelDirectory
-        if ($LASTEXITCODE -ne 0) { throw "uv build del helper falló con código $LASTEXITCODE." }
+        if ($LASTEXITCODE -ne 0) { throw "uv build del servicio de agentes falló con código $LASTEXITCODE." }
     } finally {
         Pop-Location
     }
     $Wheels = @(Get-ChildItem -LiteralPath $WheelDirectory -Filter '*.whl' -File)
-    if ($Wheels.Count -ne 1) { throw "Se esperaba un wheel del helper y encontré $($Wheels.Count)." }
+    if ($Wheels.Count -ne 1) { throw "Se esperaba un wheel del servicio de agentes y encontré $($Wheels.Count)." }
 
     $PythonExe = Join-Path $RuntimeDirectory 'python.exe'
-    & $Uv.Source pip install --python $PythonExe --target $SitePackages --require-hashes --only-binary ':all:' --requirements $Requirements --no-progress
-    if ($LASTEXITCODE -ne 0) { throw "uv pip install de dependencias falló con código $LASTEXITCODE." }
     & $Uv.Source pip install --python $PythonExe --target $SitePackages --no-deps $Wheels[0].FullName --no-progress
-    if ($LASTEXITCODE -ne 0) { throw "uv pip install del helper falló con código $LASTEXITCODE." }
+    if ($LASTEXITCODE -ne 0) { throw "uv pip install del servicio de agentes falló con código $LASTEXITCODE." }
 
     & cargo build --locked --release
     if ($LASTEXITCODE -ne 0) { throw "cargo build de Studio falló con código $LASTEXITCODE." }
-    & cargo build --locked --release --no-default-features --features python-helper-launcher --bin chxchx-python-helper
-    if ($LASTEXITCODE -ne 0) { throw "cargo build del launcher Python falló con código $LASTEXITCODE." }
+    & cargo build --locked --release --no-default-features --features agent-adapter-launcher --bin chxchx-agent-adapter
+    if ($LASTEXITCODE -ne 0) { throw "cargo build del launcher del servicio falló con código $LASTEXITCODE." }
     $Bin = Join-Path $Repository 'target\release'
     $BinDirectory = Join-Path $Payload 'bin'
     New-Item -ItemType Directory -Path $BinDirectory -Force | Out-Null
     $CommandExecutables = @(Get-ChildItem -LiteralPath $Bin -File -Filter 'chxchx*.exe' | Where-Object {
-        $_.Name -notin @('chxchx-studio.exe', 'chxchx-installer.exe', 'chxchx-python-helper.exe')
+        $_.Name -notin @('chxchx-studio.exe', 'chxchx-installer.exe', 'chxchx-agent-adapter.exe')
     })
     foreach ($Name in 'chxchx-studio.exe', 'chxchx-tech.exe', 'chxchx.exe') {
         $Source = Join-Path $Bin $Name
@@ -135,7 +130,7 @@ try {
     foreach ($Executable in $CommandExecutables) {
         Copy-Item -LiteralPath $Executable.FullName -Destination $BinDirectory
     }
-    Copy-Item -LiteralPath (Join-Path $Bin 'chxchx-python-helper.exe') -Destination (Join-Path $ScriptsDirectory 'chxchx-tech.exe')
+    Copy-Item -LiteralPath (Join-Path $Bin 'chxchx-agent-adapter.exe') -Destination (Join-Path $ScriptsDirectory 'chxchx-agent-adapter.exe')
     & (Join-Path $Repository 'scripts\verify_windows_binaries.ps1') -BinDirectory $Bin
 
     $CommitText = $Commit + "`n"
@@ -151,7 +146,7 @@ try {
     if ($Channel -eq 'dev') { $LauncherMarks += 'rem CHXCHX_STUDIO_DEV_LAUNCHER' }
     $LauncherLines = @('@echo off') + $LauncherMarks + @(
         'set "APP_ROOT=%~dp0.."',
-        'set "CHXCHX_TECH_CLI=%APP_ROOT%\.venv\Scripts\chxchx-tech.exe"',
+        'set "CHXCHX_AGENT_ADAPTER=%APP_ROOT%\.venv\Scripts\chxchx-agent-adapter.exe"',
         '"%APP_ROOT%\bin\chxchx-studio.exe" %*'
     )
     [System.IO.File]::WriteAllLines((Join-Path $Shims $LauncherName), $LauncherLines, [System.Text.Encoding]::ASCII)
@@ -161,19 +156,19 @@ try {
             '@echo off',
             'rem CHXCHX_CLI_SHIM',
             'set "APP_ROOT=%~dp0.."',
-            'set "CHXCHX_TECH_CLI=%APP_ROOT%\.venv\Scripts\chxchx-tech.exe"',
+            'set "CHXCHX_AGENT_ADAPTER=%APP_ROOT%\.venv\Scripts\chxchx-agent-adapter.exe"',
             '"%APP_ROOT%\bin\' + $Executable.Name + '" %*'
         )
         [System.IO.File]::WriteAllLines((Join-Path $Shims "$Command.cmd"), $Lines, [System.Text.Encoding]::ASCII)
     }
 
-    $Helper = Join-Path $ScriptsDirectory 'chxchx-tech.exe'
-    & $Helper --help | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'El helper Python incluido no responde a --help.' }
+    $Helper = Join-Path $ScriptsDirectory 'chxchx-agent-adapter.exe'
+    & $Helper contract | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'El servicio de agentes incluido no responde a `contract`.' }
     & (Join-Path $BinDirectory 'chxchx-tech.exe') --version | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'El CLI Rust no responde a --version.' }
-    & $PythonExe -c 'import chxchx_tech_lead; from importlib.metadata import version; print(version("chxchx-tech-lead"))' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'El runtime Python incluido no puede importar el paquete helper.' }
+    & $PythonExe -c 'import chxchx_agent_adapter; from importlib.metadata import version; print(version("chxchx-agent-adapter"))' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'El runtime Python incluido no puede importar el servicio de agentes.' }
 
     $Wxs = Join-Path $Work 'ChxChxStudio.wxs'
     & $Python.Source (Join-Path $Repository 'scripts\generate_windows_msi_wxs.py') `

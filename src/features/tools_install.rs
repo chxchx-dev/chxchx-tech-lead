@@ -70,8 +70,17 @@ pub fn tool_bin_directory() -> PathBuf {
         .join("bin")
 }
 
-/// `uv`: the one on the `PATH`, then the folders the official installer uses.
+/// `uv`: the one an MSI install carries in its private Python runtime, the one on the `PATH`,
+/// then the folders the official installer uses.
 pub fn find_uv() -> Option<PathBuf> {
+    if let Ok(executable) = std::env::current_exe() {
+        for root in executable.ancestors().skip(1).take(6) {
+            let bundled = root.join(".venv").join("python").join("uv.exe");
+            if root.join(".chxchx-msi").is_file() && bundled.is_file() {
+                return Some(bundled);
+            }
+        }
+    }
     if let Some(found) = find_in("uv", &agent_path()) {
         return Some(found);
     }

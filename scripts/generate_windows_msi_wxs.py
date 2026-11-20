@@ -128,14 +128,14 @@ def generate(
     ET.SubElement(feature, _tag(WIX, "ComponentRef"), {"Id": "SharedToolsPath"})
     ET.SubElement(feature, _tag(WIX, "ComponentRef"), {"Id": "StartMenuShortcut"})
 
-    helper_file = _id("file", f"{channel}/{root_name}/.venv/Scripts/chxchx-tech.exe")
+    tools_command = _id("file", f"{channel}/{root_name}/bin/chxchx-tech.exe")
     ET.SubElement(
         package,
         _tag(WIX, "CustomAction"),
         {
             "Id": "InstallRequiredTools",
-            "FileRef": helper_file,
-            "ExeCommand": "install",
+            "FileRef": tools_command,
+            "ExeCommand": "tools install",
             "Execute": "deferred",
             "Impersonate": "yes",
             "Return": "check",

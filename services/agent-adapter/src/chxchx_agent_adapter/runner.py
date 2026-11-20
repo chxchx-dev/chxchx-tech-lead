@@ -52,7 +52,7 @@ def _driver(request: Request, child: Any, password: str) -> LiveCodex | LiveOpen
 
 
 def run_turn(request: Request, emit: Emit, control: IO[str]) -> int:
-    """Returns the exit code of the provider (0 for a turn that ended, or was stopped by us)."""
+    """Returns the exit code of the provider (0 for a turn that was stopped by the host, or by us)."""
     password = secrets.token_urlsafe(24)  # only this turn's host may drive an OpenCode server
     env = {**os.environ, **request.env}
     if request.provider == "OpenCode":
@@ -103,4 +103,4 @@ def run_turn(request: Request, emit: Emit, control: IO[str]) -> int:
         if limits is not None:
             emit({"type": "limits", **limits})
     emit({"type": "adapter_done", "exit_code": exit_code, "cancelled": cancelled.is_set(), "session_id": session_id})
-    return exit_code
+    return 0 if cancelled.is_set() else exit_code  # a turn the host stopped did not fail

@@ -23,8 +23,8 @@ fn embed_windows_resources() {
     if std::env::var_os("CARGO_FEATURE_STUDIO").is_some() {
         binaries.push(("chxchx-studio", "ChxChx Studio"));
     }
-    if std::env::var_os("CARGO_FEATURE_PYTHON_HELPER_LAUNCHER").is_some() {
-        binaries.push(("chxchx-python-helper", "ChxChx Python Helper"));
+    if std::env::var_os("CARGO_FEATURE_AGENT_ADAPTER_LAUNCHER").is_some() {
+        binaries.push(("chxchx-agent-adapter", "ChxChx Agent Adapter"));
     }
 
     let version = std::env::var("CARGO_PKG_VERSION").expect("Cargo sets CARGO_PKG_VERSION");

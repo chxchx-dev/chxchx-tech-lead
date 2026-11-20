@@ -97,14 +97,14 @@ function Test-UserPathContains([string]$Target) {
 
 function Assert-AppOpens([string]$Root) {
     $Tech = Join-Path $Root 'bin\chxchx-tech.exe'
-    $Helper = Join-Path $Root '.venv\Scripts\chxchx-tech.exe'
+    $Helper = Join-Path $Root '.venv\Scripts\chxchx-agent-adapter.exe'
     $Python = Join-Path $Root '.venv\python\python.exe'
     $Studio = Join-Path $Root 'bin\chxchx-studio.exe'
     foreach ($Path in @($Tech, $Helper, $Python, $Studio)) {
         if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "La instalación está incompleta; falta $Path." }
     }
     Invoke-Executable $Tech @('--version') 'El CLI Rust instalado'
-    Invoke-Executable $Helper @('--help') 'El helper Python instalado'
+    Invoke-Executable $Helper @('contract') 'El servicio de agentes instalado'
     Invoke-Executable $Python @('--version') 'El runtime Python incluido'
     $StartInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $StartInfo.FileName = $Studio

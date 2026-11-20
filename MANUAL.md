@@ -194,12 +194,12 @@ panel Agentes y en la página de inicio. Abre una pestaña «Chat · agente» en
 (Markdown), tarjetas de herramientas y razonamiento, **permisos en vivo** (permitir, permitir y recordar,
 denegar), preguntas del agente, nivel de acceso (solo lectura, editar, editar y ejecutar, acceso total), red,
 modelo y esfuerzo, **uso de tokens y coste**, contexto con su liberación automática al 90 % y límites del plan.
-La conversación se guarda y se recupera al reabrir; «Nuevo chat» empieza de cero. En esta versión, Studio delega los
-turnos en `chxchx-tech agent chat --live` del CLI Python temporal (se busca en `$CHXCHX_TECH_CLI`, el PATH y el
-`.venv` de `old-version/`). Esta dependencia se retirará cuando el runner Rust tenga paridad y pruebas completas. La
-arquitectura final no conserva código en `old-version/`; cualquier runtime Python o C++ imprescindible se distribuirá
-como servicio independiente, con contrato y pruebas, enlazado desde un adapter Rust. Sin confianza del proyecto no se
-inicia ningún turno.
+La conversación se guarda y se recupera al reabrir; «Nuevo chat» empieza de cero. Claude Code corre directamente desde
+Rust. Codex y OpenCode los conduce el servicio `services/agent-adapter/` (Python, solo biblioteca estándar) mediante un
+contrato versionado (`chxchx.agent-adapter` v1): Rust decide la política (trust, acceso, contexto) y el servicio solo
+habla el protocolo en vivo de cada proveedor. Studio lo busca en `$CHXCHX_AGENT_ADAPTER`, junto al binario, en el
+`.venv` de un checkout (`uv sync` en `services/agent-adapter`) y en el PATH. Sin confianza del proyecto no se inicia
+ningún turno.
 
 ### Memoria explícita
 

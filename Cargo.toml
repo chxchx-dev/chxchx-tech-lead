@@ -31,9 +31,9 @@ path = "src/bin/chxchx-installer.rs"
 required-features = ["visual-installer"]
 
 [[bin]]
-name = "chxchx-python-helper"
-path = "src/bin/chxchx-python-helper.rs"
-required-features = ["python-helper-launcher"]
+name = "chxchx-agent-adapter"
+path = "src/bin/chxchx-agent-adapter.rs"
+required-features = ["agent-adapter-launcher"]
 
 [features]
 default = ["cli", "tui", "studio"]
@@ -42,7 +42,7 @@ tui = ["dep:ratatui"]
 studio = ["dep:iced", "dep:image", "dep:arboard", "dep:rfd", "terminal"]
 visual-installer = ["studio"]
 terminal = ["dep:portable-pty", "dep:vt100"]
-python-helper-launcher = []
+agent-adapter-launcher = []
 
 [dependencies]
 clap = { version = "=4.6.7", features = ["derive"], optional = true }

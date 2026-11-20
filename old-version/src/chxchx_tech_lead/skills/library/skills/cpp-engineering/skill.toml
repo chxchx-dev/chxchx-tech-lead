@@ -1,7 +1,0 @@
-name = "cpp-engineering"
-description = "Prácticas de C++ moderno para aplicaciones nativas seguras y mantenibles."
-stacks = []
-languages = ["cpp"]
-tags = ["c++", "cpp", "modern-cpp", "raii", "native"]
-always_recommend = false
-origin = "chxchx"

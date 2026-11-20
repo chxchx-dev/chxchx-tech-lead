@@ -1,3 +1,0 @@
-name = "chxchx-model-advisor"
-description = "Recomienda cuándo usar Haiku, Sonnet u Opus en Claude Code y da el comando para cambiar con control del usuario."
-always_recommend = true

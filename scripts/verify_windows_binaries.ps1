@@ -37,8 +37,8 @@ if (-not $dumpbin) { throw 'No se encontró dumpbin.exe para verificar las depen
 
 $directory = (Resolve-Path -LiteralPath $BinDirectory).Path
 $names = @('chxchx-studio.exe', 'chxchx-tech.exe', 'chxchx.exe')
-if (Test-Path -LiteralPath (Join-Path $directory 'chxchx-python-helper.exe') -PathType Leaf) {
-    $names += 'chxchx-python-helper.exe'
+if (Test-Path -LiteralPath (Join-Path $directory 'chxchx-agent-adapter.exe') -PathType Leaf) {
+    $names += 'chxchx-agent-adapter.exe'
 }
 foreach ($name in $names) {
     $executable = Join-Path $directory $name
