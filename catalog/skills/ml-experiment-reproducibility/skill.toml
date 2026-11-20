@@ -1,0 +1,6 @@
+name = "ml-experiment-reproducibility"
+description = "Experimentos de aprendizaje automático reproducibles: configuración, semillas, entorno fijado, seguimiento de ejecuciones, artefactos versionados y fichas de corrida."
+stacks = ["ml"]
+languages = []
+tags = ["mlops", "reproducibility", "tracking", "mlflow", "wandb"]
+origin = "chxchx"

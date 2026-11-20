@@ -5,8 +5,15 @@ pub mod features {
     pub mod agents;
     pub mod catalog;
     pub mod catalog_view;
+    pub mod chat_handoff;
+    pub mod chat_journal;
     pub mod chat_model;
+    pub mod chat_state;
+    pub mod context_compaction;
     pub mod doctor;
+    pub mod error_cache;
+    pub mod explicit_memory;
+    pub mod explicit_memory_prune;
     pub mod git;
     pub mod mcp_connectors;
     pub mod mcp_connectors_plan;
@@ -20,6 +27,7 @@ pub mod features {
     pub mod project_config_template;
     pub mod project_detection;
     pub mod project_files;
+    pub mod project_fs;
     pub mod project_mod_agents;
     pub mod project_mods;
     pub mod project_overview;
@@ -29,11 +37,16 @@ pub mod features {
     pub mod project_search;
     pub mod project_setup;
     pub mod project_skills;
+    pub mod project_switch;
     pub mod project_sync;
     pub mod project_templates;
     pub mod project_trust;
     pub mod startup_log;
     pub mod studio_preferences;
+    pub mod tools_install;
+    pub mod workspace_lifecycle;
+    pub mod workspace_processes;
+    pub mod workspace_resources;
     #[cfg(feature = "terminal")]
     pub mod workspace_terminal;
 }
@@ -46,6 +59,9 @@ pub mod interfaces {
 
     #[cfg(feature = "studio")]
     pub mod studio;
+
+    #[cfg(feature = "visual-installer")]
+    pub mod installer;
 
     #[cfg(feature = "tui")]
     pub mod tui;

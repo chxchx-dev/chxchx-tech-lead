@@ -1,7 +1,7 @@
 name: Studio release (Rust)
 
-# Builds the Rust product for every platform in the layout the installed updater expects
-# (bin/chxchx-studio, a macOS .app, a Windows zip, plus the CLI wheel) and, only when asked,
+# Builds the Rust product and visual installers for every supported platform in the layout the installed updater expects
+# (bin/chxchx-studio, a macOS .app, a Windows zip and MSI, plus the agent-adapter service wheel) and, only when asked,
 # replaces the rolling `studio-dev-preview` release that machines on the `dev` channel read.
 # `dev` replaces the rolling `studio-dev-preview` prerelease; `stable` publishes the release
 # `v<version>` that every installed Studio on the stable channel updates to. Run it by hand:
@@ -32,7 +32,7 @@ env:
 
 jobs:
   check-version:
-    name: Cargo and the CLI wheel report the same version
+    name: The tag and Cargo.toml report a releasable version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,16 +41,11 @@ jobs:
         run: |
           version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
           [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "El tag $GITHUB_REF_NAME no coincide con la versión $version de Cargo.toml."; exit 1; }
-      - name: Compare versions
+      - name: A stable release is X.Y.Z
         run: |
           python3 - <<'PY'
           import re, tomllib
           cargo = tomllib.load(open("Cargo.toml", "rb"))["package"]["version"]
-          py = tomllib.load(open("old-version/pyproject.toml", "rb"))["project"]["version"]
-          # 0.6.0-alpha.1 (semver) is 0.6.0a1 (PEP 440).
-          normalized = re.sub(r"-(alpha|beta|rc)\.?(\d+)", lambda m: {"alpha": "a", "beta": "b", "rc": "rc"}[m[1]] + m[2], cargo)
-          if normalized != py:
-              raise SystemExit(f"Cargo.toml ({cargo}) y pyproject.toml ({py}) no son la misma versión.")
           if "${{ (inputs.channel || (github.ref_type == 'tag' && 'stable' || 'dev')) }}" == "stable" and not re.fullmatch(r"\d+\.\d+\.\d+", cargo):
               raise SystemExit(f"Una versión estable debe ser X.Y.Z; Cargo.toml dice {cargo}.")
           print("Versión del producto:", cargo)
@@ -72,37 +67,111 @@ jobs:
             libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
             libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev
-      - run: cargo build --locked --release
+      - uses: astral-sh/setup-uv@v5
+      - name: Test the Linux installer, managed PATH and future command shims
+        run: |
+          python3 -m pip install pytest
+          python3 -m pytest packaging/tests/test_install_sh.py
+      - run: cargo build --locked --release --features visual-installer
       - name: Package (bin/chxchx-studio inside one folder)
         run: |
           set -euo pipefail
           root=chxchx-studio-linux
           mkdir -p "$root/bin"
-          cp target/release/chxchx-studio target/release/chxchx-tech "$root/bin/"
+          cp target/release/chxchx-studio "$root/bin/"
+          for binary in target/release/chxchx target/release/chxchx-*; do
+            [ -x "$binary" ] || continue
+            case "${binary##*/}" in
+              chxchx-studio|chxchx-installer|chxchx-agent-adapter) continue ;;
+            esac
+            cp "$binary" "$root/bin/"
+          done
+          test -x "$root/bin/chxchx-tech"
+          test -x "$root/bin/chxchx"
           "$root/bin/chxchx-tech" --version
           tar -czf chxchx-studio-linux-x86_64.tar.gz "$root"
+          installer=chxchx-installer-linux
+          mkdir -p "$installer/bin"
+          cp target/release/chxchx-installer "$installer/bin/"
+          cat > "$installer/iniciar-instalador.sh" <<'SCRIPT'
+          #!/usr/bin/env sh
+          exec "$(dirname "$0")/bin/chxchx-installer" "$@"
+          SCRIPT
+          chmod +x "$installer/iniciar-instalador.sh"
+          cat > "$installer/LEEME.txt" <<'TEXT'
+          Extrae esta carpeta y abre iniciar-instalador.sh para instalar ChxChx Studio.
+          Basic Memory y Serena se descargan durante la instalación. Se necesita conexión.
+          TEXT
+          tar -czf chxchx-installer-linux-x86_64.tar.gz "$installer"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-package
           path: chxchx-studio-linux-x86_64.tar.gz
           if-no-files-found: error
           compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-installer-package
+          path: chxchx-installer-linux-x86_64.tar.gz
+          if-no-files-found: error
+          compression-level: 0
 
   windows:
-    name: Windows x86_64 package
+    name: Windows x86_64 ZIP, MSI and installer lifecycle
     needs: check-version
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "6.0.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install WiX Toolset 5.0.2
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
       - run: cargo build --locked --release
+      - name: Verify Windows executable resources and runtime dependencies
+        shell: pwsh
+        run: ./scripts/verify_windows_binaries.ps1 -BinDirectory target/release
+      - name: Build the offline per-user MSI and a major-upgrade fixture
+        shell: pwsh
+        run: |
+          $channel = "${{ (inputs.channel || (github.ref_type == 'tag' && 'stable' || 'dev')) }}"
+          $version = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
+          ./scripts/build_windows_msi.ps1 -Channel $channel -Version $version -Commit $env:GITHUB_SHA -BuildSmokeUpdate
+      - name: Test silent MSI install, app launch, major upgrade and uninstall
+        shell: pwsh
+        run: |
+          $channel = "${{ (inputs.channel || (github.ref_type == 'tag' && 'stable' || 'dev')) }}"
+          $version = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
+          ./scripts/test_windows_msi.ps1 -Channel $channel -Version $version -Commit $env:GITHUB_SHA `
+            -Installer dist/windows-msi/chxchx-studio-windows-x86_64.msi `
+            -UpdateInstaller dist/windows-msi-smoke-update/chxchx-studio-windows-x86_64.msi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-msi-package
+          path: dist/windows-msi/*.msi
+          if-no-files-found: error
+          compression-level: 0
       - name: Package (bin/chxchx-studio.exe inside one folder)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $root = 'chxchx-studio-windows'
           New-Item -ItemType Directory -Force "$root/bin" | Out-Null
-          Copy-Item target/release/chxchx-studio.exe, target/release/chxchx-tech.exe "$root/bin/"
+          Copy-Item target/release/chxchx-studio.exe "$root/bin/"
+          Get-ChildItem target/release -File -Filter 'chxchx*.exe' |
+            Where-Object { $_.Name -notin @('chxchx-studio.exe', 'chxchx-installer.exe', 'chxchx-agent-adapter.exe') } |
+            ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination "$root/bin/" }
+          foreach ($Name in 'chxchx-tech.exe', 'chxchx.exe') {
+            if (-not (Test-Path "$root/bin/$Name")) { throw "Falta $Name en el ZIP." }
+          }
           & "$root/bin/chxchx-tech.exe" --version
           Compress-Archive -Path $root -DestinationPath chxchx-studio-windows-x86_64.zip
       - uses: actions/upload-artifact@v4
@@ -130,14 +199,23 @@ jobs:
       - name: Build for ${{ matrix.target }}
         run: |
           rustup target add ${{ matrix.target }}
-          cargo build --locked --release --target ${{ matrix.target }}
+          cargo build --locked --release --features visual-installer --target ${{ matrix.target }}
       - name: Make the .app bundle and the DMG
         run: |
           set -euo pipefail
           version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"].split("-")[0])')
           app="ChxChx Studio.app"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-          cp target/${{ matrix.target }}/release/chxchx-studio target/${{ matrix.target }}/release/chxchx-tech "$app/Contents/MacOS/"
+          cp target/${{ matrix.target }}/release/chxchx-studio "$app/Contents/MacOS/"
+          for binary in target/${{ matrix.target }}/release/chxchx target/${{ matrix.target }}/release/chxchx-*; do
+            [ -x "$binary" ] || continue
+            case "${binary##*/}" in
+              chxchx-studio|chxchx-installer|chxchx-agent-adapter) continue ;;
+            esac
+            cp "$binary" "$app/Contents/MacOS/"
+          done
+          test -x "$app/Contents/MacOS/chxchx-tech"
+          test -x "$app/Contents/MacOS/chxchx"
           # Icon from the brand mark.
           icons=$(mktemp -d)/chxchx.iconset
           mkdir -p "$icons"
@@ -166,31 +244,63 @@ jobs:
           codesign --verify --deep --strict "$app"
           mkdir dmg && cp -R "$app" dmg/
           hdiutil create -volname "ChxChx Studio" -srcfolder dmg -ov -format UDZO "chxchx-studio-macos-${{ matrix.name }}.dmg"
+          installer="ChxChx Installer.app"
+          mkdir -p "$installer/Contents/MacOS" "$installer/Contents/Resources"
+          cp target/${{ matrix.target }}/release/chxchx-installer "$installer/Contents/MacOS/"
+          cp "$app/Contents/Resources/chxchx.icns" "$installer/Contents/Resources/"
+          cat > "$installer/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>chxchx-installer</string>
+            <key>CFBundleIdentifier</key><string>dev.chxchx.installer</string>
+            <key>CFBundleName</key><string>ChxChx Installer</string>
+            <key>CFBundleDisplayName</key><string>ChxChx Installer</string>
+            <key>CFBundleIconFile</key><string>chxchx</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>${version}</string>
+            <key>CFBundleVersion</key><string>${version}</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+          plutil -lint "$installer/Contents/Info.plist"
+          codesign --force --deep --sign - "$installer"
+          codesign --verify --deep --strict "$installer"
+          test -x "$installer/Contents/MacOS/chxchx-installer"
+          mkdir installer-dmg && cp -R "$installer" installer-dmg/
+          hdiutil create -volname "ChxChx Installer" -srcfolder installer-dmg -ov -format UDZO "chxchx-installer-macos-${{ matrix.name }}.dmg"
       - uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.name }}-package
           path: chxchx-studio-macos-${{ matrix.name }}.dmg
           if-no-files-found: error
           compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.name }}-installer-package
+          path: chxchx-installer-macos-${{ matrix.name }}.dmg
+          if-no-files-found: error
+          compression-level: 0
 
-  cli-wheel:
-    name: CLI wheel (chat, local models and the updater)
+  agent-adapter-wheel:
+    name: Agent-adapter service wheel (Codex and OpenCode)
     needs: check-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv build --wheel --out-dir dist
-        working-directory: old-version
+        working-directory: services/agent-adapter
       - uses: actions/upload-artifact@v4
         with:
-          name: cli-wheel
-          path: old-version/dist/*.whl
+          name: agent-adapter-wheel
+          path: services/agent-adapter/dist/*.whl
           if-no-files-found: error
 
   stage:
     name: Stage the assets and the manifest
-    needs: [linux, windows, macos, cli-wheel]
+    needs: [linux, windows, macos, agent-adapter-wheel]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -200,13 +310,21 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: linux-package, path: dist/downloads/linux-fedora-x86_64 }
       - uses: actions/download-artifact@v4
+        with: { name: linux-installer-package, path: dist/downloads/linux-installer-x86_64 }
+      - uses: actions/download-artifact@v4
         with: { name: windows-package, path: dist/downloads/windows-x86_64 }
+      - uses: actions/download-artifact@v4
+        with: { name: windows-msi-package, path: dist/downloads/windows-msi }
       - uses: actions/download-artifact@v4
         with: { name: macos-arm64-package, path: dist/downloads/macos-arm64 }
       - uses: actions/download-artifact@v4
         with: { name: macos-x86_64-package, path: dist/downloads/macos-x86_64 }
       - uses: actions/download-artifact@v4
-        with: { name: cli-wheel, path: dist/downloads/cli-wheel }
+        with: { name: macos-arm64-installer-package, path: dist/downloads/macos-installer-arm64 }
+      - uses: actions/download-artifact@v4
+        with: { name: macos-x86_64-installer-package, path: dist/downloads/macos-installer-x86_64 }
+      - uses: actions/download-artifact@v4
+        with: { name: agent-adapter-wheel, path: dist/downloads/agent-adapter-wheel }
       - name: Write the manifest and checksums
         run: |
           if [ "${{ (inputs.channel || (github.ref_type == 'tag' && 'stable' || 'dev')) }}" = "stable" ]; then
@@ -215,7 +333,7 @@ jobs:
           else
             channel=dev; tag=studio-dev-preview
           fi
-          python3 old-version/scripts/release_assets.py --root old-version \
+          python3 packaging/release_assets.py --root . \
             --channel "$channel" --tag "$tag" --commit "$GITHUB_SHA" \
             --downloads dist/downloads --output dist/release \
             --skip windows-setup --skip windows-arm64
@@ -230,9 +348,16 @@ jobs:
           linux=$(tar -tzf chxchx-studio-ubuntu-x86_64.tar.gz)
           grep -q '/bin/chxchx-studio$' <<<"$linux" || { echo "El paquete Linux no trae bin/chxchx-studio"; exit 1; }
           grep -q '/bin/chxchx-tech$' <<<"$linux" || { echo "El paquete Linux no trae bin/chxchx-tech"; exit 1; }
+          grep -q '/bin/chxchx$' <<<"$linux" || { echo "El paquete Linux no trae bin/chxchx"; exit 1; }
+          linux_installer=$(tar -tzf chxchx-installer-linux-x86_64.tar.gz)
+          grep -q '/bin/chxchx-installer$' <<<"$linux_installer" || { echo "Falta el instalador visual Linux"; exit 1; }
+          grep -q '/iniciar-instalador.sh$' <<<"$linux_installer" || { echo "Falta el lanzador del instalador Linux"; exit 1; }
           windows=$(unzip -l chxchx-studio-windows-x86_64.zip)
           grep -q 'bin/chxchx-studio.exe' <<<"$windows" || { echo "El paquete Windows no trae bin/chxchx-studio.exe"; exit 1; }
-          ls chxchx-studio-macos-arm64.dmg chxchx-studio-macos-x86_64.dmg chxchx_tech_lead-*.whl
+          grep -q 'bin/chxchx-tech.exe' <<<"$windows" || { echo "El paquete Windows no trae bin/chxchx-tech.exe"; exit 1; }
+          grep -q 'bin/chxchx.exe' <<<"$windows" || { echo "El paquete Windows no trae bin/chxchx.exe"; exit 1; }
+          ls chxchx-studio-windows-x86_64.msi chxchx-studio-macos-arm64.dmg chxchx-studio-macos-x86_64.dmg \
+            chxchx-installer-macos-arm64.dmg chxchx-installer-macos-x86_64.dmg chxchx_agent_adapter-*.whl
       - uses: actions/upload-artifact@v4
         with:
           name: release-assets
@@ -282,7 +407,7 @@ jobs:
           body: |
             Rolling preview of the Rust product built from commit `${{ github.sha }}`.
             Only machines on the `dev` channel receive it; the stable channel is untouched.
-            Assets: Linux x86_64, Windows x86_64 and macOS (Apple Silicon and Intel).
+            Assets: Linux x86_64, Windows x86_64 (per-user MSI and ZIP), and macOS (Apple Silicon and Intel).
             Not signed or notarized.
           prerelease: true
           make_latest: false

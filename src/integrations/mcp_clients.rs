@@ -16,14 +16,24 @@ pub struct CommandOutput {
 }
 
 pub fn run(command: &[String], cwd: &Path) -> Result<CommandOutput, String> {
+    run_with_limits(command, cwd, COMMAND_TIMEOUT, OUTPUT_LIMIT_BYTES)
+}
+
+/// Run a CLI with caller-specific time and output bounds.
+pub fn run_with_limits(
+    command: &[String],
+    cwd: &Path,
+    timeout: Duration,
+    output_limit: usize,
+) -> Result<CommandOutput, String> {
     let (mut child, stdout, stderr) = spawn(command, cwd)?;
-    let stdout_reader = read_on_thread(stdout);
-    let stderr_reader = read_on_thread(stderr);
+    let stdout_reader = read_on_thread(stdout, output_limit);
+    let stderr_reader = read_on_thread(stderr, output_limit);
     let start = Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(_)) => break,
-            Ok(None) if start.elapsed() < COMMAND_TIMEOUT => {
+            Ok(None) if start.elapsed() < timeout => {
                 thread::sleep(Duration::from_millis(40));
             }
             Ok(None) => {
@@ -31,7 +41,7 @@ pub fn run(command: &[String], cwd: &Path) -> Result<CommandOutput, String> {
                 let _ = child.wait();
                 return Err(format!(
                     "La orden MCP superó el límite de {} segundos",
-                    COMMAND_TIMEOUT.as_secs()
+                    timeout.as_secs()
                 ));
             }
             Err(error) => {
@@ -122,6 +132,7 @@ fn command_builder(
             ])
             .env("CHXCHX_MCP_SCRIPT", resolved)
             .env("CHXCHX_MCP_ARGS", arguments)
+            .env("PATH", super::executable_search::agent_path())
             .current_dir(cwd);
         return Ok(process);
     }
@@ -129,7 +140,10 @@ fn command_builder(
     let _ = extension;
 
     let mut process = Command::new(resolved);
-    process.args(&command[1..]).current_dir(cwd);
+    process
+        .args(&command[1..])
+        .env("PATH", super::executable_search::agent_path())
+        .current_dir(cwd);
     Ok(process)
 }
 
@@ -160,7 +174,7 @@ fn executable_candidate(path: &Path) -> Option<PathBuf> {
     None
 }
 
-fn read_all(mut reader: impl Read) -> IoResult<Vec<u8>> {
+fn read_all(mut reader: impl Read, output_limit: usize) -> IoResult<Vec<u8>> {
     let mut output = Vec::new();
     let mut buffer = [0_u8; 8192];
     let mut truncated = false;
@@ -169,7 +183,7 @@ fn read_all(mut reader: impl Read) -> IoResult<Vec<u8>> {
         if read == 0 {
             break;
         }
-        let remaining = OUTPUT_LIMIT_BYTES.saturating_sub(output.len());
+        let remaining = output_limit.saturating_sub(output.len());
         truncated |= read > remaining;
         output.extend_from_slice(&buffer[..read.min(remaining)]);
     }
@@ -182,10 +196,13 @@ fn read_all(mut reader: impl Read) -> IoResult<Vec<u8>> {
     Ok(output)
 }
 
-fn read_on_thread(reader: impl Read + Send + 'static) -> Receiver<IoResult<Vec<u8>>> {
+fn read_on_thread(
+    reader: impl Read + Send + 'static,
+    output_limit: usize,
+) -> Receiver<IoResult<Vec<u8>>> {
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
-        let _ = sender.send(read_all(reader));
+        let _ = sender.send(read_all(reader, output_limit));
     });
     receiver
 }

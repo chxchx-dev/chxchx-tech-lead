@@ -1,0 +1,6 @@
+name = "llm-inference-serving"
+description = "Ejecutar y servir modelos de lenguaje: cuantización validada, memoria y KV cache, motores (llama.cpp, vLLM, Ollama), límites, observabilidad y pruebas de carga."
+stacks = ["ml", "ai"]
+languages = []
+tags = ["inference", "serving", "quantization", "gguf", "vllm", "llama.cpp"]
+origin = "chxchx"

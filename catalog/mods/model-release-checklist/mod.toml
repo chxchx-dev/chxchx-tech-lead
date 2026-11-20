@@ -1,0 +1,3 @@
+name = "chxchx-model-release-checklist"
+description = "Lista de verificación antes de publicar o desplegar un modelo."
+stacks = ["ml", "ai"]

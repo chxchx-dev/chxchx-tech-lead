@@ -1,7 +1,7 @@
 //! The "Modelos locales" tab: your machine, Ollama's state and the models that fit.
 use super::super::*;
 use super::{Event, State};
-use crate::integrations::local_models::{Candidate, Snapshot, size_label};
+use crate::integrations::local_models::{Candidate, Op, Snapshot, size_label};
 use iced::widget::{column, progress_bar, tooltip};
 
 fn msg(event: Event) -> Message {
@@ -154,7 +154,10 @@ fn copyable<'a>(value: String) -> Element<'a, Message> {
 }
 
 fn model_row<'a>(local: &State, snapshot: &Snapshot, model: &'a Candidate) -> Element<'a, Message> {
-    let ready = snapshot.ollama.running && snapshot.opencode_installed && !local.busy();
+    let ready = snapshot.ollama.running
+        && snapshot.opencode_installed
+        && !local.busy()
+        && local.pending.is_none();
     let fits = model.fit != "none";
     let mut title = row![
         text(&model.label).size(13).font(design::UI_BOLD),
@@ -178,7 +181,7 @@ fn model_row<'a>(local: &State, snapshot: &Snapshot, model: &'a Candidate) -> El
                 .padding([5, 10])
                 .style(styles::secondary)
                 .on_press_maybe(
-                    (snapshot.ollama.running && !local.busy())
+                    (snapshot.ollama.running && !local.busy() && local.pending.is_none())
                         .then(|| msg(Event::Remove(model.tag.clone()))),
                 ),
         );
@@ -298,6 +301,72 @@ fn working(local: &State) -> Option<Element<'_, Message>> {
     ))
 }
 
+fn confirmation<'a>(local: &'a State, snapshot: &'a Snapshot) -> Option<Element<'a, Message>> {
+    let pending = local.pending.as_ref()?;
+    let (question, action, danger) = match pending {
+        Op::Setup { tag, .. } => {
+            let model = snapshot.models.iter().find(|model| model.tag == *tag);
+            let name = model.map_or(tag.as_str(), |model| model.label.as_str());
+            let download = model.is_some_and(|model| !model.downloaded);
+            let detail = if download {
+                format!(
+                    "Se descargarán aproximadamente {} y se creará la variante con más contexto.",
+                    model.map_or_else(|| "tamaño desconocido".into(), |m| size_label(m.size))
+                )
+            } else {
+                "Se conectará el modelo a OpenCode en este proyecto.".into()
+            };
+            (
+                format!("¿Continuar con {name}? {detail}"),
+                if download {
+                    "Descargar y conectar"
+                } else {
+                    "Conectar"
+                },
+                false,
+            )
+        }
+        Op::Remove { tag } => (
+            format!(
+                "¿Quitar {tag}? Se borrarán de Ollama el modelo y sus variantes de contexto, y se quitarán de opencode.json de este proyecto."
+            ),
+            "Quitar modelo",
+            true,
+        ),
+    };
+    Some(
+        container(
+            column![
+                text(question).size(12),
+                row![
+                    button(text("Volver").size(11))
+                        .padding([5, 10])
+                        .style(styles::secondary)
+                        .on_press(msg(Event::CancelConfirmation)),
+                    button(text(action).size(11).font(design::UI_BOLD))
+                        .padding([5, 10])
+                        .style(if danger {
+                            styles::danger
+                        } else {
+                            styles::primary
+                        })
+                        .on_press(msg(Event::Confirm)),
+                ]
+                .spacing(6),
+            ]
+            .spacing(8),
+        )
+        .padding(12)
+        .width(Fill)
+        .style(styles::tinted(if danger {
+            design::danger()
+        } else {
+            design::warning()
+        }))
+        .into(),
+    )
+}
+
 pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Message> {
     let local = &state.local;
     let mut page = column![
@@ -357,6 +426,9 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
         }
         Some(snapshot) => {
             page = page.push(hardware(snapshot)).push(ollama(snapshot));
+            if let Some(confirm) = confirmation(local, snapshot) {
+                page = page.push(confirm);
+            }
             page = page.push(
                 row![
                     text("Recomendados para este equipo")

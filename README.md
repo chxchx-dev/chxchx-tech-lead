@@ -47,9 +47,24 @@ del proyecto y comparten la lógica:
 | **TUI** | Un tablero rápido dentro de tu terminal | `chxchx-tech tui .` · `t` |
 | **CLI** | Automatización y scripts, con salida JSON versionada | `chxchx-tech <comando>` |
 
-Atajos: `st` (status) · `dr` (doctor) · `sk` (skills) · `ws` (workspace) · `pr` (projects). Los comandos que aún viven en el
-CLI de Python (`agent`, `bridge`, `local-models`, `run`, `ci`, `deploy`…) también se escriben con `chxchx-tech`: los ejecuta
-el CLI que acompaña a la instalación, así que no hay que recordar dos programas.
+Atajos: `st` (status) · `dr` (doctor) · `sk` (skills) · `ws` (workspace) · `pr` (projects). El CLI Rust incluye
+`local-models status|setup|remove`, `process list|start|stop|log`,
+`workspace start|stop|suspend|resume|memory-prune`, `resources` y `agent chat-state` para restaurar o reiniciar el historial. `workspace memory-prune --dry-run` muestra capturas automáticas inválidas antes de quitarlas; al aplicar, conserva notas propias y deja un backup. Studio lee y guarda el historial en Rust, y obtiene en Rust los modelos y niveles de esfuerzo disponibles; la ejecución de turnos y los comandos pendientes (`agent`,
+`bridge`, `run`, `ci`, `deploy`…) todavía dependen del CLI Python que acompaña a la instalación mientras se
+completa la migración.
+
+`resources --json` entrega el contrato `chxchx.resources-overview` v1 con RAM, swap y procesos de los proyectos
+registrados; la inspección es de solo lectura. `process log ID --lines 100` muestra una cola acotada del log.
+
+Para instalar y conectar modelos locales, consulta primero el equipo y después previsualiza la operación. Descargar
+o quitar un modelo requiere `--yes`; `--dry-run` muestra pasos y cambios sin descargar, borrar ni modificar archivos:
+
+```bash
+chxchx-tech local-models status
+chxchx-tech local-models setup qwen2.5-coder:7b --dry-run
+chxchx-tech local-models setup qwen2.5-coder:7b --yes
+chxchx-tech local-models remove qwen2.5-coder:7b --dry-run
+```
 
 ## Studio
 
@@ -138,7 +153,7 @@ símbolos y tablas; si la rediriges o usas `NO_COLOR`, sigue siendo el texto pla
 | `status` | Resume el proyecto sin escribir ni iniciar procesos |
 | `init` | Previsualiza (y con `--apply` crea) configuración y guías |
 | `rollback` | Restaura los archivos administrados desde el último respaldo |
-| `workspace` | Gestiona la confianza local del proyecto |
+| `workspace` | Gestiona confianza, ciclo de procesos y poda de memoria explícita (`memory-prune --dry-run` previsualiza) |
 | `skills` · `packs` · `mods` | Catálogo de skills, Tech Packs y Mods |
 | `integrate` | Configura los servidores de memoria y código (basic-memory, Serena) |
 | `connectors` (`conn`) | Conecta tus agentes con Excel, Power BI, bases de datos… (`list`, `add`, `remove`, `custom`); ver [CONECTORES.md](CONECTORES.md) |
@@ -150,14 +165,40 @@ símbolos y tablas; si la rediriges o usas `NO_COLOR`, sigue siendo el texto pla
 
 ### Windows
 
-Cada push genera el artefacto **`chxchx-rust-windows-x86_64`** (workflow *Rust product builds*) con
-`chxchx-studio.exe` y `chxchx-tech.exe`; no requiere instalar nada más. Para compilar desde el repositorio:
+La release ofrece un [MSI x64 por usuario](https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/chxchx-studio-windows-x86_64.msi), sin permisos de administrador. La copia versionada de 0.6.3 también está en [GitHub](https://github.com/chxchx-dev/chxchx-tech-lead/blob/dev/installers/windows/v0.6.3/chxchx-studio-windows-x86_64.msi), con su SHA-256 al lado. Como alternativa, `install.ps1` descarga el ZIP y verifica su SHA-256 contra el manifiesto; el ayudante Python descarga `uv` y Python 3.11 si faltan. Ambos métodos instalan Basic Memory y Serena como extras requeridos, así que necesitan Internet.
+
+El MSI se instala en `%LOCALAPPDATA%\Programs\ChxChxStudio\stable-X.Y.Z`. Incluye los ejecutables Rust, el ayudante Python con CPython 3.11.18 y sus paquetes, y `uv.exe`; descarga Basic Memory y Serena durante la instalación. Los shims de sus comandos quedan en PATH. Tanto el MSI como `install.ps1` crean shims para todos los comandos Rust `chxchx-*` incluidos, también los que se añadan en futuras versiones. El workflow añade al manifiesto los paquetes y sus SHA-256 y comprueba el ciclo silencioso de instalar, abrir, actualizar y desinstalar antes de publicarlos. El script de ZIP no modifica una instalación MSI del mismo canal. Por decisión del dueño, los instaladores no llevan firma digital y se destinan al uso personal y conocidos; Windows puede mostrar SmartScreen.
+
+Para seguir instalando con el método actual, usa `-DryRun` antes de modificar el equipo:
 
 ```powershell
+Invoke-WebRequest https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.ps1 -OutFile install.ps1
+.\install.ps1 -DryRun
+.\install.ps1
+```
+
+El ZIP nativo también se publica en Releases para instalaciones existentes. El artefacto **`chxchx-rust-windows-x86_64`** del workflow *Rust product builds* es una compilación de CI, retenida por 14 días, no un instalador. No se publica aún un build nativo para Windows ARM64. Para compilar y validar el MSI desde el repositorio (requiere el SDK de .NET 6, WiX 5.0.2 y `uv`):
+
+```powershell
+./scripts/build_windows_msi.ps1 -Channel stable
 ./scripts/studio-rust.ps1
 ```
 
 ### Linux y macOS
+
+Hay instaladores gráficos para Linux x86_64 y macOS (Apple Silicon e Intel), publicados como archivos descargables en [GitHub Releases](https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest). Los paquetes se generan en CI y su SHA-256 se incluye en `studio-manifest.txt`. La ventana permite verificar descargas sin instalar antes de continuar.
+
+- **macOS:** descarga [Apple Silicon](https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/chxchx-installer-macos-arm64.dmg) o [Intel](https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/chxchx-installer-macos-x86_64.dmg), abre el DMG, copia *ChxChx Installer.app* a Aplicaciones y ejecútalo. La app instala Studio y los comandos en tu usuario. Al no tener certificado Developer ID ni notarización, macOS puede pedir autorizarla la primera vez.
+- **Linux x86_64:** descarga [el instalador gráfico](https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/chxchx-installer-linux-x86_64.tar.gz), extráelo desde el gestor de archivos y abre `iniciar-instalador.sh`. Si necesita bibliotecas gráficas, pedirá autorización del sistema; el programa y los comandos quedan en tu usuario.
+- En ambos sistemas puedes seleccionar `stable` o `dev`. Basic Memory y Serena son extras requeridos: se descargan durante la instalación, por lo que hace falta conexión a Internet.
+
+Los comandos quedan en `~/.local/bin`. El instalador agrega esa carpeta, sin duplicar el bloque, a los archivos de inicio de Bash, Zsh o Fish; abre una terminal nueva al terminar. Los paquetes incluyen automáticamente los ejecutables CLI Rust `chxchx-*` disponibles, así que futuros comandos siguen el mismo mecanismo. Al desinstalar ChxChx se conserva la ruta porque Basic Memory y Serena también viven ahí.
+
+El instalador de consola sigue disponible para automatización y `--dry-run`:
+
+```bash
+curl -fsSL https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.sh | bash -s -- --dry-run
+```
 
 Necesitas [Rust](https://rustup.rs). En Linux, las bibliotecas de ventana:
 
@@ -170,12 +211,16 @@ sudo apt-get install libwayland-dev libx11-dev libxkbcommon-dev libxcb1-dev libx
 cargo build --release
 ./target/release/chxchx-studio .         # abre Studio sobre el proyecto actual
 ./target/release/chxchx-tech status .    # o usa el CLI
+cargo run --release --features visual-installer --bin chxchx-installer
 # o, de una vez: ./scripts/studio-rust.sh
 ```
 
-> **Nota:** el chat visual usa por ahora el CLI de Python de [`old-version/`](old-version/)
-> (`cd old-version && uv sync`) hasta que `agent chat` se porte a Rust. Studio lo busca solo; también puedes
-> indicar su ruta con `CHXCHX_TECH_CLI`. El resto del producto no lo necesita.
+> **Migración en curso:** el historial visual (`agent chat-state`) ya se lee y reinicia en Rust. Studio también recupera
+> en segundo plano solicitudes explícitas de memoria desde historiales Codex, Claude y OpenCode del proyecto actual.
+> Claude Code corre desde Rust; Codex y OpenCode los conduce el servicio
+> [`services/agent-adapter/`](services/agent-adapter/) mediante un contrato versionado. Los comandos del CLI Python
+> anterior se portaron o se retiraron, y `old-version/` ya no existe. Los modelos locales se diagnostican y configuran
+> desde Rust y Ollama.
 
 ## Actualizaciones
 
@@ -211,7 +256,8 @@ libera, recorta lo que el chat no necesita y lanza los agentes con ajustes que r
 ├── MANUAL.md       Manual técnico: capacidades, seguridad y decisiones
 ├── MEMORIA.md      Guía de gestión de memoria
 ├── CONECTORES.md   Guía de los conectores MCP (Excel, Power BI, bases de datos…)
-└── old-version/    Solo el CLI de Python que aún sirve el chat, los modelos locales y el actualizador
+├── packaging/      Instaladores (install.sh, install.ps1), manifiesto del release y sus pruebas
+└── services/       Servicios con runtime ajeno a Rust (agent-adapter), con contrato versionado y pruebas propias
 ```
 
 ## Desarrollo
@@ -227,6 +273,4 @@ los procesos e integraciones externas viven en `integrations/`. Más reglas en [
 
 ## Estado
 
-Versión `0.6.3`, el producto en Rust. Pendiente: portar `agent chat` y los modelos locales a Rust (hoy los sirve el CLI de Python de `old-version/`), guardar la disposición de paneles entre sesiones y completar la QA en macOS y Linux.
-`agent chat` a Rust (hoy usa el CLI de Python), guardar la disposición de paneles entre sesiones y completar la QA
-en macOS y Linux.
+Versión `0.6.3`. Los modelos locales ya tienen diagnóstico, instalación, retirada y configuración nativos en Rust. El historial de chat se restaura y reinicia en Rust, y Studio backfillea en segundo plano solicitudes explícitas desde Codex, Claude y OpenCode. `old-version/` se eliminó: el chat de Claude corre desde Rust, el de Codex y OpenCode desde el servicio `agent-adapter`, y el actualizador avisa y abre la descarga. Falta QA nativa en Windows/macOS y verificar los builds de release con el servicio empaquetado.

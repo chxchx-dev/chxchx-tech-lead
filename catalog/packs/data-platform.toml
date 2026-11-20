@@ -1,0 +1,5 @@
+name = "data-platform"
+description = "Pipelines y almacenes de datos fiables: contratos, validaciones, SQL y calidad."
+stacks = ["postgres"]
+languages = []
+skills = ["data-engineering", "postgres", "python-engineering", "testing"]

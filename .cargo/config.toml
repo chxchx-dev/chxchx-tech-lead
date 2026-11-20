@@ -1,0 +1,3 @@
+[target.x86_64-pc-windows-msvc]
+# Release binaries must run without the separately installed MSVC redistributable.
+rustflags = ["-C", "target-feature=+crt-static"]

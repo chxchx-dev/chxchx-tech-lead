@@ -1,0 +1,6 @@
+name = "gpu-performance"
+description = "Rendimiento en GPU y entrenamiento distribuido: perfilado, memoria, MFU, atención eficiente, sharding y triaje de falta de memoria."
+stacks = ["ml"]
+languages = []
+tags = ["gpu", "cuda", "profiling", "distributed", "performance"]
+origin = "chxchx"

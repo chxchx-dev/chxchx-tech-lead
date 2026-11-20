@@ -1,0 +1,6 @@
+name = "model-safety-validation"
+description = "Validación de seguridad de modelos y aplicaciones con LLM: pruebas adversas, inyección de instrucciones, fuga de datos, salidas estructuradas y lista de verificación antes de publicar."
+stacks = ["ml", "ai"]
+languages = []
+tags = ["safety", "red-team", "prompt-injection", "validation", "release"]
+origin = "chxchx"

@@ -113,6 +113,15 @@ pub fn detect_project(root: &Path) -> ProjectDetection {
     if detects_ai(root, &dependencies) {
         stacks.push("ai".to_owned());
     }
+    if detects_ml(root, &dependencies) {
+        stacks.push("ml".to_owned());
+    }
+    if detects_kubernetes(root) {
+        stacks.push("kubernetes".to_owned());
+    }
+    if detects_terraform(root) {
+        stacks.push("terraform".to_owned());
+    }
 
     let package_managers = [
         ("pnpm-lock.yaml", "pnpm"),
@@ -280,6 +289,63 @@ fn detects_ai(root: &Path, dependencies: &BTreeSet<String>) -> bool {
         || requirements_contain(root, &markers)
 }
 
+/// Projects that train, fine-tune or run models themselves (not only call a hosted API).
+fn detects_ml(root: &Path, dependencies: &BTreeSet<String>) -> bool {
+    const MARKERS: [&str; 15] = [
+        "torch",
+        "tensorflow",
+        "jax",
+        "transformers",
+        "accelerate",
+        "peft",
+        "vllm",
+        "llama-cpp-python",
+        "sentencepiece",
+        "deepspeed",
+        "pytorch-lightning",
+        "mlflow",
+        "wandb",
+        "safetensors",
+        "bitsandbytes",
+    ];
+    dependencies
+        .iter()
+        .any(|dependency| MARKERS.contains(&dependency.as_str()))
+        || requirements_contain(root, &MARKERS)
+}
+
+fn directory_has_file(root: &Path, directory: &str, matches: impl Fn(&str) -> bool) -> bool {
+    fs::read_dir(root.join(directory)).is_ok_and(|entries| {
+        entries.filter_map(Result::ok).any(|entry| {
+            entry.file_type().is_ok_and(|kind| kind.is_file())
+                && matches(&entry.file_name().to_string_lossy())
+        })
+    })
+}
+
+/// A Helm chart or kustomization at the root, or YAML manifests in a folder named for them.
+fn detects_kubernetes(root: &Path) -> bool {
+    let at_root = |name: &str| {
+        matches!(
+            name,
+            "Chart.yaml" | "kustomization.yaml" | "kustomization.yml"
+        )
+    };
+    let yaml = |name: &str| name.ends_with(".yaml") || name.ends_with(".yml");
+    directory_has_file(root, "", at_root)
+        || ["k8s", "kubernetes", "helm", "charts"]
+            .into_iter()
+            .any(|folder| directory_has_file(root, folder, yaml))
+}
+
+fn detects_terraform(root: &Path) -> bool {
+    let tf = |name: &str| name.ends_with(".tf") || name.ends_with(".tf.json");
+    directory_has_file(root, "", tf)
+        || ["terraform", "infra", "infrastructure"]
+            .into_iter()
+            .any(|folder| directory_has_file(root, folder, tf))
+}
+
 fn detects_docker(root: &Path) -> bool {
     [
         "Dockerfile",
@@ -351,3 +417,7 @@ fn root_has_extension(root: &Path, extension: &str) -> bool {
 fn contains_any(values: &BTreeSet<String>, expected: &[&str]) -> bool {
     expected.iter().any(|value| values.contains(*value))
 }
+
+#[cfg(test)]
+#[path = "project_detection_tests.rs"]
+mod tests;

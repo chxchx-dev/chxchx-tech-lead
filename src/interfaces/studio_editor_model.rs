@@ -22,6 +22,8 @@ pub(in crate::interfaces::studio) struct State {
     pub search: bool,
     pub explorer: bool,
     pub saving: bool,
+    /// Saving every file: the tab that was open when it began, to return to it.
+    pub save_all: Option<usize>,
     pub closing: Option<usize>,
     pub exiting: bool,
     /// Match to select once the file requested by a search result has loaded.
@@ -44,12 +46,69 @@ impl State {
             search: false,
             explorer: true,
             saving: false,
+            save_all: None,
             closing: None,
             exiting: false,
             pending_cursor: None,
             modes: BTreeMap::new(),
             preview: None,
         }
+    }
+}
+
+impl State {
+    /// An item (or a folder with everything in it) was renamed or moved: the open tabs, the
+    /// expanded folders and the view modes follow it. Cached listings under it are dropped.
+    pub fn retarget(&mut self, from: &Path, to: &Path) {
+        let moved = |path: &Path| path.strip_prefix(from).ok().map(|rest| to.join(rest));
+        for tab in &mut self.tabs {
+            if let Some(path) = moved(&tab.document.relative) {
+                tab.document.relative = path;
+            }
+        }
+        let expanded = std::mem::take(&mut self.expanded);
+        self.expanded = expanded
+            .into_iter()
+            .map(|path| moved(&path).unwrap_or(path))
+            .collect();
+        self.folders
+            .retain(|path, _| path.strip_prefix(from).is_err());
+        let modes = std::mem::take(&mut self.modes);
+        self.modes = modes
+            .into_iter()
+            .map(|(path, mode)| (moved(&path).unwrap_or(path), mode))
+            .collect();
+        self.preview = None;
+    }
+
+    /// An item (or a folder with everything in it) is gone: its tabs close, even with unsaved
+    /// changes (the person confirmed the deletion), and nothing keeps pointing at it.
+    pub fn forget(&mut self, path: &Path) {
+        let selected_path = self
+            .selected
+            .and_then(|index| self.tabs.get(index))
+            .map(|tab| tab.document.relative.clone());
+        self.tabs
+            .retain(|tab| tab.document.relative.strip_prefix(path).is_err());
+        self.closing = None;
+        self.selected = selected_path
+            .filter(|current| current.strip_prefix(path).is_err())
+            .and_then(|current| {
+                self.tabs
+                    .iter()
+                    .position(|tab| tab.document.relative == current)
+            })
+            .or_else(|| (!self.tabs.is_empty()).then(|| self.tabs.len() - 1));
+        if self.selected.is_none() {
+            self.home = true;
+        }
+        self.expanded
+            .retain(|folder| folder.strip_prefix(path).is_err());
+        self.folders
+            .retain(|folder, _| folder.strip_prefix(path).is_err());
+        self.modes
+            .retain(|file, _| file.strip_prefix(path).is_err());
+        self.preview = None;
     }
 }
 
@@ -183,6 +242,7 @@ pub(in crate::interfaces::studio) fn apply_restored(
 pub(in crate::interfaces::studio) fn fixture() -> Dashboard {
     Dashboard {
         editor: State::new(),
+        explorer: Default::default(),
         terminal: Default::default(),
         agents: Default::default(),
         chat: Default::default(),
@@ -312,5 +372,78 @@ mod tests {
             state.editor.tabs[0].dirty,
             "no recomparison without an edit"
         );
+    }
+
+    #[test]
+    fn save_all_with_nothing_unsaved_says_so_and_close_all_keeps_what_is_unsaved() {
+        let mut state = fixture();
+        open(&mut state, "a.rs");
+        open(&mut state, "b.rs");
+        open(&mut state, "c.rs");
+        let _ = update(&mut state, Event::SaveAll);
+        assert!(state.message.contains("No hay cambios") && state.editor.save_all.is_none());
+
+        state.editor.tabs[1].dirty = true;
+        let _ = update(&mut state, Event::CloseAllTabs);
+        let left: Vec<_> = state
+            .editor
+            .tabs
+            .iter()
+            .map(|t| t.document.relative.clone())
+            .collect();
+        assert_eq!(left, [PathBuf::from("b.rs")]);
+        assert_eq!(state.editor.selected, Some(0));
+        assert!(!state.editor.home && state.message.contains("sin guardar"));
+
+        state.editor.tabs[0].dirty = false;
+        let _ = update(&mut state, Event::CloseAllTabs);
+        assert!(
+            state.editor.tabs.is_empty() && state.editor.home && state.editor.selected.is_none()
+        );
+    }
+
+    #[test]
+    fn select_all_cut_and_paste_work_on_the_open_file() {
+        let mut state = fixture();
+        open(&mut state, "a.rs");
+        let _ = update(&mut state, Event::SelectAll);
+        assert_eq!(
+            state.editor.tabs[0].content.selection().as_deref(),
+            Some("abc")
+        );
+
+        let _ = update(&mut state, Event::Cut);
+        assert_eq!(
+            state.editor.tabs[0].content.text().trim_end(),
+            "",
+            "a cut removes the selection"
+        );
+        assert!(state.editor.tabs[0].dirty);
+
+        let _ = update(&mut state, Event::Pasted(Some("pegado".into())));
+        assert_eq!(state.editor.tabs[0].content.text().trim_end(), "pegado");
+        let _ = update(&mut state, Event::Pasted(None));
+        let _ = update(&mut state, Event::Pasted(Some(String::new())));
+        assert_eq!(
+            state.editor.tabs[0].content.text().trim_end(),
+            "pegado",
+            "nothing on the clipboard changes nothing"
+        );
+    }
+
+    #[test]
+    fn copy_and_cut_without_a_selection_or_a_file_do_nothing() {
+        let mut state = fixture();
+        let _ = update(&mut state, Event::Copy);
+        let _ = update(&mut state, Event::Cut);
+        assert!(state.editor.tabs.is_empty());
+        open(&mut state, "a.rs");
+        let _ = update(&mut state, Event::Cut);
+        assert_eq!(
+            state.editor.tabs[0].content.text().trim_end(),
+            "abc",
+            "no selection, nothing cut"
+        );
+        assert!(!state.editor.tabs[0].dirty);
     }
 }

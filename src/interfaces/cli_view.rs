@@ -202,6 +202,110 @@ pub(super) fn projects_current(ui: &Ui) -> Result<(), String> {
     Ok(())
 }
 
+/// Keeps a failure where `workspace errors` can show it. The cache is a convenience: when it
+/// cannot be written the original error is still the one the person sees.
+pub(super) fn remember_failure(path: &Path, operation: &str, error: &str) {
+    let Some(home) = crate::features::project_profiles::application_home() else {
+        return;
+    };
+    let root = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let project = root
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let _ = crate::features::error_cache::record(&home, &project, &root, operation, error);
+}
+
+pub(super) fn errors(ui: &Ui, path: Option<&Path>, limit: usize) -> Result<(), String> {
+    let home = crate::features::project_profiles::application_home()
+        .ok_or("No se pudo resolver CHXCHX_TECH_HOME")?;
+    let found = crate::features::error_cache::list(&home, path, limit);
+    if found.is_empty() {
+        println!("No hay errores guardados.");
+        return Ok(());
+    }
+    for error in found {
+        println!(
+            "{} · {} · {}",
+            ui.dim(&error.occurred_at),
+            ui.bold(&error.project),
+            error.operation
+        );
+        println!("  {}", error.message.replace('\n', "\n  "));
+    }
+    Ok(())
+}
+
+pub(super) fn report_error(
+    ui: &Ui,
+    path: &Path,
+    operation: &str,
+    message: &str,
+) -> Result<(), String> {
+    let home = crate::features::project_profiles::application_home()
+        .ok_or("No se pudo resolver CHXCHX_TECH_HOME")?;
+    let root =
+        std::fs::canonicalize(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let project = root
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    crate::features::error_cache::record(&home, &project, &root, operation, message)?;
+    println!("{}", ui.done("Error guardado").trim_start());
+    Ok(())
+}
+
+pub(super) fn tools_install(ui: &Ui, names: &[String], dry_run: bool) -> Result<(), String> {
+    use crate::features::tools_install::{Outcome, TOOLS, install};
+    let wanted: Vec<&str> = if names.is_empty() {
+        TOOLS.iter().map(|tool| tool.name).collect()
+    } else {
+        names.iter().map(String::as_str).collect()
+    };
+    for name in wanted {
+        match install(name, dry_run)? {
+            Outcome::AlreadyInstalled => println!(
+                "{}",
+                ui.done(&format!("{name}: ya está instalado")).trim_start()
+            ),
+            Outcome::Installed => {
+                println!("{}", ui.done(&format!("{name}: instalado")).trim_start())
+            }
+            Outcome::Preview(command) => println!("DRY RUN: {}", command.join(" ")),
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn projects_switch(ui: &Ui, alias: &str, dry_run: bool) -> Result<(), String> {
+    let switched = crate::features::project_switch::switch(alias, dry_run)?;
+    let prefix = if dry_run { "DRY RUN: " } else { "" };
+    for (path, action) in &switched.suspended {
+        println!(
+            "{}",
+            ui.done(&format!(
+                "{prefix}workspace suspendido: {} · {}",
+                path.display(),
+                action.status
+            ))
+            .trim_start()
+        );
+    }
+    println!("{}", ui.bullet(&switched.started.message).trim_start());
+    for process in &switched.started.processes {
+        println!("{}", ui.bullet(&process.message).trim_start());
+    }
+    println!(
+        "{}",
+        ui.done(&format!(
+            "{prefix}proyecto activo: {} ({})",
+            switched.name, switched.alias
+        ))
+        .trim_start()
+    );
+    Ok(())
+}
+
 pub(super) fn projects_sync(ui: &Ui, apply: bool) -> Result<(), String> {
     let plan = crate::features::project_sync::plan_projects_sync()?;
     println!(

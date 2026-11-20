@@ -1,0 +1,3 @@
+No lances un entrenamiento largo ni caro sin comprobaciones previas: pérdida inicial ≈ ln(vocabulario), sobreajuste de un lote pequeño, reanudación desde un checkpoint, rendimiento medido (tokens/s) y memoria calculada. Estima el costo (GPU-horas) y avísame antes de superar lo acordado.
+
+Registra configuración, versión del código y de los datos, semillas y entorno de cada corrida. Escribe checkpoints completos y atómicos, y nunca borres ni sobrescribas los existentes sin confirmación. Define criterios de parada (presupuesto, divergencia, validación estancada) y ante un pico de pérdida investiga en vez de continuar.

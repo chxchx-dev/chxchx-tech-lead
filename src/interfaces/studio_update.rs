@@ -1,8 +1,6 @@
-//! "Buscar actualizaciones": checks the channel this install follows and installs the newer
-//! release when the person agrees. The installer keeps the running version until the next
-//! update, so a failed update never leaves Studio unusable.
+//! "Buscar actualizaciones": tells the person when a newer release is published and opens its
+//! page. Nothing is installed from here, so a failed check never touches the running Studio.
 use super::*;
-use crate::integrations::chat_bridge as bridge;
 use crate::integrations::studio_update::{self as update, Info};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -12,8 +10,6 @@ pub(super) enum Phase {
     Checking,
     UpToDate(Info),
     Available(Info),
-    Applying(Info),
-    Done(Info),
     Failed(String),
 }
 
@@ -26,73 +22,54 @@ pub(super) struct State {
 pub(super) enum Event {
     Open,
     Checked(Result<Info, String>),
-    Apply,
-    Applied(Result<Info, String>),
+    /// "Ver la descarga": opens the page of the new release.
+    Download,
+    Opened(Result<(), String>),
     Close,
-}
-
-/// A local build is not a managed install: say so instead of showing the CLI's internal error.
-fn explain(error: String) -> String {
-    if error.contains("instalación administrada") || error.contains("canal de la instalación") {
-        "Esta copia de Studio no se instaló con el instalador (es una compilación local), así que no se actualiza desde aquí. Reinstálala con install.sh / install.ps1 o compila la versión nueva.".to_owned()
-    } else {
-        error
-    }
-}
-
-fn run(
-    state: &Dashboard,
-    job: fn(&std::path::Path) -> Result<Info, String>,
-    done: fn(Result<Info, String>) -> Event,
-) -> Task<Message> {
-    let root = state.root.clone();
-    Task::perform(
-        async move {
-            jobs::offload(move || match bridge::find_cli(&root) {
-                Some(cli) => job(&cli),
-                None => Err(bridge::missing_cli_hint()),
-            })
-            .await
-            .unwrap_or_else(|| Err("No se pudo consultar las actualizaciones".into()))
-        },
-        move |result| Message::Update(done(result)),
-    )
 }
 
 pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     match event {
         Event::Open => {
-            if matches!(state.update.phase, Phase::Checking | Phase::Applying(_)) {
+            if matches!(state.update.phase, Phase::Checking) {
                 return Task::none();
             }
             state.update.phase = Phase::Checking;
-            return run(state, update::check, Event::Checked);
+            return Task::perform(
+                async {
+                    jobs::offload(update::check)
+                        .await
+                        .unwrap_or_else(|| Err("No se pudo consultar las actualizaciones".into()))
+                },
+                |result| Message::Update(Event::Checked(result)),
+            );
         }
         Event::Checked(result) => {
             state.update.phase = match result {
                 Ok(info) if info.available => Phase::Available(info),
                 Ok(info) => Phase::UpToDate(info),
-                Err(error) => Phase::Failed(explain(error)),
+                Err(error) => Phase::Failed(error),
             };
         }
-        Event::Apply => {
+        Event::Download => {
             if let Phase::Available(info) = state.update.phase.clone() {
-                state.update.phase = Phase::Applying(info);
-                return run(state, update::apply, Event::Applied);
+                return Task::perform(
+                    async move {
+                        jobs::offload(move || update::open_download(&info))
+                            .await
+                            .unwrap_or_else(|| Err("No se pudo abrir la descarga".into()))
+                    },
+                    |result| Message::Update(Event::Opened(result)),
+                );
             }
         }
-        Event::Applied(result) => {
+        Event::Opened(result) => {
             state.update.phase = match result {
-                Ok(info) => Phase::Done(info),
-                Err(error) => Phase::Failed(explain(error)),
+                Ok(()) => Phase::Closed,
+                Err(error) => Phase::Failed(error),
             };
         }
-        Event::Close => {
-            // An installation in progress cannot be dismissed: closing would hide it, not stop it.
-            if !matches!(state.update.phase, Phase::Applying(_)) {
-                state.update.phase = Phase::Closed;
-            }
-        }
+        Event::Close => state.update.phase = Phase::Closed,
     }
     Task::none()
 }
@@ -120,7 +97,7 @@ pub(super) fn dialog(state: &Dashboard) -> Option<Element<'_, Message>> {
                 "refresh",
                 design::accent(),
                 "Buscando actualizaciones…",
-                "Consultando la versión publicada en tu canal.".into(),
+                "Consultando el último release publicado.".into(),
                 Space::new().into(),
             ),
             Phase::UpToDate(info) => (
@@ -135,45 +112,25 @@ pub(super) fn dialog(state: &Dashboard) -> Option<Element<'_, Message>> {
                 design::accent(),
                 "Hay una versión nueva",
                 format!(
-                    "Tienes {} y está disponible {}. Se descarga, se verifica y se instala en lugar de la actual; tus proyectos y ajustes no cambian. Al terminar, reinicia Studio.",
+                    "Tienes {} y está disponible {}. Descárgala de la página del release e instálala encima de la actual; tus proyectos y ajustes no cambian.",
                     version(info),
                     info.latest
                 ),
                 row![
                     close(),
-                    button(text("Actualizar ahora").size(12))
+                    button(text("Ver la descarga").size(12))
                         .padding([7, 14])
                         .style(styles::primary)
-                        .on_press(Message::Update(Event::Apply)),
+                        .on_press(Message::Update(Event::Download)),
                 ]
                 .spacing(10)
                 .into(),
             ),
-            Phase::Applying(info) => (
-                "refresh",
-                design::accent(),
-                "Actualizando Studio…",
-                format!(
-                    "Instalando {}. No cierres Studio hasta que termine.",
-                    info.latest
-                ),
-                Space::new().into(),
-            ),
-            Phase::Done(info) => (
-                "check",
-                design::success(),
-                "Studio se actualizó",
-                format!(
-                    "Quedó instalada la versión {}. Cierra Studio y ábrelo de nuevo para usarla; la anterior se conserva hasta la próxima actualización.",
-                    info.latest
-                ),
-                close().into(),
-            ),
             Phase::Failed(error) => (
                 "warning",
                 design::warning(),
-                "No se pudo actualizar",
-                format!("{error} La versión que tienes sigue intacta."),
+                "No se pudo comprobar",
+                format!("{error} Tu versión sigue intacta."),
                 close().into(),
             ),
         };
@@ -202,20 +159,38 @@ pub(super) fn dialog(state: &Dashboard) -> Option<Element<'_, Message>> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn a_local_build_is_explained_not_blamed_on_the_cli() {
-        let text = explain("No se detectó una instalación administrada de Studio.".into());
-        assert!(text.contains("compilación local"));
-        assert_eq!(explain("sin red".into()), "sin red");
+    fn newer() -> Info {
+        Info {
+            current: "0.6.3".into(),
+            latest: "0.7.0".into(),
+            available: true,
+            url: "https://github.com/chxchx-dev-hp/x/releases/tag/v0.7.0".into(),
+        }
     }
 
     #[test]
-    fn an_update_in_progress_cannot_be_dismissed() {
+    fn the_download_is_only_requested_when_a_newer_release_was_found() {
         let mut state = super::super::editor::fixture();
-        state.update.phase = Phase::Applying(Info::default());
-        let _ = update(&mut state, Event::Close);
-        assert!(matches!(state.update.phase, Phase::Applying(_)));
-        state.update.phase = Phase::Failed("x".into());
+        state.update.phase = Phase::UpToDate(newer());
+        let _ = update(&mut state, Event::Download);
+        assert!(
+            matches!(state.update.phase, Phase::UpToDate(_)),
+            "nothing to download"
+        );
+        state.update.phase = Phase::Available(newer());
+        let _ = update(&mut state, Event::Download);
+        assert!(
+            matches!(state.update.phase, Phase::Available(_)),
+            "the dialog stays until the page opened"
+        );
+    }
+
+    #[test]
+    fn a_page_that_could_not_open_is_reported_and_closing_always_works() {
+        let mut state = super::super::editor::fixture();
+        state.update.phase = Phase::Available(newer());
+        let _ = update(&mut state, Event::Opened(Err("sin navegador".into())));
+        assert_eq!(state.update.phase, Phase::Failed("sin navegador".into()));
         let _ = update(&mut state, Event::Close);
         assert_eq!(state.update.phase, Phase::Closed);
     }

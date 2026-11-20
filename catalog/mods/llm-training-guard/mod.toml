@@ -1,0 +1,3 @@
+name = "chxchx-llm-training-guard"
+description = "Antes de lanzar un entrenamiento largo: comprobaciones previas, checkpoints y criterios de parada."
+stacks = ["ml"]

@@ -257,7 +257,12 @@ fn a_model_chosen_before_the_chat_is_ready_survives_its_preparation() {
     prepared_for(
         &mut state,
         "claude",
-        &(None, Err(String::new()), Ok(options), Vec::new()),
+        &(
+            bridge::SavedChat::default(),
+            Ok(options),
+            Vec::new(),
+            (String::new(), Ok(0)),
+        ),
     );
     let chat = &state.chat.chats[0];
     assert_eq!(
@@ -274,6 +279,46 @@ fn a_model_chosen_before_the_chat_is_ready_survives_its_preparation() {
 }
 
 #[test]
+fn provider_memory_preparation_unblocks_the_chat_with_recovered_context() {
+    let mut state = dashboard();
+    state.chat.chats[0].preparing = true;
+
+    drop(update(
+        &mut state,
+        Event::ProviderMemoriesPrepared("claude".into(), "Memoria recuperada".into(), Ok(2)),
+    ));
+
+    let chat = &state.chat.chats[0];
+    assert!(!chat.preparing);
+    assert_eq!(chat.recovered_memories, "Memoria recuperada");
+}
+
+#[test]
+fn starting_a_new_chat_waits_for_background_memory_recovery() {
+    let mut state = dashboard();
+    state.chat.chats[0].model.add_user("conversación anterior");
+
+    drop(update(&mut state, Event::NewChat));
+
+    let chat = &state.chat.chats[0];
+    assert!(chat.preparing);
+    assert!(chat.model.entries.is_empty());
+}
+
+#[test]
+fn new_chat_does_not_race_the_initial_chat_preparation() {
+    let mut state = dashboard();
+    state.chat.chats[0].preparing = true;
+    state.chat.chats[0].model.add_user("conversación anterior");
+
+    drop(update(&mut state, Event::NewChat));
+
+    let chat = &state.chat.chats[0];
+    assert!(chat.preparing);
+    assert_eq!(chat.model.entries[0].text, "conversación anterior");
+}
+
+#[test]
 fn arrows_walk_back_through_sent_messages_and_return_to_the_draft() {
     let mut state = dashboard();
     let chat = &mut state.chat.chats[0];
@@ -287,4 +332,141 @@ fn arrows_walk_back_through_sent_messages_and_return_to_the_draft() {
     let _ = update(&mut state, Event::HistoryNext);
     assert_eq!(state.chat.chats[0].composer.text().trim_end(), "borrador");
     assert!(state.chat.chats[0].recall.is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn studio_releases_context_generates_a_hidden_handoff_and_consumes_it_after_a_fresh_turn() {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    let root = std::env::temp_dir().join(format!(
+        "chxchx-studio-handoff-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&root).unwrap();
+    // The `claude` Studio runs itself: a summary turn (no live input) answers with the summary;
+    // a chat turn in read-only mode is the fresh session that must receive the handoff.
+    let claude = root.join("claude");
+    let line = |json: &str| format!("printf '%s\\n' '{json}'\n");
+    let init = |session: &str| {
+        line(&format!(
+            r#"{{"type":"system","subtype":"init","session_id":"{session}"}}"#
+        ))
+    };
+    let reply = |text: &str| {
+        line(&format!(
+            r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"{text}"}}]}}}}"#
+        ))
+    };
+    let result = |tokens: u32| {
+        line(&format!(
+            r#"{{"type":"result","is_error":false,"usage":{{"input_tokens":{tokens},"output_tokens":1}},"modelUsage":{{"m":{{"contextWindow":100}}}}}}"#
+        ))
+    };
+    fs::write(
+        &claude,
+        format!(
+            "#!/bin/sh\ncase \"$*\" in\n  *--input-format*) ;;\n  *) cat >/dev/null\n{summary}exit 0;;\nesac\nread line\ncase \"$*\" in\n  *\"--permission-mode plan\"*) printf '%s\\n' \"$line\" > '{recap_log}'\n{fresh};;\n  *)\n{first};;\nesac\ncat >/dev/null\n",
+            summary = reply(r"## Objetivo\nseguir") + &result(1),
+            recap_log = root.join("second-recap.txt").display(),
+            fresh = init("s-2") + &reply("respuesta visible") + &result(50),
+            first = init("s-1") + &reply("respuesta visible") + &result(90),
+        ),
+    )
+    .unwrap();
+    let mut permissions = fs::metadata(&claude).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&claude, permissions).unwrap();
+
+    let mut state = dashboard();
+    state.root = root.clone();
+    state.chat.chats[0].agent.executable = Some(claude.clone());
+    state.chat.chats[0].model.add_user("primera pregunta");
+    let spec = TurnSpec {
+        agent: "claude".into(),
+        provider: "Claude".into(),
+        project: root.clone(),
+        prompt: "primera pregunta".into(),
+        mode: "workspace-write".into(),
+        agent_command: vec!["claude".into()],
+        executable: Some(claude.clone()),
+        trusted: true,
+        ..Default::default()
+    };
+    state.chat.chats[0].turn = Some(Turn::launch(&spec).unwrap());
+
+    let drain = |state: &mut Dashboard| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while state.chat.chats[0].turn.is_some() && Instant::now() < deadline {
+            super::tick(state);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            state.chat.chats[0].turn.is_none(),
+            "Studio chat turn timed out"
+        );
+    };
+    drain(&mut state);
+
+    let handoff_path = root.join(".ai/chat-handoffs/claude-s-1.md");
+    assert!(
+        fs::read_to_string(&handoff_path)
+            .unwrap()
+            .contains("seguir")
+    );
+    let chat = &state.chat.chats[0];
+    assert_eq!(chat.model.session_id, "s-1");
+    assert_eq!(
+        chat.model
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == model::Kind::Assistant)
+            .map(|entry| entry.text.as_str())
+            .collect::<Vec<_>>(),
+        ["respuesta visible"]
+    );
+
+    state.chat.chats[0].model.add_user("segunda pregunta");
+    let next = TurnSpec {
+        agent: "claude".into(),
+        provider: "Claude".into(),
+        project: root.clone(),
+        prompt: "segunda pregunta".into(),
+        session: Some("s-1".into()),
+        mode: "read-only".into(),
+        agent_command: vec!["claude".into()],
+        executable: Some(claude.clone()),
+        trusted: true,
+        ..Default::default()
+    };
+    state.chat.chats[0].turn = Some(Turn::launch(&next).unwrap());
+    drain(&mut state);
+
+    assert!(
+        !handoff_path.exists(),
+        "Rust consumes only after the new session succeeds"
+    );
+    assert!(
+        fs::read_to_string(root.join("second-recap.txt"))
+            .unwrap()
+            .contains("seguir")
+    );
+    assert_eq!(state.chat.chats[0].model.session_id, "s-2");
+    assert_eq!(
+        state.chat.chats[0]
+            .model
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == model::Kind::Assistant)
+            .count(),
+        2,
+        "the hidden summary never appears in the visible chat"
+    );
+    let _ = fs::remove_dir_all(root);
 }

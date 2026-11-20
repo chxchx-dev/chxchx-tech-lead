@@ -1,6 +1,5 @@
-//! Visual chat with an agent: the legacy product's chat (permissions, access levels, tokens,
-//! context release) over the `chxchx-tech agent chat` protocol. The Python CLI stays the
-//! authority; this module only drives it and shows what it reports.
+//! Visual chat with an agent: Studio owns its transcript and UI while the Python adapter still
+//! runs provider turns and reports permissions, usage and context release over JSONL.
 use super::*;
 use crate::features::agents::Agent;
 use crate::features::chat_model::{self as model, Kind};
@@ -75,6 +74,8 @@ pub(super) struct Chat {
     pub model: model::Model,
     pub composer: text_editor::Content,
     pub turn: Option<Turn>,
+    /// Assistant messages produced by the current turn, saved when the provider exits.
+    pub turn_replies: Vec<String>,
     pub mode: String,
     pub network: bool,
     /// Rules approved for the rest of the chat.
@@ -84,6 +85,9 @@ pub(super) struct Chat {
     pub options: Option<AgentOptions>,
     pub model_id: Option<String>,
     pub effort: Option<String>,
+    /// Recap supplied to the adapter for a provider session Rust found missing.
+    pub resume_recap: String,
+    pub recovered_memories: String,
     pub preparing: bool,
     /// Images waiting in the composer.
     pub images: Vec<Image>,
@@ -120,7 +124,6 @@ pub(super) struct Chat {
 pub(super) struct State {
     pub chats: Vec<Chat>,
     pub active: usize,
-    cli: Option<PathBuf>,
 }
 
 impl State {
@@ -138,10 +141,10 @@ impl State {
 }
 
 type Prepared = (
-    Option<PathBuf>,
-    Result<SavedChat, String>,
+    SavedChat,
     Result<AgentOptions, String>,
     Vec<crate::integrations::slash_commands::Found>,
+    (String, Result<usize, String>),
 );
 
 #[derive(Clone, Debug)]
@@ -181,6 +184,7 @@ pub(super) enum Event {
     Permissions,
     /// Opens or closes the model picker.
     ModelMenu,
+    ProviderMemoriesPrepared(String, String, Result<usize, String>),
     /// A `/command` picked in the menu.
     Slash(String),
     /// Enter while the `/` menu is open.
@@ -226,6 +230,15 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             return task;
         }
         Event::Prepared(id, prepared) => prepared_for(state, &id, &prepared.0),
+        Event::ProviderMemoriesPrepared(id, context, result) => {
+            with_agent(state, &id, |chat| {
+                chat.preparing = false;
+                chat.recovered_memories = context;
+            });
+            if let Err(error) = result {
+                state.message = format!("No pude recuperar memorias del historial local: {error}");
+            }
+        }
         Event::For(id, inner) => {
             if let Some(index) = state.chat.chats.iter().position(|c| c.agent.id == id) {
                 state.chat.active = index;
@@ -361,7 +374,7 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             chat.models_open = false;
         }),
         Event::Effort(effort) => with_chat(state, |chat| chat.effort = Some(effort)),
-        Event::NewChat => new_chat(state),
+        Event::NewChat => return new_chat(state),
     }
     Task::none()
 }
@@ -381,17 +394,92 @@ fn with_chat(state: &mut Dashboard, apply: impl FnOnce(&mut Chat)) {
 
 fn tick(state: &mut Dashboard) {
     for chat in &mut state.chat.chats {
-        let Some(turn) = chat.turn.as_mut() else {
-            continue;
-        };
-        for event in turn.poll() {
-            chat.model.apply(&event);
+        if let Some(turn) = chat.turn.as_mut() {
+            for event in turn.poll() {
+                if event.get("type").and_then(Value::as_str) == Some("message")
+                    && event.get("role").and_then(Value::as_str) == Some("assistant")
+                    && let Some(text) = event.get("text").and_then(Value::as_str)
+                {
+                    chat.turn_replies.push(text.to_owned());
+                }
+                chat.model.apply(&event);
+            }
         }
-        let finished = turn.exit.is_some();
+        let finished = chat.turn.as_ref().is_some_and(|turn| turn.exit.is_some());
         if finished {
+            let mut turn = chat.turn.take().expect("finished turn exists");
             let code = turn.exit.unwrap_or(0);
             let stderr = turn.stderr_tail();
-            chat.turn = None;
+            let cancelled = turn.was_cancelled();
+            if turn.is_handoff() {
+                let session = turn.handoff_target_session().unwrap_or_default().to_owned();
+                let text = turn.take_handoff_text();
+                if code == 0 && !cancelled {
+                    match crate::features::chat_handoff::save(
+                        &state.root,
+                        turns::state_provider(chat.agent.provider),
+                        &session,
+                        &text,
+                    ) {
+                        Ok(()) => {
+                            let _ = chat.model.apply(&json!({
+                                "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
+                                "type": "notice", "message": "Contexto liberado automáticamente: la conversación sigue con todo lo anterior.",
+                            }));
+                        }
+                        Err(error) => {
+                            let _ = chat.model.apply(&json!({
+                                "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
+                                "type": "notice", "message": format!("No pude guardar el traspaso de contexto: {error}"),
+                            }));
+                        }
+                    }
+                } else {
+                    let detail = stderr.trim();
+                    let message = if detail.is_empty() {
+                        "No pude liberar el contexto; sigo con la conversación actual.".to_owned()
+                    } else {
+                        format!(
+                            "No pude liberar el contexto; sigo con la conversación actual. {detail}"
+                        )
+                    };
+                    chat.model.apply(&json!({
+                        "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
+                        "type": "notice", "message": message,
+                    }));
+                }
+                sync(chat);
+                continue;
+            }
+            let release_context = code == 0
+                && !cancelled
+                && turn.needs_context_release()
+                && !chat.model.session_id.is_empty();
+            let consumed_handoff = turn.take_consumed_handoff_session();
+            drop(turn);
+            let replies = std::mem::take(&mut chat.turn_replies);
+            let saved_state = crate::features::chat_state::end_turn(
+                &state.root,
+                &chat.agent.id,
+                turns::state_provider(chat.agent.provider),
+                Some(&chat.model.session_id),
+                replies.iter().map(String::as_str),
+            );
+            if let Err(error) = saved_state {
+                state.message = format!("No pude guardar el historial del chat: {error}");
+            } else {
+                if let Err(error) =
+                    crate::features::explicit_memory::capture_studio_memories(&state.root)
+                {
+                    state.message =
+                        format!("No pude guardar la memoria explícita del proyecto: {error}");
+                }
+                if let Err(error) =
+                    crate::features::chat_journal::record_latest_chat(&state.root, &chat.agent.id)
+                {
+                    state.message = format!("No pude guardar el resumen de la sesión: {error}");
+                }
+            }
             if let Some(started) = chat.turn_started.take()
                 && let Some(last) = chat
                     .model
@@ -404,7 +492,8 @@ fn tick(state: &mut Dashboard) {
             crate::integrations::process_memory::give_back_soon();
             images::cleanup(chat);
             chat.model.expire_live_requests();
-            if code != 0 && !chat.model.entries.iter().any(|e| e.kind == Kind::Error) {
+            if code != 0 && !cancelled && !chat.model.entries.iter().any(|e| e.kind == Kind::Error)
+            {
                 let detail = stderr.trim();
                 let message = if detail.is_empty() {
                     format!("El agente terminó con el código {code}.")
@@ -416,8 +505,50 @@ fn tick(state: &mut Dashboard) {
                     "type": "error", "message": message,
                 }));
             }
+            if code == 0
+                && !cancelled
+                && let Some(previous_session) = consumed_handoff
+                && chat.model.session_id != previous_session
+                && let Err(error) = crate::features::chat_handoff::consume(
+                    &state.root,
+                    turns::state_provider(chat.agent.provider),
+                    &previous_session,
+                )
+            {
+                state.message = format!("No pude retirar el traspaso ya recibido: {error}");
+            }
+            if release_context {
+                let spec = handoff_turn_spec(chat, &state.root);
+                match Turn::launch_handoff(&spec) {
+                    Ok(handoff) => chat.turn = Some(handoff),
+                    Err(error) => {
+                        let _ = chat.model.apply(&json!({
+                            "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
+                            "type": "notice", "message": format!("No pude liberar el contexto; sigo con la conversación actual. {error}"),
+                        }));
+                    }
+                }
+            }
         }
         sync(chat);
+    }
+}
+
+fn handoff_turn_spec(chat: &Chat, root: &std::path::Path) -> TurnSpec {
+    TurnSpec {
+        agent: chat.agent.id.clone(),
+        provider: turns::state_provider(chat.agent.provider).to_owned(),
+        project: root.to_path_buf(),
+        session: Some(chat.model.session_id.clone()),
+        mode: "read-only".to_owned(),
+        model: chat.model_id.clone(),
+        effort: chat.effort.clone(),
+        agent_command: chat.agent.command.clone(),
+        executable: chat.agent.executable.clone(),
+        agent_cwd: chat.agent.cwd.clone(),
+        // A summary only follows a turn Studio already ran in this trusted project.
+        trusted: true,
+        ..Default::default()
     }
 }
 

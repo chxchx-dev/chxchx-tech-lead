@@ -1,0 +1,6 @@
+name = "llm-data-pipeline"
+description = "Datos para modelos de lenguaje: licencias, deduplicación, filtrado de calidad, PII, descontaminación, particionado y validaciones reproducibles."
+stacks = ["ml"]
+languages = []
+tags = ["llm", "data", "dedup", "validation"]
+origin = "chxchx"

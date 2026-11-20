@@ -91,14 +91,23 @@ pub(super) fn identity(provider: Provider) -> (iced::Color, &'static str) {
     }
 }
 
+/// The maker's mark each provider is recognized by (Codex is OpenAI's); none for other agents.
+pub(super) fn mark_name(provider: Provider) -> Option<&'static str> {
+    match provider {
+        Provider::Claude => Some("claude"),
+        Provider::Codex => Some("openai"),
+        Provider::OpenCode => Some("opencode"),
+        Provider::Other => None,
+    }
+}
+
 pub(super) fn avatar<'a>(provider: Provider, size: f32) -> Element<'a, Message> {
-    let (tint, initial) = identity(provider);
-    container(
-        text(initial)
-            .size(size * 0.5)
-            .font(design::UI_BOLD)
-            .color(tint),
-    )
+    let (tint, _) = identity(provider);
+    container(icons::mark(
+        mark_name(provider).unwrap_or("sparkle"),
+        tint,
+        size * 0.58,
+    ))
     .center(size)
     .width(size)
     .height(size)
@@ -534,4 +543,20 @@ pub(super) fn home_card(state: &Dashboard) -> Element<'_, Message> {
         .width(Fill)
         .style(styles::card)
         .into()
+}
+
+#[cfg(test)]
+mod mark_tests {
+    use super::*;
+
+    #[test]
+    fn each_known_agent_has_its_makers_mark_and_others_get_the_generic_one() {
+        assert_eq!(mark_name(Provider::Claude), Some("claude"));
+        assert_eq!(mark_name(Provider::Codex), Some("openai"));
+        assert_eq!(mark_name(Provider::OpenCode), Some("opencode"));
+        assert_eq!(mark_name(Provider::Other), None);
+        for provider in Provider::KNOWN {
+            assert!(mark_name(provider).is_some(), "{provider:?}");
+        }
+    }
 }

@@ -1,0 +1,5 @@
+name = "llm-applications"
+description = "Aplicaciones con modelos de lenguaje: recuperación, evaluación, seguridad frente a inyección y APIs robustas."
+stacks = ["ai"]
+languages = []
+skills = ["rag-engineering", "llm-evaluation", "model-safety-validation", "api-design", "testing", "security-review"]

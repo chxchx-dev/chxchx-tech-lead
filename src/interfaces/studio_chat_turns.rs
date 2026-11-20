@@ -47,17 +47,13 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         state.message = "Concede confianza al proyecto para hablar con un agente.".into();
         return false;
     }
-    let (root, cli) = (state.root.clone(), state.chat.cli.clone());
+    let root = state.root.clone();
     let Some(chat) = state.chat.chats.get_mut(state.chat.active) else {
         return false;
     };
     if chat.turn.is_some() || chat.preparing || chat.problem.is_some() {
         return false;
     }
-    let Some(cli) = cli else {
-        state.message = bridge::missing_cli_hint();
-        return false;
-    };
     let mut allow = chat.approved.clone();
     allow.append(&mut chat.once);
     let attached = if show {
@@ -67,8 +63,11 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
     };
     let spec = TurnSpec {
         agent: chat.agent.id.clone(),
+        provider: state_provider(chat.agent.provider).to_owned(),
         project: root,
         prompt: with_images(prompt, attached.len()),
+        resume_recap: chat.resume_recap.clone(),
+        recovered_memories: chat.recovered_memories.clone(),
         images: attached.iter().map(|i| i.prepared.path.clone()).collect(),
         session: Some(chat.model.session_id.clone()).filter(|s| !s.is_empty()),
         mode: chat.mode.clone(),
@@ -76,16 +75,32 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         allow,
         model: chat.model_id.clone(),
         effort: chat.effort.clone(),
+        agent_command: chat.agent.command.clone(),
+        executable: chat.agent.executable.clone(),
+        agent_cwd: chat.agent.cwd.clone(),
+        trusted: true, // checked above: nothing starts in an untrusted project
     };
-    match Turn::start(&cli, &spec) {
+    let visible_prompt = shown(display.unwrap_or(prompt), attached.len());
+    match Turn::launch(&spec) {
         Ok(turn) => {
             if show {
-                chat.model
-                    .add_user(shown(display.unwrap_or(prompt), attached.len()));
+                let _ = crate::features::chat_state::begin_turn(
+                    &spec.project,
+                    &spec.agent,
+                    state_provider(chat.agent.provider),
+                    spec.session.as_deref(),
+                    &visible_prompt,
+                );
+                chat.model.add_user(visible_prompt);
+                chat.resume_recap.clear();
+                if spec.session.as_deref().is_none_or(str::is_empty) {
+                    chat.recovered_memories.clear();
+                }
                 if !attached.is_empty() {
                     chat.sent.push((chat.model.entries.len() - 1, attached));
                 }
             }
+            chat.turn_replies.clear();
             chat.turn = Some(turn);
             chat.turn_started = Some(std::time::Instant::now());
             sync(chat);
@@ -96,6 +111,15 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
             state.message = error;
             false
         }
+    }
+}
+
+pub(super) fn state_provider(provider: crate::features::agents::Provider) -> &'static str {
+    match provider {
+        crate::features::agents::Provider::Claude => "Claude",
+        crate::features::agents::Provider::Codex => "Codex",
+        crate::features::agents::Provider::OpenCode => "OpenCode",
+        crate::features::agents::Provider::Other => "Agente",
     }
 }
 
@@ -224,25 +248,54 @@ pub(super) fn reply(state: &mut Dashboard, index: usize) {
     chat.model.decide(index, &summary);
 }
 
-pub(super) fn new_chat(state: &mut Dashboard) {
-    let (root, cli) = (state.root.clone(), state.chat.cli.clone());
-    with_chat(state, |chat| {
-        if let Some(turn) = chat.turn.as_mut() {
-            turn.cancel();
-        }
-        chat.turn = None;
-        chat.model.clear();
-        chat.once.clear();
-        chat.approved.clear();
-        chat.composer = text_editor::Content::new();
-        chat.rendered.clear();
-        chat.selecting.clear();
-        chat.picks.clear();
-        if let Some(cli) = cli {
-            let id = chat.agent.id.clone();
-            std::thread::spawn(move || bridge::reset_chat(&cli, &root, &id));
-        }
-    });
+pub(super) fn new_chat(state: &mut Dashboard) -> Task<Message> {
+    let Some(chat) = state.chat.chats.get_mut(state.chat.active) else {
+        return Task::none();
+    };
+    // Opening a chat already recovers the provider history. Don't let its older Prepared event
+    // race with this reset and restore the session we are clearing.
+    if chat.preparing {
+        return Task::none();
+    }
+    chat.preparing = true;
+    chat.recovered_memories.clear();
+    let id = chat.agent.id.clone();
+    let root = state.root.clone();
+    if let Some(turn) = chat.turn.as_mut() {
+        turn.cancel();
+    }
+    chat.turn = None;
+    chat.model.clear();
+    chat.turn_replies.clear();
+    chat.resume_recap.clear();
+    chat.once.clear();
+    chat.approved.clear();
+    chat.composer = text_editor::Content::new();
+    chat.rendered.clear();
+    chat.selecting.clear();
+    chat.picks.clear();
+
+    let job_id = id.clone();
+    Task::perform(
+        async move {
+            jobs::offload(move || {
+                // Recover before reset_chat removes this provider's Studio transcript.
+                let recovered = crate::features::explicit_memory::prepare_provider_history(&root);
+                bridge::reset_chat(&root, &job_id);
+                recovered
+            })
+            .await
+            .unwrap_or_else(|| {
+                (
+                    String::new(),
+                    Err("el trabajo en segundo plano terminó sin resultado".to_owned()),
+                )
+            })
+        },
+        move |(context, result)| {
+            Message::Chat(Event::ProviderMemoriesPrepared(id.clone(), context, result))
+        },
+    )
 }
 
 #[cfg(test)]

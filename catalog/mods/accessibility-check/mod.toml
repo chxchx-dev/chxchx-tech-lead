@@ -1,0 +1,3 @@
+name = "chxchx-accessibility-check"
+description = "Revisar accesibilidad de cada cambio de interfaz."
+stacks = ["react", "nextjs", "react-native", "react-vite", "qt"]

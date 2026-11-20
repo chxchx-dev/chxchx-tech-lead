@@ -1,0 +1,24 @@
+# MSI x64 complementario construido desde dev commit dc802481f43be0c0f41c59b941c9180d1adfc5d4
+schema_version=1
+channel=stable
+tag=v0.6.3
+commit=d19815e759f6f0f01a5daf4e5db6cb63c539f8d6
+version=0.6.3
+asset.linux-ubuntu-x86_64=chxchx-studio-ubuntu-x86_64.tar.gz
+sha256.linux-ubuntu-x86_64=411842fb085b664fde2b1b33171d9e331a29adf67d7d1e8dca42df976500f784
+asset.linux-fedora-x86_64=chxchx-studio-fedora-x86_64.tar.gz
+sha256.linux-fedora-x86_64=411842fb085b664fde2b1b33171d9e331a29adf67d7d1e8dca42df976500f784
+asset.windows-x86_64=chxchx-studio-windows-x86_64.zip
+sha256.windows-x86_64=3341548aa9f5e12b99241189c2c345b27c1830b9d6fba6881640f88566962f73
+asset.macos-arm64=chxchx-studio-macos-arm64.dmg
+sha256.macos-arm64=5bf2e57e7103e5a9b32f78fd6ae5b43a6875ff8a69878c2a292b6a74a593e718
+asset.macos-x86_64=chxchx-studio-macos-x86_64.dmg
+sha256.macos-x86_64=585c10dd77df8e9b144e9715800c358128b1c93bd462d290d99b019df7a53f94
+asset.cli-wheel=chxchx_tech_lead-0.6.3-py3-none-any.whl
+sha256.cli-wheel=dd897c511791f9448a7d24e99c0f7640988b1b248ba267e24cb8bbd9714c81a2
+asset.install-sh=install.sh
+sha256.install-sh=0654914a5e675d66259b7328cb3fc32da4ab94137c6ef4e836fac921f819fcf1
+asset.install-ps1=install.ps1
+sha256.install-ps1=68ec973384f99a356baf7d619372f899ea97edbee632bb4e91ce726ccdc8dd6b
+asset.windows-msi=chxchx-studio-windows-x86_64.msi
+sha256.windows-msi=98c9d4f4a6b571ea581e0af9f5942a3d5323d40f220a1a1a051eff21133b4c51

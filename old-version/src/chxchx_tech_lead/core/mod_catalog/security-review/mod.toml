@@ -1,3 +1,0 @@
-name = "chxchx-security-review"
-description = "Revisión de seguridad práctica: entradas, secretos, dependencias y permisos."
-always_recommend = true

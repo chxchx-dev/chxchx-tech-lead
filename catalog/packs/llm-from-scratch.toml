@@ -1,0 +1,5 @@
+name = "llm-from-scratch"
+description = "Desarrollar modelos de lenguaje desde cero: datos, tokenizador, entrenamiento, rendimiento, reproducibilidad y evaluación."
+stacks = ["ml"]
+languages = []
+skills = ["llm-training-from-scratch", "llm-data-pipeline", "tokenizer-engineering", "pytorch-engineering", "gpu-performance", "ml-experiment-reproducibility", "llm-evaluation", "python-engineering", "testing"]

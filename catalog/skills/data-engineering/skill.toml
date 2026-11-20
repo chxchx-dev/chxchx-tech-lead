@@ -1,0 +1,6 @@
+name = "data-engineering"
+description = "Pipelines de datos fiables: idempotencia, contratos de esquema, validaciones de calidad, particionado, reprocesamiento y trazabilidad."
+stacks = []
+languages = []
+tags = ["data", "etl", "pipelines", "quality", "sql"]
+origin = "chxchx"

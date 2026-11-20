@@ -1,3 +1,0 @@
-name = "chxchx-debug-with-evidence"
-description = "Depura siguiendo evidencia reproducible antes de cambiar código."
-always_recommend = true

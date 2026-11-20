@@ -1,0 +1,6 @@
+name = "llm-fine-tuning"
+description = "Ajuste fino de modelos (SFT, LoRA/QLoRA, preferencias): formato de datos, enmascarado, hiperparámetros, evaluación antes y después y fusión de adaptadores."
+stacks = ["ml"]
+languages = []
+tags = ["fine-tuning", "lora", "sft", "dpo", "llm"]
+origin = "chxchx"

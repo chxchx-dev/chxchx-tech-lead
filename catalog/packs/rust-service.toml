@@ -1,0 +1,5 @@
+name = "rust-service"
+description = "Servicios y herramientas en Rust: errores explícitos, concurrencia segura y verificación estricta."
+stacks = ["rust"]
+languages = ["rust"]
+skills = ["rust-engineering", "testing", "security-review", "code-review", "api-design"]

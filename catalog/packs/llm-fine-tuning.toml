@@ -1,0 +1,5 @@
+name = "llm-fine-tuning"
+description = "Ajustar modelos existentes (SFT, LoRA, preferencias) con datos validados y evaluación contra la línea base."
+stacks = ["ml"]
+languages = []
+skills = ["llm-fine-tuning", "llm-data-pipeline", "llm-evaluation", "pytorch-engineering", "ml-experiment-reproducibility", "model-safety-validation", "python-engineering"]

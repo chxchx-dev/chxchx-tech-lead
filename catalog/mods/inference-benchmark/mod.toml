@@ -1,0 +1,3 @@
+name = "chxchx-inference-benchmark"
+description = "Medir antes de optimizar la inferencia y validar cada cuantización."
+stacks = ["ml"]

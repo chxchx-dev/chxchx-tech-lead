@@ -234,7 +234,7 @@ fn run(state: &mut Dashboard, action: Local) -> Task<Message> {
     let id = state.chat.active_chat().map(|c| c.agent.id.clone());
     let mut task = Task::none();
     match action {
-        Local::New => super::new_chat(state),
+        Local::New => task = super::new_chat(state),
         Local::Retry => super::turns::retry(state),
         Local::Terminal => {
             if let Some(id) = id {

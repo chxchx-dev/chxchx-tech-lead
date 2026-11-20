@@ -1,0 +1,6 @@
+name = "pytorch-engineering"
+description = "Código PyTorch fiable: módulos y dispositivos, precisión mixta, DataLoader, determinismo, checkpoints en safetensors y pruebas de modelos."
+stacks = ["ml"]
+languages = []
+tags = ["pytorch", "deep-learning", "testing"]
+origin = "chxchx"

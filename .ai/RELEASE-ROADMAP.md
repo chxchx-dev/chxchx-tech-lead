@@ -99,7 +99,32 @@ Los clientes y supervisores activos negocian compatibilidad; no convivirán
 versiones incompatibles sobre el mismo estado. El upgrade no mata procesos
 automáticamente para forzar un cambio de runtime.
 
-## 5. Checklist de una release
+## 5. Migración del instalador Windows a MSI
+
+La entrega objetivo es un MSI por usuario, sin elevación, bajo
+`%LOCALAPPDATA%\Programs\ChxChxStudio\stable-X.Y.Z`. Se usará WiX Toolset
+5.0.2, fijado en CI. El MSI incluirá los ejecutables Rust y un runtime Python
+3.11 privado con los paquetes del ayudante. Instalar ChxChx no necesitará
+descargar Python ni elevar permisos; la instalación de Basic Memory y Serena
+sí descarga sus herramientas Python mediante `uv`.
+
+La fase de transición conserva `install.ps1` y el ZIP para instalaciones
+existentes y recuperación. El actualizador identifica instalaciones MSI y
+aplica el MSI verificado por el SHA-256 del manifiesto; ZIP y `install.ps1` no
+reemplazan archivos que pertenezcan a Windows Installer. El manifiesto admite
+`windows-msi` junto al ZIP. Las versiones nuevas prueban instalar, abrir,
+actualizar y desinstalar en silencio antes de publicar.
+
+Implementado localmente en el checkout 0.6.3: (1) runtime MSVC estático,
+metadatos/manifiesto de los EXE y documentación; (2) MSI con prueba local de
+ciclo de vida y workflow de CI; (3) helper Python offline dentro del MSI; y
+(4) actualización MSI desde el manifiesto, con SHA-256. Falta comprobar la
+ejecución remota del workflow y publicar una release. MSI y ejecutables se
+mantienen sin firma por decisión del dueño: uso personal y conocidos, sin
+distribución general planeada. Mantener WiX 5.0.2 fijado y revisar sus términos
+antes de cambiar a otra versión mayor.
+
+## 6. Checklist de una release
 
 - [ ] Alcance cerrado y changelog por capacidades, con efectos por modo.
 - [ ] Paridad y fronteras verificadas; formato, lints, unitarias, contratos y E2E.
@@ -113,7 +138,7 @@ automáticamente para forzar un cambio de runtime.
 - [ ] Notas de migración, limitaciones y soporte publicables con el artefacto.
 - [ ] Publicación realizada solo como acción explícita posterior a la validación.
 
-## 6. Mantenimiento y actualizaciones futuras
+## 7. Mantenimiento y actualizaciones futuras
 
 - Durante la transición se corrigen fallos críticos del legado; no congelarlo
   mientras los usuarios dependan de él. Fin de soporte tras Rust estable y un

@@ -223,9 +223,9 @@ mod tests {
 
     #[test]
     fn bundled_catalog_is_complete_and_consistent() {
-        assert_eq!(skills().len(), 21, "skills bundled");
-        assert_eq!(packs().len(), 13, "tech packs bundled");
-        assert_eq!(mods().len(), 23, "mods bundled");
+        assert_eq!(skills().len(), 40, "skills bundled");
+        assert_eq!(packs().len(), 22, "tech packs bundled");
+        assert_eq!(mods().len(), 31, "mods bundled");
         for pack in packs() {
             for name in &pack.skills {
                 assert!(
@@ -249,6 +249,149 @@ mod tests {
                 "{} has no instructions",
                 module.name
             );
+        }
+    }
+
+    fn detection(stacks: &[&str], languages: &[&str]) -> ProjectDetection {
+        ProjectDetection {
+            stacks: stacks.iter().map(|s| (*s).to_owned()).collect(),
+            languages: languages.iter().map(|s| (*s).to_owned()).collect(),
+            package_managers: Vec::new(),
+            infrastructure: Vec::new(),
+            profile: "python".into(),
+            profile_rules: Vec::new(),
+        }
+    }
+
+    fn recommended_skills(found: &ProjectDetection) -> Vec<&'static str> {
+        skills()
+            .iter()
+            .filter(|skill| !skill_reasons(found, skill).is_empty())
+            .map(|skill| skill.name.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn a_model_training_project_gets_the_training_skills_and_a_plain_python_project_does_not() {
+        let ml = recommended_skills(&detection(&["python", "ml"], &["python"]));
+        for wanted in [
+            "llm-training-from-scratch",
+            "llm-data-pipeline",
+            "tokenizer-engineering",
+            "llm-fine-tuning",
+            "llm-evaluation",
+            "llm-inference-serving",
+            "pytorch-engineering",
+            "gpu-performance",
+            "ml-experiment-reproducibility",
+            "model-safety-validation",
+        ] {
+            assert!(
+                ml.contains(&wanted),
+                "{wanted} should be recommended: {ml:?}"
+            );
+        }
+        let plain = recommended_skills(&detection(&["python"], &["python"]));
+        for unwanted in [
+            "llm-training-from-scratch",
+            "gpu-performance",
+            "pytorch-engineering",
+            "data-engineering",
+        ] {
+            assert!(
+                !plain.contains(&unwanted),
+                "{unwanted} must not follow every Python project"
+            );
+        }
+    }
+
+    #[test]
+    fn an_app_that_calls_hosted_models_gets_rag_and_safety_but_not_training() {
+        let ai = recommended_skills(&detection(&["python", "ai"], &["python"]));
+        assert!(ai.contains(&"rag-engineering") && ai.contains(&"model-safety-validation"));
+        assert!(ai.contains(&"llm-evaluation"));
+        assert!(!ai.contains(&"llm-training-from-scratch"));
+    }
+
+    #[test]
+    fn infrastructure_and_language_skills_follow_their_stacks() {
+        assert!(recommended_skills(&detection(&["kubernetes"], &[])).contains(&"kubernetes"));
+        assert!(recommended_skills(&detection(&["terraform"], &[])).contains(&"terraform"));
+        assert!(recommended_skills(&detection(&["rust"], &["rust"])).contains(&"rust-engineering"));
+        assert!(recommended_skills(&detection(&["go"], &["go"])).contains(&"go-engineering"));
+        assert!(!recommended_skills(&detection(&["rust"], &["rust"])).contains(&"go-engineering"));
+    }
+
+    #[test]
+    fn the_new_packs_bundle_what_their_goal_needs_and_are_recommended_by_stack() {
+        let scratch = pack("llm-from-scratch").unwrap();
+        for wanted in [
+            "llm-training-from-scratch",
+            "tokenizer-engineering",
+            "llm-evaluation",
+            "gpu-performance",
+        ] {
+            assert!(scratch.skills.iter().any(|s| s == wanted), "{wanted}");
+        }
+        assert!(!pack_reasons(&detection(&["ml"], &[]), scratch).is_empty());
+        assert!(pack_reasons(&detection(&["python"], &["python"]), scratch).is_empty());
+        for name in [
+            "llm-fine-tuning",
+            "llm-inference",
+            "llm-applications",
+            "rust-service",
+            "go-service",
+            "kubernetes-platform",
+            "terraform-infrastructure",
+            "data-platform",
+        ] {
+            let found = pack(name).unwrap_or_else(|| panic!("{name} missing"));
+            assert!(found.skills.len() >= 4, "{name} bundles too little");
+        }
+    }
+
+    #[test]
+    fn the_new_mods_are_recommended_for_their_stacks_only() {
+        let reasons = |name: &str, stacks: &[&str]| {
+            mod_reasons(
+                &detection(stacks, &[]),
+                module(name).unwrap_or_else(|| panic!("{name} missing")),
+            )
+            .len()
+        };
+        assert!(reasons("chxchx-llm-training-guard", &["ml"]) > 0);
+        assert_eq!(reasons("chxchx-llm-training-guard", &["python"]), 0);
+        assert!(reasons("chxchx-llm-eval-gate", &["ai"]) > 0);
+        assert!(reasons("chxchx-kubernetes-safety", &["kubernetes"]) > 0);
+        assert!(reasons("chxchx-terraform-plan-first", &["terraform"]) > 0);
+        assert_eq!(reasons("chxchx-terraform-plan-first", &["kubernetes"]), 0);
+    }
+
+    #[test]
+    fn every_skill_is_real_guidance_not_a_stub() {
+        for skill in skills() {
+            assert!(
+                skill.description.len() >= 20,
+                "{} needs a description",
+                skill.name
+            );
+        }
+        // The new LLM and ML skills carry enough substance to act on.
+        for name in [
+            "llm-training-from-scratch",
+            "llm-data-pipeline",
+            "tokenizer-engineering",
+            "llm-fine-tuning",
+            "llm-evaluation",
+            "llm-inference-serving",
+            "pytorch-engineering",
+            "gpu-performance",
+            "ml-experiment-reproducibility",
+            "model-safety-validation",
+            "rag-engineering",
+        ] {
+            let lines = skill(name).unwrap().instructions.lines().count();
+            assert!(lines >= 40, "{name} has only {lines} lines");
         }
     }
 }

@@ -1,0 +1,5 @@
+name = "kubernetes-platform"
+description = "Despliegues en Kubernetes seguros y operables, con entrega continua y observabilidad."
+stacks = ["kubernetes"]
+languages = []
+skills = ["kubernetes", "docker", "observability", "security-review", "ci-cd-pipelines"]

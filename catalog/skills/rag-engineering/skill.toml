@@ -1,0 +1,6 @@
+name = "rag-engineering"
+description = "Recuperación aumentada (RAG): troceado, embeddings, búsqueda híbrida, reordenamiento, citas, evaluación de la recuperación y defensa frente a inyección."
+stacks = ["ai", "ml"]
+languages = []
+tags = ["rag", "retrieval", "embeddings", "search"]
+origin = "chxchx"

@@ -1,3 +1,0 @@
-name = "chxchx-redis-patterns"
-description = "Uso de Redis con expiración, claves con espacio de nombres y degradación segura."
-stacks = ["redis"]
