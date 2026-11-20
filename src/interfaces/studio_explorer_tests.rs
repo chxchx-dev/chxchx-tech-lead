@@ -62,7 +62,7 @@ fn a_click_selects_and_ctrl_or_shift_extend_the_selection_in_tree_order() {
     );
     assert!(p.state.explorer.focused);
 
-    p.state.explorer.modifiers = Modifiers::CTRL;
+    p.state.explorer.modifiers = Modifiers::COMMAND;
     let _ = update(&mut p.state, Event::Click("src/main.rs".into(), false));
     assert_eq!(p.state.explorer.selection.len(), 2);
     let _ = update(&mut p.state, Event::Click("src/main.rs".into(), false));
@@ -567,7 +567,7 @@ fn dragging_a_selection_drags_all_of_it_and_a_ctrl_press_only_extends() {
         "a click narrows it"
     );
 
-    p.state.explorer.modifiers = Modifiers::CTRL;
+    p.state.explorer.modifiers = Modifiers::COMMAND;
     press(&mut p, "src/main.rs", false);
     assert_eq!(p.state.explorer.selection.len(), 2);
     assert!(!p.state.explorer.pressed.as_ref().unwrap().plain);
@@ -598,15 +598,16 @@ fn a_drop_from_outside_is_copied_in_only_while_the_explorer_is_showing() {
     let _ = update(&mut p.state, Event::Dropped(outside.clone()));
     assert_eq!(p.state.pending, before + 1);
 
-    // The job it starts: into the folder of the selected file.
-    run_job(&mut p, ops::Job::Import(vec![outside], "src".into()));
+    // The job it starts: into the folder of the selected file. A different file is
+    // imported here so it cannot race the background job the drop already launched.
+    run_job(&mut p, ops::Job::Import(vec![other], "src".into()));
     assert_eq!(
-        std::fs::read_to_string(p.root.join("src/fuera.txt")).unwrap(),
-        "F"
+        std::fs::read_to_string(p.root.join("src/otro-fuera.txt")).unwrap(),
+        "O"
     );
     assert_eq!(
         p.state.explorer.selection,
-        BTreeSet::from([PathBuf::from("src/fuera.txt")])
+        BTreeSet::from([PathBuf::from("src/otro-fuera.txt")])
     );
 }
 
