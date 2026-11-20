@@ -53,6 +53,62 @@ impl State {
     }
 }
 
+impl State {
+    /// An item (or a folder with everything in it) was renamed or moved: the open tabs, the
+    /// expanded folders and the view modes follow it. Cached listings under it are dropped.
+    pub fn retarget(&mut self, from: &Path, to: &Path) {
+        let moved = |path: &Path| path.strip_prefix(from).ok().map(|rest| to.join(rest));
+        for tab in &mut self.tabs {
+            if let Some(path) = moved(&tab.document.relative) {
+                tab.document.relative = path;
+            }
+        }
+        let expanded = std::mem::take(&mut self.expanded);
+        self.expanded = expanded
+            .into_iter()
+            .map(|path| moved(&path).unwrap_or(path))
+            .collect();
+        self.folders
+            .retain(|path, _| path.strip_prefix(from).is_err());
+        let modes = std::mem::take(&mut self.modes);
+        self.modes = modes
+            .into_iter()
+            .map(|(path, mode)| (moved(&path).unwrap_or(path), mode))
+            .collect();
+        self.preview = None;
+    }
+
+    /// An item (or a folder with everything in it) is gone: its tabs close, even with unsaved
+    /// changes (the person confirmed the deletion), and nothing keeps pointing at it.
+    pub fn forget(&mut self, path: &Path) {
+        let selected_path = self
+            .selected
+            .and_then(|index| self.tabs.get(index))
+            .map(|tab| tab.document.relative.clone());
+        self.tabs
+            .retain(|tab| tab.document.relative.strip_prefix(path).is_err());
+        self.closing = None;
+        self.selected = selected_path
+            .filter(|current| current.strip_prefix(path).is_err())
+            .and_then(|current| {
+                self.tabs
+                    .iter()
+                    .position(|tab| tab.document.relative == current)
+            })
+            .or_else(|| (!self.tabs.is_empty()).then(|| self.tabs.len() - 1));
+        if self.selected.is_none() {
+            self.home = true;
+        }
+        self.expanded
+            .retain(|folder| folder.strip_prefix(path).is_err());
+        self.folders
+            .retain(|folder, _| folder.strip_prefix(path).is_err());
+        self.modes
+            .retain(|file, _| file.strip_prefix(path).is_err());
+        self.preview = None;
+    }
+}
+
 /// Reopens the tabs of the previous session; files that vanished are skipped.
 pub(in crate::interfaces::studio) fn restore(
     root: PathBuf,
@@ -183,6 +239,7 @@ pub(in crate::interfaces::studio) fn apply_restored(
 pub(in crate::interfaces::studio) fn fixture() -> Dashboard {
     Dashboard {
         editor: State::new(),
+        explorer: Default::default(),
         terminal: Default::default(),
         agents: Default::default(),
         chat: Default::default(),

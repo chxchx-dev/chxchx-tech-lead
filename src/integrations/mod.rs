@@ -25,6 +25,7 @@ pub mod process_memory;
 pub mod slash_commands;
 #[cfg(feature = "studio")]
 pub mod studio_update;
+pub mod system_open;
 #[cfg(feature = "terminal")]
 pub mod terminal;
 pub mod wake;

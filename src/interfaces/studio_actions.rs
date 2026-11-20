@@ -8,6 +8,9 @@ pub(super) fn update(state: &mut Dashboard, message: Message) -> Task<Message> {
             | Message::Local(local::Event::Tick)
             | Message::Wake
     );
+    if !high_frequency {
+        explorer::interacted(state, &message);
+    }
     let task = dispatch(state, message);
     state.shell.refresh_memory();
     if !high_frequency {
@@ -23,6 +26,9 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
             chat::update(state, chat::Event::Tick),
             local::update(state, local::Event::Tick),
         ]);
+    }
+    if let Message::Explorer(event) = message {
+        return explorer::update(state, event);
     }
     if let Message::Terminal(event) = message {
         return terminal::update(state, event);
@@ -90,6 +96,7 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
     }
     match message {
         Message::Editor(_)
+        | Message::Explorer(_)
         | Message::Terminal(_)
         | Message::Agents(_)
         | Message::Chat(_)

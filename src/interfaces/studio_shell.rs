@@ -246,6 +246,9 @@ pub(super) fn subscription(state: &Dashboard) -> Subscription<Message> {
             iced::Event::Window(iced::window::Event::Unfocused) => {
                 Some(Message::Shell(Event::WindowFocus(false)))
             }
+            iced::Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+                Some(Message::Explorer(explorer::Event::Modifiers(modifiers)))
+            }
             _ => None,
         }),
     ]);
@@ -280,7 +283,10 @@ fn shortcut(
         key.as_ref(),
         keyboard::Key::Named(keyboard::key::Named::Escape)
     ) {
-        return Some(Message::Menu(menu::Event::Close));
+        return Some(Message::Sequence(vec![
+            Message::Menu(menu::Event::Close),
+            Message::Explorer(explorer::Event::Escape),
+        ]));
     }
     if keymap::capturing() {
         return None;
@@ -304,6 +310,22 @@ fn shortcut(
         Action::OpenSettings => Message::Navigate(Page::Settings),
         Action::NewChat => Message::Chat(chat::Event::NewChat),
         Action::CopyLastAnswer => Message::Chat(chat::Event::CopyLast),
+        Action::ExplorerNewFile => {
+            Message::Explorer(explorer::Event::Shortcut(explorer::Action::NewFile))
+        }
+        Action::ExplorerRename => {
+            Message::Explorer(explorer::Event::Shortcut(explorer::Action::Rename))
+        }
+        Action::ExplorerDelete => {
+            Message::Explorer(explorer::Event::Shortcut(explorer::Action::Delete))
+        }
+        Action::ExplorerCopy => {
+            Message::Explorer(explorer::Event::Shortcut(explorer::Action::Copy))
+        }
+        Action::ExplorerCut => Message::Explorer(explorer::Event::Shortcut(explorer::Action::Cut)),
+        Action::ExplorerPaste => {
+            Message::Explorer(explorer::Event::Shortcut(explorer::Action::Paste))
+        }
     })
 }
 

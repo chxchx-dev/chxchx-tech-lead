@@ -17,10 +17,16 @@ pub(super) enum Action {
     OpenSettings,
     NewChat,
     CopyLastAnswer,
+    ExplorerNewFile,
+    ExplorerRename,
+    ExplorerDelete,
+    ExplorerCopy,
+    ExplorerCut,
+    ExplorerPaste,
 }
 
 impl Action {
-    pub const ALL: [Action; 8] = [
+    pub const ALL: [Action; 14] = [
         Action::ToggleSidebar,
         Action::ToggleDock,
         Action::SearchProject,
@@ -29,6 +35,12 @@ impl Action {
         Action::OpenSettings,
         Action::NewChat,
         Action::CopyLastAnswer,
+        Action::ExplorerNewFile,
+        Action::ExplorerRename,
+        Action::ExplorerDelete,
+        Action::ExplorerCopy,
+        Action::ExplorerCut,
+        Action::ExplorerPaste,
     ];
 
     pub fn id(self) -> &'static str {
@@ -41,6 +53,12 @@ impl Action {
             Action::OpenSettings => "settings",
             Action::NewChat => "new-chat",
             Action::CopyLastAnswer => "copy-last-answer",
+            Action::ExplorerNewFile => "explorer-new-file",
+            Action::ExplorerRename => "explorer-rename",
+            Action::ExplorerDelete => "explorer-delete",
+            Action::ExplorerCopy => "explorer-copy",
+            Action::ExplorerCut => "explorer-cut",
+            Action::ExplorerPaste => "explorer-paste",
         }
     }
 
@@ -54,6 +72,12 @@ impl Action {
             Action::OpenSettings => "Abrir los ajustes",
             Action::NewChat => "Nuevo chat (en el chat activo)",
             Action::CopyLastAnswer => "Copiar la última respuesta del agente",
+            Action::ExplorerNewFile => "Explorador: nuevo archivo",
+            Action::ExplorerRename => "Explorador: renombrar",
+            Action::ExplorerDelete => "Explorador: eliminar",
+            Action::ExplorerCopy => "Explorador: copiar",
+            Action::ExplorerCut => "Explorador: cortar",
+            Action::ExplorerPaste => "Explorador: pegar",
         }
     }
 
@@ -67,12 +91,28 @@ impl Action {
             Action::OpenSettings => "mod+,",
             Action::NewChat => "mod+shift+n",
             Action::CopyLastAnswer => "mod+shift+y",
+            Action::ExplorerNewFile => "",
+            Action::ExplorerRename => "f2",
+            Action::ExplorerDelete => "delete",
+            Action::ExplorerCopy => "mod+c",
+            Action::ExplorerCut => "mod+x",
+            Action::ExplorerPaste => "mod+v",
         }
     }
 
     /// Saving and closing leave the key to a focused editor that already used it.
     pub fn needs_free_key(self) -> bool {
-        matches!(self, Action::Save | Action::CloseTab)
+        matches!(
+            self,
+            Action::Save
+                | Action::CloseTab
+                | Action::ExplorerNewFile
+                | Action::ExplorerRename
+                | Action::ExplorerDelete
+                | Action::ExplorerCopy
+                | Action::ExplorerCut
+                | Action::ExplorerPaste
+        )
     }
 }
 
@@ -171,6 +211,7 @@ fn named_key(named: Named) -> Option<&'static str> {
         Named::PageDown => "pagedown",
         Named::Home => "home",
         Named::End => "end",
+        Named::Delete => "delete",
         _ => return None,
     })
 }
@@ -199,6 +240,7 @@ pub(super) fn display(binding: &str) -> String {
             "up" => "↑".to_owned(),
             "down" => "↓".to_owned(),
             "left" => "←".to_owned(),
+            "delete" => "Supr".to_owned(),
             "right" => "→".to_owned(),
             other => {
                 let mut chars = other.chars();
