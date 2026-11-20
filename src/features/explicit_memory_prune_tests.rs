@@ -60,6 +60,7 @@ fn backup_inside_the_project_is_rejected_before_creating_its_directory() {
         OffsetDateTime::now_utc().unix_timestamp_nanos()
     ));
     fs::create_dir_all(root.join(".ai/memory")).unwrap();
+    let root = root.canonicalize().unwrap();
     let path = root.join(".ai/memory/PROJECT_MEMORY.md");
     fs::write(&path, entry("Revisa el uso de memoria RAM.")).unwrap();
     let local_home = root.join(".local-home");

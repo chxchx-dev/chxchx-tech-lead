@@ -15,6 +15,8 @@ impl Scratch {
         ));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).unwrap();
+        // Windows temp dirs use 8.3 short names; the code under test canonicalizes.
+        let path = path.canonicalize().unwrap();
         Self(path)
     }
 }

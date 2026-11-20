@@ -14,6 +14,8 @@ impl Project {
             .as_nanos();
         let path = std::env::temp_dir().join(format!("chxchx-chat-journal-{nonce}"));
         fs::create_dir_all(&path).unwrap();
+        // Windows temp dirs use 8.3 short names; the code under test canonicalizes.
+        let path = path.canonicalize().unwrap();
         Self(path)
     }
 
@@ -74,7 +76,14 @@ fn records_visible_conversation_and_includes_it_in_new_chat_context() {
     assert!(!prompt.contains("<!-- session:"));
     assert!(context.contains("Resumen automático de las últimas sesiones"));
     assert!(context.contains("Añade pruebas unitarias"));
-    assert_eq!(saved, project.path().join(JOURNAL));
+    assert_eq!(
+        saved,
+        project
+            .path()
+            .join(".ai")
+            .join("history")
+            .join("SESSIONS.md")
+    );
 }
 
 #[test]
