@@ -1,5 +1,18 @@
 # Handoff
 
+## Ruta heredada del chat retirada; qué falta para borrar `old-version/` (2026-11-19)
+
+- Rust ya no usa el CLI Python para nada en tiempo de ejecución: se eliminó el protocolo heredado del chat (sondeo, lanzamiento y control de `chxchx-tech agent chat`), `find_cli`/`legacy_cli`/`supports_chat` y el plumbing `cli` de Studio. Claude corre desde Rust; Codex y OpenCode, desde `services/agent-adapter/`, y sin el servicio el chat dice cómo conseguirlo (`uv sync` en `services/agent-adapter` en un checkout, o `CHXCHX_AGENT_ADAPTER`). Los tests Studio de OpenCode usan un servicio falso. Verificado en Linux: formato, Clippy estricto y 371 unitarias estables en tres ejecuciones.
+- **Lo que queda para poder borrar `old-version/`: empaquetado y release.** Decisiones del mantenedor: el actualizador solo avisa y abre la descarga (hecho), y el servicio viaja con su propio runtime. Hallazgos al intentarlo (no se tocó nada de esto, se revirtió un intento a medias):
+  1. `old-version/scripts/install.sh` (687 líneas) e `install.ps1` (532) instalan el *wheel* del CLI Python en un `.venv` con `uv` y exportan `CHXCHX_TECH_CLI`. Hay que cambiarlo por el wheel del servicio (`chxchx_agent_adapter-*`, binario `chxchx-agent-adapter`, variable `CHXCHX_AGENT_ADAPTER`, clave de manifiesto `agent-adapter-wheel`).
+  2. El modo `--cli-only` de los instaladores instala **el CLI Python como comando `chxchx-tech`**; hay que reemplazarlo por los binarios Rust del paquete sin la app de escritorio.
+  3. Los instaladores ejecutan `chxchx-tech install` (Python, `integrations/installers.py`) para instalar Basic Memory y Serena con `uv tool install`; ese comando se retiró del CLI, así que hace falta un equivalente Rust (por ejemplo `chxchx-tech tools install`) o que el instalador llame a `uv` directamente.
+  4. `release_assets.py` toma la versión de `old-version/pyproject.toml` y empaqueta el *wheel* `cli-wheel`; la versión debe venir de `Cargo.toml`. `release.yml` compara versiones con el pyproject, construye el wheel en `old-version` y ejecuta los tests de instaladores allí.
+  5. MSI de Windows: `scripts/build_windows_msi.ps1` empaqueta un runtime Python privado con el wheel heredado y `src/bin/chxchx-python-helper.rs` lo lanza (`python -c "from chxchx_tech_lead.cli import app"`); debe pasar a `python -m chxchx_agent_adapter` como `chxchx-agent-adapter.exe` (el adapter Rust ya busca ese nombre junto al binario). Afecta también a `generate_windows_msi_wxs.py`, `test_windows_msi.ps1`, `verify_windows_binaries.ps1`, `build.rs` y `Cargo.toml`.
+  6. `src/interfaces/installer.rs` incrusta `old-version/scripts/install.sh` con `include_str!`.
+  Los scripts y sus tests (`old-version/tests/installers`) deben moverse a `packaging/`. Los instaladores de Linux/macOS se pueden probar con `pytest`; los de Windows (PowerShell/MSI) solo se verifican en el runner de Windows, así que conviene hacerlo con CI a mano.
+- Después: borrar `old-version/` (y su `uv.lock`, tests y `.venv`), actualizar README/MANUAL y `.gitignore`.
+
 ## Actualizador de Studio en Rust: avisa y abre la descarga (2026-11-19)
 
 - `integrations/studio_update.rs` ya no usa el CLI Python: lee el último release por la redirección de `github.com/chxchx-dev/chxchx-tech-lead/releases/latest` con el `curl` del sistema (solo HTTPS, 15 s, sin token ni API), compara versiones (un prerelease es anterior a su release) y abre la página del release con el abridor del sistema (`xdg-open`, `open`, `rundll32`); solo abre páginas de los releases del proyecto. Studio muestra "Hay una versión nueva · Ver la descarga". No reemplaza binarios: se instala con los instaladores del release. Comprobado contra GitHub real (devuelve `v0.6.3`).
