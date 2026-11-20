@@ -180,6 +180,36 @@ static HANDLES: LazyLock<HashMap<&'static str, Handle>> = LazyLock::new(|| {
         .collect()
 });
 
+/// The marks of the agents' makers (see `assets/brands/README.md`): filled drawings, tinted at
+/// draw time like the other icons.
+const MARKS: [(&str, &str); 3] = [
+    ("claude", include_str!("../../assets/brands/claude.svg")),
+    ("openai", include_str!("../../assets/brands/openai.svg")),
+    ("opencode", include_str!("../../assets/brands/opencode.svg")),
+];
+
+static MARK_HANDLES: LazyLock<HashMap<&'static str, Handle>> = LazyLock::new(|| {
+    MARKS
+        .iter()
+        .map(|(name, drawing)| {
+            // The files carry no colour: the root's fill is what the tint replaces.
+            let data = drawing.replacen("<svg ", "<svg fill=\"#fff\" ", 1);
+            (*name, Handle::from_memory(data.into_bytes()))
+        })
+        .collect()
+});
+
+/// A maker's mark tinted with `color`; an unknown name draws the generic sparkle icon.
+pub(super) fn mark<'a>(name: &str, color: Color, size: f32) -> svg::Svg<'a, Theme> {
+    let Some(handle) = MARK_HANDLES.get(name).cloned() else {
+        return icon("sparkle", color, size);
+    };
+    svg::Svg::new(handle)
+        .width(size)
+        .height(size)
+        .style(move |_: &Theme, _| svg::Style { color: Some(color) })
+}
+
 /// Returns the named icon tinted with `color`. Unknown names draw a dot.
 pub(super) fn icon<'a>(name: &str, color: Color, size: f32) -> svg::Svg<'a, Theme> {
     let handle = HANDLES
@@ -197,6 +227,20 @@ pub(super) fn icon<'a>(name: &str, color: Color, size: f32) -> svg::Svg<'a, Them
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
+
+    #[test]
+    fn every_agent_mark_is_a_filled_drawing_without_colours_of_its_own() {
+        for (name, drawing) in MARKS {
+            assert!(drawing.contains("<path"), "{name} has no drawing");
+            assert!(drawing.contains("viewBox"), "{name} has no viewBox");
+            assert!(
+                !drawing.contains("fill=\"#"),
+                "{name} must take the tint, not its own colour"
+            );
+            assert!(MARK_HANDLES.contains_key(name));
+        }
+        assert_eq!(MARKS.len(), 3);
+    }
 
     fn names() -> BTreeSet<&'static str> {
         ICONS.iter().map(|(name, _)| *name).collect()
