@@ -27,6 +27,7 @@ pub mod features {
     pub mod project_config_template;
     pub mod project_detection;
     pub mod project_files;
+    pub mod project_fs;
     pub mod project_mod_agents;
     pub mod project_mods;
     pub mod project_overview;

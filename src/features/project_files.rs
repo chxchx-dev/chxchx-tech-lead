@@ -21,7 +21,7 @@ pub struct Document {
     pub fingerprint: Vec<u8>,
 }
 
-fn resolve(root: &Path, relative: &Path) -> Result<PathBuf, String> {
+pub(crate) fn resolve(root: &Path, relative: &Path) -> Result<PathBuf, String> {
     let root = root.canonicalize().map_err(|e| e.to_string())?;
     let mut path = root.clone();
     for part in relative.components() {
