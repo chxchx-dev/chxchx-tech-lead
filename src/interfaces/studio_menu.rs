@@ -14,6 +14,10 @@ const DROPDOWN_WIDTH: f32 = 290.0;
 const SUBMENU_WIDTH: f32 = 200.0;
 /// Height of one row of a dropdown, to line a submenu up with its entry.
 const ROW_HEIGHT: f32 = 28.0;
+/// A separator is a 1 px line plus the spacing around it.
+const SEPARATOR_HEIGHT: f32 = 2.0;
+/// Padding of a dropdown's list.
+const LIST_PADDING: f32 = 4.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Menu {
@@ -163,10 +167,22 @@ pub(super) fn overlay(state: &Dashboard) -> Option<Element<'_, Message>> {
                     .style(styles::menu_panel),
             ))
             .x(menu.offset() + DROPDOWN_WIDTH - 4.0)
-            .y(BAR_HEIGHT - 2.0 + index as f32 * ROW_HEIGHT),
+            .y(BAR_HEIGHT - 2.0 + LIST_PADDING + rows_before(&items, index)),
         );
     }
     Some(layers.into())
+}
+
+/// How far down the dropdown the entry at `index` starts: separators are thinner than items.
+fn rows_before(items: &[Entry], index: usize) -> f32 {
+    items
+        .iter()
+        .take(index)
+        .map(|entry| match entry {
+            Entry::Separator => SEPARATOR_HEIGHT,
+            _ => ROW_HEIGHT,
+        })
+        .sum()
 }
 
 fn entry_view(entry: &Entry, open_sub: Option<&'static str>) -> Element<'static, Message> {
@@ -182,9 +198,14 @@ fn entry_view(entry: &Entry, open_sub: Option<&'static str>) -> Element<'static,
             message,
         } => {
             let content = row![
-                text(label.to_string()).size(12),
+                text(label.to_string())
+                    .size(12)
+                    .wrapping(iced::widget::text::Wrapping::None),
                 Space::new().width(Fill),
-                text(hint.clone()).size(11).color(design::faint())
+                text(hint.clone())
+                    .size(11)
+                    .color(design::faint())
+                    .wrapping(iced::widget::text::Wrapping::None)
             ]
             .align_y(iced::Center);
             let mut item = button(content)
@@ -418,5 +439,74 @@ mod tests {
         for wanted in ["Acercar", "Alejar", "Tamaño normal", "Pantalla completa"] {
             assert!(message_of(Menu::View, &state, wanted).is_some(), "{wanted}");
         }
+    }
+
+    #[test]
+    fn a_submenu_lines_up_with_its_entry_counting_separators_as_thin() {
+        let state = editor::fixture();
+        let file = entries(Menu::File, &state);
+        let index = file
+            .iter()
+            .position(|entry| {
+                matches!(
+                    entry,
+                    Entry::Submenu {
+                        label: "Abrir reciente",
+                        ..
+                    }
+                )
+            })
+            .unwrap();
+        let separators = file
+            .iter()
+            .take(index)
+            .filter(|e| matches!(e, Entry::Separator))
+            .count();
+        assert!(separators >= 1);
+        let expected =
+            (index - separators) as f32 * ROW_HEIGHT + separators as f32 * SEPARATOR_HEIGHT;
+        assert_eq!(rows_before(&file, index), expected);
+        assert!(
+            rows_before(&file, index) < index as f32 * ROW_HEIGHT,
+            "separators are not full rows"
+        );
+    }
+
+    #[test]
+    fn long_project_names_are_cut_to_one_line_and_short_ones_are_left_alone() {
+        use super::items::shortened;
+        assert_eq!(shortened("nexora"), "nexora");
+        let cut = shortened("NameThatLLM_Semilla_2026_experimentos");
+        assert_eq!(cut.chars().count(), 24);
+        assert!(cut.ends_with('…'));
+        assert_eq!(shortened(&"x".repeat(24)), "x".repeat(24));
+    }
+
+    #[test]
+    fn recent_projects_show_only_their_name_without_the_path_that_used_to_wrap() {
+        let base = std::env::temp_dir().join(format!("chxchx-recent-name-{}", std::process::id()));
+        let other = base.join("un-proyecto-con-un-nombre-muy-muy-largo-de-verdad");
+        std::fs::create_dir_all(&other).unwrap();
+        let mut state = editor::fixture();
+        state
+            .session
+            .edit(|p| p.recent_projects = vec![other.display().to_string()]);
+        let recent = entries(Menu::File, &state)
+            .into_iter()
+            .find_map(|entry| match entry {
+                Entry::Submenu {
+                    label: "Abrir reciente",
+                    entries,
+                } => Some(entries),
+                _ => None,
+            })
+            .unwrap();
+        let Entry::Item { label, hint, .. } = &recent[0] else {
+            panic!("an item")
+        };
+        assert!(
+            label.chars().count() <= 24 && hint.is_empty(),
+            "{label:?} {hint:?}"
+        );
     }
 }

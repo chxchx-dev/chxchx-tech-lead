@@ -76,6 +76,17 @@ fn gated(label: &'static str, hint: impl Into<String>, enabled: bool, message: M
     }
 }
 
+/// A folder name that fits one line of the submenu.
+pub(super) fn shortened(name: &str) -> String {
+    const MAX: usize = 24;
+    if name.chars().count() <= MAX {
+        name.to_owned()
+    } else {
+        let kept: String = name.chars().take(MAX - 1).collect();
+        format!("{kept}…")
+    }
+}
+
 /// The projects opened before, other than this one, ready to open in place of it.
 fn recent_projects(state: &Dashboard) -> Entry {
     let here = state.root.canonicalize().ok();
@@ -86,11 +97,13 @@ fn recent_projects(state: &Dashboard) -> Entry {
         .filter(|path| Path::new(path).canonicalize().ok() != here && Path::new(path).is_dir())
         .take(10)
         .map(|path| Entry::Item {
-            label: Path::new(path)
-                .file_name()
-                .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned())
-                .into(),
-            hint: path.clone(),
+            label: shortened(
+                &Path::new(path)
+                    .file_name()
+                    .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned()),
+            )
+            .into(),
+            hint: String::new(),
             message: Some(Message::Session(session::Event::OpenFolder {
                 path: PathBuf::from(path),
                 new_window: false,
