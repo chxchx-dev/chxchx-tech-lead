@@ -1,5 +1,12 @@
 # Handoff
 
+## Comandos centrales portados y heredados retirados (2026-11-19)
+
+- Portados a Rust: `projects switch ALIAS [--dry-run]` (suspende los workspaces activos de los demás proyectos registrados, activa el destino con su trust y recuerda `last_project` con backup del registro; comprueba el trust del destino antes de suspender nada) y `workspace errors [PATH] [--limit N]` / `workspace report-error` (registro acotado a 200 entradas en `cache/errors.jsonl`, con recorte y redacción de secretos —corregida una fuga del original con `Authorization: Bearer <token>`—, escritura atómica y sin seguir enlaces). Los fallos de `workspace start/resume` y `projects switch` quedan registrados.
+- Retirados (ya no se delegan al CLI Python; dicen dónde vive ahora la función): `run`/`attach`/`stop` → `workspace start|stop` o Studio; `ci`, `deploy` → sin reemplazo; `editor` → Studio; `bridge` → contrato interno del Studio anterior; `install`/`setup` → `init . --apply` o el instalador visual; `sync` → `projects sync`; `skill`/`pack`/`mod` → plurales; `workspace attach|terminal|open` → terminales del Studio (no hay Zellij); `workspace status|handoff`, `projects prepare`; `agent add|start|attach|preflight|list|status|chat|chat-handoff` → Studio/TUI (`agent chat-state` sigue).
+- Verificado en Linux: formato, Clippy estricto, `cargo test --locked` (378 unitarias, 6 catálogo, 21 flujos) y los builds `cli` y `cli tui` sin avisos. Sin CI remota de este cambio.
+- Quedan dos usos del CLI Python: el actualizador de Studio (`bridge studio-update`, atado al formato de release actual: manifiesto, paquetes y wheel del CLI) y la ruta heredada del chat para Codex/OpenCode cuando no se encuentra el servicio. Ambos se retiran con el rediseño del release (paso 4 del plan anterior), que necesita decidir cómo se actualiza el producto.
+
 ## Servicio de agentes y plan para retirar `old-version/` (2026-11-19)
 
 - Decisión del mantenedor: Python/C++ no se erradican; donde aporten, viven como servicios bajo `services/<nombre>/` con contrato versionado y se conectan desde un adapter Rust. Lo que sobra se porta a Rust o se retira explícitamente, y `old-version/` se elimina.

@@ -191,7 +191,7 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Lo demás lo resuelve el CLI heredado (agent, bridge, local-models…) o abre una carpeta.
+    /// Una carpeta se abre; cualquier otra palabra es un comando del CLI anterior ya retirado.
     #[command(external_subcommand)]
     External(Vec<OsString>),
 }
@@ -242,6 +242,26 @@ enum WorkspaceCommand {
         #[arg(long)]
         apply: bool,
     },
+    /// Subcomandos del CLI anterior (attach, terminal, open…): se retiraron.
+    #[command(external_subcommand)]
+    External(Vec<OsString>),
+    /// Muestra los errores recientes guardados en esta máquina (sin secretos).
+    Errors {
+        /// Solo los de este proyecto; sin ruta, los de todos.
+        path: Option<PathBuf>,
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
+    /// Guarda un error en el registro local; el mensaje se recorta y se le quitan los secretos.
+    ReportError {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Qué se estaba haciendo (por ejemplo `start`).
+        #[arg(long)]
+        operation: String,
+        #[arg(long)]
+        message: String,
+    },
     /// Previsualiza o limpia capturas automáticas inválidas de memoria explícita.
     MemoryPrune {
         #[arg(default_value = ".")]
@@ -263,6 +283,17 @@ enum ProjectsCommand {
         /// Aplica los cambios después de mostrar el plan.
         #[arg(long)]
         apply: bool,
+    },
+    /// Subcomandos del CLI anterior (prepare): se retiraron.
+    #[command(external_subcommand)]
+    External(Vec<OsString>),
+    /// Suspende los workspaces activos y activa otro proyecto registrado.
+    Switch {
+        /// Alias del proyecto (véase `projects list`).
+        alias: String,
+        /// Muestra la transición sin ejecutarla.
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -313,7 +344,7 @@ enum AgentCommand {
         #[arg(long)]
         restore: bool,
     },
-    /// Los subcomandos de agentes aún no portados se delegan al CLI Python.
+    /// Los subcomandos del CLI anterior: se retiraron y se explica dónde está cada función.
     #[command(external_subcommand)]
     External(Vec<OsString>),
 }
@@ -388,7 +419,8 @@ pub fn run() -> Result<(), String> {
         Command::Rollback { path, apply } => view::rollback(&ui, &path, apply),
         Command::Workspace { command } => match command {
             WorkspaceCommand::Start { path, dry_run } => {
-                let action = crate::features::workspace_lifecycle::start(&path, dry_run)?;
+                let action = crate::features::workspace_lifecycle::start(&path, dry_run)
+                    .inspect_err(|error| view::remember_failure(&path, "workspace start", error))?;
                 print_workspace_action(action);
                 Ok(())
             }
@@ -403,10 +435,20 @@ pub fn run() -> Result<(), String> {
                 Ok(())
             }
             WorkspaceCommand::Resume { path, dry_run } => {
-                let action = crate::features::workspace_lifecycle::resume(&path, dry_run)?;
+                let action = crate::features::workspace_lifecycle::resume(&path, dry_run)
+                    .inspect_err(|error| {
+                        view::remember_failure(&path, "workspace resume", error)
+                    })?;
                 print_workspace_action(action);
                 Ok(())
             }
+            WorkspaceCommand::External(arguments) => Err(launch::retired("workspace", &arguments)),
+            WorkspaceCommand::Errors { path, limit } => view::errors(&ui, path.as_deref(), limit),
+            WorkspaceCommand::ReportError {
+                path,
+                operation,
+                message,
+            } => view::report_error(&ui, &path, &operation, &message),
             WorkspaceCommand::Trust { path, apply } => view::trust(&ui, &path, true, apply),
             WorkspaceCommand::Untrust { path, apply } => view::trust(&ui, &path, false, apply),
             WorkspaceCommand::MemoryPrune { path, dry_run } => {
@@ -452,6 +494,12 @@ pub fn run() -> Result<(), String> {
             ProjectsCommand::List => view::projects_list(&ui),
             ProjectsCommand::Current => view::projects_current(&ui),
             ProjectsCommand::Sync { apply } => view::projects_sync(&ui, apply),
+            ProjectsCommand::External(arguments) => Err(launch::retired("projects", &arguments)),
+            ProjectsCommand::Switch { alias, dry_run } => {
+                view::projects_switch(&ui, &alias, dry_run).inspect_err(|error| {
+                    view::remember_failure(std::path::Path::new("."), "projects switch", error)
+                })
+            }
         },
         Command::Integrate {
             path,
@@ -482,18 +530,8 @@ pub fn run() -> Result<(), String> {
                 );
                 Ok(())
             }
-            Some(AgentCommand::External(arguments)) => {
-                let mut delegated = vec![OsString::from("agent")];
-                delegated.extend(arguments);
-                match launch::delegate(&delegated)? {
-                    0 => Ok(()),
-                    code => std::process::exit(code),
-                }
-            }
-            None => match launch::delegate(&[OsString::from("agent")])? {
-                0 => Ok(()),
-                code => std::process::exit(code),
-            },
+            Some(AgentCommand::External(arguments)) => Err(launch::retired("agent", &arguments)),
+            None => Err(launch::retired("agent", &[])),
         },
         Command::Doctor { path } => view::doctor(&ui, &path),
         #[cfg(feature = "tui")]
@@ -585,10 +623,7 @@ pub fn run() -> Result<(), String> {
             if let Some(folder) = launch::folder_argument(&arguments) {
                 return open_default(folder);
             }
-            match launch::delegate(&arguments)? {
-                0 => Ok(()),
-                code => std::process::exit(code),
-            }
+            Err(launch::retired("", &arguments))
         }
     }
 }
@@ -683,21 +718,57 @@ mod tests {
     }
 
     #[test]
-    fn what_the_legacy_cli_owns_is_passed_through_untouched() {
+    fn the_commands_of_the_earlier_cli_are_recognised_to_explain_where_they_went() {
         match parse(&["agent", "chat", "claude", "--live", "-x"]).command {
             Some(Command::Agent {
                 command: Some(AgentCommand::External(args)),
-            }) => {
-                assert_eq!(args.len(), 4);
-                assert_eq!(args[0], "chat");
-                assert_eq!(args[3], "-x", "flags travel with it");
-            }
-            other => panic!("expected a pass-through, got {other:?}"),
+            }) => assert_eq!(
+                args.len(),
+                4,
+                "its flags are accepted, not rejected by the parser"
+            ),
+            other => panic!("expected a retired command, got {other:?}"),
         }
+        assert!(matches!(
+            parse(&["workspace", "attach"]).command,
+            Some(Command::Workspace {
+                command: WorkspaceCommand::External(_)
+            })
+        ));
+        assert!(matches!(
+            parse(&["projects", "prepare"]).command,
+            Some(Command::Projects {
+                command: ProjectsCommand::External(_)
+            })
+        ));
+        assert!(matches!(
+            parse(&["ci", "run"]).command,
+            Some(Command::External(_))
+        ));
     }
 
     #[test]
-    fn chat_state_is_a_rust_command_while_other_agent_commands_still_delegate() {
+    fn each_retired_command_says_where_its_function_lives_now() {
+        let say = |scope: &str, words: &[&str]| {
+            launch::retired(scope, &words.iter().map(OsString::from).collect::<Vec<_>>())
+        };
+        assert!(say("", &["ci", "run"]).contains("CI/CD"));
+        assert!(say("", &["sync"]).contains("projects sync"));
+        assert!(say("", &["skill", "list"]).contains("`skills`"));
+        assert!(say("workspace", &["terminal"]).contains("Studio"));
+        assert!(say("projects", &["prepare"]).contains("init"));
+        assert!(say("agent", &["list"]).contains("chat-state"));
+        assert!(say("agent", &[]).contains("tui"));
+        assert!(say("", &["bridge", "status"]).contains("se retiró"));
+        let unknown = say("", &["quizas"]);
+        assert!(
+            unknown.contains("no es un comando") && !unknown.contains("se retiró"),
+            "{unknown}"
+        );
+    }
+
+    #[test]
+    fn chat_state_is_a_rust_command_and_the_other_agent_commands_are_retired() {
         assert!(matches!(
             parse(&["agent", "chat-state", "codex", "--restore"]).command,
             Some(Command::Agent {

@@ -354,7 +354,7 @@ pub fn resources_overview_payload(current_path: &Path) -> Result<Value, String> 
     }))
 }
 
-fn read_workspace_status(root: &Path) -> String {
+pub(crate) fn read_workspace_status(root: &Path) -> String {
     let Some(home) = crate::features::project_profiles::application_home() else {
         return "STOPPED".to_owned();
     };

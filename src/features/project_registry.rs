@@ -104,6 +104,46 @@ pub fn plan_registration(
     })
 }
 
+/// Plans recording `root` as the last activated project, keeping the rest of the file as it is.
+pub fn plan_last_project(root: &str) -> Result<RegistryUpdate, String> {
+    let home =
+        application_home().ok_or_else(|| "No se pudo resolver CHXCHX_TECH_HOME".to_owned())?;
+    let path = home.join("projects.json");
+    if fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err("projects.json es un enlace simbólico; no se modificó".to_owned());
+    }
+    let before = match fs::read(&path) {
+        Ok(bytes) => Some(bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(format!("No se pudo leer el registro de proyectos: {error}")),
+    };
+    let mut document = match &before {
+        Some(bytes) => serde_json::from_slice::<Value>(bytes).map_err(|_| {
+            "projects.json contiene JSON inválido; se preservó sin cambios".to_owned()
+        })?,
+        None => json!({ "projects": [] }),
+    };
+    let object = document
+        .as_object_mut()
+        .ok_or_else(|| "projects.json debe contener un objeto".to_owned())?;
+    let changed = object.get("last_project").and_then(Value::as_str) != Some(root);
+    let after = if changed {
+        object.insert("last_project".to_owned(), Value::String(root.to_owned()));
+        let mut bytes = serde_json::to_vec_pretty(&document)
+            .map_err(|error| format!("No se pudo renderizar projects.json: {error}"))?;
+        bytes.push(b'\n');
+        Some(bytes)
+    } else {
+        None
+    };
+    Ok(RegistryUpdate {
+        path,
+        changed,
+        before,
+        after,
+    })
+}
+
 pub fn apply_registration(update: &RegistryUpdate) -> Result<RegistryWriteResult, String> {
     if !update.changed {
         return Ok(RegistryWriteResult {

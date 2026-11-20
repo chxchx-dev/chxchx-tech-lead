@@ -11,6 +11,7 @@ pub mod features {
     pub mod chat_state;
     pub mod context_compaction;
     pub mod doctor;
+    pub mod error_cache;
     pub mod explicit_memory;
     pub mod explicit_memory_prune;
     pub mod git;
@@ -35,6 +36,7 @@ pub mod features {
     pub mod project_search;
     pub mod project_setup;
     pub mod project_skills;
+    pub mod project_switch;
     pub mod project_sync;
     pub mod project_templates;
     pub mod project_trust;
