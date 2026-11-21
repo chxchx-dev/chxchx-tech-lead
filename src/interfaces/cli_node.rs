@@ -48,12 +48,37 @@ pub(super) enum NodeCommand {
         #[command(subcommand)]
         command: remote::RemoteCommand,
     },
+    /// Arranca el nodo al iniciar tu sesión, como servicio de tu usuario (vista previa y `--apply`).
+    Service {
+        #[command(subcommand)]
+        command: ServiceCommand,
+    },
     /// Muestra quién hizo qué (no hace falta que el nodo esté en marcha).
     Audit {
         #[arg(long, default_value_t = 30)]
         limit: usize,
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub(super) enum ServiceCommand {
+    /// Instala el servicio de usuario (systemd --user, LaunchAgent o tarea programada).
+    ///
+    /// Nunca usa root ni administrador. Sin `--apply` solo muestra qué haría.
+    Install {
+        #[arg(long, default_value_t = crate::interfaces::node::DEFAULT_PORT)]
+        port: u16,
+        #[arg(long)]
+        apply: bool,
+    },
+    /// Dice si el servicio está instalado y en marcha.
+    Status,
+    /// Detiene el servicio y borra lo que se instaló.
+    Uninstall {
+        #[arg(long)]
+        apply: bool,
     },
 }
 
@@ -78,6 +103,7 @@ pub(super) fn run(command: NodeCommand) -> Result<(), String> {
         NodeCommand::Revoke { id } => revoke(&id),
         NodeCommand::Audit { limit, json } => audit(limit, json),
         NodeCommand::Remote { command } => remote::run(command),
+        NodeCommand::Service { command } => service(command),
     }
 }
 
@@ -266,5 +292,51 @@ fn stop() -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(100));
     }
     println!("Nodo detenido.");
+    Ok(())
+}
+
+fn service(command: ServiceCommand) -> Result<(), String> {
+    use crate::integrations::user_service as svc;
+    let port = match &command {
+        ServiceCommand::Install { port, .. } => *port,
+        _ => crate::interfaces::node::DEFAULT_PORT,
+    };
+    let plan = svc::plan(&svc::current_setup(port)?);
+    match command {
+        ServiceCommand::Status => println!("{}", svc::status(&plan)),
+        ServiceCommand::Install { apply, .. } => {
+            if let Some((path, contents)) = &plan.file {
+                println!("Archivo: {}\n{contents}", path.display());
+            }
+            for command in &plan.install {
+                println!("Comando: {}", command.join(" "));
+            }
+            for note in &plan.notes {
+                println!("Nota: {note}");
+            }
+            if !apply {
+                println!("\nVista previa: no se cambió nada. Añade --apply para instalarlo.");
+                return Ok(());
+            }
+            for line in svc::install(&plan)? {
+                println!("{line}");
+            }
+        }
+        ServiceCommand::Uninstall { apply } => {
+            for command in &plan.uninstall {
+                println!("Comando: {}", command.join(" "));
+            }
+            if let Some((path, _)) = &plan.file {
+                println!("Se borra: {}", path.display());
+            }
+            if !apply {
+                println!("\nVista previa: no se cambió nada. Añade --apply para quitarlo.");
+                return Ok(());
+            }
+            for line in svc::uninstall(&plan)? {
+                println!("{line}");
+            }
+        }
+    }
     Ok(())
 }

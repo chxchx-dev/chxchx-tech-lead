@@ -38,6 +38,7 @@
   - Errores que solo el navegador mostró y quedaron corregidos: el `sw.js` salía roto (el marcador también estaba en un comentario) y el service worker no se registraba; `Dioxus` cancela las tareas de un componente al desmontarlo (las cargas de datos usan `spawn_forever`); `use_effect` no reaccionaba a un valor calculado en el render (`use_reactive!`).
 - **Pendiente de H4:** Safari/iOS, Firefox y un teléfono real; la pantalla a través de la tailnet (solo se probó el API); Web Push (no incluido); verlo correr en el CI; `wasm-opt` (opcional). El instalador y el release aún no incluyen el nodo ni el cliente (H5).
 - Siguiente: H5, Studio como cliente del nodo y servicio de usuario.
+- **H5 hecha (2026-11-21):** `integrations/{node_link,node_process,user_service}.rs`, `chat_bridge/node_runner.rs`, `interfaces/studio_chat_node.rs` y `studio_settings_node.rs` (panel). Verificado: pruebas con nodo real y nodo simulado, servicio `systemd --user` real en Linux (instalar/reinstalar/desinstalar). **Pendiente:** ventana real de Studio con nodo real (clic a clic), LaunchAgent/tarea de Windows, test automático del panel de Ajustes, el handoff de «liberar contexto» y turnos con imágenes siguen locales. Siguiente: H6 (Manager).
 
 ## `old-version/` eliminada; empaquetado con el servicio de agentes (2026-11-19)
 

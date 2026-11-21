@@ -242,15 +242,23 @@ socket con el token como subprotocolo, el service worker y «Añadir a pantalla 
 
 ### H5 — Studio como cliente del nodo y servicio del sistema · M
 
-- [ ] Si el nodo está activo, Studio le delega turnos y trabajos y se adjunta a los que siguen
-  corriendo. Al cerrar la ventana no se corta nada.
-- [ ] Instalación opcional del nodo como servicio **de usuario** (unidad `systemd --user`,
-  `LaunchAgent` en macOS, tarea programada en Windows), con vista previa, `--dry-run` y
-  desinstalación limpia. Nunca como root ni administrador.
-- [ ] Studio muestra el estado del nodo y los dispositivos vinculados, con un botón para revocar.
+- [x] Si el nodo está activo y el usuario lo activó (Ajustes → Nodo local), Studio le delega los
+  turnos de chat sencillos y se adjunta a los que siguen corriendo. Al cerrar la ventana no se
+  corta nada. Quedan locales: imágenes, resumen de sesión perdida, memorias recuperadas, reglas
+  aprobadas, comando de agente personalizado y reintentos ocultos. Si el nodo falla, el turno corre
+  local.
+- [x] Servicio **de usuario** opcional: `chxchx-tech node service install|status|uninstall`
+  (vista previa por defecto, `--apply` para cambiar; copia `.bak` si el archivo difería; idempotente).
+  **Verificado en Linux** de verdad (`systemd --user`: instala, arranca, responde, reinstala sin
+  cambios, desinstala). **Sin verificar** el LaunchAgent de macOS ni la tarea programada de Windows
+  (solo se prueba el texto que generan).
+- [x] Studio muestra el estado del nodo, lo inicia/detiene, vincula dispositivos con un código y los
+  desvincula con doble confirmación (Ajustes → Nodo local, se refresca solo cada 4 s).
 
 **Salida:** se empieza un turno en la PC, se cierra Studio, se sigue desde el celular y al
-reabrir Studio aparece el turno con su historial.
+reabrir Studio aparece el turno con su historial. *Reproducida a nivel de biblioteca contra el nodo
+real (cerrar, el trabajo sigue, reabrir, contestar, terminar) y a nivel de Studio contra un nodo
+simulado. **No se ha hecho con la ventana real ni un teléfono.***
 
 ### H6 — Manager: instalar, vigilar y reparar · L · puede ir en paralelo desde H2
 

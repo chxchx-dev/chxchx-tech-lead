@@ -75,6 +75,17 @@ vista previa sin cambios, `--apply` idempotente, `401` sin token, `403` con el t
 7. **Los archivos del cliente son públicos** (la página carga antes de vincular): no contienen
    nada secreto, pero confirman que ahí hay un nodo.
 
+## Studio y servicio de usuario (H5)
+
+- Studio habla con el nodo solo por `127.0.0.1` con el token local (archivo privado, nunca se imprime
+  ni sale en `Debug`), con límites de 0,5–1,5 s: un nodo colgado no congela la ventana.
+- La delegación es opt-in. Lo que Studio añade alrededor del turno (imágenes, reglas aprobadas…)
+  nunca se manda: esos turnos se quedan locales, así no se pierde ni se amplía un permiso.
+- El servicio es de usuario (`systemd --user`, LaunchAgent, tarea `ONLOGON`), con `NoNewPrivileges`
+  en Linux, sin root, sin tocar archivos del sistema; el archivo existente distinto se guarda como `.bak`.
+  Hereda `CHXCHX_TECH_HOME` si estaba definido. `loginctl enable-linger` no se activa solo.
+- `start.log` (carpeta del nodo) solo contiene la salida de arranque del proceso; no guarda tokens.
+
 ## Abierto
 
 - **Windows:** el token y los archivos del nodo heredan la ACL del perfil; no se probó que otro

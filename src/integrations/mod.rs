@@ -21,6 +21,7 @@ pub mod mcp_codex;
 pub mod mcp_files;
 pub mod node_client;
 pub mod node_link;
+pub mod node_process;
 pub mod opencode_history;
 pub mod process_memory;
 #[cfg(feature = "studio")]
@@ -34,4 +35,6 @@ pub mod system_open;
 pub mod tailscale;
 #[cfg(feature = "terminal")]
 pub mod terminal;
+#[cfg(feature = "node")]
+pub mod user_service;
 pub mod wake;

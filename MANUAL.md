@@ -109,6 +109,15 @@ atiende como mucho 128 peticiones a la vez, 16 flujos de eventos y 50 trabajos e
 cola. Las claves de idempotencia se ligan a quien las envía (la clave completa, con
 su dueño, no pasa de 128 caracteres).
 
+**Studio y servicio de usuario (H5).**
+En Ajustes → *Nodo local* ves si el nodo corre, lo inicias o detienes, activas «Usar el nodo
+para los turnos del chat» (cerrar Studio no corta el turno; al reabrir lo recupera) y gestionas
+dispositivos: *Vincular un dispositivo* muestra un código de un solo uso y *Desvincular* pide
+confirmación. Para que el nodo arranque al iniciar sesión:
+`chxchx-tech node service install` (vista previa), `... install --apply`, `... status`,
+`... uninstall --apply`. Es un servicio de tu usuario (nunca root); en Linux, para que corra sin
+sesión abierta, ejecuta tú `loginctl enable-linger`. macOS y Windows aún sin verificar.
+
 **Acceso desde tus dispositivos por Tailscale (H3).**
 `chxchx-tech node remote status|enable|disable` configura `tailscale serve` para que
 el nodo, que solo escucha en `127.0.0.1`, responda también al nombre de tu máquina

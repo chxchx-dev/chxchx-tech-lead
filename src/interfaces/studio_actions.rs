@@ -120,6 +120,12 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
             if page == Page::Catalog && state.catalog.view.is_none() {
                 return catalog::update(state, catalog::Event::Load);
             }
+            if page == Page::Settings {
+                return settings::update(
+                    state,
+                    settings::Event::Node(settings::node::Event::Refresh),
+                );
+            }
             if page == Page::Integrations {
                 state.connectors.states = None;
                 return connectors::update(state, connectors::Event::Load);

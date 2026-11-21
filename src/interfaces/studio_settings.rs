@@ -7,8 +7,13 @@ use super::keymap::{self, Action};
 use super::*;
 use iced::widget::{column, text_input};
 
+#[path = "studio_settings_node.rs"]
+pub(super) mod node;
+
 #[derive(Default)]
 pub(super) struct State {
+    /// Settings → Nodo local.
+    node: node::State,
     /// The action whose new shortcut is being recorded.
     capturing: Option<Action>,
     accent_input: String,
@@ -30,6 +35,7 @@ pub(super) enum Event {
     Cancel,
     ResetKey(Action),
     ResetKeys,
+    Node(node::Event),
 }
 
 /// The next interface size up (`step` > 0) or down, within the sizes Settings offers.
@@ -60,6 +66,7 @@ pub(super) fn apply(state: &Dashboard) {
 
 pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     match event {
+        Event::Node(event) => return node::update(state, event),
         Event::Theme(id) => {
             state.session.edit(|p| p.appearance.theme = id);
         }
@@ -145,8 +152,19 @@ fn capture(state: &mut Dashboard, chord: String) {
 
 /// While a shortcut is being recorded, the next key press is the shortcut.
 pub(super) fn subscription(state: &Dashboard) -> Option<iced::Subscription<Message>> {
-    state.settings.capturing?;
-    Some(iced::event::listen_with(|event, _, _| {
+    let refresh = (state.page == Page::Settings).then(|| {
+        iced::time::every(std::time::Duration::from_secs(4))
+            .map(|_| Message::Settings(Event::Node(node::Event::Refresh)))
+    });
+    let keys = state.settings.capturing.map(|_| capture_keys());
+    match (refresh, keys) {
+        (Some(refresh), Some(keys)) => Some(iced::Subscription::batch([refresh, keys])),
+        (one, other) => one.or(other),
+    }
+}
+
+fn capture_keys() -> iced::Subscription<Message> {
+    iced::event::listen_with(|event, _, _| {
         let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) = event
         else {
             return None;
@@ -158,7 +176,7 @@ pub(super) fn subscription(state: &Dashboard) -> Option<iced::Subscription<Messa
             return Some(Message::Settings(Event::Cancel));
         }
         keymap::chord(&key, modifiers).map(|chord| Message::Settings(Event::Captured(chord)))
-    }))
+    })
 }
 
 pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
@@ -182,6 +200,12 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
     .spacing(14)
     .max_width(820);
     body = body.push(shortcuts_card(state));
+    body = body.push(section_title(
+        "cpu",
+        "Nodo local",
+        "Corre tus agentes aunque cierres Studio y los sigue en tu teléfono.",
+    ));
+    body = body.push(node::card(state));
     if !state.settings.notice.is_empty() {
         body = body.push(
             container(text(&state.settings.notice).size(12))

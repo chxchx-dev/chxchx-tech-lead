@@ -177,6 +177,11 @@ pub fn revoke(endpoint: &Endpoint, id: &DeviceId) -> Result<Device, String> {
     )
 }
 
+/// Asks the node to stop. It cancels what is running first, so this is for the person to decide.
+pub fn stop(endpoint: &Endpoint) -> Result<(), String> {
+    call::<serde_json::Value>(endpoint, "POST", "/api/v1/node/stop", None, &[]).map(|_| ())
+}
+
 /// A one-use code for linking a new device.
 pub fn pairing(endpoint: &Endpoint, role: Role) -> Result<PairingOffer, String> {
     let body = serde_json::json!({ "role": role }).to_string();
