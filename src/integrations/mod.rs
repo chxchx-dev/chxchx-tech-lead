@@ -29,6 +29,8 @@ pub mod studio_update;
 #[cfg(feature = "studio")]
 pub mod system_clipboard;
 pub mod system_open;
+#[cfg(feature = "node")]
+pub mod tailscale;
 #[cfg(feature = "terminal")]
 pub mod terminal;
 pub mod wake;

@@ -24,7 +24,13 @@
   - CLI: `node pair|devices|revoke|audit`.
   - Verificado en Linux: 18 + 499 + 6 + 22 pruebas, clippy con `--features node`, builds por defecto y `cli`, WASM y `e2e-devices.sh` del scratchpad (200/403/403, tope de acceso, 401 al revocar, 0 secretos en disco).
   - Defecto encontrado por las pruebas y corregido: un reintento idempotente se auditaba como una creación nueva.
-- Pendiente de H3: integración con Tailscale (`node remote enable|status|disable` y probarla de verdad con el `tailscale` ya instalado), QR, ACL del token en Windows y la revisión de seguridad.
+- **H3, entrega 2 (Tailscale y revisión):**
+  - `integrations/tailscale.rs` (plan, apply, disable; captura stderr porque Tailscale explica ahí sus errores), `cli_node_remote.rs` y `RemoteConfig` con el `Host` de la tailnet aceptado solo si `remote.json` lo dice.
+  - Probado con Tailscale 1.104.7 real (`e2e-remote.sh` del scratchpad): serve conserva el `Host`, llega desde 127.0.0.1 y añade `Tailscale-User-*` (que no se lee ni se guarda). El certificado HTTPS tardó ~40 s la primera vez.
+  - Revisión en [NODE-SECURITY.md](NODE-SECURITY.md). Defectos corregidos: claves de idempotencia ligadas a su dueño y cola acotada a 50.
+  - Verificado en Linux: 18 + 509 + 6 + 22 pruebas, tres pasadas seguidas, clippy con `--features node`.
+- **Pendiente de H3:** probar desde el celular con datos móviles (abrir `https://fedora.tail33e808.ts.net/api/v1/health` con `node remote enable --apply` activo y el nodo en marcha), ACL del token y archivos en Windows, la ruta de Tailscale en macOS y una revisión independiente.
+- Siguiente: H4, la PWA en Dioxus (esqueleto, presupuesto de bundle y carga, pantallas y el QR de vinculación).
 
 ## `old-version/` eliminada; empaquetado con el servicio de agentes (2026-11-19)
 

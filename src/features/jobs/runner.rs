@@ -16,6 +16,9 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+/// Jobs that may wait for a free slot. Past it, a new job is refused (a retry still works).
+pub const MAX_QUEUED: usize = 50;
+
 pub trait Executor: Send + Sync + 'static {
     /// Does the job. `Ok` carries a short summary of the outcome.
     fn run(&self, job: &Job, context: &Context) -> Result<Option<String>, JobError>;
@@ -83,6 +86,7 @@ struct Shared {
     executor: Box<dyn Executor>,
     limit: usize,
     attended: bool,
+    max_queued: std::sync::atomic::AtomicUsize,
     schedule: Mutex<Schedule>,
     idle: Condvar,
     listeners: Mutex<Vec<Sender<JobEvent>>>,
@@ -134,6 +138,7 @@ impl JobRunner {
                 executor: Box::new(executor),
                 limit: limit.max(1),
                 attended,
+                max_queued: std::sync::atomic::AtomicUsize::new(MAX_QUEUED),
                 schedule: Mutex::new(Schedule::default()),
                 idle: Condvar::new(),
                 listeners: Mutex::new(Vec::new()),
@@ -146,6 +151,12 @@ impl JobRunner {
         self.submit_tracked(spec, key).map(|(job, _)| job)
     }
 
+    /// Tests: a small cap, so reaching it does not take fifty synced writes.
+    #[cfg(test)]
+    pub(crate) fn set_max_queued(&self, cap: usize) {
+        self.shared.max_queued.store(cap, Ordering::Relaxed);
+    }
+
     /// Like `submit`, and says whether the job is new (`false`: an earlier request with the same
     /// key already made it). Whoever records "a job was created" needs to know.
     pub fn submit_tracked(
@@ -153,6 +164,14 @@ impl JobRunner {
         spec: JobSpec,
         key: Option<IdempotencyKey>,
     ) -> Result<(Job, bool), JobError> {
+        let cap = self.shared.max_queued.load(Ordering::Relaxed);
+        let full = self.shared.schedule().queue.len() >= cap;
+        if full && !self.shared.store().has_key(key.as_ref()) {
+            return Err(JobError::new(
+                ErrorCode::TooManyRequests,
+                "Hay demasiados trabajos esperando; espera a que termine alguno",
+            ));
+        }
         let (job, events) = self.shared.store().create(spec, key)?;
         let created = !events.is_empty();
         self.shared.broadcast(events);

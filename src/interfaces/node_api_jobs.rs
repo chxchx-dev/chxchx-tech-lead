@@ -74,15 +74,21 @@ pub(super) async fn create(
             format!("Petición no válida: {problem}"),
         )
     })?;
+    // A key belongs to whoever sent it: two devices using the same text are not the same request,
+    // and one can never be handed the other's job (or its answer) by repeating a key.
     let key = headers
         .get("idempotency-key")
         .map(|value| {
-            value
+            let text = value
                 .to_str()
-                .map_err(|_| error(ErrorCode::InvalidRequest, "Idempotency-Key no válida"))
-                .and_then(|value| {
-                    IdempotencyKey::parse(value)
-                        .map_err(|problem| error(ErrorCode::InvalidRequest, problem.to_string()))
+                .map_err(|_| error(ErrorCode::InvalidRequest, "Idempotency-Key no válida"))?;
+            IdempotencyKey::parse(text)
+                .and_then(|_| IdempotencyKey::parse(format!("{}:{text}", who.actor())))
+                .map_err(|_| {
+                    error(
+                        ErrorCode::InvalidRequest,
+                        "Idempotency-Key no válida o demasiado larga",
+                    )
                 })
         })
         .transpose()?;

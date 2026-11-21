@@ -105,7 +105,25 @@ corre y lo que se audita es lo efectivo. `GET /api/v1/projects` lista solo los
 proyectos de confianza, sin rutas. `node audit` muestra quién hizo qué (vinculaciones,
 revocaciones, trabajos, cancelaciones, respuestas y cambios de acceso) y no
 necesita el nodo en marcha; nunca guarda prompts, textos de respuesta ni tokens. El nodo
-atiende como mucho 128 peticiones a la vez y 16 flujos de eventos.
+atiende como mucho 128 peticiones a la vez, 16 flujos de eventos y 50 trabajos en
+cola. Las claves de idempotencia se ligan a quien las envía (la clave completa, con
+su dueño, no pasa de 128 caracteres).
+
+**Acceso desde tus dispositivos por Tailscale (H3).**
+`chxchx-tech node remote status|enable|disable` configura `tailscale serve` para que
+el nodo, que solo escucha en `127.0.0.1`, responda también al nombre de tu máquina
+en la tailnet (`https://máquina.tailnet.ts.net/`). Como el resto del producto,
+`enable` y `disable` muestran una vista previa con el comando exacto y solo
+`--apply` lo ejecuta; `disable` es la vuelta atrás. Solo usa `tailscale serve` y
+`tailscale status`: nunca `funnel` (no sale a Internet), no toca el firewall, no
+cambia un puerto HTTPS que ya sirva otra cosa y rechaza uno con Funnel activo.
+Con el puerto fijo `47821` (por defecto de `node start`) el acceso sigue
+funcionando entre reinicios; si el nodo se inicia con `--port 0`, repite
+`enable --apply`. La primera vez Tailscale tarda hasta ~1 min en emitir el
+certificado HTTPS. El nodo solo acepta ese nombre si `node/remote.json` lo dice y
+solo para nombres `*.ts.net`. El token local no vale por la tailnet: cada
+dispositivo se vincula con su código. Ver [.ai/NODE-SECURITY.md](.ai/NODE-SECURITY.md)
+para los riesgos y lo que queda abierto.
 
 Skills, Tech Packs y Mods están portados (CLI y Studio). El catálogo del legado
 (40 skills, 22 packs, 31 mods) se empaqueta en el binario al compilar leyendo

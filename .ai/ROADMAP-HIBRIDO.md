@@ -168,9 +168,11 @@ recupera el estado y el resultado.
 
 ### H3 — Acceso remoto seguro · M · requiere revisión de seguridad
 
-- [ ] Integración con Tailscale en `integrations/tailscale.rs` mediante la CLI oficial. Detecta
-  si está instalado y conectado, y ofrece `tailscale serve` con vista previa y deshacer. El nodo
-  nunca abre puertos ni toca el firewall.
+- [x] Integración con Tailscale en `integrations/tailscale.rs` mediante la CLI oficial y
+  `chxchx-tech node remote status|enable|disable` (vista previa y `--apply`; `disable` deshace).
+  Detecta si está instalado y conectado; nunca ejecuta `funnel`, rechaza un puerto con Funnel o
+  que ya sirva otra cosa y no toca el firewall. El `Host` de la tailnet solo se acepta si
+  `node/remote.json` lo dice y es un `*.ts.net`.
   **Comprobado con Tailscale 1.104.7:** `tailscale serve` conserva el `Host` original
   (`máquina.tailnet.ts.net[:puerto]`), llega desde `127.0.0.1` y añade cabeceras con el correo y
   el nombre de la cuenta (`Tailscale-User-*`), que el nodo ni lee ni guarda. La primera vez, el
@@ -179,7 +181,8 @@ recupera el estado y el resultado.
 - [x] Vinculación de dispositivos (núcleo): código de un solo uso (10 caracteres sin ambiguos,
   5 min) y token propio de 256 bits mostrado una vez; en el nodo solo se guardan hashes. Cinco
   intentos fallidos cierran la vinculación 10 min y cancelan los códigos pendientes. Revocar corta
-  el token y los flujos abiertos. Pendiente: mostrar el código como QR.
+  el token y los flujos abiertos. El QR se hace con la PWA (H4), cuando
+  haya una dirección que abrir.
 - [x] Roles `reader`, `operator` y `admin`, comprobados por acción en cada ruta. Parar el nodo y
   crear códigos solo con el token local; el token local no vale con un `Host` de la tailnet.
 - [x] Tope de acceso remoto: un dispositivo nunca pasa de `workspace-write` y solo un `admin`
@@ -190,7 +193,16 @@ recupera el estado y el resultado.
   `GET /api/v1/audit`.
 - [x] Límites: cuerpo de 8 KiB (320 KiB solo para crear trabajos), 128 peticiones en vuelo y 16
   flujos de eventos; `Host` y `Origin` comprobados.
-- [ ] Revisión de seguridad antes de cerrar la fase (checklist y hallazgos).
+- [x] Revisión de seguridad: [NODE-SECURITY.md](NODE-SECURITY.md), con controles, pruebas, riesgos
+  aceptados y lo abierto. Es una **autorrevisión**, no una auditoría independiente. Encontró y
+  corrigió dos defectos: las claves de idempotencia eran globales (un dispositivo podía recibir el
+  trabajo de otro) y la cola no tenía tope (ahora 50).
+
+**Salida (criterio del plan):** «desde fuera de casa se puede iniciar y supervisar una tarea real
+sin exponer el nodo públicamente». Comprobado con Tailscale real pasando por la tailnet desde la
+propia PC (vinculación, trabajo y deshacer). **Falta la prueba desde otra red** (celular con datos
+móviles), que depende de un dispositivo que hoy aparece desconectado en la tailnet. H3 queda
+implementada y pendiente solo de esa comprobación.
 
 **Salida:** con datos móviles, fuera del Wi‑Fi de casa, un dispositivo vinculado lanza y sigue un
 turno, y uno sin vincular o revocado recibe 401 en todo.

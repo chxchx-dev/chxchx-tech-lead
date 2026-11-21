@@ -118,6 +118,15 @@ impl JobStore {
         Ok(store)
     }
 
+    /// Whether a job already exists for this idempotency key (a retry, not a new job).
+    pub fn has_key(&self, key: Option<&IdempotencyKey>) -> bool {
+        key.is_some_and(|key| {
+            self.jobs
+                .values()
+                .any(|job| job.idempotency_key.as_ref() == Some(key))
+        })
+    }
+
     pub fn get(&self, id: &JobId) -> Option<&Job> {
         self.jobs.get(id)
     }

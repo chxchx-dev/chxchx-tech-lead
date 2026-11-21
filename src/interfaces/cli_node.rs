@@ -1,4 +1,7 @@
 //! `chxchx-tech node start|status|stop`.
+#[path = "cli_node_remote.rs"]
+mod remote;
+
 use crate::features::{node_audit, node_state};
 use crate::integrations::node_client;
 use chxchx_protocol::{Device, PairingOffer, Role};
@@ -38,6 +41,11 @@ pub(super) enum NodeCommand {
     },
     /// Desvincula un dispositivo: su token deja de valer al instante.
     Revoke { id: String },
+    /// Acceso desde tus otros dispositivos por Tailscale (vista previa y `--apply`).
+    Remote {
+        #[command(subcommand)]
+        command: remote::RemoteCommand,
+    },
     /// Muestra quién hizo qué (no hace falta que el nodo esté en marcha).
     Audit {
         #[arg(long, default_value_t = 30)]
@@ -67,6 +75,7 @@ pub(super) fn run(command: NodeCommand) -> Result<(), String> {
         NodeCommand::Devices { json } => devices(json),
         NodeCommand::Revoke { id } => revoke(&id),
         NodeCommand::Audit { limit, json } => audit(limit, json),
+        NodeCommand::Remote { command } => remote::run(command),
     }
 }
 

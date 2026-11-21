@@ -1,3 +1,4 @@
+use super::MAX_QUEUED;
 use super::store::{MAX_EVENTS_PER_JOB, MAX_KEPT_FINISHED};
 use super::*;
 use chxchx_protocol::{
@@ -361,4 +362,41 @@ fn a_repeated_submit_does_not_run_the_job_twice() {
         })
         .count();
     assert_eq!(runs, 1);
+}
+
+#[test]
+fn only_so_many_jobs_may_wait_but_a_retry_of_one_that_exists_still_works() {
+    assert_eq!(MAX_QUEUED, 50, "the real cap");
+    let (runner, release) = runner("queue-cap", 1);
+    const CAP: usize = 4;
+    runner.set_max_queued(CAP);
+    let running = runner.submit(turn("wait"), key("first")).unwrap();
+    wait_for(&runner, &running.id, JobState::Running);
+    for index in 0..CAP {
+        runner
+            .submit(turn("wait"), key(&format!("q-{index}")))
+            .unwrap();
+    }
+    let refused = runner
+        .submit(turn("wait"), key("one-too-many"))
+        .unwrap_err();
+    assert_eq!(refused.code, ErrorCode::TooManyRequests);
+    assert_eq!(
+        runner.list().len(),
+        CAP + 1,
+        "a refused job leaves nothing behind"
+    );
+
+    let retry = runner.submit(turn("wait"), key("q-0")).unwrap();
+    assert_eq!(
+        retry.state,
+        JobState::Queued,
+        "a retry is not a new job, so the cap does not apply"
+    );
+
+    for job in runner.list() {
+        let _ = runner.cancel(&job.id);
+    }
+    release.send(Ok(None)).ok();
+    assert!(runner.wait_idle(Duration::from_secs(10)));
 }

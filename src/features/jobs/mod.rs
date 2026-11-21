@@ -13,5 +13,5 @@ mod agent_turn_tests;
 mod tests;
 
 pub use product::ProductExecutor;
-pub use runner::{Context, Executor, JobRunner};
+pub use runner::{Context, Executor, JobRunner, MAX_QUEUED};
 pub use store::{JobStore, default_dir, read, read_events};

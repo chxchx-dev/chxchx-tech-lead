@@ -943,3 +943,86 @@ fn only_so_many_event_streams_can_be_open_at_once() {
         drop(open);
     });
 }
+
+#[tokio::test]
+async fn an_idempotency_key_belongs_to_whoever_sent_it() {
+    let state = state("keys");
+    let (_, first) = link(&state, "operator").await;
+    let (_, second) = link(&state, "operator").await;
+    let post = |token: Option<&str>| {
+        let mut call = Call::new("POST", "/api/v1/jobs").with_body(turn());
+        call.key = Some("same-key");
+        if let Some(token) = token {
+            call = call.with_token(token);
+        }
+        call
+    };
+    let (_, a) = post(Some(&first)).send(&state).await;
+    let (_, again) = post(Some(&first)).send(&state).await;
+    let (_, b) = post(Some(&second)).send(&state).await;
+    let (_, local) = post(None).send(&state).await;
+    assert_eq!(
+        a["id"], again["id"],
+        "the same device retrying gets its own job"
+    );
+    assert_ne!(
+        a["id"], b["id"],
+        "another device with the same text gets another job"
+    );
+    assert_ne!(a["id"], local["id"]);
+    assert_ne!(b["id"], local["id"]);
+
+    let mut too_long = Call::new("POST", "/api/v1/jobs").with_body(turn());
+    // Valid on its own (128 characters), too long once it carries its owner.
+    too_long.key = Some(Box::leak("k".repeat(128).into_boxed_str()));
+    assert_eq!(too_long.send(&state).await.0, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn every_route_that_is_not_public_refuses_a_call_without_a_token() {
+    let state = state("closed");
+    let public = ["/api/v1/health", "/api/v1/pair"];
+    let routes = [
+        ("GET", "/api/v1/node"),
+        ("POST", "/api/v1/node/stop"),
+        ("GET", "/api/v1/projects"),
+        ("GET", "/api/v1/jobs"),
+        ("POST", "/api/v1/jobs"),
+        ("GET", "/api/v1/jobs/x"),
+        ("GET", "/api/v1/jobs/x/events"),
+        ("POST", "/api/v1/jobs/x/cancel"),
+        ("POST", "/api/v1/jobs/x/answers"),
+        ("GET", "/api/v1/events"),
+        ("GET", "/api/v1/devices"),
+        ("POST", "/api/v1/devices/pairing"),
+        ("DELETE", "/api/v1/devices/x"),
+        ("GET", "/api/v1/audit"),
+    ];
+    for (method, path) in routes {
+        assert!(!public.contains(&path));
+        let mut call = Call::new(method, path);
+        call.token = None;
+        let (status, body) = call.send(&state).await;
+        assert_eq!(
+            status,
+            StatusCode::UNAUTHORIZED,
+            "{method} {path} answered without a token: {body}"
+        );
+        let wrong = Call::new(method, path).with_token(&"0".repeat(64));
+        assert_eq!(
+            wrong.send(&state).await.0,
+            StatusCode::UNAUTHORIZED,
+            "{method} {path} with a wrong token"
+        );
+    }
+    // Even a path that does not exist is answered behind the token: it reveals nothing.
+    let mut missing = Call::new("GET", "/api/v1/nope");
+    missing.token = None;
+    assert_eq!(missing.send(&state).await.0, StatusCode::UNAUTHORIZED);
+    let known = Call::new("GET", "/api/v1/nope");
+    assert_eq!(
+        known.send(&state).await.0,
+        StatusCode::NOT_FOUND,
+        "with the token it is just missing"
+    );
+}
