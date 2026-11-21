@@ -47,6 +47,9 @@ proteger esas capacidades.
 | Agotar el nodo | cuerpo de 8 KiB (320 KiB para trabajos), 128 peticiones en vuelo, 16 flujos de eventos, 50 trabajos en cola | `a_huge_body_is_refused_before_it_is_read`, `a_busy_node_refuses_new_requests_instead_of_piling_them_up`, `only_so_many_event_streams_can_be_open_at_once`, `only_so_many_jobs_may_wait_but_a_retry_of_one_that_exists_still_works` |
 | Falsificar la auditoría o el log | cada texto va en una línea, sin control, acotado; nunca prompts, respuestas ni tokens | `text_cannot_forge_entries_and_is_bounded`, `the_audit_log_keeps_who_did_what_but_no_secrets`, `a_rejected_token_is_logged_without_the_token` |
 | Publicar el nodo en Internet | el adapter nunca ejecuta `tailscale funnel`, rechaza un puerto con Funnel activo y no toca uno que sirva otra cosa | `the_funnel_command_cannot_be_started_at_all`, `a_port_published_on_the_internet_is_refused`, `enabling_is_planned_without_overwriting_what_is_already_served` |
+| Una página que robe el token o cargue algo ajeno | política de contenido `default-src 'none'`, scripts solo propios (WebAssembly sí, `eval` y texto como código no), nada en línea, sin marcos ni formularios, y el socket solo de vuelta al host de la página | `the_policy_lets_the_page_talk_only_to_the_host_it_came_from`; comprobado en Chromium sin ningún aviso de la política |
+| Respuestas del API guardadas en una caché | el API va con `no-store` y el service worker nunca lo intercepta | `every_answer_carries_the_hardening_headers_and_api_answers_are_never_cached`; en el navegador la caché solo tiene los 13 archivos de arranque |
+| Servir archivos a quien no debe | solo una tabla fija incrustada al compilar, sin rutas del disco; `Host` y `Origin` como en el API | `the_web_client_is_served_without_a_token_compressed_and_with_the_right_types` |
 | Identidad de la cuenta de Tailscale | Tailscale reenvía correo y nombre en `Tailscale-User-*`; el nodo no lee esas cabeceras | comprobado a mano: ningún archivo del nodo las contiene |
 
 **Comprobado de punta a punta con Tailscale 1.104.7 real** (`e2e-remote.sh` del scratchpad):
@@ -66,7 +69,11 @@ vista previa sin cambios, `--apply` idempotente, `401` sin token, `403` con el t
 4. **Todos los dispositivos ven todos los trabajos.** Es un sistema de un solo usuario.
 5. **Los dispositivos de la tailnet comparten el certificado HTTPS** de la máquina, cuyo nombre
    aparece en los registros públicos de transparencia de certificados.
-6. **El token de dispositivo vive en el cliente.** La PWA (H4) deberá guardarlo con cuidado (XSS).
+6. **El token de dispositivo vive en `localStorage`** del navegador. Un XSS lo leería; por eso la
+   política prohíbe scripts en línea y ajenos y el cliente no pinta HTML ajeno (todo el texto del
+   agente va como texto, nunca como marcado). Si se añade Markdown, hay que revisarlo aquí.
+7. **Los archivos del cliente son públicos** (la página carga antes de vincular): no contienen
+   nada secreto, pero confirman que ahí hay un nodo.
 
 ## Abierto
 
@@ -78,7 +85,9 @@ vista previa sin cambios, `--apply` idempotente, `401` sin token, `403` con el t
   propia PC. La prueba real es abrir `https://<nombre>.ts.net/api/v1/health` en el celular con
   Tailscale activo y los datos móviles encendidos.
 - **Sin revisión independiente** ni *fuzzing* del API.
-- **QR de vinculación:** se hará con la PWA (H4), cuando haya una dirección que abrir.
+- **QR de vinculación:** hecho (`node pair`), con el código tras la `#` para que no llegue a ningún
+  servidor, proxy ni registro. Solo con el acceso remoto activado.
+- **Cliente web probado solo en Chromium:** ni Safari/iOS ni Firefox ni un teléfono real.
 - **Rotación del token local:** no existe un comando; borrar `node/token` con el nodo parado
   genera otro.
 - **Un `admin` remoto puede leer la auditoría y revocar dispositivos,** incluidos los de otros

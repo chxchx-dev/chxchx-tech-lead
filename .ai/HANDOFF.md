@@ -30,7 +30,14 @@
   - Revisión en [NODE-SECURITY.md](NODE-SECURITY.md). Defectos corregidos: claves de idempotencia ligadas a su dueño y cola acotada a 50.
   - Verificado en Linux: 18 + 509 + 6 + 22 pruebas, tres pasadas seguidas, clippy con `--features node`.
 - **Pendiente de H3:** probar desde el celular con datos móviles (abrir `https://fedora.tail33e808.ts.net/api/v1/health` con `node remote enable --apply` activo y el nodo en marcha), ACL del token y archivos en Windows, la ruta de Tailscale en macOS y una revisión independiente.
-- Siguiente: H4, la PWA en Dioxus (esqueleto, presupuesto de bundle y carga, pantallas y el QR de vinculación).
+- **H4 cerrada (cliente web):**
+  - `apps/remote` (Dioxus 0.7.10): `model`/`route` (lógica pura, 12 pruebas nativas), `net` (fetch con tiempo límite, WebSocket con el token como subprotocolo, almacenamiento, avisos), `store`/`actions`/`engine` (señales globales, acciones y el motor que reconecta y recupera por `seq`) y `ui/*`. Más `web/` (página, estilos, manifiesto, service worker, iconos), `scripts/build-remote.sh` (falla si pasa de 1,5 MiB), `finish_remote.py` y `make_remote_icons.py`.
+  - Nodo: `node_web.rs` (sirve el cliente incrustado, CSP, cabeceras), `node_api_projects.rs` (`/projects/{id}/agents` y `/chats`), `GET /node` tipado y QR en `node pair` (`cli_node_qr.rs`, `qrcode` 0.14.1 pinned).
+  - Pruebas de navegador en `apps/remote/e2e` (25 pasos, Chromium 139, perfil Pixel 7) y job `remote-web` en el CI (con `continue-on-error` hasta verlo en verde en el runner).
+  - Verificado en Linux: 19 + 519 + 6 + 22 pruebas del nodo, 12 del cliente, clippy (nodo y wasm), builds por defecto y `cli` sin dependencias nuevas, el QR decodificado con jsQR y la carga medida (0,89 s en 4G típico, 2,49 s en Slow 4G).
+  - Errores que solo el navegador mostró y quedaron corregidos: el `sw.js` salía roto (el marcador también estaba en un comentario) y el service worker no se registraba; `Dioxus` cancela las tareas de un componente al desmontarlo (las cargas de datos usan `spawn_forever`); `use_effect` no reaccionaba a un valor calculado en el render (`use_reactive!`).
+- **Pendiente de H4:** Safari/iOS, Firefox y un teléfono real; la pantalla a través de la tailnet (solo se probó el API); Web Push (no incluido); verlo correr en el CI; `wasm-opt` (opcional). El instalador y el release aún no incluyen el nodo ni el cliente (H5).
+- Siguiente: H5, Studio como cliente del nodo y servicio de usuario.
 
 ## `old-version/` eliminada; empaquetado con el servicio de agentes (2026-11-19)
 

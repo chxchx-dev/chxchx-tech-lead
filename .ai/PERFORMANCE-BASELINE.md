@@ -27,6 +27,20 @@ memoria compartida. **No medido:** el arranque de Studio hasta el primer frame (
 instrumentado), Windows, macOS ni escenarios activos (chat largo, editor, búsqueda). Los
 presupuestos del nodo están en [ADR 0017](adr/0017-local-node-and-remote-access.md).
 
+### Cliente web (H4, 2026-11-20)
+
+Chromium 139 con perfil de Pixel 7, caché desactivada, `apps/remote/e2e/perf.mjs` (cinco cargas por
+perfil; las cifras son casi idénticas entre ellas porque la red simulada manda).
+
+| Medida | Resultado | Presupuesto (ADR 0017) |
+| --- | ---: | ---: |
+| Cliente comprimido, total | 610 KB (WASM 315 KB, JS 5 KB) | ≤ 1,5 MiB ✔ |
+| Recibido en la primera visita | 336 KiB | — |
+| Primera visita, sin límite | 111 ms | — |
+| Primera visita, 4G típico (10 Mbps, 60 ms) | 0,89 s | ≤ 3 s ✔ |
+| Primera visita, Slow 4G de Lighthouse (1,6 Mbps, 150 ms) | 2,49 s | ≤ 3 s ✔ (sin precarga: 2,996 s) |
+| Segunda visita (service worker) | ~70 ms | — |
+
 ### Nodo local (H2, 2026-11-20)
 
 `cargo build --release --locked --features node`, mismo equipo. `node start --port 0` sin

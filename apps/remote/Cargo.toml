@@ -6,9 +6,25 @@ publish = false
 description = "ChxChx remote client: the PWA the node serves to the person's own devices (ADR 0017)"
 
 # WebAssembly only. Built with `scripts/build-remote.sh` (see its header); it is a workspace
-# member but not a default one, so plain `cargo test` and `cargo clippy` leave it alone.
+# member but not a default one, so plain `cargo test` and `cargo clippy` leave it alone. Its
+# pure logic (`model`, `route`) also runs natively: `cargo test -p chxchx-remote`.
 [dependencies]
 chxchx-protocol = { path = "../../crates/chxchx-protocol" }
 dioxus = { version = "=0.7.10", default-features = false, features = ["web", "macro", "html", "signals", "hooks", "launch"] }
+futures-channel = { version = "=0.3.34", default-features = false, features = ["std"] }
+futures-util = { version = "=0.3.34", default-features = false, features = ["std", "async-await", "async-await-macro"] }
+js-sys = "=0.3.107"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.149"
+wasm-bindgen = "=0.2.130"
+wasm-bindgen-futures = "=0.4.80"
+
+[dependencies.web-sys]
+version = "=0.3.107"
+features = [
+  "AbortController", "AbortSignal", "CloseEvent", "Crypto", "Document", "Element", "Event",
+  "EventTarget", "Headers", "History", "Location", "MessageEvent", "Navigator", "Notification",
+  "NotificationOptions", "NotificationPermission", "Request", "RequestCache", "RequestInit",
+  "Response", "ServiceWorkerContainer", "Storage",
+  "VisibilityState", "WebSocket", "Window",
+]

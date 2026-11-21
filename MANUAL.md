@@ -125,6 +125,21 @@ solo para nombres `*.ts.net`. El token local no vale por la tailnet: cada
 dispositivo se vincula con su código. Ver [.ai/NODE-SECURITY.md](.ai/NODE-SECURITY.md)
 para los riesgos y lo que queda abierto.
 
+**App web (PWA, H4).** El nodo sirve en `/` una app web (Dioxus compilado a WebAssembly,
+`apps/remote`) para el teléfono o cualquier navegador: ver proyectos de confianza, hablar con
+Claude, Codex u OpenCode con la respuesta en vivo, aprobar o rechazar sus permisos, responder sus
+preguntas, cancelar trabajos y, siendo administrador, desvincular dispositivos. Se instala desde el
+menú del navegador («Instalar app» en Android, «Añadir a pantalla de inicio» en iPhone), arranca
+sin red desde su service worker y, si cae la conexión, se reconecta y recupera lo que pasó. Para
+incluirla en el nodo: `scripts/build-remote.sh && cargo build --features node` (necesita
+`rustup target add wasm32-unknown-unknown` y `cargo install wasm-bindgen-cli` en la versión de
+`Cargo.lock`); sin ese paso el nodo funciona igual y su portada lo indica. La primera vez se
+vincula con el código de `chxchx-tech node pair` o, con el acceso remoto activado, escaneando el QR
+que imprime (la dirección lleva el código tras la `#`, que no llega a ningún servidor). El acceso
+predeterminado es solo leer; «leer y editar» se elige en el chat o en Ajustes. Los avisos son
+locales (mientras la página viva): no hay notificaciones push. Pruebas de navegador en
+`apps/remote/e2e`.
+
 Skills, Tech Packs y Mods están portados (CLI y Studio). El catálogo del legado
 (40 skills, 22 packs, 31 mods) se empaqueta en el binario al compilar leyendo
 `src/chxchx_tech_lead/`, sin copiarlo. Todo cambio se previsualiza y solo se aplica

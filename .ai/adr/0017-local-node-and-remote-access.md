@@ -91,6 +91,10 @@ ni el tamaño de los builds sin ella (lo comprueba la CI). El bundle de la PWA c
 quedar en ≤ 1,5 MiB y cargar en ≤ 3 s en 4G simulado. Si Dioxus no lo cumple, se reabre este ADR
 antes de seguir con H4.
 
+**Resultado de H4 (2026-11-20):** el presupuesto de la PWA se cumple con margen y la decisión de
+Dioxus se mantiene: 610 KB comprimidos en total, 0,89 s en un 4G típico y 2,49 s en «Slow 4G» de
+Lighthouse (ver `PERFORMANCE-BASELINE.md`).
+
 ## Consecuencias
 
 - La primera entrega útil (H1) no añade red: saca los trabajos de la ventana y deja `interrupted`

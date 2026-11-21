@@ -1,0 +1,8 @@
+{
+  "name": "chxchx-remote-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser tests of the web client against a real node (ADR 0017)",
+  "scripts": { "test": "node e2e.mjs", "perf": "node perf.mjs" },
+  "devDependencies": { "playwright-core": "1.54.2" }
+}

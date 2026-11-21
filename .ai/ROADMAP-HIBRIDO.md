@@ -209,19 +209,36 @@ turno, y uno sin vincular o revocado recibe 401 en todo.
 
 ### H4 — Cliente web / PWA · L
 
-- [ ] Esqueleto en Dioxus web (versión 0.7.x fijada) en `apps/remote/`, con `chxchx-protocol`
-  y build en CI. Se comprueba primero el presupuesto de ADR 0017: bundle comprimido ≤ 1,5 MiB y
-  carga ≤ 3 s en 4G simulado. Si no se cumple, se reabre el ADR antes de construir las pantallas.
-- [ ] El nodo sirve los archivos estáticos incrustados (`include_bytes!`), sin servidor extra.
-- [ ] Pantallas: nodo y salud, proyectos confiados, chats (enviar, ver el streaming, aprobar o
-  rechazar tarjetas, cambiar modelo), trabajos (progreso, cancelar, resultado) y dispositivos.
-- [ ] Diseño táctil y responsivo, instalable como PWA, con reconexión automática que recupera el
-  estado por `job_id`.
-- [ ] Opcional al final: notificaciones Web Push cuando termina un turno o llega una tarjeta de
-  permiso.
+- [x] Cliente en Dioxus web 0.7.10 (`apps/remote/`, miembro del workspace pero no por defecto) que
+  comparte `chxchx-protocol`. **Presupuesto de ADR 0017 cumplido, con medidas:**
+  610 KB comprimidos en total (39 % de 1,5 MiB; el WASM son 315 KB). Carga en frío con caché vacía
+  y Chromium 139: **0,89 s en un 4G típico** (10 Mbps, 60 ms) y **2,49 s en «Slow 4G» de
+  Lighthouse** (1,6 Mbps, 150 ms; eran 2,996 s antes de precargar el WASM en paralelo). Visitas
+  siguientes: ~70 ms, desde el service worker. `wasm-opt` se usa si está instalado y no hace falta.
+- [x] El nodo sirve el cliente incrustado (`build.rs` + `include_bytes!`, solo con la feature
+  `node`; gzip, `ETag`/304, `HEAD`). Los archivos son públicos (la página carga antes de
+  vincular); protegen el `Host`, una política de contenido que solo deja abrir el socket de vuelta
+  al mismo host (sin scripts ni estilos en línea, sin `eval`), cabeceras `nosniff`, `no-referrer`
+  y sin marcos, y el token que el API sigue exigiendo. Sin cliente compilado, la portada lo dice.
+- [x] Pantallas: Inicio (estado, lo que espera tu respuesta y recientes), Proyectos (solo los de
+  confianza), chat (historial guardado, respuesta en vivo, herramientas, tarjetas de permiso y de
+  pregunta, modelo y esfuerzo, acceso, detener), Trabajos y su detalle (cancelar), Dispositivos
+  (administrador: ver y desvincular) y Ajustes (avisos, acceso predeterminado, cerrar sesión).
+  Nuevos endpoints de solo lectura: `GET /projects/{id}/agents` y `/chats`, y `GET /node` tipado.
+- [x] Táctil y responsivo (sin desbordes a 360 px, objetivos de 44 px, tema claro y oscuro, áreas
+  seguras), instalable (manifiesto, iconos «any» y «maskable», service worker que arranca sin red
+  y nunca guarda el API) y con reconexión: al volver a primer plano o a tener red, o si cae el
+  nodo, se recupera por `seq` lo que faltó. Vinculación con el código o con un QR en la terminal
+  (`node pair`), comprobado decodificándolo.
+- [~] Avisos: solo locales (`Notification`) mientras la página siga viva. **Web Push no se
+  incluye**: pide claves VAPID y cifrado en el servidor, y en iOS exige instalar la app.
 
-**Salida:** el criterio del MVP (§6) pasa en Android Chrome, iOS Safari y un navegador de
-escritorio.
+**Salida (criterio del plan):** «el criterio del MVP (§6) pasa en Android Chrome, iOS Safari y un
+navegador de escritorio». **Verificado** en Chromium 139 (el motor de Chrome en Android y de Chrome,
+Edge y Brave en el escritorio) con un perfil de Pixel 7: 25 pasos de extremo a extremo
+(`apps/remote/e2e`). **No verificado:** Safari en iOS, Firefox y un teléfono real; con la tailnet
+solo se probó el API, no esta pantalla. En el iPhone hay que mirar sobre todo: Safari ≥ 16.4, el
+socket con el token como subprotocolo, el service worker y «Añadir a pantalla de inicio».
 
 ### H5 — Studio como cliente del nodo y servicio del sistema · M
 

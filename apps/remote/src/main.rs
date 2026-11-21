@@ -1,9 +1,13 @@
-use dioxus::prelude::*;
+//! ChxChx remote client (ADR 0017): the web app the node serves to the person's own devices.
+
+mod actions;
+mod engine;
+mod model;
+mod net;
+mod route;
+mod store;
+mod ui;
 
 fn main() {
-    launch(app);
-}
-
-fn app() -> Element {
-    rsx! { main { h1 { "ChxChx" } } }
+    dioxus::launch(ui::app);
 }

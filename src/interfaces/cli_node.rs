@@ -1,4 +1,6 @@
 //! `chxchx-tech node start|status|stop`.
+#[path = "cli_node_qr.rs"]
+mod qr;
 #[path = "cli_node_remote.rs"]
 mod remote;
 
@@ -108,10 +110,21 @@ fn pair(role: Role) -> Result<(), String> {
     );
     let remote = node_state::dir().and_then(|dir| node_state::read_remote(&dir));
     match remote {
-        Some(remote) => println!(
-            "En el dispositivo abre {} e introduce el código.",
-            remote.url()
-        ),
+        Some(remote) => {
+            // The code goes after `#`: it never reaches a server, a proxy or a log.
+            let address = format!("{}#code={}", remote.url(), offer.code);
+            println!(
+                "En el dispositivo, con Tailscale activo, abre {} e introduce el código,",
+                remote.url()
+            );
+            println!("o escanea esto con la cámara:");
+            if std::io::IsTerminal::is_terminal(&std::io::stdout())
+                && let Some(code) = qr::render(&address)
+            {
+                println!("{code}");
+            }
+            println!("{address}");
+        }
         None => println!(
             "El acceso desde fuera aún no está activado: `chxchx-tech node remote enable`."
         ),

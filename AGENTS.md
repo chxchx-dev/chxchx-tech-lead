@@ -70,7 +70,14 @@ cargo test --locked --features node
 ```
 
 La feature `node` (nodo local, ADR 0017) aún no entra en el build por defecto;
-`cargo check --locked` comprueba que el producto sigue compilando sin ella.
+`cargo check --locked` comprueba que el producto sigue compilando sin ella. El cliente web
+(`apps/remote`) tiene su propia comprobación:
+
+```bash
+cargo test --locked -p chxchx-remote
+cargo clippy --locked -p chxchx-remote --target wasm32-unknown-unknown -- -D warnings
+scripts/build-remote.sh   # compila el cliente y falla si pasa del presupuesto de tamaño
+```
 
 ## Organización del código
 
