@@ -13,6 +13,9 @@ mod api_projects;
 #[cfg(test)]
 #[path = "node_api_tests.rs"]
 mod api_tests;
+#[cfg(test)]
+#[path = "node_link_tests.rs"]
+mod link_tests;
 #[path = "node_web.rs"]
 mod web;
 

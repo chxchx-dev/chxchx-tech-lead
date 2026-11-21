@@ -48,6 +48,8 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         return false;
     }
     let root = state.root.clone();
+    // Read before the chat is borrowed: whether Studio is set to hand turns to the node.
+    let to_node = super::node::enabled(state);
     let Some(chat) = state.chat.chats.get_mut(state.chat.active) else {
         return false;
     };
@@ -81,16 +83,27 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         trusted: true, // checked above: nothing starts in an untrusted project
     };
     let visible_prompt = shown(display.unwrap_or(prompt), attached.len());
-    match Turn::launch(&spec) {
+    // Only what the person typed goes to the node as it is: a hidden retry or a `/command` that
+    // expands into something else stays here.
+    let typed = show && display.is_none();
+    let launched = if to_node {
+        super::node::launch(&spec, typed)
+    } else {
+        Turn::launch(&spec)
+    };
+    match launched {
         Ok(turn) => {
             if show {
-                let _ = crate::features::chat_state::begin_turn(
-                    &spec.project,
-                    &spec.agent,
-                    state_provider(chat.agent.provider),
-                    spec.session.as_deref(),
-                    &visible_prompt,
-                );
+                // The node saves the visible message itself, when the job starts.
+                if !turn.is_remote() {
+                    let _ = crate::features::chat_state::begin_turn(
+                        &spec.project,
+                        &spec.agent,
+                        state_provider(chat.agent.provider),
+                        spec.session.as_deref(),
+                        &visible_prompt,
+                    );
+                }
                 chat.model.add_user(visible_prompt);
                 chat.resume_recap.clear();
                 if spec.session.as_deref().is_none_or(str::is_empty) {

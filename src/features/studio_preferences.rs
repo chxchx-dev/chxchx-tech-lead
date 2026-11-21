@@ -65,6 +65,15 @@ impl Default for Appearance {
     }
 }
 
+/// How Studio uses the local node (ADR 0017, H5).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NodePrefs {
+    /// Hand chat turns to the node when it is running, so they go on after the window is closed
+    /// and can be followed from other devices. Off until the person turns it on.
+    pub delegate: bool,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectSession {
@@ -86,6 +95,7 @@ pub struct Preferences {
     pub shortcuts: BTreeMap<String, String>,
     pub recent_projects: Vec<String>,
     pub projects: BTreeMap<String, ProjectSession>,
+    pub node: NodePrefs,
 }
 
 impl Default for Preferences {
@@ -97,6 +107,7 @@ impl Default for Preferences {
             shortcuts: BTreeMap::new(),
             recent_projects: Vec::new(),
             projects: BTreeMap::new(),
+            node: NodePrefs::default(),
         }
     }
 }

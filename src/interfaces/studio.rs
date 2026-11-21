@@ -28,6 +28,9 @@ mod e2e_tests;
 mod editor;
 #[path = "studio_explorer.rs"]
 mod explorer;
+#[cfg(test)]
+#[path = "studio_fake_node.rs"]
+mod fake_node;
 #[path = "studio_file_types.rs"]
 mod file_types;
 #[path = "studio_git.rs"]
@@ -384,11 +387,19 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                     .map(|_| Message::Local(local::Event::Tick)),
             );
         }
-        if state.chat.busy() {
+        if state.chat.following() {
             // Safety net only: the agent's output wakes the window by itself.
             subscriptions.push(
                 iced::time::every(std::time::Duration::from_secs(2))
                     .map(|_| Message::Chat(chat::Event::Tick)),
+            );
+        }
+        if state.session.preferences().node.delegate && !state.chat.chats.is_empty() {
+            // Turns the node is running that this window is not following yet (a phone asked, or
+            // Studio was closed meanwhile).
+            subscriptions.push(
+                iced::time::every(std::time::Duration::from_secs(3))
+                    .map(|_| Message::Chat(chat::Event::Adopt)),
             );
         }
         iced::Subscription::batch(subscriptions)

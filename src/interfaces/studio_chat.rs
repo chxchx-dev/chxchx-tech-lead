@@ -21,6 +21,8 @@ mod cards;
 mod composer;
 #[path = "studio_chat_models.rs"]
 mod models;
+#[path = "studio_chat_node.rs"]
+pub(super) mod node;
 #[path = "studio_chat_perms.rs"]
 mod perms;
 #[path = "studio_chat_prepare.rs"]
@@ -135,7 +137,8 @@ impl State {
         self.chats.iter().any(|chat| chat.agent.id == id)
     }
 
-    pub fn busy(&self) -> bool {
+    /// A turn is being followed (here or on the node): the heartbeat that wakes the chat runs.
+    pub fn following(&self) -> bool {
         self.chats.iter().any(|chat| chat.turn.is_some())
     }
 }
@@ -159,6 +162,8 @@ pub(super) enum Event {
     Send,
     Stop,
     Tick,
+    /// Looks for turns the node is running that no chat follows yet.
+    Adopt,
     /// Answer the permission card at this entry: a choice, or `None` to deny.
     Decide(usize, Option<usize>),
     /// Picks (or unpicks) an option of a question card: entry, question, label.
@@ -229,7 +234,11 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             with_agent(state, &id, |chat| use_model(chat, &model));
             return task;
         }
-        Event::Prepared(id, prepared) => prepared_for(state, &id, &prepared.0),
+        Event::Prepared(id, prepared) => {
+            prepared_for(state, &id, &prepared.0);
+            // A turn the node is already running for this chat is picked up as soon as it opens.
+            return node::adopt(state);
+        }
         Event::ProviderMemoriesPrepared(id, context, result) => {
             with_agent(state, &id, |chat| {
                 chat.preparing = false;
@@ -246,6 +255,7 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             return update(state, *inner);
         }
         Event::Tick => tick(state),
+        Event::Adopt => return node::adopt(state),
         Event::Send => return submit(state),
         Event::Slash(name) => with_chat(state, |chat| slash::complete(chat, &name)),
         Event::SlashEnter => {
@@ -456,18 +466,25 @@ fn tick(state: &mut Dashboard) {
                 && turn.needs_context_release()
                 && !chat.model.session_id.is_empty();
             let consumed_handoff = turn.take_consumed_handoff_session();
+            let remote = turn.is_remote();
             drop(turn);
             let replies = std::mem::take(&mut chat.turn_replies);
-            let saved_state = crate::features::chat_state::end_turn(
-                &state.root,
-                &chat.agent.id,
-                turns::state_provider(chat.agent.provider),
-                Some(&chat.model.session_id),
-                replies.iter().map(String::as_str),
-            );
+            // The node that ran the turn also saved the conversation, the explicit memory and the
+            // journal: saving them here as well would write every answer twice.
+            let saved_state = if remote {
+                Ok(())
+            } else {
+                crate::features::chat_state::end_turn(
+                    &state.root,
+                    &chat.agent.id,
+                    turns::state_provider(chat.agent.provider),
+                    Some(&chat.model.session_id),
+                    replies.iter().map(String::as_str),
+                )
+            };
             if let Err(error) = saved_state {
                 state.message = format!("No pude guardar el historial del chat: {error}");
-            } else {
+            } else if !remote {
                 if let Err(error) =
                     crate::features::explicit_memory::capture_studio_memories(&state.root)
                 {

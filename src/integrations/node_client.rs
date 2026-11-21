@@ -1,7 +1,7 @@
 //! A minimal client for the local node, over plain HTTP/1.1 on loopback (standard library only).
 //!
-//! Used by `chxchx-tech node status|stop`, and later by Studio to attach to the node (H5).
-//! It only ever talks to `127.0.0.1`.
+//! Used by `chxchx-tech node status|stop` and by Studio, which hands its chat turns to the node
+//! (H5). It only ever talks to `127.0.0.1`.
 
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
@@ -20,12 +20,35 @@ pub fn request(
     token: Option<&str>,
     body: Option<&str>,
 ) -> Result<Response, String> {
+    send(
+        port,
+        method,
+        path,
+        token,
+        body,
+        &[],
+        Duration::from_secs(10),
+    )
+}
+
+/// Like `request`, with extra headers and a time limit for the whole exchange's reads. Studio
+/// uses short limits: a node that stops answering must never freeze a window.
+pub fn send(
+    port: u16,
+    method: &str,
+    path: &str,
+    token: Option<&str>,
+    body: Option<&str>,
+    headers: &[(&str, &str)],
+    limit: Duration,
+) -> Result<Response, String> {
     let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))
+    let connect = limit.min(Duration::from_secs(2));
+    let mut stream = TcpStream::connect_timeout(&address, connect)
         .map_err(|error| format!("El nodo no responde en {address}: {error}"))?;
     stream
-        .set_read_timeout(Some(Duration::from_secs(10)))
-        .and_then(|()| stream.set_write_timeout(Some(Duration::from_secs(10))))
+        .set_read_timeout(Some(limit))
+        .and_then(|()| stream.set_write_timeout(Some(limit)))
         .map_err(|error| error.to_string())?;
     let body = body.unwrap_or_default();
     let mut head = format!(
@@ -37,6 +60,12 @@ pub fn request(
     }
     if let Some(token) = token {
         head.push_str(&format!("Authorization: Bearer {token}\r\n"));
+    }
+    for (name, value) in headers {
+        // Names and values come from this program, never from a person or the network.
+        if !name.contains(['\r', '\n', ':']) && !value.contains(['\r', '\n']) {
+            head.push_str(&format!("{name}: {value}\r\n"));
+        }
     }
     head.push_str("\r\n");
     stream

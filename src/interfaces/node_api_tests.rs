@@ -9,7 +9,7 @@ use std::time::Duration;
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
-const TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+pub(super) const TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 const PORT: u16 = 47_999;
 
 struct Done;
@@ -854,10 +854,15 @@ async fn the_audit_log_keeps_who_did_what_but_no_secrets() {
 
 /// Starts a real node on a free port; the closure runs with its port and a way to stop it.
 fn with_real_node(name: &str, test: impl FnOnce(u16)) {
+    with_real_node_using(name, Done, test);
+}
+
+/// Like `with_real_node`, with the executor that runs the node's jobs.
+pub(super) fn with_real_node_using(name: &str, executor: impl Executor, test: impl FnOnce(u16)) {
     let dir = std::env::temp_dir().join(format!("chxchx-node-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let runner = JobRunner::attended(JobStore::open(&dir.join("jobs")).unwrap(), Done, 1);
+    let runner = JobRunner::attended(JobStore::open(&dir.join("jobs")).unwrap(), executor, 1);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
