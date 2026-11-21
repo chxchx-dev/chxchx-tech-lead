@@ -140,7 +140,13 @@ pub fn locate(project: Option<&Path>) -> Option<PathBuf> {
     let executable = std::env::current_exe().ok();
     let found = candidates(&agent_path(), executable.as_deref(), project)
         .into_iter()
-        .find(|candidate| describe(candidate).is_ok_and(|d| !d.providers.is_empty()));
+        .find(|candidate| describe(candidate).is_ok_and(|d| !d.providers.is_empty()))
+        // Nothing installed: unpack the copy that travels inside this program.
+        .or_else(|| {
+            super::agent_adapter_bundle::ensure()
+                .ok()
+                .filter(|path| describe(path).is_ok_and(|d| !d.providers.is_empty()))
+        });
     if let (Some(path), Ok(mut known)) = (&found, located().lock()) {
         *known = Some(path.clone());
     }
@@ -150,8 +156,9 @@ pub fn locate(project: Option<&Path>) -> Option<PathBuf> {
 /// What to tell someone whose Codex or OpenCode chat cannot start because the service is missing.
 pub fn missing_hint() -> String {
     format!(
-        "No encontré el servicio de agentes de ChxChx (`{PROGRAM}`), que conduce a Codex y OpenCode. \
-         Reinstala ChxChx, o en un checkout ejecuta `uv sync` en services/agent-adapter, o define {ENV} con su ruta."
+        "No pude preparar el servicio de agentes de ChxChx (`{PROGRAM}`), que conduce a Codex y OpenCode. \
+         Viene dentro del programa y solo necesita Python 3.11 o más nuevo: instálalo y vuelve a intentarlo \
+         (o define {ENV} con la ruta de un servicio propio)."
     )
 }
 

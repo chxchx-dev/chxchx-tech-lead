@@ -1,5 +1,6 @@
 pub mod agent_access;
 pub mod agent_adapter;
+pub mod agent_adapter_bundle;
 pub mod agent_catalog;
 pub mod agent_live;
 pub mod agent_stream;
