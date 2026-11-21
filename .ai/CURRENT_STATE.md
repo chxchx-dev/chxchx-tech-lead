@@ -1,5 +1,16 @@
 # Current State
 
+## Nodo local y acceso remoto: H0–H3 hechas (2026-11-20)
+
+- **Qué existe** (todo en `dev`; ver [ROADMAP-HIBRIDO.md](ROADMAP-HIBRIDO.md) y [ADR 0017](adr/0017-local-node-and-remote-access.md)):
+  - `crates/chxchx-protocol`: tipos del contrato (trabajos, eventos, respuestas, dispositivos, roles). Compila a WASM.
+  - `features/jobs`: cola persistente (instantánea + diario), `JobRunner` con idempotencia, cancelación, tope de 50 en cola y respuestas a permisos; los turnos de agente corren como trabajos. `chxchx-tech jobs run|list|show`.
+  - **Nodo** (`--features node`, aún fuera del build por defecto y de los instaladores): `node start|status|stop`, API v1 en `127.0.0.1`, eventos por WebSocket, `node pair|devices|revoke|audit`, `node remote status|enable|disable` con Tailscale. Presupuestos medidos: 10,4 MiB en reposo, 0 de CPU, `health` p95 1,13 ms.
+- **Seguridad:** [NODE-SECURITY.md](NODE-SECURITY.md) (autorrevisión; riesgos aceptados y lo abierto).
+- **Verificado:** Linux (18 + 509 + 6 + 22 pruebas, tres pasadas; clippy con `--features node`; builds por defecto y `cli`; WASM) y de punta a punta con Tailscale 1.104.7 real pasando por la tailnet desde la propia PC.
+- **No verificado:** prueba desde otra red (celular con datos móviles), Windows (ACL del token y archivos) y macOS, Codex/OpenCode/Claude reales a través del nodo, CI remoto de los últimos pushes.
+- **Siguiente:** H4, la PWA en Dioxus (presupuesto: ≤ 1,5 MiB comprimida y carga ≤ 3 s en 4G), con el QR de vinculación; luego H5 (Studio como cliente del nodo y servicio de usuario) y H6 (Manager).
+
 ## `old-version/` eliminada; empaquetado con el servicio de agentes (2026-11-19)
 
 - **`old-version/` ya no existe** (CLI Python, sus 560 tests, `uv.lock`, scripts). Lo que seguía vivo se movió o se reemplazó: `install.sh`, `install.ps1` y `release_assets.py` están en `packaging/` con sus tests (39); el servicio `services/agent-adapter/` (50 tests) sustituye al *wheel* del CLI heredado; `chxchx-tech tools install` (Rust) sustituye a `chxchx-tech install` de Python (Basic Memory y Serena con `uv tool install`, con detección del `uv.exe` y la carpeta `tools` del MSI).
