@@ -30,7 +30,6 @@ pub mod process_memory;
 pub mod self_update;
 #[cfg(feature = "studio")]
 pub mod slash_commands;
-#[cfg(feature = "studio")]
 pub mod studio_update;
 #[cfg(feature = "studio")]
 pub mod system_clipboard;
