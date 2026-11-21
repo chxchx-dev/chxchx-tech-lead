@@ -109,6 +109,15 @@ atiende como mucho 128 peticiones a la vez, 16 flujos de eventos y 50 trabajos e
 cola. Las claves de idempotencia se ligan a quien las envía (la clave completa, con
 su dueño, no pasa de 128 caracteres).
 
+**Manager (H6).** `chxchx-tech manager status` dice qué tiene la máquina y `manager plan`
+qué falta; `manager apply [--dry-run]` hace solo lo que es de ChxChx. `manager watch` mantiene vivos
+el nodo y el servicio de agentes (si algo se cae 3 veces en una hora, se detiene y lo explica) y
+`manager recover [--dry-run]` repara copias viejas o rotas del servicio. `manager update` busca una
+versión firmada más nueva y `--apply` la instala (solo Linux; espera a que no haya trabajos y guarda
+la anterior en `.update-backup`). Para publicar actualizaciones el mantenedor ejecuta una vez
+`manager keygen --out ARCHIVO`, guarda la clave privada como secreto `RELEASE_SIGNING_KEY` en GitHub
+y sube la pública a `packaging/release-public-key.txt`.
+
 **Studio y servicio de usuario (H5).**
 En Ajustes → *Nodo local* ves si el nodo corre, lo inicias o detienes, activas «Usar el nodo
 para los turnos del chat» (cerrar Studio no corta el turno; al reabrir lo recupera) y gestionas

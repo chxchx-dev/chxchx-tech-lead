@@ -75,6 +75,11 @@ fn digest() -> String {
     format!("{hash:016x}")
 }
 
+/// Name of the folder this build unpacks into.
+pub fn current_name() -> String {
+    digest()
+}
+
 /// A Python 3.11+ on the search path, or why there is none.
 pub fn python() -> Result<PathBuf, String> {
     let path = agent_path();

@@ -339,6 +339,22 @@ jobs:
             --skip windows-setup --skip windows-arm64
           ls -l dist/release
           cat dist/release/studio-manifest.txt
+      - name: Sign the manifest (ed25519)
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          channel="${{ (inputs.channel || (github.ref_type == 'tag' && 'stable' || 'dev')) }}"
+          if [ -z "${RELEASE_SIGNING_KEY:-}" ]; then
+            if [ "$channel" = "stable" ]; then
+              echo "Un lanzamiento estable debe ir firmado: falta el secreto RELEASE_SIGNING_KEY."; exit 1
+            fi
+            echo "::warning::Sin RELEASE_SIGNING_KEY: este lanzamiento de desarrollo sale sin firma y no se aplicará solo."
+            exit 0
+          fi
+          python3 -m pip install --quiet cryptography
+          python3 packaging/sign_manifest.py dist/release/studio-manifest.txt
+          ls -l dist/release/studio-manifest.txt.sig
       - name: Check each package has what the installed updater looks for
         run: |
           set -euo pipefail

@@ -553,7 +553,7 @@ pub fn run() -> Result<(), String> {
         Command::Mods { command } => catalog::mods(&ui, command),
         Command::LocalModels { command } => local_models::run(command),
         Command::Jobs { command } => jobs::run(command),
-        Command::Manager { command } => manager::run(command),
+        Command::Manager { command } => manager::run_other(command),
         #[cfg(feature = "node")]
         Command::Node { command } => node::run(command),
         Command::Agent { command } => match command {

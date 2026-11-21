@@ -30,9 +30,6 @@ use tokio::net::TcpListener;
 use tokio::sync::Notify;
 
 pub const DEFAULT_PORT: u16 = 47_821;
-/// Jobs that may run at the same time on this machine.
-const PARALLEL_JOBS: usize = 2;
-
 pub fn run(port: u16) -> Result<(), String> {
     let dir = node_state::dir().ok_or("No se pudo resolver CHXCHX_TECH_HOME")?;
     node_state::create_private_dir(&dir)?;
@@ -53,7 +50,11 @@ pub fn run(port: u16) -> Result<(), String> {
         access_cap: AccessMode::FullAccess,
     };
     // The node's clients can answer what an agent asks, so its jobs wait for them.
-    let runner = JobRunner::attended(store, executor, PARALLEL_JOBS);
+    let runner = JobRunner::attended(
+        store,
+        executor,
+        crate::features::manager::parallel_jobs_here(),
+    );
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()

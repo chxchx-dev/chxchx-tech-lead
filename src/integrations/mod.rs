@@ -18,6 +18,7 @@ pub mod formatter;
 pub mod git;
 pub mod local_models;
 pub mod manager_probe;
+pub mod manager_recover;
 pub mod mcp_clients;
 pub mod mcp_codex;
 pub mod mcp_files;
@@ -26,6 +27,7 @@ pub mod node_link;
 pub mod node_process;
 pub mod opencode_history;
 pub mod process_memory;
+pub mod self_update;
 #[cfg(feature = "studio")]
 pub mod slash_commands;
 #[cfg(feature = "studio")]

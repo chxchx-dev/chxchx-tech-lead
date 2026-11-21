@@ -262,24 +262,27 @@ simulado. **No se ha hecho con la ventana real ni un teléfono.***
 
 ### H6 — Manager: instalar, vigilar y reparar · L · puede ir en paralelo desde H2
 
-- [~] `chxchx-tech manager status|plan|apply [--dry-run]`. **Hecho (2026-11-21):** inventario y plan
-  de agentes, Python, servicio de agentes, nodo, Tailscale y memoria (`features/manager.rs` puro y
-  probado; `integrations/manager_probe.rs` lee la máquina). **Falta:** integrar `doctor`, `tools
-  install`, modelos locales, espacio en disco y descargas.
-- [ ] Manifiesto de componentes (binarios, servicio `agent-adapter`, herramientas opcionales)
-  con versión y SHA-256. El servicio Python se recrea desde su wheel en un entorno aislado, nunca
-  con `uv sync` sobre el Python del usuario.
-- [ ] Supervisión: salud del nodo y del adapter, reinicios con *backoff* exponencial y *circuit
-  breaker* (p. ej. ≤ 3 por hora). Después se detiene y lo explica.
-- [ ] Recuperación automática solo en la lista blanca del documento (§5.5): reiniciar un proceso
-  propio, limpiar cachés propias, recrear el entorno del adapter y restaurar la configuración
-  previa desde su backup. Todo lo demás pide confirmación.
-- [ ] **Releases firmados**: `release.yml` firma el manifiesto (ed25519/minisign) con la clave
-  privada solo como secreto de CI, y el binario lleva la clave pública. Después, actualización
-  aplicada en escritorio (bajar, verificar firma, drenar trabajos, reemplazar, comprobar salud y
-  revertir al binario anterior si falla). En móvil manda la plataforma.
-- [ ] Auto‑ajuste acotado: la concurrencia de trabajos y las sugerencias de modelo local salen de
-  las medidas de `workspace_resources`, sin tocar parámetros del sistema operativo.
+- [x] `chxchx-tech manager status|plan|apply [--dry-run]`: inventario y plan (agentes, Python,
+  servicio de agentes, nodo, Tailscale, memoria y disco), puro y probado. No integra `doctor`
+  (es por proyecto) ni `tools install`; los modelos locales siguen en `local-models`.
+- [x] Servicio de agentes: viaja dentro del programa y se desempaqueta solo (sin `uv sync`).
+  El manifiesto de componentes es el `studio-manifest.txt` que ya firma y publica `release.yml`
+  (versión, commit y SHA-256 de cada paquete, incluida la rueda del servicio).
+- [x] Supervisión: `manager watch` vigila el nodo y el servicio de agentes, espera 2 s, 4 s, 8 s…
+  (tope 5 min) y tras 3 reinicios en una hora se detiene y lo explica. El conteo se guarda en
+  disco y sobrevive a reiniciar el vigilante.
+- [x] Recuperación solo en lista cerrada (`manager recover`): copias viejas del servicio de
+  agentes, recrear la copia rota y reiniciar el nodo. **La restauración de configuración desde su
+  backup no se automatiza**: ya existe `rollback` y pide confirmación.
+- [x] Releases firmados: `release.yml` firma `studio-manifest.txt` (ed25519, secreto
+  `RELEASE_SIGNING_KEY`; un estable sin secreto falla) y el programa lleva la clave pública
+  (`packaging/release-public-key.txt`). `manager update [--apply]` verifica firma, SHA-256 y
+  versión, inspecciona el paquete, comprueba que el nuevo arranca, espera a que no haya trabajos,
+  reemplaza conservando los archivos anteriores y los restaura si el programa instalado no
+  responde. **Solo Linux**; en Windows, macOS y móvil manda el instalador de la plataforma.
+  **Hasta que el mantenedor genere la clave** (`manager keygen`) el programa se niega a aplicar.
+- [x] Auto-ajuste acotado: la concurrencia de trabajos del nodo sale de la memoria libre y las
+  CPU (1 a 4) y solo cambia la cola del propio nodo; no toca parámetros del sistema operativo.
 
 **Salida:** en una máquina limpia, `manager plan` describe exactamente lo que hará. `apply` lo deja
 funcionando y repetirlo no cambia nada. Romper a propósito el entorno del adapter se repara solo,

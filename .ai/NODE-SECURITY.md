@@ -86,6 +86,19 @@ vista previa sin cambios, `--apply` idempotente, `401` sin token, `403` con el t
   Hereda `CHXCHX_TECH_HOME` si estaba definido. `loginctl enable-linger` no se activa solo.
 - `start.log` (carpeta del nodo) solo contiene la salida de arranque del proceso; no guarda tokens.
 
+## Actualizaciones firmadas y manager (H6)
+
+- Una actualización se aplica solo con: firma ed25519 válida del manifiesto, SHA-256 del paquete
+  igual al firmado, versión más nueva, archivo sin rutas `..`, absolutas ni enlaces, y el programa
+  nuevo respondiendo con la versión anunciada. Sin clave incrustada, nunca se aplica.
+- La clave privada vive solo en el secreto `RELEASE_SIGNING_KEY` del CI y en el archivo 0600 que
+  crea `manager keygen`; nunca en el repositorio. Quien comprometa ese secreto puede firmar
+  lanzamientos: protégelo y rótalo cambiando la clave pública en una versión firmada con la anterior.
+- Descarga con `curl` por HTTPS únicamente (`--proto =https`). No hay cadena de revocación ni
+  protección contra volver a una versión anterior firmada (solo se acepta una más nueva).
+- `manager watch/recover` solo tocan lo que ChxChx creó (el nodo y las copias del servicio de agentes
+  bajo su carpeta); nunca ajustes de usuario ni proyectos.
+
 ## Abierto
 
 - **Windows:** el token y los archivos del nodo heredan la ACL del perfil; no se probó que otro

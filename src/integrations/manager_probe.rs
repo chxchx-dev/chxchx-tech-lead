@@ -21,6 +21,7 @@ pub fn read() -> Facts {
         node_service_installed,
         tailscale: tailscale(),
         memory_percent: memory(),
+        disk_free_bytes: disk_free(),
     }
 }
 
@@ -55,4 +56,25 @@ fn tailscale() -> Option<String> {
 #[cfg(not(feature = "node"))]
 fn tailscale() -> Option<String> {
     None
+}
+
+/// Free bytes where ChxChx keeps its files, from `df` (Linux and macOS); `None` elsewhere.
+fn disk_free() -> Option<u64> {
+    let home = crate::features::project_profiles::application_home()?;
+    let target = std::iter::successors(Some(home.as_path()), |path| path.parent())
+        .find(|path| path.exists())?;
+    let output = std::process::Command::new("df")
+        .args(["-Pk"])
+        .arg(target)
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let kib: u64 = text
+        .lines()
+        .nth(1)?
+        .split_whitespace()
+        .nth(3)?
+        .parse()
+        .ok()?;
+    Some(kib * 1024)
 }

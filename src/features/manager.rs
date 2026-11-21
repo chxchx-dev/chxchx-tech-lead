@@ -19,6 +19,8 @@ pub struct Facts {
     pub node_service_installed: bool,
     pub tailscale: Option<String>,
     pub memory_percent: Option<f64>,
+    /// Free space where ChxChx keeps its files.
+    pub disk_free_bytes: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -73,6 +75,25 @@ fn found(id: &'static str, label: &'static str, path: &Option<String>, missing: 
         Some(path) => item(id, label, Health::Ready, path.clone()),
         None => item(id, label, Health::Missing, missing),
     }
+}
+
+/// How many agent turns the node runs at once on this machine: about one per 1.5 GiB of free
+/// memory and at most one per two CPUs, never fewer than 1 nor more than 4. It only chooses a number
+/// for the node's own queue; it touches no setting of the operating system.
+pub fn suggested_parallel_jobs(available_bytes: u64, cpus: usize) -> usize {
+    const PER_JOB: u64 = 1_536 * 1024 * 1024;
+    let by_memory = usize::try_from(available_bytes / PER_JOB).unwrap_or(usize::MAX);
+    by_memory.min(cpus / 2).clamp(1, 4)
+}
+
+/// The value the node uses: the suggestion for this machine, or 2 when the machine cannot be read.
+pub fn parallel_jobs_here() -> usize {
+    let system = crate::features::workspace_resources::read_system_resources();
+    if system.total_bytes == 0 {
+        return 2;
+    }
+    let cpus = std::thread::available_parallelism().map_or(2, std::num::NonZero::get);
+    suggested_parallel_jobs(system.available_bytes, cpus)
 }
 
 pub fn inventory(facts: &Facts) -> Vec<Item> {
@@ -137,8 +158,23 @@ pub fn inventory(facts: &Facts) -> Vec<Item> {
             format!("{percent:.0} % en uso"),
         ));
     }
+    if let Some(free) = facts.disk_free_bytes {
+        items.push(item(
+            "disk",
+            "Espacio en disco",
+            if free < LOW_DISK {
+                Health::Attention
+            } else {
+                Health::Ready
+            },
+            format!("{:.1} GiB libres", free as f64 / (1024.0 * 1024.0 * 1024.0)),
+        ));
+    }
     items
 }
+
+/// Below this, downloads and agent work start to fail in confusing ways.
+pub const LOW_DISK: u64 = 2 * 1024 * 1024 * 1024;
 
 /// What would leave the machine ready for the agents the person has. Empty when nothing is needed.
 pub fn plan(facts: &Facts) -> Vec<Step> {
@@ -194,6 +230,13 @@ pub fn plan(facts: &Facts) -> Vec<Step> {
             fix: Fix::Manual("Cierra procesos pesados antes de lanzar más turnos.".into()),
         });
     }
+    if facts.disk_free_bytes.is_some_and(|free| free < LOW_DISK) {
+        steps.push(Step {
+            item: "disk",
+            why: "Queda poco espacio libre (menos de 2 GiB).".into(),
+            fix: Fix::Manual("Libera espacio; ChxChx no borra tus archivos.".into()),
+        });
+    }
     steps
 }
 
@@ -212,6 +255,7 @@ mod tests {
             node_service_installed: true,
             tailscale: Some("/bin/tailscale".into()),
             memory_percent: Some(40.0),
+            disk_free_bytes: Some(50 * 1024 * 1024 * 1024),
         }
     }
 
@@ -276,6 +320,25 @@ mod tests {
                 .filter(|s| s.item == "tailscale")
                 .all(|s| matches!(s.fix, Fix::Manual(_)))
         );
+    }
+
+    #[test]
+    fn concurrency_follows_memory_and_cpus_within_bounds() {
+        const GIB: u64 = 1024 * 1024 * 1024;
+        assert_eq!(suggested_parallel_jobs(0, 16), 1, "never below one");
+        assert_eq!(suggested_parallel_jobs(2 * GIB, 16), 1);
+        assert_eq!(suggested_parallel_jobs(8 * GIB, 4), 2, "cpus limit it");
+        assert_eq!(suggested_parallel_jobs(64 * GIB, 64), 4, "never above four");
+        assert_eq!(suggested_parallel_jobs(64 * GIB, 1), 1);
+    }
+
+    #[test]
+    fn little_disk_is_flagged_and_never_cleaned_by_the_program() {
+        let mut facts = ready();
+        facts.disk_free_bytes = Some(500 * 1024 * 1024);
+        let steps = plan(&facts);
+        assert_eq!(steps[0].item, "disk");
+        assert!(matches!(steps[0].fix, Fix::Manual(_)));
     }
 
     #[test]

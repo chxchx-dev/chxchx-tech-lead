@@ -46,8 +46,10 @@ pub mod features {
     pub mod project_sync;
     pub mod project_templates;
     pub mod project_trust;
+    pub mod release_manifest;
     pub mod startup_log;
     pub mod studio_preferences;
+    pub mod supervision;
     pub mod tools_install;
     pub mod workspace_lifecycle;
     pub mod workspace_processes;

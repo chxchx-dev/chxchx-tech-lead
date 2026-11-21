@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- **Manager completo (H6)**: `chxchx-tech manager update [--apply]` aplica una versión nueva solo si el manifiesto está firmado (ed25519), el paquete coincide con su SHA-256 y es más nueva; espera a que no haya trabajos, conserva los archivos anteriores y los restaura si el programa no responde (solo Linux; hasta que haya clave de firma publicada no aplica nada). `manager watch` levanta el nodo y el servicio de agentes si se caen, con espera creciente y corte tras 3 reinicios por hora; `manager recover` repara copias viejas o rotas del servicio de agentes; `manager keygen` genera la clave de firma. El nodo ajusta cuántos turnos corre a la vez según tu memoria y CPU, y `manager status` muestra también el disco.
+
 - **`chxchx-tech manager status|plan|apply` (primer paso de H6)**: dice qué tiene tu máquina (Claude, Codex, OpenCode, Python, servicio de agentes, nodo, Tailscale, memoria), qué falta y qué haría falta. `plan` solo muestra; `apply` hace únicamente lo que es de ChxChx y se puede repetir (desempaquetar el servicio de agentes, instalar el nodo como servicio de tu usuario) y deja claro lo que te toca a ti (Python, Tailscale); `--dry-run` no cambia nada. Con los mismos datos siempre da el mismo plan.
 
 - **Codex y OpenCode sin pasos manuales**: el servicio que los conduce (`services/agent-adapter`, solo biblioteca estándar de Python) ahora viaja dentro del programa y se desempaqueta solo en la carpeta de ChxChx la primera vez que hace falta, con un lanzador que usa tu Python 3.11+. Ya no hace falta `uv sync`, ni un checkout, ni instalar nada aparte; si falta Python, el aviso lo dice claro. Un servicio instalado o definido con `CHXCHX_AGENT_ADAPTER` sigue teniendo prioridad.
