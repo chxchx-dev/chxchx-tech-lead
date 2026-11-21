@@ -111,10 +111,15 @@ y CI en los tres sistemas. Tamaños relativos: S ≈ 1 PR, M ≈ 2–3 PRs, L �
   Los proyectos se identifican por su alias del registro (`ProjectId`), nunca por una ruta. Un
   `JobSpec` con campos o tipos desconocidos se rechaza, y `AccessMode::capped` aplica el tope
   remoto.
-- [ ] `features/jobs`: `JobStore` (diario JSONL + instantánea atómica en el directorio de datos
-  del usuario, acotado y con redacción de secretos) y `JobRunner` (cancelación cooperativa,
-  clave de idempotencia, límite de concurrencia).
-- [ ] Al arrancar, todo trabajo `running` cuyo dueño murió pasa a `interrupted`.
+- [x] `features/jobs`: `JobStore` (instantánea `jobs.json` atómica + `journal.jsonl` en
+  `<CHXCHX_TECH_HOME>/jobs`, carpeta `0700`, compacta al abrir y cada 1.000 cambios, guarda los
+  200 trabajos terminados más recientes y hasta 20.000 eventos por trabajo, con redacción de
+  secretos) y `JobRunner` (hilos con límite de concurrencia, cancelación cooperativa, clave de
+  idempotencia, captura de pánicos y suscriptores en vivo). Un solo dueño por almacén
+  (`owner.lock` con PID; un candado de un proceso muerto se retoma). Lectura sin dueño con
+  `jobs::read` / `read_events` para el CLI.
+- [x] Al reabrir, todo trabajo `queued` o `running` pasa a `interrupted` con su historial. Los
+  encolados tampoco se reanudan solos: un agente no empieza a actuar sin nadie mirando.
 - [ ] Los turnos de agente (`claude_runner`, `service_runner`) corren como `JobSpec::AgentTurn`.
 - [ ] `chxchx-tech jobs list|show|cancel` para verlos sin UI.
 

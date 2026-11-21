@@ -414,6 +414,7 @@ name = "chxchx-tech"
 version = "0.6.3"
 dependencies = [
  "arboard",
+ "chxchx-protocol",
  "clap",
  "embed-resource",
  "iced",

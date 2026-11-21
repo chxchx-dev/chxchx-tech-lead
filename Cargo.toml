@@ -51,6 +51,7 @@ terminal = ["dep:portable-pty", "dep:vt100"]
 agent-adapter-launcher = []
 
 [dependencies]
+chxchx-protocol = { path = "crates/chxchx-protocol" }
 clap = { version = "=4.6.7", features = ["derive"], optional = true }
 iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "tokio", "x11", "wayland", "highlighter", "svg", "image-without-codecs", "canvas", "advanced", "markdown"], optional = true }
 image = { version = "=0.25.10", default-features = false, features = ["gif", "jpeg", "png", "webp"], optional = true }

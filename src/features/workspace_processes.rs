@@ -648,7 +648,7 @@ fn refresh(record: &mut ProcessRecord) {
         Status::Unknown
     };
 }
-fn pid_alive(pid: u32) -> bool {
+pub(crate) fn pid_alive(pid: u32) -> bool {
     #[cfg(unix)]
     {
         Command::new("/bin/kill")
