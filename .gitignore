@@ -38,10 +38,12 @@ Thumbs.db
 !/.ai/RUST-CAPABILITY-MATRIX.md
 !/.ai/PERFORMANCE-BASELINE.md
 !/.ai/RELEASE-ROADMAP.md
+!/.ai/ROADMAP-HIBRIDO.md
 !/.ai/history/
 .ai/history/*
 !/.ai/history/ROADMAP-PRE-RUST.md
 !/.ai/adr/0016-rust-control-plane.md
+!/.ai/adr/0017-local-node-and-remote-access.md
 # Documentación de trabajo privada/local del mantenedor.
 /docs/
 /.codex/

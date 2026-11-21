@@ -1,5 +1,12 @@
 # Handoff
 
+## Plan híbrido: nodo, clientes remotos y Manager (2026-11-20)
+
+- Nuevo [ROADMAP-HIBRIDO.md](ROADMAP-HIBRIDO.md) a partir de la nota local `docs/CHXCHX-Studio_Plan_Arquitectura_Hibrida_y_Automatizacion.md`, ajustado tras auditar el repo: Iced se queda en escritorio, el cliente remoto es una PWA servida por el nodo, un solo crate nuevo (`chxchx-protocol`), cola en JSONL (sin SQLite), acceso remoto por Tailscale (`tailscale serve`) y Manager como consolidación de `doctor`/`tools install`/`local_models`/`workspace_resources`. El nodo es el supervisor pendiente de R4.1/ADR 0016.
+- Decisiones del mantenedor: PWA en **Dioxus web**, Studio usa el nodo solo **opt-in**, **Android e iOS por igual** (vía PWA).
+- **H0 cerrada:** [ADR 0017](adr/0017-local-node-and-remote-access.md) aceptado, con el inventario de acciones remotas, los roles y los presupuestos del nodo. La línea base R0.4 de Rust en Linux está en `PERFORMANCE-BASELINE.md`, con el nuevo `scripts/perf/measure_rust.py`. No medido: Windows, macOS y el primer frame de Studio.
+- Siguiente: H1. Workspace Cargo y `crates/chxchx-protocol` (con comprobación WASM en CI), luego `JobStore`/`JobRunner` y el turno de agente como trabajo, más `chxchx-tech jobs`.
+
 ## `old-version/` eliminada; empaquetado con el servicio de agentes (2026-11-19)
 
 - **`old-version/` ya no existe** (CLI Python, sus 560 tests, `uv.lock`, scripts). Lo que seguía vivo se movió o se reemplazó: `install.sh`, `install.ps1` y `release_assets.py` están en `packaging/` con sus tests (39); el servicio `services/agent-adapter/` (50 tests) sustituye al *wheel* del CLI heredado; `chxchx-tech tools install` (Rust) sustituye a `chxchx-tech install` de Python (Basic Memory y Serena con `uv tool install`, con detección del `uv.exe` y la carpeta `tools` del MSI).

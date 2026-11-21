@@ -13,6 +13,8 @@
 - [RUST-MIGRATION.md](RUST-MIGRATION.md): arquitectura, estructura y transición.
 - [ADR 0016](adr/0016-rust-control-plane.md): decisiones y propuestas pendientes.
 - [RELEASE-ROADMAP.md](RELEASE-ROADMAP.md): versiones y actualizaciones futuras.
+- [ROADMAP-HIBRIDO.md](ROADMAP-HIBRIDO.md): nodo local, acceso remoto (PWA) y gestión
+  automática; concreta el supervisor de R4.1 ([ADR 0017](adr/0017-local-node-and-remote-access.md)).
 - [EDITOR-PARITY.md](EDITOR-PARITY.md): baseline funcional a contrastar con código.
 - [RUST-CAPABILITY-MATRIX.md](RUST-CAPABILITY-MATRIX.md): capacidades, evidencia y
   datos inspeccionados para el port.
@@ -55,6 +57,10 @@ prototipo o workflow.
   antes de cerrar el gate. A solicitud del usuario, la corrida Fedora local se
   difiere hasta retomarla en Fedora; el intento con Podman en Windows se detuvo
   manualmente antes de compilar (219/386 tareas), sin resultado de CTest/CPack.
+  2026-11-20, producto Rust en el mismo equipo (`scripts/perf/measure_rust.py`):
+  CLI `status` p95 8/14 ms y Studio en reposo 28 MiB y ≤ 0,3 % CPU, dentro de los
+  presupuestos. El paquete Qt ya no aplica (legado retirado). Falta medir Windows y
+  macOS y el arranque de Studio hasta el primer frame.
 
 Salida parcial: R0.1–R0.3 documentados/reproducidos; R0.4 tiene baseline
 parcial. Falta un paquete Studio válido y tamaño aceptable antes de cerrar R0.
