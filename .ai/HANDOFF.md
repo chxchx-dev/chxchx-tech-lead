@@ -17,7 +17,14 @@
   - Rutas `…/answers` y el WebSocket `/api/v1/events`, más `node.log` con rotación.
   - Verificado en Linux: 14 + 480 + 6 + 22 pruebas, los builds por defecto y `cli` y WASM, y el script de punta a punta del scratchpad (secciones 5 y 6: permiso aprobado por la API; el servicio falso recibió `{"type":"answer","request_id":…,"behavior":"allow"}`).
 - Pendiente fuera de H2: la ACL del token en Windows (H3), un turno real de Claude, Codex u OpenCode a través del nodo y logs del nodo como servicio del sistema (H5).
-- Siguiente: H3, acceso remoto seguro (Tailscale con `tailscale serve`, vinculación de dispositivos por QR, roles, auditoría y revisión de seguridad).
+- **H3, entrega 1 (núcleo de seguridad):**
+  - Protocolo: `Role`, `Device`, `DeviceId`, `PairRequest/Response`, `PairingOffer`, `ProjectSummary`, `ErrorCode::TooManyRequests`.
+  - `features/node_devices.rs` (códigos, tokens con hash, límite de intentos, revocación), `features/node_audit.rs`, `RemoteConfig` en `node_state` (solo acepta nombres `*.ts.net` de cuatro partes).
+  - El API pasó a `node_api.rs` (estado, `Principal`, guardas de límites, `Host`/`Origin` y token), `node_api_jobs.rs` y `node_api_devices.rs`. `JobRunner::submit_tracked` dice si el trabajo es nuevo.
+  - CLI: `node pair|devices|revoke|audit`.
+  - Verificado en Linux: 18 + 499 + 6 + 22 pruebas, clippy con `--features node`, builds por defecto y `cli`, WASM y `e2e-devices.sh` del scratchpad (200/403/403, tope de acceso, 401 al revocar, 0 secretos en disco).
+  - Defecto encontrado por las pruebas y corregido: un reintento idempotente se auditaba como una creación nueva.
+- Pendiente de H3: integración con Tailscale (`node remote enable|status|disable` y probarla de verdad con el `tailscale` ya instalado), QR, ACL del token en Windows y la revisión de seguridad.
 
 ## `old-version/` eliminada; empaquetado con el servicio de agentes (2026-11-19)
 

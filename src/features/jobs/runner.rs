@@ -143,6 +143,16 @@ impl JobRunner {
 
     /// Queues a job, or returns the one a previous request with the same key created.
     pub fn submit(&self, spec: JobSpec, key: Option<IdempotencyKey>) -> Result<Job, JobError> {
+        self.submit_tracked(spec, key).map(|(job, _)| job)
+    }
+
+    /// Like `submit`, and says whether the job is new (`false`: an earlier request with the same
+    /// key already made it). Whoever records "a job was created" needs to know.
+    pub fn submit_tracked(
+        &self,
+        spec: JobSpec,
+        key: Option<IdempotencyKey>,
+    ) -> Result<(Job, bool), JobError> {
         let (job, events) = self.shared.store().create(spec, key)?;
         let created = !events.is_empty();
         self.shared.broadcast(events);
@@ -150,7 +160,7 @@ impl JobRunner {
             self.shared.schedule().queue.push_back(job.id.clone());
             pump(&self.shared);
         }
-        Ok(job)
+        Ok((job, created))
     }
 
     /// Cancels a queued job at once; a running one is asked to stop and ends as `cancelled` when

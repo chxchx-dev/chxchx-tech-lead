@@ -18,6 +18,73 @@ pub struct NodeInfo {
     pub started_ms: u64,
 }
 
+/// Where the node may also be reached: the name `tailscale serve` gives this machine (ADR 0017).
+/// Without this file the node answers only to `127.0.0.1` and `localhost`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteConfig {
+    /// MagicDNS name, e.g. `mi-pc.tail1234.ts.net`.
+    pub host: String,
+    /// The HTTPS port `tailscale serve` listens on (443 by default).
+    pub https_port: u16,
+}
+
+impl RemoteConfig {
+    /// A configuration only for a Tailscale name: it cannot be used to authorise any other
+    /// domain, whatever the file holds.
+    pub fn new(host: &str, https_port: u16) -> Result<Self, String> {
+        let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
+        let label_ok = |label: &str| {
+            !label.is_empty()
+                && label.len() <= 63
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        };
+        let valid = host.len() <= 253
+            && host.ends_with(".ts.net")
+            && host.split('.').count() >= 4
+            && host.split('.').all(label_ok);
+        if !valid || https_port == 0 {
+            return Err(format!(
+                "«{host}:{https_port}» no es un nombre de Tailscale válido (termina en .ts.net)"
+            ));
+        }
+        Ok(Self { host, https_port })
+    }
+
+    /// What a client puts in `Host`: the name, plus the port unless it is 443.
+    pub fn authority(&self) -> String {
+        if self.https_port == 443 {
+            self.host.clone()
+        } else {
+            format!("{}:{}", self.host, self.https_port)
+        }
+    }
+
+    pub fn origin(&self) -> String {
+        format!("https://{}", self.authority())
+    }
+
+    pub fn url(&self) -> String {
+        format!("{}/", self.origin())
+    }
+}
+
+pub fn read_remote(dir: &Path) -> Option<RemoteConfig> {
+    let config: RemoteConfig =
+        serde_json::from_slice(&fs::read(dir.join("remote.json")).ok()?).ok()?;
+    RemoteConfig::new(&config.host, config.https_port).ok()
+}
+
+pub fn write_remote(dir: &Path, config: &RemoteConfig) -> Result<(), String> {
+    let bytes = serde_json::to_vec_pretty(config).map_err(|error| error.to_string())?;
+    write_private(&dir.join("remote.json"), &bytes)
+}
+
+pub fn remove_remote(dir: &Path) {
+    let _ = fs::remove_file(dir.join("remote.json"));
+}
+
 pub fn dir() -> Option<PathBuf> {
     crate::features::project_profiles::application_home().map(|home| home.join("node"))
 }
@@ -91,7 +158,7 @@ pub fn create_private_dir(dir: &Path) -> Result<(), String> {
 }
 
 /// Written next to its final place and renamed, readable only by this user on Unix.
-fn write_private(path: &Path, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let temp = path.with_extension("tmp");
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
@@ -160,6 +227,40 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn only_a_tailscale_name_can_be_authorised_as_the_remote_host() {
+        let remote = RemoteConfig::new("Fedora.Tail33E808.ts.net.", 443).unwrap();
+        assert_eq!(remote.host, "fedora.tail33e808.ts.net");
+        assert_eq!(remote.authority(), "fedora.tail33e808.ts.net");
+        assert_eq!(remote.origin(), "https://fedora.tail33e808.ts.net");
+        let other_port = RemoteConfig::new("fedora.tail33e808.ts.net", 8443).unwrap();
+        assert_eq!(other_port.authority(), "fedora.tail33e808.ts.net:8443");
+        for bad in [
+            "evil.example",
+            "ts.net",
+            "x.ts.net",
+            "evil.example/x.tail1.ts.net",
+            "a b.tail1.ts.net",
+            "-a.tail1.ts.net",
+            "fedora.tail33e808.ts.net.evil.com",
+        ] {
+            assert!(RemoteConfig::new(bad, 443).is_err(), "{bad}");
+        }
+        assert!(RemoteConfig::new("a.tail1.ts.net", 0).is_err());
+
+        let dir = scratch("remote");
+        assert_eq!(read_remote(&dir), None);
+        write_remote(&dir, &remote).unwrap();
+        assert_eq!(read_remote(&dir), Some(remote));
+        fs::write(
+            dir.join("remote.json"),
+            r#"{"host":"evil.example","https_port":443}"#,
+        )
+        .unwrap();
+        assert_eq!(read_remote(&dir), None, "a damaged file authorises nothing");
+        remove_remote(&dir);
     }
 
     #[test]

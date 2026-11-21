@@ -2,6 +2,7 @@
 
 ## Sin publicar
 
+- **Dispositivos vinculados (nodo, en desarrollo)**: `chxchx-tech node pair` crea un código de un solo uso; el celular lo canjea por su propio token (roles `reader`, `operator` y `admin`), que se puede revocar al instante con `node revoke`. Un dispositivo nunca pasa de `workspace-write` ni usa la red salvo que sea `admin`, y `node audit` cuenta quién hizo qué sin guardar secretos.
 - **Nodo local (en desarrollo, `--features node`)**: `chxchx-tech node start|status|stop` sirve los trabajos en `127.0.0.1` con token y eventos en vivo por WebSocket. Las tarjetas de permiso y las preguntas del agente esperan tu respuesta por la API, hasta 10 minutos. Rechaza peticiones que no vayan dirigidas a loopback y, al pararse, cancela lo que esté en curso. En reposo usa unos 10 MiB. Todavía no entra en los instaladores.
 - **Hablar con un agente sin abrir Studio** (`chxchx-tech jobs run --project ALIAS --provider claude|codex|opencode "mensaje"`): el turno corre como un trabajo guardado. Si el comando se corta, queda `interrupted` con su historial en vez de perderse. `jobs list` y `jobs show ID --events` lo consultan después, y la conversación aparece en Studio como si la hubieras escrito allí. Es el primer paso para seguir trabajando desde el celular (ver `.ai/ROADMAP-HIBRIDO.md`).
 - **Marcas de los agentes**: Claude, Codex (OpenAI) y OpenCode se reconocen por su marca en el panel de agentes y en los chats, en vez de una letra. Los dibujos vienen de simple-icons (CC0) y del repositorio de OpenCode (MIT); ver `assets/brands/README.md`.

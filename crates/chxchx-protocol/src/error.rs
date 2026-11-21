@@ -12,6 +12,8 @@ pub enum ErrorCode {
     NotFound,
     /// The same idempotency key was used for a different request.
     Conflict,
+    /// Too many attempts or too much at once; try again later.
+    TooManyRequests,
     UntrustedProject,
     ProviderUnavailable,
     ProviderFailed,

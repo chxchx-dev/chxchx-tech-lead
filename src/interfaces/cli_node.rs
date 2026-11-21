@@ -1,7 +1,8 @@
 //! `chxchx-tech node start|status|stop`.
-use crate::features::node_state;
+use crate::features::{node_audit, node_state};
 use crate::integrations::node_client;
-use clap::Subcommand;
+use chxchx_protocol::{Device, PairingOffer, Role};
+use clap::{Subcommand, ValueEnum};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Subcommand)]
@@ -21,6 +22,36 @@ pub(super) enum NodeCommand {
     },
     /// Pide al nodo que se detenga; cancela lo que esté en curso.
     Stop,
+    /// Crea un código de un solo uso (5 min) para vincular un celular u otro equipo.
+    ///
+    /// El dispositivo lo escribe y recibe su propio token, que se muestra una sola vez.
+    Pair {
+        /// Qué podrá hacer: reader mira; operator además lanza trabajos y aprueba; admin
+        /// además gestiona dispositivos y lee la auditoría.
+        #[arg(long, value_enum, default_value = "operator")]
+        role: RoleArg,
+    },
+    /// Lista los dispositivos vinculados.
+    Devices {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Desvincula un dispositivo: su token deja de valer al instante.
+    Revoke { id: String },
+    /// Muestra quién hizo qué (no hace falta que el nodo esté en marcha).
+    Audit {
+        #[arg(long, default_value_t = 30)]
+        limit: usize,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub(super) enum RoleArg {
+    Reader,
+    Operator,
+    Admin,
 }
 
 pub(super) fn run(command: NodeCommand) -> Result<(), String> {
@@ -28,6 +59,130 @@ pub(super) fn run(command: NodeCommand) -> Result<(), String> {
         NodeCommand::Start { port } => crate::interfaces::node::run(port),
         NodeCommand::Status { json } => status(json),
         NodeCommand::Stop => stop(),
+        NodeCommand::Pair { role } => pair(match role {
+            RoleArg::Reader => Role::Reader,
+            RoleArg::Operator => Role::Operator,
+            RoleArg::Admin => Role::Admin,
+        }),
+        NodeCommand::Devices { json } => devices(json),
+        NodeCommand::Revoke { id } => revoke(&id),
+        NodeCommand::Audit { limit, json } => audit(limit, json),
+    }
+}
+
+/// Asks the running node something with the local token and returns the answer's body.
+fn ask(method: &str, path: &str, body: Option<&str>) -> Result<String, String> {
+    let (_, info, token) = running()?;
+    let response = node_client::request(info.port, method, path, Some(&token), body)?;
+    if (200..300).contains(&response.status) {
+        return Ok(response.body);
+    }
+    let message = serde_json::from_str::<chxchx_protocol::JobError>(&response.body)
+        .map(|error| error.message)
+        .unwrap_or(response.body);
+    Err(message)
+}
+
+fn pair(role: Role) -> Result<(), String> {
+    let body = serde_json::json!({ "role": role }).to_string();
+    let offer: PairingOffer =
+        serde_json::from_str(&ask("POST", "/api/v1/devices/pairing", Some(&body))?)
+            .map_err(|error| error.to_string())?;
+    let minutes = offer
+        .expires_ms
+        .saturating_sub(crate::features::jobs::store::now_ms())
+        / 60_000;
+    println!("Código de vinculación: {}", offer.code);
+    println!(
+        "Rol: {} · vale un solo uso y caduca en {minutes} min.",
+        offer.role.as_str()
+    );
+    let remote = node_state::dir().and_then(|dir| node_state::read_remote(&dir));
+    match remote {
+        Some(remote) => println!(
+            "En el dispositivo abre {} e introduce el código.",
+            remote.url()
+        ),
+        None => println!(
+            "El acceso desde fuera aún no está activado: `chxchx-tech node remote enable`."
+        ),
+    }
+    Ok(())
+}
+
+fn devices(json: bool) -> Result<(), String> {
+    let body = ask("GET", "/api/v1/devices", None)?;
+    if json {
+        println!("{body}");
+        return Ok(());
+    }
+    let list: Vec<Device> = serde_json::from_str(&body).map_err(|error| error.to_string())?;
+    if list.is_empty() {
+        println!("No hay dispositivos vinculados. `chxchx-tech node pair` crea un código.");
+    }
+    for device in list {
+        println!(
+            "{}  {:<8}  {}  (vinculado {})",
+            device.id,
+            device.role.as_str(),
+            device.name,
+            when(device.created_ms)
+        );
+    }
+    Ok(())
+}
+
+fn revoke(id: &str) -> Result<(), String> {
+    let id = chxchx_protocol::DeviceId::parse(id).map_err(|error| error.to_string())?;
+    let device: Device =
+        serde_json::from_str(&ask("DELETE", &format!("/api/v1/devices/{id}"), None)?)
+            .map_err(|error| error.to_string())?;
+    println!(
+        "Desvinculado «{}» ({}). Su token ya no vale.",
+        device.name, device.id
+    );
+    Ok(())
+}
+
+fn audit(limit: usize, json: bool) -> Result<(), String> {
+    let dir = node_state::dir().ok_or("No se pudo resolver CHXCHX_TECH_HOME")?;
+    let entries = node_audit::read(&dir, limit.clamp(1, 500));
+    if json {
+        return serde_json::to_string_pretty(&entries)
+            .map(|text| println!("{text}"))
+            .map_err(|error| error.to_string());
+    }
+    if entries.is_empty() {
+        println!("La auditoría está vacía.");
+    }
+    for entry in entries {
+        let detail = if entry.detail.as_object().is_some_and(|map| map.is_empty()) {
+            String::new()
+        } else {
+            format!("  {}", entry.detail)
+        };
+        println!(
+            "{}  {:<22}  {}{detail}",
+            when(entry.at_ms),
+            entry.action,
+            entry.actor
+        );
+    }
+    Ok(())
+}
+
+fn when(ms: u64) -> String {
+    match time::OffsetDateTime::from_unix_timestamp_nanos(i128::from(ms) * 1_000_000) {
+        Ok(t) => format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC",
+            t.year(),
+            u8::from(t.month()),
+            t.day(),
+            t.hour(),
+            t.minute(),
+            t.second()
+        ),
+        Err(_) => ms.to_string(),
     }
 }
 

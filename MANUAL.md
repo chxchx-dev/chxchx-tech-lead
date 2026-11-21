@@ -86,6 +86,27 @@ está limitado a unos 320 KiB. `node status` y `node stop` usan el mismo token.
 Al detenerse (Ctrl+C o `node stop`), el nodo cancela lo que esté en curso, espera
 hasta 10 s y borra `node.json`.
 
+**Dispositivos vinculados (H3).** Un celular u otro equipo no usa el token local:
+se vincula en la PC. `chxchx-tech node pair [--role reader|operator|admin]` crea un
+código de un solo uso (`XXXXX-XXXXX`, 5 min). El dispositivo lo envía a
+`POST /api/v1/pair` con un nombre (`{"code","name"}`) y recibe **su propio token,
+que se muestra una sola vez**. El nodo solo guarda su hash SHA-256 (también el del
+código), así que `devices.json` no sirve para entrar. Cinco códigos incorrectos
+cierran la vinculación diez minutos y cancelan los códigos pendientes. Roles:
+`reader` mira proyectos, trabajos y eventos; `operator` además lanza y cancela
+trabajos y responde a permisos; `admin` además gestiona dispositivos
+(`node devices`, `node revoke ID`) y lee `GET /api/v1/audit`. Detener el nodo y
+crear códigos de vinculación solo se puede hacer con el token local, en la PC.
+Revocar corta el token en la siguiente petición y cierra los eventos en vivo que el
+dispositivo tuviera abiertos. Los trabajos que pide un dispositivo se recortan
+**antes de guardarlos**: el acceso nunca pasa de `workspace-write`, aunque pida
+`full-access`, y la red solo se permite a un `admin`. Lo que se lista, lo que
+corre y lo que se audita es lo efectivo. `GET /api/v1/projects` lista solo los
+proyectos de confianza, sin rutas. `node audit` muestra quién hizo qué (vinculaciones,
+revocaciones, trabajos, cancelaciones, respuestas y cambios de acceso) y no
+necesita el nodo en marcha; nunca guarda prompts, textos de respuesta ni tokens. El nodo
+atiende como mucho 128 peticiones a la vez y 16 flujos de eventos.
+
 Skills, Tech Packs y Mods están portados (CLI y Studio). El catálogo del legado
 (40 skills, 22 packs, 31 mods) se empaqueta en el binario al compilar leyendo
 `src/chxchx_tech_lead/`, sin copiarlo. Todo cambio se previsualiza y solo se aplica

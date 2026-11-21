@@ -171,15 +171,26 @@ recupera el estado y el resultado.
 - [ ] Integración con Tailscale en `integrations/tailscale.rs` mediante la CLI oficial. Detecta
   si está instalado y conectado, y ofrece `tailscale serve` con vista previa y deshacer. El nodo
   nunca abre puertos ni toca el firewall.
-- [ ] Vinculación de dispositivos: en la PC aparece un código o QR de un solo uso (≤ 5 min) y el
-  dispositivo recibe un token propio. En el nodo solo se guarda el hash del token. Los tokens
-  expiran y se revocan desde Studio o el CLI.
-- [ ] Roles: `lector`, `operador` y `admin` del nodo; el rol «colaborador» se aplaza. La
-  autorización se comprueba por acción, proyecto y dispositivo, aunque la petición venga de la
-  tailnet.
-- [ ] Auditoría (`audit.jsonl`): vinculaciones, revocaciones, cambios de nivel de acceso y
-  acciones de admin.
-- [ ] Límites de tasa, tamaño de petición y concurrencia, y comprobación de `Origin` en la API.
+  **Comprobado con Tailscale 1.104.7:** `tailscale serve` conserva el `Host` original
+  (`máquina.tailnet.ts.net[:puerto]`), llega desde `127.0.0.1` y añade cabeceras con el correo y
+  el nombre de la cuenta (`Tailscale-User-*`), que el nodo ni lee ni guarda. La primera vez, el
+  certificado HTTPS tardó ~40 s en emitirse. El nombre queda en los registros públicos de
+  transparencia de certificados.
+- [x] Vinculación de dispositivos (núcleo): código de un solo uso (10 caracteres sin ambiguos,
+  5 min) y token propio de 256 bits mostrado una vez; en el nodo solo se guardan hashes. Cinco
+  intentos fallidos cierran la vinculación 10 min y cancelan los códigos pendientes. Revocar corta
+  el token y los flujos abiertos. Pendiente: mostrar el código como QR.
+- [x] Roles `reader`, `operator` y `admin`, comprobados por acción en cada ruta. Parar el nodo y
+  crear códigos solo con el token local; el token local no vale con un `Host` de la tailnet.
+- [x] Tope de acceso remoto: un dispositivo nunca pasa de `workspace-write` y solo un `admin`
+  habilita la red. Se recorta antes de guardar el trabajo, y un reintento idempotente no se
+  audita como creación.
+- [x] Auditoría (`audit.jsonl`, `0600`, rota a 5 MiB): vinculaciones, revocaciones, trabajos,
+  cancelaciones, respuestas y recortes de acceso, sin prompts ni secretos. `node audit` y
+  `GET /api/v1/audit`.
+- [x] Límites: cuerpo de 8 KiB (320 KiB solo para crear trabajos), 128 peticiones en vuelo y 16
+  flujos de eventos; `Host` y `Origin` comprobados.
+- [ ] Revisión de seguridad antes de cerrar la fase (checklist y hallazgos).
 
 **Salida:** con datos móviles, fuera del Wi‑Fi de casa, un dispositivo vinculado lanza y sigue un
 turno, y uno sin vincular o revocado recibe 401 en todo.

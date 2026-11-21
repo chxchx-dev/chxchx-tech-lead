@@ -83,6 +83,14 @@ identifier!(
 );
 
 identifier!(
+    /// A device linked to the node, chosen by the node.
+    DeviceId,
+    "Identificador de dispositivo",
+    64,
+    token_char
+);
+
+identifier!(
     /// A registered project, by its alias in the project registry. A remote client never sends
     /// a path: the node resolves the alias and checks the project's trust itself.
     ProjectId,

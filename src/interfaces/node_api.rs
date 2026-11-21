@@ -1,34 +1,40 @@
-//! The node's HTTP API v1 (ADR 0017). Every route but `health` needs the local token, and every
-//! request must be addressed to loopback: a web page in a browser can send requests to
-//! `127.0.0.1`, so a foreign `Host` (DNS rebinding) or `Origin` is refused before anything else.
+//! The node's HTTP API v1 (ADR 0017): state, who is calling, and the guards every request passes.
+//!
+//! Three guards, outermost first:
+//! 1. **Limits:** a body cap and a ceiling on requests in flight.
+//! 2. **Where it was addressed:** `Host` must be `127.0.0.1`/`localhost` on the node's port, or the
+//!    Tailscale name the person enabled (`remote.json`). A web page can send requests to
+//!    `127.0.0.1`, so any other `Host` (DNS rebinding) or `Origin` is refused before anything else.
+//! 3. **Who is calling:** every route but `health` and `pair` needs a token. The local token is
+//!    the person at this PC (admin) and only works when the request is addressed to loopback; a
+//!    device token carries the role it was paired with.
 
-use crate::features::jobs::JobRunner;
-use axum::body::Bytes;
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
-use axum::http::{HeaderMap, StatusCode, header};
+use super::{api_devices as devices, api_jobs as jobs};
+use crate::features::node_devices::Devices;
+use crate::features::node_state::{self, RemoteConfig};
+use crate::features::{jobs::JobRunner, node_audit};
+use axum::extract::{DefaultBodyLimit, Request, State};
+use axum::http::{StatusCode, header};
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
-use chxchx_protocol::{
-    ErrorCode, IdempotencyKey, JobAnswer, JobError, JobEvent, JobId, JobSpec, JobState,
-    PROTOCOL_VERSION,
-};
-use serde::Deserialize;
-use serde_json::json;
-use std::collections::BTreeMap;
+use chxchx_protocol::{AccessMode, Device, ErrorCode, JobError, PROTOCOL_VERSION, Role};
+use serde_json::{Value, json};
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::Notify;
+use std::sync::{Arc, Mutex, MutexGuard};
+use tokio::sync::{Notify, Semaphore};
 
 /// The WebSocket subprotocol of this API. A browser cannot set `Authorization` on a WebSocket, so
 /// it offers the token as a second protocol, `bearer.<token>`; the node answers with this one.
 pub(crate) const WS_PROTOCOL: &str = "chxchx.v1";
 
-/// Large enough for the biggest prompt a job accepts, and no more.
-const MAX_BODY_BYTES: usize = chxchx_protocol::MAX_PROMPT_BYTES + 64 * 1024;
+/// Large enough for the biggest prompt a job accepts, and no more. Every other route takes 8 KiB.
+const MAX_JOB_BODY_BYTES: usize = chxchx_protocol::MAX_PROMPT_BYTES + 64 * 1024;
+const MAX_BODY_BYTES: usize = 8 * 1024;
+const MAX_IN_FLIGHT: usize = 128;
+/// Event streams open at once.
+const MAX_SOCKETS: usize = 16;
 
 #[derive(Clone)]
 pub(crate) struct AppState {
@@ -37,31 +43,154 @@ pub(crate) struct AppState {
     pub port: u16,
     pub started_ms: u64,
     pub stop: Arc<Notify>,
-    /// Where `node.log` goes.
+    /// Where `node.log`, `audit.jsonl`, `devices.json` and `remote.json` live.
     pub dir: PathBuf,
+    pub devices: Arc<Mutex<Devices>>,
+    pub in_flight: Arc<Semaphore>,
+    pub sockets: Arc<Semaphore>,
 }
 
 impl AppState {
-    fn log(&self, line: &str) {
-        crate::features::node_state::append_log(&self.dir, line);
+    pub fn new(
+        runner: JobRunner,
+        token: Arc<str>,
+        port: u16,
+        started_ms: u64,
+        stop: Arc<Notify>,
+        dir: PathBuf,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            runner,
+            token,
+            port,
+            started_ms,
+            stop,
+            devices: Arc::new(Mutex::new(Devices::open(&dir)?)),
+            dir,
+            in_flight: Arc::new(Semaphore::new(MAX_IN_FLIGHT)),
+            sockets: Arc::new(Semaphore::new(MAX_SOCKETS)),
+        })
+    }
+
+    pub fn log(&self, line: &str) {
+        node_state::append_log(&self.dir, line);
+    }
+
+    pub fn audit(&self, who: &Principal, action: &str, detail: Value) {
+        node_audit::record(&self.dir, &who.actor(), action, detail);
+    }
+
+    pub fn devices(&self) -> MutexGuard<'_, Devices> {
+        self.devices
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+    }
+}
+
+/// Who is calling.
+#[derive(Clone, Debug)]
+pub(crate) enum Principal {
+    /// The person at this PC, with the local token.
+    Local,
+    Device(Device),
+}
+
+impl Principal {
+    pub fn role(&self) -> Role {
+        match self {
+            Principal::Local => Role::Admin,
+            Principal::Device(device) => device.role,
+        }
+    }
+
+    pub fn is_local(&self) -> bool {
+        matches!(self, Principal::Local)
+    }
+
+    /// What the audit log calls this caller.
+    pub fn actor(&self) -> String {
+        match self {
+            Principal::Local => "local".to_owned(),
+            Principal::Device(device) => device.id.to_string(),
+        }
+    }
+
+    /// The highest access level this caller may give an agent (ADR 0014, ADR 0017).
+    pub fn access_cap(&self) -> AccessMode {
+        match self {
+            Principal::Local => AccessMode::FullAccess,
+            Principal::Device(_) => AccessMode::REMOTE_DEFAULT_CAP,
+        }
+    }
+
+    /// Whether the agent may reach the network. A device below admin cannot enable it.
+    pub fn may_use_network(&self) -> bool {
+        self.role() == Role::Admin
+    }
+}
+
+/// How the request got here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Via {
+    /// Addressed to `127.0.0.1` or `localhost`.
+    Loopback,
+    /// Addressed to the Tailscale name, through `tailscale serve`.
+    Remote,
+}
+
+pub(crate) fn require(who: &Principal, needed: Role) -> Result<(), ApiError> {
+    if who.role() >= needed {
+        Ok(())
+    } else {
+        Err(error(
+            ErrorCode::Forbidden,
+            format!(
+                "Este dispositivo es «{}» y esto pide «{}»",
+                who.role().as_str(),
+                needed.as_str()
+            ),
+        ))
+    }
+}
+
+pub(crate) fn require_local(who: &Principal) -> Result<(), ApiError> {
+    if who.is_local() {
+        Ok(())
+    } else {
+        Err(error(
+            ErrorCode::Forbidden,
+            "Esto solo se puede hacer desde la PC del nodo",
+        ))
     }
 }
 
 pub(crate) fn router(state: AppState) -> Router {
     let protected = Router::new()
-        .route("/api/v1/node", get(node))
-        .route("/api/v1/node/stop", post(stop))
-        .route("/api/v1/jobs", get(list).post(create))
-        .route("/api/v1/jobs/{id}", get(show))
-        .route("/api/v1/jobs/{id}/events", get(events))
-        .route("/api/v1/jobs/{id}/cancel", post(cancel))
-        .route("/api/v1/jobs/{id}/answers", post(answer))
-        .route("/api/v1/events", get(stream))
+        .route("/api/v1/node", get(jobs::node))
+        .route("/api/v1/node/stop", post(jobs::stop))
+        .route("/api/v1/projects", get(devices::projects))
+        .route(
+            "/api/v1/jobs",
+            get(jobs::list)
+                .post(jobs::create)
+                .layer(DefaultBodyLimit::max(MAX_JOB_BODY_BYTES)),
+        )
+        .route("/api/v1/jobs/{id}", get(jobs::show))
+        .route("/api/v1/jobs/{id}/events", get(jobs::events))
+        .route("/api/v1/jobs/{id}/cancel", post(jobs::cancel))
+        .route("/api/v1/jobs/{id}/answers", post(jobs::answer))
+        .route("/api/v1/events", get(jobs::stream))
+        .route("/api/v1/devices", get(devices::list))
+        .route("/api/v1/devices/pairing", post(devices::offer))
+        .route("/api/v1/devices/{id}", delete(devices::revoke))
+        .route("/api/v1/audit", get(devices::audit))
         .layer(from_fn_with_state(state.clone(), require_token));
     Router::new()
         .route("/api/v1/health", get(health))
+        .route("/api/v1/pair", post(devices::pair))
         .merge(protected)
-        .layer(from_fn_with_state(state.clone(), loopback_only))
+        .layer(from_fn_with_state(state.clone(), host_guard))
+        .layer(from_fn_with_state(state.clone(), limit_in_flight))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .with_state(state)
 }
@@ -82,6 +211,7 @@ impl IntoResponse for ApiError {
             ErrorCode::Forbidden | ErrorCode::UntrustedProject => StatusCode::FORBIDDEN,
             ErrorCode::NotFound => StatusCode::NOT_FOUND,
             ErrorCode::Conflict | ErrorCode::Interrupted => StatusCode::CONFLICT,
+            ErrorCode::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             ErrorCode::ProviderUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             ErrorCode::ProviderFailed => StatusCode::BAD_GATEWAY,
             ErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
@@ -90,16 +220,35 @@ impl IntoResponse for ApiError {
     }
 }
 
-fn error(code: ErrorCode, message: impl Into<String>) -> ApiError {
+pub(crate) fn error(code: ErrorCode, message: impl Into<String>) -> ApiError {
     ApiError(JobError::new(code, message))
 }
 
-async fn loopback_only(
+/// Fills `buffer` with random bytes from the operating system.
+pub(crate) fn fill_random(buffer: &mut [u8]) {
+    getrandom::fill(buffer).expect("the operating system provides random bytes");
+}
+
+async fn limit_in_flight(
     State(state): State<AppState>,
     request: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
-    let allowed = |value: &str, scheme: &str| {
+    let Ok(_permit) = state.in_flight.clone().try_acquire_owned() else {
+        return Err(error(
+            ErrorCode::TooManyRequests,
+            "El nodo está atendiendo demasiadas peticiones a la vez",
+        ));
+    };
+    Ok(next.run(request).await)
+}
+
+async fn host_guard(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Result<Response, ApiError> {
+    let loopback = |value: &str, scheme: &str| {
         [
             format!("{scheme}127.0.0.1:{}", state.port),
             format!("{scheme}localhost:{}", state.port),
@@ -110,39 +259,60 @@ async fn loopback_only(
     let headers = request.headers();
     let host = headers
         .get(header::HOST)
-        .and_then(|value| value.to_str().ok());
-    if !host.is_some_and(|host| allowed(host, "")) {
-        state.log(&format!(
-            "rechazada: Host {:?} en {}",
-            host.unwrap_or("(ninguno)"),
-            request.uri().path()
-        ));
-        return Err(error(
-            ErrorCode::Forbidden,
-            "El nodo solo atiende peticiones dirigidas a 127.0.0.1",
-        ));
-    }
-    if let Some(origin) = headers.get(header::ORIGIN) {
-        let origin = origin.to_str().unwrap_or_default();
-        if !allowed(origin, "http://") {
-            state.log(&format!(
-                "rechazada: Origin {origin:?} en {}",
-                request.uri().path()
-            ));
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_ascii_lowercase);
+    let origin = headers
+        .get(header::ORIGIN)
+        .map(|value| value.to_str().unwrap_or_default().to_ascii_lowercase());
+    let path = request.uri().path().to_owned();
+
+    let (via, allowed_origin) = match host.as_deref() {
+        Some(host) if loopback(host, "") => (Via::Loopback, None),
+        // Read only for a request that is not addressed to loopback: the common path stays free.
+        Some(host) => match node_state::read_remote(&state.dir) {
+            Some(remote) if remote.authority() == host => (Via::Remote, Some(remote)),
+            _ => return Err(refused_host(&state, Some(host.to_owned()), &path)),
+        },
+        None => return Err(refused_host(&state, None, &path)),
+    };
+    if let Some(origin) = origin {
+        let fine = match &allowed_origin {
+            Some(remote) => origin == remote.origin(),
+            None => loopback(&origin, "http://"),
+        };
+        if !fine {
+            state.log(&format!("rechazada: Origin {origin:?} en {path}"));
             return Err(error(
                 ErrorCode::Forbidden,
                 "Origen no permitido para el nodo",
             ));
         }
     }
+    request.extensions_mut().insert(via);
     Ok(next.run(request).await)
+}
+
+fn refused_host(state: &AppState, host: Option<String>, path: &str) -> ApiError {
+    state.log(&format!(
+        "rechazada: Host {:?} en {path}",
+        host.as_deref().unwrap_or("(ninguno)")
+    ));
+    error(
+        ErrorCode::Forbidden,
+        "El nodo solo atiende peticiones dirigidas a este equipo o a su nombre de Tailscale",
+    )
 }
 
 async fn require_token(
     State(state): State<AppState>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
+    let via = request
+        .extensions()
+        .get::<Via>()
+        .copied()
+        .unwrap_or(Via::Loopback);
     let headers = request.headers();
     let bearer = headers
         .get(header::AUTHORIZATION)
@@ -156,18 +326,41 @@ async fn require_token(
                 .split(',')
                 .find_map(|protocol| protocol.trim().strip_prefix("bearer."))
         });
-    let given = bearer.or(offered).unwrap_or_default();
-    if !same(given.as_bytes(), state.token.as_bytes()) {
-        // The path only: never what was sent as a token.
-        state.log(&format!(
-            "rechazada: token ausente o no válido en {}",
-            request.uri().path()
-        ));
-        return Err(error(
-            ErrorCode::Unauthorized,
-            "Falta el token del nodo o no es válido",
-        ));
-    }
+    let given = bearer.or(offered).unwrap_or_default().to_owned();
+    let path = request.uri().path().to_owned();
+
+    let principal = if !given.is_empty() && same(given.as_bytes(), state.token.as_bytes()) {
+        if via == Via::Remote {
+            state.log(&format!(
+                "rechazada: token local usado desde fuera en {path}"
+            ));
+            return Err(error(
+                ErrorCode::Forbidden,
+                "El token local solo vale en el propio equipo: vincula este dispositivo",
+            ));
+        }
+        Principal::Local
+    } else {
+        let device = if given.is_empty() {
+            None
+        } else {
+            state
+                .devices()
+                .authenticate(&given, crate::features::jobs::store::now_ms())
+        };
+        match device {
+            Some(device) => Principal::Device(device),
+            None => {
+                // The path only: never what was sent as a token.
+                state.log(&format!("rechazada: token ausente o no válido en {path}"));
+                return Err(error(
+                    ErrorCode::Unauthorized,
+                    "Falta el token del nodo o no es válido",
+                ));
+            }
+        }
+    };
+    request.extensions_mut().insert(principal);
     Ok(next.run(request).await)
 }
 
@@ -181,216 +374,11 @@ fn same(given: &[u8], expected: &[u8]) -> bool {
             == 0
 }
 
-async fn health() -> Json<serde_json::Value> {
+async fn health() -> Json<Value> {
     Json(json!({ "status": "ok", "protocol": PROTOCOL_VERSION }))
 }
 
-async fn node(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let jobs = state.runner.list();
-    let count = |wanted: JobState| jobs.iter().filter(|job| job.state == wanted).count();
-    Json(json!({
-        "version": env!("CARGO_PKG_VERSION"),
-        "protocol": PROTOCOL_VERSION,
-        "pid": std::process::id(),
-        "started_ms": state.started_ms,
-        "jobs": { "queued": count(JobState::Queued), "running": count(JobState::Running) },
-    }))
-}
-
-async fn stop(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
-    state.log("parada pedida por la API");
-    state.stop.notify_one();
-    (StatusCode::ACCEPTED, Json(json!({ "status": "stopping" })))
-}
-
-async fn list(State(state): State<AppState>) -> Json<Vec<chxchx_protocol::Job>> {
-    Json(state.runner.list())
-}
-
-async fn create(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Result<(StatusCode, Json<chxchx_protocol::Job>), ApiError> {
-    let spec: JobSpec = serde_json::from_slice(&body).map_err(|problem| {
-        error(
-            ErrorCode::InvalidRequest,
-            format!("Petición no válida: {problem}"),
-        )
-    })?;
-    let key = headers
-        .get("idempotency-key")
-        .map(|value| {
-            value
-                .to_str()
-                .map_err(|_| error(ErrorCode::InvalidRequest, "Idempotency-Key no válida"))
-                .and_then(|value| {
-                    IdempotencyKey::parse(value)
-                        .map_err(|problem| error(ErrorCode::InvalidRequest, problem.to_string()))
-                })
-        })
-        .transpose()?;
-    let runner = state.runner.clone();
-    // Writing the job is a synced file write: kept off the async workers.
-    let job = tokio::task::spawn_blocking(move || runner.submit(spec, key))
-        .await
-        .map_err(|_| error(ErrorCode::Internal, "Falló el registro del trabajo"))??;
-    state.log(&format!("trabajo {} recibido ({:?})", job.id, job.state));
-    Ok((StatusCode::ACCEPTED, Json(job)))
-}
-
-fn job_id(raw: &str) -> Result<JobId, ApiError> {
-    JobId::parse(raw).map_err(|problem| error(ErrorCode::InvalidRequest, problem.to_string()))
-}
-
-fn not_found(id: &JobId) -> ApiError {
-    error(ErrorCode::NotFound, format!("No existe el trabajo {id}"))
-}
-
-async fn show(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<chxchx_protocol::Job>, ApiError> {
-    let id = job_id(&id)?;
-    state
-        .runner
-        .get(&id)
-        .map(Json)
-        .ok_or_else(|| not_found(&id))
-}
-
-#[derive(Deserialize)]
-struct Since {
-    #[serde(default)]
-    since: u64,
-}
-
-async fn events(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-    Query(query): Query<Since>,
-) -> Result<Json<Vec<chxchx_protocol::JobEvent>>, ApiError> {
-    let id = job_id(&id)?;
-    if state.runner.get(&id).is_none() {
-        return Err(not_found(&id));
-    }
-    Ok(Json(state.runner.events_since(&id, query.since)))
-}
-
-async fn cancel(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<chxchx_protocol::Job>, ApiError> {
-    let id = job_id(&id)?;
-    let runner = state.runner.clone();
-    let job = tokio::task::spawn_blocking(move || runner.cancel(&id))
-        .await
-        .map_err(|_| error(ErrorCode::Internal, "Falló la cancelación"))??;
-    state.log(&format!("trabajo {} cancelado ({:?})", job.id, job.state));
-    Ok(Json(job))
-}
-
-async fn answer(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-    body: Bytes,
-) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
-    let id = job_id(&id)?;
-    let answer: JobAnswer = serde_json::from_slice(&body).map_err(|problem| {
-        error(
-            ErrorCode::InvalidRequest,
-            format!("Respuesta no válida: {problem}"),
-        )
-    })?;
-    let request_id = answer.request_id.clone();
-    let behavior = answer.behavior;
-    state.runner.answer(&id, answer)?;
-    // What was decided, never the text of an answer to a question.
-    state.log(&format!(
-        "trabajo {id}: respuesta a {request_id} ({})",
-        behavior.map_or("pregunta".to_owned(), |b| format!("{b:?}").to_lowercase())
-    ));
-    Ok((StatusCode::ACCEPTED, Json(json!({ "status": "delivered" }))))
-}
-
-#[derive(Deserialize)]
-struct Stream {
-    job: Option<String>,
-    #[serde(default)]
-    since: u64,
-}
-
-/// Events as they happen, one JSON `JobEvent` per text message. With `job`, it first sends that
-/// job's events after `since`, so a client that reconnects only gets what it missed.
-async fn stream(
-    State(state): State<AppState>,
-    Query(query): Query<Stream>,
-    upgrade: WebSocketUpgrade,
-) -> Result<Response, ApiError> {
-    let job = query.job.as_deref().map(job_id).transpose()?;
-    if let Some(id) = &job
-        && state.runner.get(id).is_none()
-    {
-        return Err(not_found(id));
-    }
-    let runner = state.runner.clone();
-    Ok(upgrade
-        .protocols([WS_PROTOCOL])
-        .on_upgrade(move |socket| forward(socket, runner, job, query.since)))
-}
-
-async fn forward(mut socket: WebSocket, runner: JobRunner, job: Option<JobId>, since: u64) {
-    // Subscribed before reading the backlog: nothing can fall between the two.
-    let live = runner.subscribe();
-    let (sender, mut events) = tokio::sync::mpsc::channel::<JobEvent>(256);
-    std::thread::spawn(move || {
-        loop {
-            match live.recv_timeout(Duration::from_millis(250)) {
-                Ok(event) => {
-                    if sender.blocking_send(event).is_err() {
-                        return;
-                    }
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) if !sender.is_closed() => {}
-                Err(_) => return,
-            }
-        }
-    });
-    let mut sent: BTreeMap<JobId, u64> = BTreeMap::new();
-    if let Some(id) = &job {
-        for event in runner.events_since(id, since) {
-            sent.insert(event.job.clone(), event.seq);
-            if send(&mut socket, &event).await.is_err() {
-                return;
-            }
-        }
-    }
-    loop {
-        tokio::select! {
-            event = events.recv() => {
-                let Some(event) = event else { return };
-                if job.as_ref().is_some_and(|id| *id != event.job)
-                    || sent.get(&event.job).is_some_and(|last| event.seq <= *last)
-                {
-                    continue;
-                }
-                sent.insert(event.job.clone(), event.seq);
-                if send(&mut socket, &event).await.is_err() {
-                    return;
-                }
-            }
-            incoming = socket.recv() => match incoming {
-                None | Some(Err(_)) | Some(Ok(Message::Close(_))) => return,
-                Some(Ok(_)) => {} // pings are answered by the library; nothing else is expected
-            }
-        }
-    }
-}
-
-async fn send(socket: &mut WebSocket, event: &JobEvent) -> Result<(), ()> {
-    let text = serde_json::to_string(event).map_err(|_| ())?;
-    socket
-        .send(Message::Text(text.into()))
-        .await
-        .map_err(|_| ())
+/// What `remote.json` says, for handlers that report it.
+pub(crate) fn remote(state: &AppState) -> Option<RemoteConfig> {
+    node_state::read_remote(&state.dir)
 }

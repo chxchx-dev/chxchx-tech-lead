@@ -4,6 +4,10 @@
 
 #[path = "node_api.rs"]
 mod api;
+#[path = "node_api_devices.rs"]
+mod api_devices;
+#[path = "node_api_jobs.rs"]
+mod api_jobs;
 #[cfg(test)]
 #[path = "node_api_tests.rs"]
 mod api_tests;
@@ -32,7 +36,11 @@ pub fn run(port: u16) -> Result<(), String> {
     for warning in &store.warnings {
         eprintln!("Aviso: {warning}");
     }
-    let token = node_state::ensure_token(&dir, random_bytes)?;
+    let token = node_state::ensure_token(&dir, || {
+        let mut bytes = [0u8; 32];
+        api::fill_random(&mut bytes);
+        bytes
+    })?;
     // The token holder can read this user's files: the same person as at the keyboard.
     let executor = ProductExecutor {
         access_cap: AccessMode::FullAccess,
@@ -84,14 +92,14 @@ pub(crate) async fn serve(
     );
     let stop = Arc::new(Notify::new());
     node_state::append_log(dir, &format!("nodo iniciado en 127.0.0.1:{port}"));
-    let state = api::AppState {
+    let state = api::AppState::new(
         runner,
         token,
         port,
         started_ms,
-        stop: stop.clone(),
-        dir: dir.to_owned(),
-    };
+        stop.clone(),
+        dir.to_owned(),
+    )?;
     let shutdown = async move {
         if signals {
             tokio::select! {
@@ -118,10 +126,4 @@ fn drain(runner: &JobRunner) {
     if !runner.wait_idle(Duration::from_secs(10)) {
         eprintln!("Aviso: algún trabajo no terminó a tiempo; quedará como interrumpido.");
     }
-}
-
-fn random_bytes() -> [u8; 32] {
-    let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes).expect("the operating system provides random bytes");
-    bytes
 }
