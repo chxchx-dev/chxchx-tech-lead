@@ -28,7 +28,7 @@ mod e2e_tests;
 mod editor;
 #[path = "studio_explorer.rs"]
 mod explorer;
-#[cfg(test)]
+#[cfg(all(test, unix))]
 #[path = "studio_fake_node.rs"]
 mod fake_node;
 #[path = "studio_file_types.rs"]

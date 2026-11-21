@@ -47,7 +47,7 @@ impl Endpoint {
 #[cfg(test)]
 pub(crate) static TEST_NODE: std::sync::Mutex<Option<(Endpoint, ProjectId)>> =
     std::sync::Mutex::new(None);
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(crate) static TEST_NODE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(test)]
