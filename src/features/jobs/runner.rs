@@ -6,9 +6,10 @@
 
 use super::store::JobStore;
 use chxchx_protocol::{
-    ErrorCode, IdempotencyKey, Job, JobError, JobEvent, JobEventBody, JobId, JobSpec, JobState,
+    ErrorCode, IdempotencyKey, Job, JobAnswer, JobError, JobEvent, JobEventBody, JobId, JobSpec,
+    JobState,
 };
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -25,6 +26,8 @@ pub struct Context {
     id: JobId,
     cancel: Arc<AtomicBool>,
     shared: Arc<Shared>,
+    answers: Receiver<JobAnswer>,
+    pending: Arc<Mutex<BTreeSet<String>>>,
 }
 
 impl Context {
@@ -36,18 +39,50 @@ impl Context {
     pub fn cancelled(&self) -> bool {
         self.cancel.load(Ordering::SeqCst)
     }
+
+    /// Whether someone may answer this job's questions (the node), as opposed to nobody (`jobs
+    /// run` in a terminal).
+    pub fn attended(&self) -> bool {
+        self.shared.attended
+    }
+
+    /// From now on, `JobRunner::answer` accepts an answer to `request_id`.
+    pub fn expect_answer(&self, request_id: &str) {
+        lock(&self.pending).insert(request_id.to_owned());
+    }
+
+    /// No answer to `request_id` is wanted any more (answered, refused or the turn moved on).
+    pub fn settle(&self, request_id: &str) {
+        lock(&self.pending).remove(request_id);
+    }
+
+    /// Answers that arrived since the last call.
+    pub fn answers(&self) -> Vec<JobAnswer> {
+        self.answers.try_iter().collect()
+    }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poison| poison.into_inner())
+}
+
+struct Running {
+    cancel: Arc<AtomicBool>,
+    inbox: Sender<JobAnswer>,
+    pending: Arc<Mutex<BTreeSet<String>>>,
 }
 
 #[derive(Default)]
 struct Schedule {
     queue: VecDeque<JobId>,
-    running: BTreeMap<JobId, Arc<AtomicBool>>,
+    running: BTreeMap<JobId, Running>,
 }
 
 struct Shared {
     store: Mutex<JobStore>,
     executor: Box<dyn Executor>,
     limit: usize,
+    attended: bool,
     schedule: Mutex<Schedule>,
     idle: Condvar,
     listeners: Mutex<Vec<Sender<JobEvent>>>,
@@ -84,11 +119,21 @@ pub struct JobRunner {
 
 impl JobRunner {
     pub fn new(store: JobStore, executor: impl Executor, limit: usize) -> Self {
+        Self::build(store, executor, limit, false)
+    }
+
+    /// A runner whose jobs can be answered through `answer` (the node).
+    pub fn attended(store: JobStore, executor: impl Executor, limit: usize) -> Self {
+        Self::build(store, executor, limit, true)
+    }
+
+    fn build(store: JobStore, executor: impl Executor, limit: usize, attended: bool) -> Self {
         Self {
             shared: Arc::new(Shared {
                 store: Mutex::new(store),
                 executor: Box::new(executor),
                 limit: limit.max(1),
+                attended,
                 schedule: Mutex::new(Schedule::default()),
                 idle: Condvar::new(),
                 listeners: Mutex::new(Vec::new()),
@@ -112,8 +157,8 @@ impl JobRunner {
     /// its executor returns. A finished job is left as it is.
     pub fn cancel(&self, id: &JobId) -> Result<Job, JobError> {
         let mut schedule = self.shared.schedule();
-        if let Some(flag) = schedule.running.get(id) {
-            flag.store(true, Ordering::SeqCst);
+        if let Some(running) = schedule.running.get(id) {
+            running.cancel.store(true, Ordering::SeqCst);
             drop(schedule);
             return self.get(id).ok_or_else(|| not_found(id));
         }
@@ -132,6 +177,29 @@ impl JobRunner {
         }
         drop(schedule);
         self.get(id).ok_or_else(|| not_found(id))
+    }
+
+    /// Hands an answer to the running job that is waiting for it.
+    pub fn answer(&self, id: &JobId, answer: JobAnswer) -> Result<(), JobError> {
+        answer.validate()?;
+        let schedule = self.shared.schedule();
+        let Some(running) = schedule.running.get(id) else {
+            return Err(if self.get(id).is_some() {
+                JobError::new(ErrorCode::Conflict, "El trabajo no está en curso")
+            } else {
+                not_found(id)
+            });
+        };
+        if !lock(&running.pending).remove(&answer.request_id) {
+            return Err(JobError::new(
+                ErrorCode::Conflict,
+                "El trabajo no espera una respuesta a esa petición (ya se respondió o caducó)",
+            ));
+        }
+        running
+            .inbox
+            .send(answer)
+            .map_err(|_| JobError::new(ErrorCode::Conflict, "El trabajo ya terminó"))
     }
 
     pub fn get(&self, id: &JobId) -> Option<Job> {
@@ -188,7 +256,16 @@ fn pump(shared: &Arc<Shared>) {
             return;
         };
         let cancel = Arc::new(AtomicBool::new(false));
-        schedule.running.insert(id.clone(), cancel.clone());
+        let pending = Arc::new(Mutex::new(BTreeSet::new()));
+        let (inbox, answers) = channel();
+        schedule.running.insert(
+            id.clone(),
+            Running {
+                cancel: cancel.clone(),
+                inbox,
+                pending: pending.clone(),
+            },
+        );
         drop(schedule);
 
         let started = shared
@@ -206,15 +283,23 @@ fn pump(shared: &Arc<Shared>) {
             }
         };
         let shared = shared.clone();
-        std::thread::spawn(move || run(&shared, job, cancel));
+        std::thread::spawn(move || run(&shared, job, cancel, answers, pending));
     }
 }
 
-fn run(shared: &Arc<Shared>, job: Job, cancel: Arc<AtomicBool>) {
+fn run(
+    shared: &Arc<Shared>,
+    job: Job,
+    cancel: Arc<AtomicBool>,
+    answers: Receiver<JobAnswer>,
+    pending: Arc<Mutex<BTreeSet<String>>>,
+) {
     let context = Context {
         id: job.id.clone(),
         cancel: cancel.clone(),
         shared: shared.clone(),
+        answers,
+        pending,
     };
     let outcome = catch_unwind(AssertUnwindSafe(|| shared.executor.run(&job, &context)))
         .unwrap_or_else(|_| {

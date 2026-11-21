@@ -71,12 +71,20 @@ rutas, salvo `GET /api/v1/health`, piden el token de
 dentro de una carpeta `0700` que se crea una vez y se reutiliza. Rutas:
 `GET /api/v1/node`, `GET|POST /api/v1/jobs` (con cabecera `Idempotency-Key`
 opcional), `GET /api/v1/jobs/{id}`, `GET /api/v1/jobs/{id}/events?since=N`,
-`POST /api/v1/jobs/{id}/cancel` y `POST /api/v1/node/stop`. Los errores son JSON
+`POST /api/v1/jobs/{id}/cancel`, `POST /api/v1/jobs/{id}/answers` y
+`POST /api/v1/node/stop`. `GET /api/v1/events` es un WebSocket (subprotocolo
+`chxchx.v1`; el token puede ir como subprotocolo `bearer.<token>`) que envía cada
+`JobEvent` en vivo. Con `?job=ID&since=N` manda antes lo que ese trabajo tuvo
+después de `N`, para que una reconexión reciba solo lo que le faltó. Cuando el
+agente pide permiso o pregunta algo, el trabajo espera la respuesta en
+`…/answers` (`{"request_id", "behavior": "allow"|"deny", "scope"?}` o
+`{"request_id", "answers": {pregunta: respuesta}}`) hasta 10 minutos. Si nadie
+responde, la petición se rechaza y queda anotada como evento `answered`. El nodo
+escribe `node/node.log` (rota a 1 MiB) sin tokens ni textos de respuestas. Los errores son JSON
 `{code, message}` con el código HTTP correspondiente, y el cuerpo de una petición
 está limitado a unos 320 KiB. `node status` y `node stop` usan el mismo token.
 Al detenerse (Ctrl+C o `node stop`), el nodo cancela lo que esté en curso, espera
-hasta 10 s y borra `node.json`. Las respuestas a permisos y los eventos en vivo
-por WebSocket son el siguiente paso.
+hasta 10 s y borra `node.json`.
 
 Skills, Tech Packs y Mods están portados (CLI y Studio). El catálogo del legado
 (40 skills, 22 packs, 31 mods) se empaqueta en el binario al compilar leyendo

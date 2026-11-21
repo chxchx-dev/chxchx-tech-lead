@@ -145,11 +145,23 @@ Linux con el binario real, un `codex` y un servicio de agentes falsos (turno com
   socket real), más la prueba de punta a punta con el binario.
 - [x] Presupuestos medidos en release: 10,4 MiB de RSS en reposo, 0 de CPU, health con p95 de
   1,13 ms y +1,1 MB de binario ([PERFORMANCE-BASELINE.md](PERFORMANCE-BASELINE.md)).
-- [ ] Eventos por WebSocket con reanudación por `seq`.
-- [ ] Las tarjetas de permiso del turno viajan como eventos y se responden por la API (hoy, sin
-  nadie que responda, se rechazan).
-- [ ] Logs con rotación y tamaño máximo. El nodo aún escribe en stdout; con el servicio del
-  sistema (H5) hará falta un archivo.
+- [x] Eventos por WebSocket (`GET /api/v1/events[?job=ID&since=N]`, subprotocolo `chxchx.v1`;
+  el token también viaja como subprotocolo `bearer.<token>`, porque un navegador no puede poner
+  cabeceras en un WebSocket). La suscripción se abre antes de leer el pendiente y se descartan
+  los `seq` ya enviados, así que no se pierde ni se repite nada al reconectar.
+- [x] Las tarjetas de permiso y las preguntas se responden con
+  `POST /api/v1/jobs/{id}/answers` (`JobAnswer`: `behavior` allow/deny con `scope` opcional, o
+  `answers` para preguntas). En el nodo el turno espera hasta 10 min; sin respuesta, se rechaza.
+  En `jobs run` se rechaza al instante. Cada decisión queda como evento `answered`. La petición
+  se registra como pendiente antes de emitir la tarjeta, y responder dos veces o algo que no se
+  espera da `409`.
+- [x] `node.log` en `node/`, con rotación a 1 MiB (`node.log.1`) y archivo `0600`: arranque y
+  parada, trabajos recibidos o cancelados, decisiones (nunca el texto de una respuesta) y
+  peticiones rechazadas (la ruta, nunca el token).
+
+**Salida (criterio del plan):** un cliente lanza un turno, se desconecta y, al volver, recupera
+el estado y los eventos que le faltaban. ✔ Probado con un socket real (`since`) y de punta a
+punta con el binario (permiso aprobado por la API mientras el turno espera). **H2 cerrada.**
 
 **Salida (criterio del documento):** un cliente de prueba lanza un turno, se cierra y, al volver,
 recupera el estado y el resultado.

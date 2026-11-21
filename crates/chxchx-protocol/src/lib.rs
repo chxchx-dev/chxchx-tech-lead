@@ -6,12 +6,14 @@
 //! WebAssembly.
 
 mod access;
+mod answers;
 mod error;
 mod events;
 mod ids;
 mod jobs;
 
 pub use access::{AccessMode, Provider};
+pub use answers::{AnswerBehavior, JobAnswer};
 pub use error::{ErrorCode, JobError};
 pub use events::{JobEvent, JobEventBody};
 pub use ids::{IdError, IdempotencyKey, JobId, ProjectId};

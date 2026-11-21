@@ -37,7 +37,8 @@ pub fn run(port: u16) -> Result<(), String> {
     let executor = ProductExecutor {
         access_cap: AccessMode::FullAccess,
     };
-    let runner = JobRunner::new(store, executor, PARALLEL_JOBS);
+    // The node's clients can answer what an agent asks, so its jobs wait for them.
+    let runner = JobRunner::attended(store, executor, PARALLEL_JOBS);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -50,6 +51,7 @@ pub fn run(port: u16) -> Result<(), String> {
         serve(listener, runner.clone(), token.into(), &dir, true).await
     });
     drain(&runner);
+    node_state::append_log(&dir, "nodo detenido");
     node_state::remove_info(&dir);
     result
 }
@@ -81,12 +83,14 @@ pub(crate) async fn serve(
         "Nodo en http://127.0.0.1:{port} (solo este equipo). Ctrl+C o `chxchx-tech node stop` para pararlo."
     );
     let stop = Arc::new(Notify::new());
+    node_state::append_log(dir, &format!("nodo iniciado en 127.0.0.1:{port}"));
     let state = api::AppState {
         runner,
         token,
         port,
         started_ms,
         stop: stop.clone(),
+        dir: dir.to_owned(),
     };
     let shutdown = async move {
         if signals {

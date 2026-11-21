@@ -51,6 +51,33 @@ pub fn ensure_token(dir: &Path, random: impl FnOnce() -> [u8; 32]) -> Result<Str
     Ok(token)
 }
 
+/// Largest `node.log` before it is rotated to `node.log.1` (the previous one is dropped).
+pub const MAX_LOG_BYTES: u64 = 1024 * 1024;
+
+/// Appends a timestamped line to `node.log`. Logging never fails the request that logs.
+pub fn append_log(dir: &Path, line: &str) {
+    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = WRITING.lock().unwrap_or_else(|poison| poison.into_inner());
+    let path = dir.join("node.log");
+    if fs::metadata(&path).is_ok_and(|meta| meta.len() >= MAX_LOG_BYTES) {
+        let _ = fs::rename(&path, dir.join("node.log.1"));
+    }
+    let stamp = time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default();
+    let line: String = line.chars().filter(|c| !c.is_control()).take(500).collect();
+    let mut options = fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    if let Ok(mut file) = options.open(&path) {
+        let _ = writeln!(file, "{stamp} {line}");
+    }
+}
+
 pub fn create_private_dir(dir: &Path) -> Result<(), String> {
     fs::create_dir_all(dir)
         .map_err(|error| format!("No se pudo crear {}: {error}", dir.display()))?;
@@ -114,6 +141,25 @@ mod tests {
         }
         fs::write(dir.join("token"), "short").unwrap();
         assert_eq!(read_token(&dir), None, "a damaged token is not trusted");
+    }
+
+    #[test]
+    fn the_log_is_one_line_per_entry_and_rotates_when_it_grows() {
+        let dir = scratch("log");
+        append_log(&dir, "uno\ncon salto");
+        let text = fs::read_to_string(dir.join("node.log")).unwrap();
+        assert_eq!(text.lines().count(), 1, "a line cannot forge another entry");
+        assert!(text.trim_end().ends_with("unocon salto"));
+        fs::write(dir.join("node.log"), vec![b'x'; MAX_LOG_BYTES as usize]).unwrap();
+        append_log(&dir, "nuevo");
+        assert!(fs::metadata(dir.join("node.log.1")).unwrap().len() >= MAX_LOG_BYTES);
+        assert_eq!(
+            fs::read_to_string(dir.join("node.log"))
+                .unwrap()
+                .lines()
+                .count(),
+            1
+        );
     }
 
     #[test]

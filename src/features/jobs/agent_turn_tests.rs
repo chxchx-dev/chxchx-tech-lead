@@ -1,10 +1,12 @@
-use super::agent_turn::{LiveTurn, UNATTENDED_REFUSAL, drive, prepare, project_root};
+use super::agent_turn::{
+    EXPIRED_REFUSAL, LiveTurn, UNATTENDED_REFUSAL, drive, prepare, project_root,
+};
 use super::*;
 use crate::features::agents::{Agent, Provider as AgentProvider};
 use crate::features::project_catalog::{ProjectCatalog, RegisteredProject};
 use chxchx_protocol::{
-    AccessMode, AgentTurnSpec, ErrorCode, Job, JobError, JobEventBody, JobSpec, JobState,
-    ProjectId, Provider,
+    AccessMode, AgentTurnSpec, AnswerBehavior, ErrorCode, Job, JobAnswer, JobError, JobEventBody,
+    JobSpec, JobState, ProjectId, Provider,
 };
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -115,6 +117,8 @@ struct FakeTurn {
     stderr: String,
     /// Keeps running (polling nothing) until it is cancelled.
     until_cancelled: bool,
+    /// Keeps running until it has received an answer.
+    until_answered: bool,
     answers: Arc<Mutex<Vec<Value>>>,
     cancelled: Arc<AtomicBool>,
 }
@@ -124,7 +128,8 @@ impl LiveTurn for FakeTurn {
         self.batches.pop_front().unwrap_or_default()
     }
     fn exit(&self) -> Option<i32> {
-        let waiting = self.until_cancelled && !self.cancelled.load(Ordering::SeqCst);
+        let waiting = (self.until_cancelled && !self.cancelled.load(Ordering::SeqCst))
+            || (self.until_answered && self.answers.lock().unwrap().is_empty());
         (self.batches.is_empty() && !waiting).then_some(self.code)
     }
     fn answer(&mut self, answer: &Value) -> Result<(), String> {
@@ -139,20 +144,29 @@ impl LiveTurn for FakeTurn {
     }
 }
 
-struct Driving(Mutex<Option<FakeTurn>>);
+struct Driving(Mutex<Option<FakeTurn>>, Duration);
 
 impl Executor for Driving {
     fn run(&self, _job: &Job, context: &Context) -> Result<Option<String>, JobError> {
         let mut fake = self.0.lock().unwrap().take().expect("one turn per test");
-        drive(&mut fake, context, Duration::from_millis(1)).result
+        drive(&mut fake, context, Duration::from_millis(1), self.1).result
     }
 }
 
 fn run_fake(name: &str, fake: FakeTurn) -> (JobRunner, Job) {
+    start(name, fake, false, Duration::from_secs(600))
+}
+
+fn start(name: &str, fake: FakeTurn, attended: bool, timeout: Duration) -> (JobRunner, Job) {
     let dir = std::env::temp_dir().join(format!("chxchx-agent-job-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let store = JobStore::open(&dir).unwrap();
-    let runner = JobRunner::new(store, Driving(Mutex::new(Some(fake))), 1);
+    let executor = Driving(Mutex::new(Some(fake)), timeout);
+    let runner = if attended {
+        JobRunner::attended(store, executor, 1)
+    } else {
+        JobRunner::new(store, executor, 1)
+    };
     let job = runner
         .submit(JobSpec::AgentTurn(turn(AccessMode::ReadOnly)), None)
         .unwrap();
@@ -191,20 +205,111 @@ fn a_finished_turn_keeps_every_event_and_ends_with_the_last_answer() {
     let done = runner.get(&job.id).unwrap();
     assert_eq!(done.state, JobState::Succeeded);
     assert_eq!(done.summary.as_deref(), Some("Listo, revisado."));
+    let events = agent_events(&runner, &job);
     assert_eq!(
-        agent_events(&runner, &job).len(),
-        4,
-        "every agent event is kept"
+        events.len(),
+        5,
+        "every agent event is kept, plus the decision"
     );
 
     let answers = answers.lock().unwrap();
     assert_eq!(answers.len(), 1, "only the live request is answered");
     assert_eq!(answers[0]["request_id"], "req-1");
     assert_eq!(answers[0]["behavior"], "deny");
-    let said_why = runner.events_since(&job.id, 0).into_iter().any(|event| {
-        matches!(&event.body, JobEventBody::Progress { message, .. } if message.starts_with(UNATTENDED_REFUSAL))
-    });
-    assert!(said_why, "the job explains the refusal");
+    let decision = events.iter().find(|e| e["type"] == "answered").unwrap();
+    assert_eq!(decision["request_id"], "req-1");
+    assert_eq!(decision["automatic"], true);
+    assert_eq!(decision["reason"], UNATTENDED_REFUSAL);
+}
+
+fn wait_for_card(runner: &JobRunner, job: &Job) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !agent_events(runner, job)
+        .iter()
+        .any(|e| e["type"] == "permission")
+    {
+        assert!(std::time::Instant::now() < deadline, "the card never came");
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+fn allow(request_id: &str) -> JobAnswer {
+    JobAnswer {
+        request_id: request_id.into(),
+        behavior: Some(AnswerBehavior::Allow),
+        scope: None,
+        answers: None,
+    }
+}
+
+#[test]
+fn with_someone_attending_the_turn_waits_for_the_answer_and_passes_it_on() {
+    let answers = Arc::new(Mutex::new(Vec::new()));
+    let fake = FakeTurn {
+        batches: VecDeque::from([vec![
+            json!({"type": "permission", "request_id": "req-7", "summary": "cargo test"}),
+        ]]),
+        until_answered: true,
+        answers: answers.clone(),
+        ..Default::default()
+    };
+    let (runner, job) = start("attended", fake, true, Duration::from_secs(600));
+    wait_for_card(&runner, &job);
+    assert_eq!(
+        runner.get(&job.id).unwrap().state,
+        JobState::Running,
+        "it waits"
+    );
+
+    let wrong = runner.answer(&job.id, allow("req-other")).unwrap_err();
+    assert_eq!(
+        wrong.code,
+        ErrorCode::Conflict,
+        "an unknown request is refused"
+    );
+    runner.answer(&job.id, allow("req-7")).unwrap();
+    assert_eq!(
+        runner.answer(&job.id, allow("req-7")).unwrap_err().code,
+        ErrorCode::Conflict,
+        "a request is answered once"
+    );
+    assert!(runner.wait_idle(Duration::from_secs(5)));
+
+    assert_eq!(runner.get(&job.id).unwrap().state, JobState::Succeeded);
+    let sent = answers.lock().unwrap();
+    assert_eq!(
+        sent[0],
+        json!({"type": "answer", "request_id": "req-7", "behavior": "allow"})
+    );
+    let decision = agent_events(&runner, &job)
+        .into_iter()
+        .find(|e| e["type"] == "answered")
+        .unwrap();
+    assert_eq!(decision["behavior"], "allow");
+    assert!(decision.get("automatic").is_none());
+    let late = runner.answer(&job.id, allow("req-7")).unwrap_err();
+    assert_eq!(late.code, ErrorCode::Conflict, "the job is over");
+}
+
+#[test]
+fn a_card_nobody_answers_in_time_is_refused_and_the_turn_goes_on() {
+    let answers = Arc::new(Mutex::new(Vec::new()));
+    let fake = FakeTurn {
+        batches: VecDeque::from([vec![
+            json!({"type": "permission", "request_id": "req-8", "summary": "git push"}),
+        ]]),
+        until_answered: true,
+        answers: answers.clone(),
+        ..Default::default()
+    };
+    let (runner, job) = start("expired", fake, true, Duration::from_millis(30));
+    assert!(runner.wait_idle(Duration::from_secs(5)));
+    assert_eq!(answers.lock().unwrap()[0]["behavior"], "deny");
+    let decision = agent_events(&runner, &job)
+        .into_iter()
+        .find(|e| e["type"] == "answered")
+        .unwrap();
+    assert_eq!(decision["reason"], EXPIRED_REFUSAL);
 }
 
 #[test]

@@ -4,6 +4,7 @@
 
 use crate::features::jobs::JobRunner;
 use axum::body::Bytes;
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::middleware::{Next, from_fn_with_state};
@@ -11,12 +12,20 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use chxchx_protocol::{
-    ErrorCode, IdempotencyKey, JobError, JobId, JobSpec, JobState, PROTOCOL_VERSION,
+    ErrorCode, IdempotencyKey, JobAnswer, JobError, JobEvent, JobId, JobSpec, JobState,
+    PROTOCOL_VERSION,
 };
 use serde::Deserialize;
 use serde_json::json;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Notify;
+
+/// The WebSocket subprotocol of this API. A browser cannot set `Authorization` on a WebSocket, so
+/// it offers the token as a second protocol, `bearer.<token>`; the node answers with this one.
+pub(crate) const WS_PROTOCOL: &str = "chxchx.v1";
 
 /// Large enough for the biggest prompt a job accepts, and no more.
 const MAX_BODY_BYTES: usize = chxchx_protocol::MAX_PROMPT_BYTES + 64 * 1024;
@@ -28,6 +37,14 @@ pub(crate) struct AppState {
     pub port: u16,
     pub started_ms: u64,
     pub stop: Arc<Notify>,
+    /// Where `node.log` goes.
+    pub dir: PathBuf,
+}
+
+impl AppState {
+    fn log(&self, line: &str) {
+        crate::features::node_state::append_log(&self.dir, line);
+    }
 }
 
 pub(crate) fn router(state: AppState) -> Router {
@@ -38,6 +55,8 @@ pub(crate) fn router(state: AppState) -> Router {
         .route("/api/v1/jobs/{id}", get(show))
         .route("/api/v1/jobs/{id}/events", get(events))
         .route("/api/v1/jobs/{id}/cancel", post(cancel))
+        .route("/api/v1/jobs/{id}/answers", post(answer))
+        .route("/api/v1/events", get(stream))
         .layer(from_fn_with_state(state.clone(), require_token));
     Router::new()
         .route("/api/v1/health", get(health))
@@ -93,6 +112,11 @@ async fn loopback_only(
         .get(header::HOST)
         .and_then(|value| value.to_str().ok());
     if !host.is_some_and(|host| allowed(host, "")) {
+        state.log(&format!(
+            "rechazada: Host {:?} en {}",
+            host.unwrap_or("(ninguno)"),
+            request.uri().path()
+        ));
         return Err(error(
             ErrorCode::Forbidden,
             "El nodo solo atiende peticiones dirigidas a 127.0.0.1",
@@ -101,6 +125,10 @@ async fn loopback_only(
     if let Some(origin) = headers.get(header::ORIGIN) {
         let origin = origin.to_str().unwrap_or_default();
         if !allowed(origin, "http://") {
+            state.log(&format!(
+                "rechazada: Origin {origin:?} en {}",
+                request.uri().path()
+            ));
             return Err(error(
                 ErrorCode::Forbidden,
                 "Origen no permitido para el nodo",
@@ -115,13 +143,26 @@ async fn require_token(
     request: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
-    let given = request
-        .headers()
+    let headers = request.headers();
+    let bearer = headers
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "))
-        .unwrap_or_default();
+        .and_then(|value| value.strip_prefix("Bearer "));
+    let offered = headers
+        .get(header::SEC_WEBSOCKET_PROTOCOL)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| {
+            value
+                .split(',')
+                .find_map(|protocol| protocol.trim().strip_prefix("bearer."))
+        });
+    let given = bearer.or(offered).unwrap_or_default();
     if !same(given.as_bytes(), state.token.as_bytes()) {
+        // The path only: never what was sent as a token.
+        state.log(&format!(
+            "rechazada: token ausente o no válido en {}",
+            request.uri().path()
+        ));
         return Err(error(
             ErrorCode::Unauthorized,
             "Falta el token del nodo o no es válido",
@@ -157,6 +198,7 @@ async fn node(State(state): State<AppState>) -> Json<serde_json::Value> {
 }
 
 async fn stop(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
+    state.log("parada pedida por la API");
     state.stop.notify_one();
     (StatusCode::ACCEPTED, Json(json!({ "status": "stopping" })))
 }
@@ -193,6 +235,7 @@ async fn create(
     let job = tokio::task::spawn_blocking(move || runner.submit(spec, key))
         .await
         .map_err(|_| error(ErrorCode::Internal, "Falló el registro del trabajo"))??;
+    state.log(&format!("trabajo {} recibido ({:?})", job.id, job.state));
     Ok((StatusCode::ACCEPTED, Json(job)))
 }
 
@@ -243,5 +286,111 @@ async fn cancel(
     let job = tokio::task::spawn_blocking(move || runner.cancel(&id))
         .await
         .map_err(|_| error(ErrorCode::Internal, "Falló la cancelación"))??;
+    state.log(&format!("trabajo {} cancelado ({:?})", job.id, job.state));
     Ok(Json(job))
+}
+
+async fn answer(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    body: Bytes,
+) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+    let id = job_id(&id)?;
+    let answer: JobAnswer = serde_json::from_slice(&body).map_err(|problem| {
+        error(
+            ErrorCode::InvalidRequest,
+            format!("Respuesta no válida: {problem}"),
+        )
+    })?;
+    let request_id = answer.request_id.clone();
+    let behavior = answer.behavior;
+    state.runner.answer(&id, answer)?;
+    // What was decided, never the text of an answer to a question.
+    state.log(&format!(
+        "trabajo {id}: respuesta a {request_id} ({})",
+        behavior.map_or("pregunta".to_owned(), |b| format!("{b:?}").to_lowercase())
+    ));
+    Ok((StatusCode::ACCEPTED, Json(json!({ "status": "delivered" }))))
+}
+
+#[derive(Deserialize)]
+struct Stream {
+    job: Option<String>,
+    #[serde(default)]
+    since: u64,
+}
+
+/// Events as they happen, one JSON `JobEvent` per text message. With `job`, it first sends that
+/// job's events after `since`, so a client that reconnects only gets what it missed.
+async fn stream(
+    State(state): State<AppState>,
+    Query(query): Query<Stream>,
+    upgrade: WebSocketUpgrade,
+) -> Result<Response, ApiError> {
+    let job = query.job.as_deref().map(job_id).transpose()?;
+    if let Some(id) = &job
+        && state.runner.get(id).is_none()
+    {
+        return Err(not_found(id));
+    }
+    let runner = state.runner.clone();
+    Ok(upgrade
+        .protocols([WS_PROTOCOL])
+        .on_upgrade(move |socket| forward(socket, runner, job, query.since)))
+}
+
+async fn forward(mut socket: WebSocket, runner: JobRunner, job: Option<JobId>, since: u64) {
+    // Subscribed before reading the backlog: nothing can fall between the two.
+    let live = runner.subscribe();
+    let (sender, mut events) = tokio::sync::mpsc::channel::<JobEvent>(256);
+    std::thread::spawn(move || {
+        loop {
+            match live.recv_timeout(Duration::from_millis(250)) {
+                Ok(event) => {
+                    if sender.blocking_send(event).is_err() {
+                        return;
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) if !sender.is_closed() => {}
+                Err(_) => return,
+            }
+        }
+    });
+    let mut sent: BTreeMap<JobId, u64> = BTreeMap::new();
+    if let Some(id) = &job {
+        for event in runner.events_since(id, since) {
+            sent.insert(event.job.clone(), event.seq);
+            if send(&mut socket, &event).await.is_err() {
+                return;
+            }
+        }
+    }
+    loop {
+        tokio::select! {
+            event = events.recv() => {
+                let Some(event) = event else { return };
+                if job.as_ref().is_some_and(|id| *id != event.job)
+                    || sent.get(&event.job).is_some_and(|last| event.seq <= *last)
+                {
+                    continue;
+                }
+                sent.insert(event.job.clone(), event.seq);
+                if send(&mut socket, &event).await.is_err() {
+                    return;
+                }
+            }
+            incoming = socket.recv() => match incoming {
+                None | Some(Err(_)) | Some(Ok(Message::Close(_))) => return,
+                Some(Ok(_)) => {} // pings are answered by the library; nothing else is expected
+            }
+        }
+    }
+}
+
+async fn send(socket: &mut WebSocket, event: &JobEvent) -> Result<(), ()> {
+    let text = serde_json::to_string(event).map_err(|_| ())?;
+    socket
+        .send(Message::Text(text.into()))
+        .await
+        .map_err(|_| ())
 }

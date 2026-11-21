@@ -12,14 +12,18 @@ use crate::features::agents::{self, Agent, Provider as AgentProvider};
 use crate::features::project_catalog::ProjectCatalog;
 use crate::integrations::chat_bridge::{Turn, TurnSpec};
 use chxchx_protocol::{
-    AccessMode, AgentTurnSpec, ErrorCode, JobError, JobEventBody, ProjectId, Provider,
+    AccessMode, AgentTurnSpec, ErrorCode, JobAnswer, JobError, JobEventBody, ProjectId, Provider,
 };
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-/// Said in the job's events when a permission or a question is refused because nobody can answer.
-pub const UNATTENDED_REFUSAL: &str = "Rechazado automáticamente: este trabajo corre sin nadie que pueda aprobarlo. Las aprobaciones remotas llegan con el nodo (H2).";
+/// Said when a permission or a question is refused because nobody can answer (`jobs run`).
+pub const UNATTENDED_REFUSAL: &str = "Rechazado automáticamente: este trabajo corre sin nadie que pueda aprobarlo. Para aprobar desde otro dispositivo, envía el trabajo al nodo.";
+/// Said when nobody answered in time.
+pub const EXPIRED_REFUSAL: &str = "Rechazado automáticamente: nadie respondió a tiempo.";
+/// How long a job waits for an answer before refusing, so a forgotten card never blocks forever.
+pub const ANSWER_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const POLL: Duration = Duration::from_millis(40);
 
 /// What `drive` needs from a running turn; `chat_bridge::Turn` in the product, a fake in tests.
@@ -83,7 +87,7 @@ pub fn run(
         spec.session.as_deref(),
         &turn.prompt,
     );
-    let outcome = drive(&mut live, context, POLL);
+    let outcome = drive(&mut live, context, POLL, ANSWER_TIMEOUT);
     let saved = crate::features::chat_state::end_turn(
         &root,
         &spec.agent,
@@ -194,10 +198,20 @@ pub struct Outcome {
 }
 
 /// Runs a started turn to its end.
-pub fn drive(turn: &mut impl LiveTurn, context: &Context, poll: Duration) -> Outcome {
+///
+/// A live permission or question (one with a `request_id`) waits for an answer through the job
+/// when someone can give it (the node), up to `answer_timeout`; otherwise it is refused at once.
+/// Every decision is recorded as an `answered` agent event, so every client can close the card.
+pub fn drive(
+    turn: &mut impl LiveTurn,
+    context: &Context,
+    poll: Duration,
+    answer_timeout: Duration,
+) -> Outcome {
     let mut session = None;
     let mut replies = Vec::new();
     let mut stopping = false;
+    let mut waiting: Vec<(String, Instant)> = Vec::new();
     loop {
         if context.cancelled() && !stopping {
             stopping = true;
@@ -217,12 +231,38 @@ pub fn drive(turn: &mut impl LiveTurn, context: &Context, poll: Duration) -> Out
                         replies.push(text.to_owned());
                     }
                 }
-                "permission" | "question" => refuse(turn, &event, context),
                 _ => {}
             }
+            let request = live_request(&event);
+            let wait = request.is_some() && context.attended() && !stopping;
+            if let (true, Some(request_id)) = (wait, &request) {
+                // Registered before the card goes out, so even an instant answer is accepted.
+                context.expect_answer(request_id);
+                waiting.push((request_id.clone(), Instant::now()));
+            }
             context.emit(JobEventBody::Agent { event });
+            if let (false, Some(request_id)) = (wait, &request) {
+                refuse(turn, request_id, context, UNATTENDED_REFUSAL);
+            }
+        }
+        for answer in context.answers() {
+            waiting.retain(|(id, _)| *id != answer.request_id);
+            deliver(turn, &answer, context);
+        }
+        let expired: Vec<String> = waiting
+            .iter()
+            .filter(|(_, since)| since.elapsed() >= answer_timeout || stopping)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for request_id in expired {
+            context.settle(&request_id);
+            waiting.retain(|(id, _)| *id != request_id);
+            refuse(turn, &request_id, context, EXPIRED_REFUSAL);
         }
         if let Some(code) = turn.exit() {
+            for (request_id, _) in waiting.drain(..) {
+                context.settle(&request_id);
+            }
             let result = if code == 0 || stopping {
                 Ok(replies.last().map(|text| summary(text)))
             } else {
@@ -247,21 +287,37 @@ pub fn drive(turn: &mut impl LiveTurn, context: &Context, poll: Duration) -> Out
     }
 }
 
-/// A live request (one with a `request_id`) would block the turn forever: it is refused, and the
-/// job says so. Cards without one are only shown, as in Studio.
-fn refuse(turn: &mut impl LiveTurn, event: &Value, context: &Context) {
-    let Some(request_id) = event["request_id"].as_str().filter(|id| !id.is_empty()) else {
-        return;
-    };
+/// The `request_id` of a permission or question the turn is blocked on. Cards without one are
+/// only shown, as in Studio.
+fn live_request(event: &Value) -> Option<String> {
+    matches!(event["type"].as_str(), Some("permission" | "question"))
+        .then(|| event["request_id"].as_str())
+        .flatten()
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+}
+
+/// Passes a person's answer to the agent.
+fn deliver(turn: &mut impl LiveTurn, answer: &JobAnswer, context: &Context) {
+    let mut record = answer.to_bridge();
+    record["type"] = json!("answered");
+    if let Err(error) = turn.answer(&answer.to_bridge()) {
+        record["error"] = json!(error);
+    }
+    context.emit(JobEventBody::Agent { event: record });
+}
+
+/// Denies a request nobody is going to answer, saying why.
+fn refuse(turn: &mut impl LiveTurn, request_id: &str, context: &Context, reason: &str) {
     let answer = json!({ "type": "answer", "request_id": request_id, "behavior": "deny" });
-    let message = match turn.answer(&answer) {
-        Ok(()) => UNATTENDED_REFUSAL.to_owned(),
-        Err(error) => format!("{UNATTENDED_REFUSAL} ({error})"),
-    };
-    context.emit(JobEventBody::Progress {
-        message,
-        fraction: None,
+    let mut record = json!({
+        "type": "answered", "request_id": request_id, "behavior": "deny",
+        "automatic": true, "reason": reason,
     });
+    if let Err(error) = turn.answer(&answer) {
+        record["error"] = json!(error);
+    }
+    context.emit(JobEventBody::Agent { event: record });
 }
 
 fn summary(text: &str) -> String {

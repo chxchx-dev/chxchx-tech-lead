@@ -10,7 +10,14 @@
 - **H1 cerrada (paso 3):** `features/jobs/agent_turn.rs` y `product.rs`, y `chxchx-tech jobs run|list|show` (`interfaces/cli_jobs.rs`), con 6 pruebas nuevas del turno (trust, agente ausente, tope de acceso, alias, eventos y rechazo de permisos, fallo con stderr, cancelación) sobre un turno falso. Además, una prueba manual de punta a punta con el binario: el script vive en el scratchpad de la sesión y no se versionó. Arreglos de paso: el turno busca el servicio de agentes (`agent_adapter::locate`), porque antes solo lo hacía Studio al arrancar; `jobs list` muestra `interrupted` si el dueño murió; `pid_alive` ya no imprime «No such process». Verificado en Linux: fmt, clippy estricto, `cargo test --locked` (11 + 465 + 6 + 22) y el build `cli`.
 - Riesgos conocidos: si `jobs run` muere, el proceso del agente puede seguir hasta acabar su turno (Claude va en su propio grupo de procesos). `jobs cancel` y la cancelación limpia llegan con H2. Codex y OpenCode reales por esta vía no se han probado; solo con el servicio falso.
 - **H2, paso 1 hecho:** nodo local con la feature `node`, fuera del build por defecto. Archivos: `interfaces/node.rs` (servidor y parada que drena los trabajos), `interfaces/node_api.rs` (router con capas de loopback y token), `interfaces/cli_node.rs`, `features/node_state.rs` (`node.json` y token) e `integrations/node_client.rs` (cliente HTTP mínimo con la biblioteca estándar, para el CLI y para Studio en H5). El CI corre clippy y los tests con `--features node`, y `AGENTS.md` actualiza la puerta de calidad. Verificado en Linux: 11 + 474 + 6 + 22 pruebas, los builds por defecto y `cli` sin las dependencias nuevas, y la prueba de punta a punta (sección 5 del script del scratchpad).
-- Pendiente de H2: WebSocket de eventos y respuestas a permisos (que `drive` espere una respuesta en vez de rechazar cuando hay nodo), logs a archivo y la ACL del token en Windows.
+- **H2 cerrada (paso 2):**
+  - `JobAnswer` en el protocolo, con validación y conversión a la línea que ya manda Studio.
+  - En el runner, cada trabajo en curso tiene un buzón y un registro de peticiones pendientes (`JobRunner::attended` para el nodo).
+  - `drive` espera respuestas hasta 10 min (`ANSWER_TIMEOUT`) y deja eventos `answered`.
+  - Rutas `…/answers` y el WebSocket `/api/v1/events`, más `node.log` con rotación.
+  - Verificado en Linux: 14 + 480 + 6 + 22 pruebas, los builds por defecto y `cli` y WASM, y el script de punta a punta del scratchpad (secciones 5 y 6: permiso aprobado por la API; el servicio falso recibió `{"type":"answer","request_id":…,"behavior":"allow"}`).
+- Pendiente fuera de H2: la ACL del token en Windows (H3), un turno real de Claude, Codex u OpenCode a través del nodo y logs del nodo como servicio del sistema (H5).
+- Siguiente: H3, acceso remoto seguro (Tailscale con `tailscale serve`, vinculación de dispositivos por QR, roles, auditoría y revisión de seguridad).
 
 ## `old-version/` eliminada; empaquetado con el servicio de agentes (2026-11-19)
 
