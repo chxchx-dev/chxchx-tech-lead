@@ -46,6 +46,10 @@ pub(super) enum ManagerCommand {
         /// Dónde guardar la clave privada (se crea con permisos privados; no se sobrescribe).
         #[arg(long)]
         out: std::path::PathBuf,
+        /// Escribe la clave pública en este archivo (normalmente `packaging/release-public-key.txt`),
+        /// conservando sus comentarios, para no tener que copiarla a mano.
+        #[arg(long)]
+        public_file: Option<std::path::PathBuf>,
     },
     /// Hace los pasos automáticos del plan (los que son de ChxChx y se pueden repetir).
     Apply {
@@ -87,7 +91,7 @@ pub(super) fn run_other(command: ManagerCommand) -> Result<(), String> {
             }
             Ok(())
         }
-        ManagerCommand::Keygen { out } => keygen(&out),
+        ManagerCommand::Keygen { out, public_file } => keygen(&out, public_file.as_deref()),
         other => run(other),
     }
 }
@@ -195,7 +199,7 @@ fn restart_node() {
 fn restart_node() {}
 
 #[cfg(feature = "node")]
-fn keygen(out: &std::path::Path) -> Result<(), String> {
+fn keygen(out: &std::path::Path, public_file: Option<&std::path::Path>) -> Result<(), String> {
     use crate::features::release_manifest as release;
     if out.exists() {
         return Err(format!("{} ya existe: no se sobrescribe.", out.display()));
@@ -210,20 +214,37 @@ fn keygen(out: &std::path::Path) -> Result<(), String> {
         out,
         format!("{}\n", release::to_hex(&seed)).as_bytes(),
     )?;
+    let public_hex = release::to_hex(&public);
     println!(
-        "Clave privada guardada en {} (no la subas a git).",
+        "Clave privada guardada en {} (no la subas a git; guarda una copia segura).",
         out.display()
     );
+    if let Some(file) = public_file {
+        let kept: Vec<String> = std::fs::read_to_string(file)
+            .unwrap_or_default()
+            .lines()
+            .filter(|line| line.trim_start().starts_with('#'))
+            .map(str::to_owned)
+            .collect();
+        std::fs::write(file, format!("{}\n{public_hex}\n", kept.join("\n")))
+            .map_err(|error| format!("{}: {error}", file.display()))?;
+        println!(
+            "Clave pública escrita en {}: solo falta subirla (git).",
+            file.display()
+        );
+    } else {
+        println!("Clave pública (ponla en packaging/release-public-key.txt): {public_hex}");
+    }
     println!(
-        "1. Pon su contenido en el secreto RELEASE_SIGNING_KEY del repositorio (Settings → Secrets → Actions)."
+        "Falta un paso tuyo: en GitHub → Settings → Secrets and variables → Actions → New repository secret, \
+         nombre RELEASE_SIGNING_KEY y como valor el contenido de {}.",
+        out.display()
     );
-    println!("2. Pon esta clave pública en packaging/release-public-key.txt y súbela:");
-    println!("{}", release::to_hex(&public));
     Ok(())
 }
 
 #[cfg(not(feature = "node"))]
-fn keygen(_: &std::path::Path) -> Result<(), String> {
+fn keygen(_: &std::path::Path, _: Option<&std::path::Path>) -> Result<(), String> {
     Err("Esta compilación no incluye `--features node`.".to_owned())
 }
 
