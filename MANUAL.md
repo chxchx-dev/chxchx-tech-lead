@@ -58,6 +58,26 @@ su turno. Claude corre en su propio grupo de procesos, así que `Ctrl+C` en la
 terminal no lo detiene; Codex y OpenCode, a través del servicio, sí lo reciben.
 Cancelar de forma limpia un trabajo en curso llega con el nodo (H2).
 
+### Nodo local (feature `node`, en desarrollo)
+
+`chxchx-tech node start [--port 47821]` levanta el nodo en primer plano. Solo se
+compila con `--features node` y todavía no entra en los instaladores. El nodo
+administra los trabajos de este usuario. Mientras corre, `jobs run` lo indica y
+pide usar su API. Escucha **solo en `127.0.0.1`**: rechaza toda petición cuyo
+`Host` u `Origin` no sea `127.0.0.1` o `localhost` en su puerto, lo que protege
+contra páginas web que intenten llamarlo y contra el DNS rebinding. Todas las
+rutas, salvo `GET /api/v1/health`, piden el token de
+`$CHXCHX_TECH_HOME/node/token` (`Authorization: Bearer …`), un archivo `0600`
+dentro de una carpeta `0700` que se crea una vez y se reutiliza. Rutas:
+`GET /api/v1/node`, `GET|POST /api/v1/jobs` (con cabecera `Idempotency-Key`
+opcional), `GET /api/v1/jobs/{id}`, `GET /api/v1/jobs/{id}/events?since=N`,
+`POST /api/v1/jobs/{id}/cancel` y `POST /api/v1/node/stop`. Los errores son JSON
+`{code, message}` con el código HTTP correspondiente, y el cuerpo de una petición
+está limitado a unos 320 KiB. `node status` y `node stop` usan el mismo token.
+Al detenerse (Ctrl+C o `node stop`), el nodo cancela lo que esté en curso, espera
+hasta 10 s y borra `node.json`. Las respuestas a permisos y los eventos en vivo
+por WebSocket son el siguiente paso.
+
 Skills, Tech Packs y Mods están portados (CLI y Studio). El catálogo del legado
 (40 skills, 22 packs, 31 mods) se empaqueta en el binario al compilar leyendo
 `src/chxchx_tech_lead/`, sin copiarlo. Todo cambio se previsualiza y solo se aplica

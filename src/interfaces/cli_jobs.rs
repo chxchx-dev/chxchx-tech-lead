@@ -156,7 +156,17 @@ fn run_turn(
     spec: JobSpec,
     key: Option<IdempotencyKey>,
 ) -> Result<(), String> {
-    let store = JobStore::open(dir)?;
+    let store = JobStore::open(dir).map_err(|error| {
+        let node = crate::features::node_state::dir()
+            .and_then(|dir| crate::features::node_state::read_info(&dir));
+        match node {
+            Some(node) => format!(
+                "El nodo está en marcha (http://127.0.0.1:{}) y administra los trabajos: envía el turno a su API o detenlo con `chxchx-tech node stop`.",
+                node.port
+            ),
+            None => error,
+        }
+    })?;
     for warning in &store.warnings {
         eprintln!("Aviso: {warning}");
     }

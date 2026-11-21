@@ -49,6 +49,8 @@ studio = ["dep:iced", "dep:image", "dep:arboard", "dep:rfd", "terminal"]
 visual-installer = ["studio"]
 terminal = ["dep:portable-pty", "dep:vt100"]
 agent-adapter-launcher = []
+# The local node (ADR 0017): an HTTP API on loopback for jobs. Not in the default build yet.
+node = ["cli", "dep:axum", "dep:tokio", "dep:tower", "dep:getrandom"]
 
 [dependencies]
 chxchx-protocol = { path = "crates/chxchx-protocol" }
@@ -64,6 +66,10 @@ sha1 = "=0.10.6"
 sha2 = "=0.10.9"
 time = { version = "=0.3.55", features = ["formatting", "parsing"] }
 toml = "=0.9.12"
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "json", "query", "tokio", "ws"], optional = true }
+getrandom = { version = "=0.3.4", optional = true }
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "net", "sync", "signal", "macros", "time"], optional = true }
+tower = { version = "=0.5.3", features = ["util"], optional = true }
 arboard = { version = "=3.7.0", features = ["image-data", "wayland-data-control"], optional = true }
 rfd = { version = "=0.18.0", default-features = false, features = ["xdg-portal"], optional = true }
 

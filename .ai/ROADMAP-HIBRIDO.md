@@ -134,13 +134,22 @@ Linux con el binario real, un `codex` y un servicio de agentes falsos (turno com
 
 ### H2 — Nodo local · M
 
-- [ ] `chxchx-tech node start|status|stop` (feature `node`: `axum` y `tokio` con versión fijada).
-  Escucha solo en `127.0.0.1`.
-- [ ] Token local en un archivo con permisos `0600` (ACL de usuario en Windows) y un solo nodo
-  por usuario con candado.
-- [ ] API v1 (§7) y eventos por WebSocket con reanudación por `last_event_id`.
-- [ ] Las tarjetas de permiso del turno viajan como eventos y se responden por la API.
-- [ ] Logs con rotación y tamaño máximo, y `--dry-run` en todo lo que escriba configuración.
+- [x] `chxchx-tech node start|status|stop` (feature `node`, fuera del build por defecto: `axum`
+  0.8.9, `tokio` 1.54.1, `tower` 0.5.3 y `getrandom` 0.3.4, todos con versión exacta). Escucha
+  solo en `127.0.0.1` y rechaza un `Host` u `Origin` ajeno (páginas web y DNS rebinding).
+- [x] Token local de 256 bits en un archivo `0600` dentro de una carpeta `0700`, comparado en
+  tiempo constante. **Windows: hereda la ACL del perfil del usuario, sin ACL propia; revisar
+  en H3.** Un solo nodo por usuario: es el dueño del almacén de trabajos.
+- [x] API v1 de trabajos: listar, crear con `Idempotency-Key`, ver, eventos desde `since`,
+  cancelar y parar el nodo. Errores tipados y cuerpo limitado. 6 pruebas del API (una con
+  socket real), más la prueba de punta a punta con el binario.
+- [x] Presupuestos medidos en release: 10,4 MiB de RSS en reposo, 0 de CPU, health con p95 de
+  1,13 ms y +1,1 MB de binario ([PERFORMANCE-BASELINE.md](PERFORMANCE-BASELINE.md)).
+- [ ] Eventos por WebSocket con reanudación por `seq`.
+- [ ] Las tarjetas de permiso del turno viajan como eventos y se responden por la API (hoy, sin
+  nadie que responda, se rechazan).
+- [ ] Logs con rotación y tamaño máximo. El nodo aún escribe en stdout; con el servicio del
+  sistema (H5) hará falta un archivo.
 
 **Salida (criterio del documento):** un cliente de prueba lanza un turno, se cierra y, al volver,
 recupera el estado y el resultado.

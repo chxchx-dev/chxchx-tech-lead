@@ -13,6 +13,9 @@ mod jobs;
 mod launch;
 #[path = "cli_local_models.rs"]
 mod local_models;
+#[cfg(feature = "node")]
+#[path = "cli_node.rs"]
+mod node;
 #[path = "cli_style.rs"]
 mod style;
 #[path = "cli_view.rs"]
@@ -155,6 +158,12 @@ enum Command {
     Jobs {
         #[command(subcommand)]
         command: jobs::JobsCommand,
+    },
+    /// El nodo local: los trabajos y su API en 127.0.0.1 (ver ADR 0017).
+    #[cfg(feature = "node")]
+    Node {
+        #[command(subcommand)]
+        command: node::NodeCommand,
     },
     /// Lee o reinicia el historial persistido de un chat visual.
     #[command(subcommand_required = false)]
@@ -537,6 +546,8 @@ pub fn run() -> Result<(), String> {
         Command::Mods { command } => catalog::mods(&ui, command),
         Command::LocalModels { command } => local_models::run(command),
         Command::Jobs { command } => jobs::run(command),
+        #[cfg(feature = "node")]
+        Command::Node { command } => node::run(command),
         Command::Agent { command } => match command {
             Some(AgentCommand::ChatState {
                 agent_id,

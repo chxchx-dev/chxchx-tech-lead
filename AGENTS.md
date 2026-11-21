@@ -65,9 +65,12 @@ Antes de cerrar cambios:
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked
+cargo clippy --locked --all-targets --features node -- -D warnings
+cargo test --locked --features node
 ```
+
+La feature `node` (nodo local, ADR 0017) aún no entra en el build por defecto;
+`cargo check --locked` comprueba que el producto sigue compilando sin ella.
 
 ## Organización del código
 

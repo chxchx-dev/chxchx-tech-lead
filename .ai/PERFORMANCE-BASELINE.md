@@ -27,6 +27,19 @@ memoria compartida. **No medido:** el arranque de Studio hasta el primer frame (
 instrumentado), Windows, macOS ni escenarios activos (chat largo, editor, búsqueda). Los
 presupuestos del nodo están en [ADR 0017](adr/0017-local-node-and-remote-access.md).
 
+### Nodo local (H2, 2026-11-20)
+
+`cargo build --release --locked --features node`, mismo equipo. `node start --port 0` sin
+trabajos, 5 s de calentamiento y diez muestras de 1 s; latencia con 200 `GET /api/v1/health`
+seguidos desde Python (`urllib`, incluye el costo del cliente).
+
+| Medida | Resultado | Presupuesto (ADR 0017) |
+| --- | ---: | ---: |
+| RSS en reposo, mediana/máximo | 10.4 / 10.4 MiB | ≤ 20 MiB ✔ |
+| CPU en reposo (10 s) | 0 ticks | ≤ 0,5 % ✔ |
+| `GET /api/v1/health` p50/p95 | 0.53 / 1.13 ms | p95 ≤ 5 ms ✔ |
+| `chxchx-tech` con `node` | 22,514,784 bytes (+1.1 MB) | — |
+
 ---
 
 ## Legado (Python/Qt, 2026-11-12)

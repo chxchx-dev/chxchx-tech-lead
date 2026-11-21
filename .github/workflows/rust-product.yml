@@ -86,14 +86,15 @@ jobs:
         run: cargo check --locked
       - name: Check the console-only build without GUI dependencies
         run: cargo check --locked --no-default-features --features cli
-      - name: Run Clippy for the full product
-        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Run Clippy for the full product and the local node
+        run: cargo clippy --locked --all-targets --features node -- -D warnings
       - name: Run Rust capability integration tests
         shell: bash
         run: |
           # The end of the output goes into the annotation: the job log is not visible from outside.
           set -o pipefail
-          cargo test --locked 2>&1 | tee test.log && exit 0
+          # `node` is not in the default build yet (ADR 0017); its API and server are tested here.
+          cargo test --locked --features node 2>&1 | tee test.log && exit 0
           code=${PIPESTATUS[0]}
           echo "::error title=cargo test falló ($code)::$(tail -n 45 test.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
           exit "$code"

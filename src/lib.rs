@@ -20,6 +20,7 @@ pub mod features {
     pub mod mcp_connectors_plan;
     pub mod mcp_diagnostics;
     pub mod mcp_setup;
+    pub mod node_state;
     pub mod project_backup;
     pub mod project_catalog;
     pub mod project_changes;
@@ -63,6 +64,9 @@ pub mod interfaces {
 
     #[cfg(feature = "visual-installer")]
     pub mod installer;
+
+    #[cfg(feature = "node")]
+    pub mod node;
 
     #[cfg(feature = "tui")]
     pub mod tui;
