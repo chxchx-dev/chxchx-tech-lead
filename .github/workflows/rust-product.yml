@@ -12,6 +12,17 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --all -- --check
 
+  protocol-wasm:
+    name: chxchx-protocol builds for WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add the WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+      # The Dioxus PWA uses these types (ADR 0017): nothing tied to an OS may slip in.
+      - name: Check the protocol crate for wasm32
+        run: cargo check --locked -p chxchx-protocol --target wasm32-unknown-unknown
+
   agent-adapter:
     name: agent-adapter service (${{ matrix.os }}, Python ${{ matrix.python }})
     strategy:

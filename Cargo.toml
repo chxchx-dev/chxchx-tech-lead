@@ -6,6 +6,12 @@ publish = false
 description = "ChxChx local development control plane"
 build = "build.rs"
 
+# One product (this package) plus the wire contract its clients share (ADR 0017). No crate per
+# interface: CLI, TUI and Studio stay features of this package.
+[workspace]
+members = ["crates/chxchx-protocol"]
+default-members = [".", "crates/chxchx-protocol"]
+
 [lib]
 name = "chxchx_tech"
 path = "src/lib.rs"

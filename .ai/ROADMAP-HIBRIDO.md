@@ -104,9 +104,13 @@ y CI en los tres sistemas. Tamaños relativos: S ≈ 1 PR, M ≈ 2–3 PRs, L �
 
 ### H1 — Trabajos fuera de la ventana · M
 
-- [ ] Workspace Cargo con `crates/chxchx-protocol`: `JobId`, `JobSpec`, `JobState` (`queued`,
+- [x] Workspace Cargo con `crates/chxchx-protocol`: `JobId`, `JobSpec`, `JobState` (`queued`,
   `running`, `succeeded`, `failed`, `cancelled`, `interrupted`), `JobEvent`, versión de protocolo
-  y errores tipados. Compila en `wasm32-unknown-unknown` en CI.
+  y errores tipados. Compila en `wasm32-unknown-unknown` en CI (job `protocol-wasm`).
+  `default-members` incluye el protocolo, así que `cargo test`/`clippy` lo cubren sin flags nuevos.
+  Los proyectos se identifican por su alias del registro (`ProjectId`), nunca por una ruta. Un
+  `JobSpec` con campos o tipos desconocidos se rechaza, y `AccessMode::capped` aplica el tope
+  remoto.
 - [ ] `features/jobs`: `JobStore` (diario JSONL + instantánea atómica en el directorio de datos
   del usuario, acotado y con redacción de secretos) y `JobRunner` (cancelación cooperativa,
   clave de idempotencia, límite de concurrencia).
