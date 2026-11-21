@@ -9,7 +9,7 @@
 //!    the person at this PC (admin) and only works when the request is addressed to loopback; a
 //!    device token carries the role it was paired with.
 
-use super::{api_devices as devices, api_jobs as jobs};
+use super::{api_devices as devices, api_jobs as jobs, api_projects as projects, web};
 use crate::features::node_devices::Devices;
 use crate::features::node_state::{self, RemoteConfig};
 use crate::features::{jobs::JobRunner, node_audit};
@@ -48,6 +48,8 @@ pub(crate) struct AppState {
     pub devices: Arc<Mutex<Devices>>,
     pub in_flight: Arc<Semaphore>,
     pub sockets: Arc<Semaphore>,
+    /// The web client served at `/` (embedded at build time).
+    pub assets: Arc<web::Assets>,
 }
 
 impl AppState {
@@ -69,6 +71,7 @@ impl AppState {
             dir,
             in_flight: Arc::new(Semaphore::new(MAX_IN_FLIGHT)),
             sockets: Arc::new(Semaphore::new(MAX_SOCKETS)),
+            assets: Arc::new(web::Assets::embedded()),
         })
     }
 
@@ -168,7 +171,12 @@ pub(crate) fn router(state: AppState) -> Router {
     let protected = Router::new()
         .route("/api/v1/node", get(jobs::node))
         .route("/api/v1/node/stop", post(jobs::stop))
-        .route("/api/v1/projects", get(devices::projects))
+        .route("/api/v1/projects", get(projects::projects))
+        .route(
+            "/api/v1/projects/{id}/agents",
+            get(projects::project_agents),
+        )
+        .route("/api/v1/projects/{id}/chats", get(projects::project_chats))
         .route(
             "/api/v1/jobs",
             get(jobs::list)
@@ -189,9 +197,12 @@ pub(crate) fn router(state: AppState) -> Router {
         .route("/api/v1/health", get(health))
         .route("/api/v1/pair", post(devices::pair))
         .merge(protected)
+        // Everything that is not the API is the web client: public files, nothing secret.
+        .fallback(web::serve)
         .layer(from_fn_with_state(state.clone(), host_guard))
         .layer(from_fn_with_state(state.clone(), limit_in_flight))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
+        .layer(axum::middleware::from_fn(web::harden))
         .with_state(state)
 }
 

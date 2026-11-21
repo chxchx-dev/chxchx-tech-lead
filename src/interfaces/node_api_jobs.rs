@@ -12,8 +12,8 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use chxchx_protocol::{
-    DeviceId, ErrorCode, IdempotencyKey, JobAnswer, JobEvent, JobId, JobSpec, JobState,
-    PROTOCOL_VERSION, Role,
+    DeviceId, ErrorCode, IdempotencyKey, JobAnswer, JobCounts, JobEvent, JobId, JobSpec, JobState,
+    NodeStatus, PROTOCOL_VERSION, Role, You,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -25,22 +25,28 @@ use tokio::sync::OwnedSemaphorePermit;
 pub(super) async fn node(
     State(state): State<AppState>,
     Extension(who): Extension<Principal>,
-) -> Json<Value> {
+) -> Json<NodeStatus> {
     let jobs = state.runner.list();
     let count = |wanted: JobState| jobs.iter().filter(|job| job.state == wanted).count();
-    let mut body = json!({
-        "version": env!("CARGO_PKG_VERSION"),
-        "protocol": PROTOCOL_VERSION,
-        "started_ms": state.started_ms,
-        "jobs": { "queued": count(JobState::Queued), "running": count(JobState::Running) },
-        "you": { "role": who.role().as_str(), "local": who.is_local() },
-    });
-    if who.is_local() {
-        // Process details are for the person at this PC.
-        body["pid"] = json!(std::process::id());
-        body["remote"] = json!(remote(&state).map(|remote| remote.url()));
-    }
-    Json(body)
+    Json(NodeStatus {
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        protocol: PROTOCOL_VERSION,
+        started_ms: state.started_ms,
+        jobs: JobCounts {
+            queued: count(JobState::Queued),
+            running: count(JobState::Running),
+        },
+        you: You {
+            role: who.role(),
+            local: who.is_local(),
+        },
+        // Process details and the address are for the person at this PC.
+        pid: who.is_local().then(std::process::id),
+        remote: who
+            .is_local()
+            .then(|| remote(&state).map(|remote| remote.url()))
+            .flatten(),
+    })
 }
 
 pub(super) async fn stop(

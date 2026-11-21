@@ -8,9 +8,13 @@ mod api;
 mod api_devices;
 #[path = "node_api_jobs.rs"]
 mod api_jobs;
+#[path = "node_api_projects.rs"]
+mod api_projects;
 #[cfg(test)]
 #[path = "node_api_tests.rs"]
 mod api_tests;
+#[path = "node_web.rs"]
+mod web;
 
 use crate::features::jobs::{self, JobRunner, JobStore, ProductExecutor};
 use crate::features::node_state::{self, NodeInfo};

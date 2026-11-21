@@ -54,6 +54,7 @@ struct Call {
     origin: Option<String>,
     key: Option<&'static str>,
     body: Option<String>,
+    headers: Vec<(&'static str, String)>,
 }
 
 impl Call {
@@ -66,10 +67,25 @@ impl Call {
             origin: None,
             key: None,
             body: None,
+            headers: Vec::new(),
         }
     }
 
+    fn with_header(mut self, name: &'static str, value: &str) -> Self {
+        self.headers.push((name, value.to_owned()));
+        self
+    }
+
     async fn send(self, state: &AppState) -> (StatusCode, Value) {
+        let (status, _, bytes) = self.raw(state).await;
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        )
+    }
+
+    /// The whole answer: status, headers and the body as it came.
+    async fn raw(self, state: &AppState) -> (StatusCode, axum::http::HeaderMap, Vec<u8>) {
         let mut request = Request::builder()
             .method(self.method)
             .uri(&self.path)
@@ -83,17 +99,17 @@ impl Call {
         if let Some(key) = self.key {
             request = request.header("idempotency-key", key);
         }
+        for (name, value) in &self.headers {
+            request = request.header(*name, value);
+        }
         let body = self.body.map(Body::from).unwrap_or_else(Body::empty);
         let response = router(state.clone())
             .oneshot(request.body(body).unwrap())
             .await
             .unwrap();
-        let status = response.status();
-        let bytes = to_bytes(response.into_body(), 1 << 20).await.unwrap();
-        (
-            status,
-            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
-        )
+        let (parts, body) = response.into_parts();
+        let bytes = to_bytes(body, 1 << 20).await.unwrap();
+        (parts.status, parts.headers, bytes.to_vec())
     }
 }
 
@@ -1015,14 +1031,192 @@ async fn every_route_that_is_not_public_refuses_a_call_without_a_token() {
             "{method} {path} with a wrong token"
         );
     }
-    // Even a path that does not exist is answered behind the token: it reveals nothing.
+    // A path that is not the API falls to the web client: a plain 404, with or without a token.
     let mut missing = Call::new("GET", "/api/v1/nope");
     missing.token = None;
-    assert_eq!(missing.send(&state).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(missing.send(&state).await.0, StatusCode::NOT_FOUND);
     let known = Call::new("GET", "/api/v1/nope");
+    assert_eq!(known.send(&state).await.0, StatusCode::NOT_FOUND);
+}
+
+// ---- H4: the web client the node serves ------------------------------------------------------
+
+fn with_client(name: &str) -> AppState {
+    let mut state = state(name);
+    state.assets = Arc::new(super::web::Assets::from(&[
+        ("/index.html", &b"<html>app</html>"[..]),
+        ("/app.js", &b"console.log(1)"[..]),
+        ("/app_bg.wasm", &b"\0asm"[..]),
+        ("/manifest.webmanifest", &b"{}"[..]),
+        ("/sw.js", &b"self.skipWaiting()"[..]),
+    ]));
+    state
+}
+
+fn page(path: &str) -> Call {
+    let mut call = Call::new("GET", path).with_header("accept-encoding", "gzip, br");
+    call.token = None; // the page loads before anyone is linked
+    call
+}
+
+#[tokio::test]
+async fn the_web_client_is_served_without_a_token_compressed_and_with_the_right_types() {
+    let state = with_client("web");
+    for (path, kind) in [
+        ("/", "text/html; charset=utf-8"),
+        ("/index.html", "text/html; charset=utf-8"),
+        ("/app.js", "text/javascript; charset=utf-8"),
+        ("/app_bg.wasm", "application/wasm"),
+        ("/manifest.webmanifest", "application/manifest+json"),
+    ] {
+        let (status, headers, body) = page(path).raw(&state).await;
+        assert_eq!(status, StatusCode::OK, "{path}");
+        assert_eq!(headers["content-type"], kind, "{path}");
+        assert_eq!(headers["content-encoding"], "gzip");
+        assert_eq!(
+            headers["cache-control"], "no-cache",
+            "revalidated, never stale"
+        );
+        assert!(!body.is_empty());
+    }
+    let (_, headers, _) = page("/sw.js").raw(&state).await;
+    assert_eq!(headers["service-worker-allowed"], "/");
+    assert_eq!(page("/nope.js").raw(&state).await.0, StatusCode::NOT_FOUND);
+
+    // Only the page is public: the API still wants its token.
+    let mut api = Call::new("GET", "/api/v1/jobs").with_header("accept-encoding", "gzip");
+    api.token = None;
+    assert_eq!(api.send(&state).await.0, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn the_client_revalidates_with_its_etag_and_head_sends_no_body() {
+    let state = with_client("etag");
+    let (_, headers, _) = page("/app.js").raw(&state).await;
+    let etag = headers["etag"].to_str().unwrap().to_owned();
+    let (status, _, body) = page("/app.js")
+        .with_header("if-none-match", &etag)
+        .raw(&state)
+        .await;
+    assert_eq!((status, body.len()), (StatusCode::NOT_MODIFIED, 0));
+    let (status, _, _) = page("/app.js")
+        .with_header("if-none-match", "\"another\"")
+        .raw(&state)
+        .await;
+    assert_eq!(status, StatusCode::OK, "a different version is sent again");
+
+    let mut head = Call::new("HEAD", "/app.js").with_header("accept-encoding", "gzip");
+    head.token = None;
+    let (status, headers, body) = head.raw(&state).await;
+    assert_eq!((status, body.len()), (StatusCode::OK, 0));
+    assert_eq!(headers["etag"].to_str().unwrap(), etag);
+
+    let mut post = Call::new("POST", "/app.js").with_header("accept-encoding", "gzip");
+    post.token = None;
+    assert_eq!(post.raw(&state).await.0, StatusCode::METHOD_NOT_ALLOWED);
+}
+
+#[tokio::test]
+async fn a_browser_that_refuses_gzip_is_told_so_instead_of_getting_garbage() {
+    let state = with_client("nogzip");
+    for encoding in [None, Some("identity"), Some("gzip;q=0"), Some("br")] {
+        let mut call = Call::new("GET", "/app.js");
+        call.token = None;
+        if let Some(encoding) = encoding {
+            call = call.with_header("accept-encoding", encoding);
+        }
+        assert_eq!(
+            call.raw(&state).await.0,
+            StatusCode::NOT_ACCEPTABLE,
+            "{encoding:?}"
+        );
+    }
+    let mut any = Call::new("GET", "/app.js").with_header("accept-encoding", "*");
+    any.token = None;
+    assert_eq!(any.raw(&state).await.0, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn the_policy_lets_the_page_talk_only_to_the_host_it_came_from() {
+    let state = with_client("csp");
+    let (_, headers, _) = page("/").raw(&state).await;
+    let policy = headers["content-security-policy"].to_str().unwrap();
+    assert!(policy.contains("default-src 'none'"), "{policy}");
+    assert!(
+        policy.contains("script-src 'self' 'wasm-unsafe-eval'"),
+        "{policy}"
+    );
+    assert!(
+        policy.contains(&format!(
+            "connect-src 'self' ws://127.0.0.1:{PORT} wss://127.0.0.1:{PORT}"
+        )),
+        "{policy}"
+    );
+    assert!(policy.contains("frame-ancestors 'none'") && policy.contains("form-action 'none'"));
+    // WebAssembly may be compiled, but text is never run as code and nothing is inline.
+    assert!(!policy.contains("unsafe-inline") && !policy.contains(" 'unsafe-eval'"));
+
+    // Through the Tailscale name the socket may go to that name and nowhere else.
+    use crate::features::node_state::{RemoteConfig, write_remote};
+    let name = "fedora.tail33e808.ts.net";
+    write_remote(&state.dir, &RemoteConfig::new(name, 443).unwrap()).unwrap();
+    let mut call = page("/");
+    call.host = name.to_owned();
+    let (status, headers, _) = call.raw(&state).await;
+    assert_eq!(status, StatusCode::OK);
+    let policy = headers["content-security-policy"].to_str().unwrap();
+    assert!(
+        policy.contains(&format!("connect-src 'self' ws://{name} wss://{name}")),
+        "{policy}"
+    );
+}
+
+#[tokio::test]
+async fn every_answer_carries_the_hardening_headers_and_api_answers_are_never_cached() {
+    let state = with_client("headers");
+    for (path, token) in [
+        ("/", None),
+        ("/api/v1/health", None),
+        ("/api/v1/jobs", Some(TOKEN)),
+    ] {
+        let mut call = Call::new("GET", path).with_header("accept-encoding", "gzip");
+        call.token = token.map(str::to_owned);
+        let (_, headers, _) = call.raw(&state).await;
+        assert_eq!(headers["x-content-type-options"], "nosniff", "{path}");
+        assert_eq!(headers["referrer-policy"], "no-referrer", "{path}");
+        assert_eq!(headers["x-frame-options"], "DENY", "{path}");
+        assert_eq!(
+            headers["cross-origin-resource-policy"], "same-origin",
+            "{path}"
+        );
+    }
+    let (_, headers, _) = Call::new("GET", "/api/v1/jobs").raw(&state).await;
+    assert_eq!(headers["cache-control"], "no-store");
+
+    // The page is reachable only through a host the node accepts.
+    let mut evil = page("/");
+    evil.host = format!("evil.example:{PORT}");
+    assert_eq!(evil.raw(&state).await.0, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn a_build_without_the_client_says_so_on_its_home_page_and_keeps_the_api() {
+    let state = state("empty-client");
+    let mut state = state;
+    state.assets = Arc::new(super::web::Assets::default());
+    let (status, headers, body) = page("/").raw(&state).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert!(
+        headers["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/html")
+    );
+    assert!(String::from_utf8_lossy(&body).contains("build-remote.sh"));
+    assert!(headers.contains_key("content-security-policy"));
+    assert_eq!(page("/app.js").raw(&state).await.0, StatusCode::NOT_FOUND);
     assert_eq!(
-        known.send(&state).await.0,
-        StatusCode::NOT_FOUND,
-        "with the token it is just missing"
+        Call::new("GET", "/api/v1/jobs").send(&state).await.0,
+        StatusCode::OK
     );
 }

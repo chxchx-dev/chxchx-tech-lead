@@ -88,3 +88,4 @@ Thumbs.db
 /.claude/skills/
 /.agents/skills/
 
+apps/remote/dist/

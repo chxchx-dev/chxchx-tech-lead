@@ -1,4 +1,5 @@
-//! Build-time packaging: Windows executable metadata and the bundled catalog.
+//! Build-time packaging: Windows executable metadata, the bundled catalog and (with the `node`
+//! feature) the web client the node serves.
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -6,6 +7,62 @@ use std::path::{Path, PathBuf};
 fn main() {
     embed_windows_resources();
     bundle_catalog();
+    bundle_remote_app();
+}
+
+/// Embeds `apps/remote/dist/**/*.gz` (made by `scripts/build-remote.sh`) so the node can serve its
+/// web client from one binary. Without that folder the node still builds, and says on its home
+/// page that the client is not part of this build.
+fn bundle_remote_app() {
+    let output =
+        PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR")).join("remote_assets.rs");
+    let dist = Path::new("apps/remote/dist");
+    let mut table = String::from("pub static REMOTE_APP: &[(&str, &[u8])] = &[\n");
+    if std::env::var_os("CARGO_FEATURE_NODE").is_some() && dist.is_dir() {
+        println!("cargo:rerun-if-changed=apps/remote/dist");
+        let mut files = Vec::new();
+        collect_files(dist, &mut files);
+        files.sort();
+        for file in files {
+            let Some(name) = file
+                .to_string_lossy()
+                .strip_suffix(".gz")
+                .map(str::to_owned)
+            else {
+                continue;
+            };
+            let url = name
+                .replace('\\', "/")
+                .strip_prefix("apps/remote/dist")
+                .unwrap_or_default()
+                .to_owned();
+            let absolute = std::path::absolute(&file).expect("absolute asset path");
+            let _ = writeln!(
+                table,
+                "    ({url:?}, include_bytes!({:?})),",
+                absolute.to_string_lossy().replace('\\', "/")
+            );
+        }
+    } else {
+        // Watch the folder that would hold it, so building it later triggers a rebuild.
+        println!("cargo:rerun-if-changed=apps/remote");
+    }
+    table.push_str("];\n");
+    fs::write(output, table).expect("write the embedded web client table");
+}
+
+fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_files(&path, files);
+        } else {
+            files.push(path);
+        }
+    }
 }
 
 fn embed_windows_resources() {

@@ -9,7 +9,7 @@ build = "build.rs"
 # One product (this package) plus the wire contract its clients share (ADR 0017). No crate per
 # interface: CLI, TUI and Studio stay features of this package.
 [workspace]
-members = ["crates/chxchx-protocol"]
+members = ["crates/chxchx-protocol", "apps/remote"]
 default-members = [".", "crates/chxchx-protocol"]
 
 [lib]
@@ -80,6 +80,15 @@ embed-resource = "=3.0.11"
 # optimised even in dev builds; the product crate stays fast to rebuild.
 [profile.dev.package."*"]
 opt-level = 3
+
+# The web client: size matters more than speed (ADR 0017 budget: 1.5 MiB compressed).
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+panic = "abort"
+codegen-units = 1
+strip = "debuginfo"
 
 [profile.release]
 opt-level = 3
