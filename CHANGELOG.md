@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- **`chxchx-tech manager status|plan|apply` (primer paso de H6)**: dice qué tiene tu máquina (Claude, Codex, OpenCode, Python, servicio de agentes, nodo, Tailscale, memoria), qué falta y qué haría falta. `plan` solo muestra; `apply` hace únicamente lo que es de ChxChx y se puede repetir (desempaquetar el servicio de agentes, instalar el nodo como servicio de tu usuario) y deja claro lo que te toca a ti (Python, Tailscale); `--dry-run` no cambia nada. Con los mismos datos siempre da el mismo plan.
+
 - **Codex y OpenCode sin pasos manuales**: el servicio que los conduce (`services/agent-adapter`, solo biblioteca estándar de Python) ahora viaja dentro del programa y se desempaqueta solo en la carpeta de ChxChx la primera vez que hace falta, con un lanzador que usa tu Python 3.11+. Ya no hace falta `uv sync`, ni un checkout, ni instalar nada aparte; si falta Python, el aviso lo dice claro. Un servicio instalado o definido con `CHXCHX_AGENT_ADAPTER` sigue teniendo prioridad.
 
 - **Studio y el nodo (H5, en desarrollo)**: en Ajustes → *Nodo local* puedes iniciar o detener el nodo, ver sus dispositivos vinculados, crear un código para vincular otro y desvincular uno (con confirmación). Si activas «Usar el nodo para los turnos del chat», cerrar Studio ya no corta el turno: al volver a abrir lo recupera con su historial. `chxchx-tech node service install|status|uninstall` lo arranca al iniciar sesión como servicio de tu usuario (vista previa por defecto, `--apply` para instalar; nunca root). Probado de verdad en Linux; macOS y Windows sin verificar.

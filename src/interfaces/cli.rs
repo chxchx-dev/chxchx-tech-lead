@@ -13,6 +13,8 @@ mod jobs;
 mod launch;
 #[path = "cli_local_models.rs"]
 mod local_models;
+#[path = "cli_manager.rs"]
+mod manager;
 #[cfg(feature = "node")]
 #[path = "cli_node.rs"]
 mod node;
@@ -158,6 +160,11 @@ enum Command {
     Jobs {
         #[command(subcommand)]
         command: jobs::JobsCommand,
+    },
+    /// Qué tiene esta máquina, qué falta y dejarla lista (agentes, servicio, nodo).
+    Manager {
+        #[command(subcommand)]
+        command: manager::ManagerCommand,
     },
     /// El nodo local: los trabajos y su API en 127.0.0.1 (ver ADR 0017).
     #[cfg(feature = "node")]
@@ -546,6 +553,7 @@ pub fn run() -> Result<(), String> {
         Command::Mods { command } => catalog::mods(&ui, command),
         Command::LocalModels { command } => local_models::run(command),
         Command::Jobs { command } => jobs::run(command),
+        Command::Manager { command } => manager::run(command),
         #[cfg(feature = "node")]
         Command::Node { command } => node::run(command),
         Command::Agent { command } => match command {

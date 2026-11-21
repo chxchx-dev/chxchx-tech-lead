@@ -76,7 +76,7 @@ fn digest() -> String {
 }
 
 /// A Python 3.11+ on the search path, or why there is none.
-fn python() -> Result<PathBuf, String> {
+pub fn python() -> Result<PathBuf, String> {
     let path = agent_path();
     let names: &[&str] = if cfg!(windows) {
         &["python", "python3"]

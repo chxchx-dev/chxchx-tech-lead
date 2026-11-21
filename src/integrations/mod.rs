@@ -17,6 +17,7 @@ pub mod executable_search;
 pub mod formatter;
 pub mod git;
 pub mod local_models;
+pub mod manager_probe;
 pub mod mcp_clients;
 pub mod mcp_codex;
 pub mod mcp_files;

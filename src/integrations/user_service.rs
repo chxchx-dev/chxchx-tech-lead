@@ -274,6 +274,14 @@ impl Plan {
     }
 }
 
+/// Whether the service is installed.
+pub fn is_installed(plan: &Plan) -> bool {
+    match &plan.file {
+        Some((path, _)) => path.exists(),
+        None => run(&words(&["schtasks", "/Query", "/TN", NAME])).is_ok(),
+    }
+}
+
 /// Whether the service is installed, and what its manager says about it.
 pub fn status(plan: &Plan) -> String {
     let installed = match &plan.file {

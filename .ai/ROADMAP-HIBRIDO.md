@@ -262,9 +262,10 @@ simulado. **No se ha hecho con la ventana real ni un teléfono.***
 
 ### H6 — Manager: instalar, vigilar y reparar · L · puede ir en paralelo desde H2
 
-- [ ] `chxchx-tech manager status|plan|apply [--dry-run]`, que reúne `doctor`, `tools install`,
-  el diagnóstico de modelos locales y la medición de recursos en un **inventario** y un **plan**
-  con cambios, descargas, espacio y permisos.
+- [~] `chxchx-tech manager status|plan|apply [--dry-run]`. **Hecho (2026-11-21):** inventario y plan
+  de agentes, Python, servicio de agentes, nodo, Tailscale y memoria (`features/manager.rs` puro y
+  probado; `integrations/manager_probe.rs` lee la máquina). **Falta:** integrar `doctor`, `tools
+  install`, modelos locales, espacio en disco y descargas.
 - [ ] Manifiesto de componentes (binarios, servicio `agent-adapter`, herramientas opcionales)
   con versión y SHA-256. El servicio Python se recrea desde su wheel en un entorno aislado, nunca
   con `uv sync` sobre el Python del usuario.
