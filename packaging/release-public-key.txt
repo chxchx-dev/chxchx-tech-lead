@@ -1,3 +1,4 @@
 # Clave pública (ed25519, 32 bytes en hexadecimal) con la que se firman los lanzamientos.
 # Mientras no haya una, el programa NO aplica actualizaciones por sí mismo.
 # Se genera con `chxchx-tech manager keygen`; la privada va solo en el secreto RELEASE_SIGNING_KEY del CI.
+f9d1bd5a435ce6d080f6e9b593a972b2200d757dc5bda9ef3b2a1072ed2beb34
