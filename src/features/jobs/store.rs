@@ -58,8 +58,16 @@ pub fn now_ms() -> u64 {
 }
 
 /// The jobs as they are on disk, without owning the store (for `jobs list` while a node runs).
+///
+/// When no live process owns the store, unfinished jobs are shown as `interrupted`, which is what
+/// the next owner will record; nothing is written here.
 pub fn read(dir: &Path) -> Result<Vec<Job>, String> {
-    let (jobs, _) = load(dir)?;
+    let (mut jobs, _) = load(dir)?;
+    if !super::lock::held(&dir.join("owner.lock")) {
+        for job in jobs.values_mut().filter(|job| !job.state.is_terminal()) {
+            job.state = JobState::Interrupted;
+        }
+    }
     Ok(newest_first(jobs.into_values()))
 }
 

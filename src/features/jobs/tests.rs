@@ -62,6 +62,10 @@ fn a_job_survives_its_owner_and_comes_back_interrupted_with_its_history() {
         (queued, running)
     }; // the owner goes away without finishing either
 
+    // Before anyone owns the store again, readers already see what happened.
+    let seen = read(&dir).unwrap();
+    assert!(seen.iter().all(|job| job.state == JobState::Interrupted));
+
     let store = JobStore::open(&dir).unwrap();
     for id in [&queued.id, &running.id] {
         let job = store.get(id).unwrap();

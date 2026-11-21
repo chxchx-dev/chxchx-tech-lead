@@ -41,6 +41,23 @@ escritura falla. Omite proyectos ausentes o inseguros con avisos. CLI, TUI (`s`,
 luego `y`) y Studio usan el mismo caso de uso. `projects switch` espera al runtime
 de workspace/agentes.
 
+`jobs run --project ALIAS --provider claude|codex|opencode "mensaje"` habla con
+el agente de un proyecto registrado y de confianza sin abrir Studio ([ADR
+0017](.ai/adr/0017-local-node-and-remote-access.md)). Acepta `--access` (por
+defecto `workspace-write`), `--network`, `--model`, `--effort`, `--session` y
+`--key`. Este último es una clave de idempotencia: repetir el comando con la
+misma clave devuelve el trabajo existente en lugar de crear otro. La respuesta se
+muestra en vivo y la conversación queda en `.ai/chat-state/`, igual que en
+Studio, que la retoma al abrirlo. Sin nadie que apruebe, cada permiso o pregunta
+del agente se rechaza y se anota en el trabajo; las aprobaciones remotas llegan
+con el nodo. Los trabajos se guardan en `$CHXCHX_TECH_HOME/jobs/`. Si el comando
+se corta, el trabajo queda `interrupted` con su historial, y nada lo reanuda solo.
+`jobs list [--json]` y `jobs show ID [--events] [--json]` los consultan sin
+modificarlos. Si `jobs run` se corta, el agente puede seguir vivo hasta terminar
+su turno. Claude corre en su propio grupo de procesos, así que `Ctrl+C` en la
+terminal no lo detiene; Codex y OpenCode, a través del servicio, sí lo reciben.
+Cancelar de forma limpia un trabajo en curso llega con el nodo (H2).
+
 Skills, Tech Packs y Mods están portados (CLI y Studio). El catálogo del legado
 (40 skills, 22 packs, 31 mods) se empaqueta en el binario al compilar leyendo
 `src/chxchx_tech_lead/`, sin copiarlo. Todo cambio se previsualiza y solo se aplica

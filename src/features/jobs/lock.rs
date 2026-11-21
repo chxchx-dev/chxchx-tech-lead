@@ -46,6 +46,14 @@ impl OwnerLock {
     }
 }
 
+/// Whether a live process holds the lock at `path`.
+pub fn held(path: &Path) -> bool {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|text| text.trim().parse::<u32>().ok())
+        .is_some_and(crate::features::workspace_processes::pid_alive)
+}
+
 impl Drop for OwnerLock {
     fn drop(&mut self) {
         let mine = fs::read_to_string(&self.path)

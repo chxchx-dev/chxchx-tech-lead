@@ -120,11 +120,17 @@ y CI en los tres sistemas. Tamaños relativos: S ≈ 1 PR, M ≈ 2–3 PRs, L �
   `jobs::read` / `read_events` para el CLI.
 - [x] Al reabrir, todo trabajo `queued` o `running` pasa a `interrupted` con su historial. Los
   encolados tampoco se reanudan solos: un agente no empieza a actuar sin nadie mirando.
-- [ ] Los turnos de agente (`claude_runner`, `service_runner`) corren como `JobSpec::AgentTurn`.
-- [ ] `chxchx-tech jobs list|show|cancel` para verlos sin UI.
+- [x] Los turnos de agente corren como `JobSpec::AgentTurn` (`features/jobs/agent_turn.rs`): el
+  alias se resuelve en el registro, se exige trust y el agente instalado, y el nivel se recorta
+  al tope del executor. El historial va a `.ai/chat-state` como en Studio, y los permisos y
+  preguntas sin nadie que responda se rechazan y se anotan.
+- [x] `chxchx-tech jobs run|list|show`. **`cancel` pasa a H2**: sin nodo, un trabajo en curso
+  pertenece al proceso de `jobs run` y otro proceso no tiene cómo pedirle que pare.
 
 **Salida:** un turno lanzado desde el CLI sin Studio termina, se consulta por `job_id` y, si se
-mata el proceso a la mitad, aparece como `interrupted`, nunca como perdido.
+mata el proceso a la mitad, aparece como `interrupted`, nunca como perdido. ✔ Comprobado en
+Linux con el binario real, un `codex` y un servicio de agentes falsos (turno completo,
+`kill -9` a mitad de turno, idempotencia, alias desconocido). **H1 cerrada.**
 
 ### H2 — Nodo local · M
 

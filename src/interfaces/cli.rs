@@ -7,6 +7,8 @@ use std::path::PathBuf;
 mod catalog;
 #[path = "cli_connectors.rs"]
 mod connectors;
+#[path = "cli_jobs.rs"]
+mod jobs;
 #[path = "cli_launch.rs"]
 mod launch;
 #[path = "cli_local_models.rs"]
@@ -148,6 +150,11 @@ enum Command {
     LocalModels {
         #[command(subcommand)]
         command: local_models::LocalModelsCommand,
+    },
+    /// Trabajos que siguen aunque se cierre la ventana: hablar con un agente sin Studio.
+    Jobs {
+        #[command(subcommand)]
+        command: jobs::JobsCommand,
     },
     /// Lee o reinicia el historial persistido de un chat visual.
     #[command(subcommand_required = false)]
@@ -529,6 +536,7 @@ pub fn run() -> Result<(), String> {
         Command::Packs { command } => catalog::packs(&ui, command),
         Command::Mods { command } => catalog::mods(&ui, command),
         Command::LocalModels { command } => local_models::run(command),
+        Command::Jobs { command } => jobs::run(command),
         Command::Agent { command } => match command {
             Some(AgentCommand::ChatState {
                 agent_id,
