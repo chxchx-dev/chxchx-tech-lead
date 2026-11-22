@@ -65,6 +65,7 @@ pub fn Chat(project: ProjectId, provider: Provider) -> Element {
     let mut sending = use_signal(|| false);
     let mut model_pick = use_signal(String::new);
     let mut effort_pick = use_signal(String::new);
+    let mut show_options = use_signal(|| false);
 
     let send = {
         let (project, key) = (project.clone(), key.clone());
@@ -146,61 +147,78 @@ pub fn Chat(project: ProjectId, provider: Provider) -> Element {
         .unwrap_or_default();
     let installed = agent.as_ref().is_some_and(|a| a.installed);
 
+    // Which agents are working right now, so switching tabs never hides a turn that is running.
+    let busy_of = |candidate: Provider| {
+        store::live_jobs(&key, candidate, data.opened_ms)
+            .iter()
+            .any(|view| !view.terminal())
+    };
+    let label = model::provider_label(provider);
+    let subtitle = if working.is_some() {
+        format!("{label} está trabajando…")
+    } else if loading {
+        "Cargando…".to_owned()
+    } else if !installed {
+        format!("{label} no está instalado")
+    } else {
+        format!("{label} · listo")
+    };
+    let empty = !loading && history.is_empty() && live.is_empty() && data.error.is_none();
+
     rsx! {
         section { class: "chat",
-            div { class: "chat-head",
-                a { class: "back", href: "#/projects", aria_label: "Volver a proyectos", "‹" }
-                h2 { "{project}" }
-                button {
-                    class: "icon", aria_label: "Recargar la conversación", title: "Recargar",
-                    onclick: {
-                        let project = project.clone();
-                        move |_| {
+            header { class: "chat-top",
+                div { class: "chat-bar",
+                    a { class: "back", href: "#/projects", aria_label: "Volver a proyectos", "‹" }
+                    div { class: "chat-title",
+                        h2 { "{project}" }
+                        p { class: if working.is_some() { "state working" } else { "state" }, "{subtitle}" }
+                    }
+                    button {
+                        class: "icon", aria_label: "Recargar la conversación", title: "Recargar",
+                        onclick: {
                             let project = project.clone();
-                            store::detach(async move { actions::open_chat(&project).await });
+                            move |_| {
+                                let project = project.clone();
+                                store::detach(async move { actions::open_chat(&project).await });
+                            }
+                        },
+                        "↻"
+                    }
+                    if store::can_operate() && installed {
+                        button {
+                            class: if show_options() { "icon on" } else { "icon" },
+                            aria_label: "Opciones del agente", title: "Opciones",
+                            aria_expanded: if show_options() { "true" } else { "false" },
+                            aria_controls: "agent-options",
+                            onclick: move |_| show_options.set(!show_options()),
+                            "⚙"
                         }
-                    },
-                    "↻"
+                    }
                 }
-            }
-            nav { class: "segments", aria_label: "Agente",
-                for candidate in PROVIDERS {
-                    {
-                        let is_installed = agents.iter().any(|a| a.provider == candidate && a.installed);
-                        let target = Route::Chat { project: project.clone(), provider: candidate };
-                        rsx! {
-                            a {
-                                key: "{candidate.as_str()}",
-                                class: if candidate == provider { "segment active" } else if loading || is_installed { "segment" } else { "segment off" },
-                                href: "{target.to_hash()}",
-                                aria_current: if candidate == provider { "page" } else { "false" },
-                                "{model::provider_label(candidate)}"
+                nav { class: "segments", aria_label: "Agente",
+                    for candidate in PROVIDERS {
+                        {
+                            let is_installed = agents.iter().any(|a| a.provider == candidate && a.installed);
+                            let working_there = busy_of(candidate);
+                            let target = Route::Chat { project: project.clone(), provider: candidate };
+                            rsx! {
+                                a {
+                                    key: "{candidate.as_str()}",
+                                    class: if candidate == provider { "segment active" } else if loading || is_installed { "segment" } else { "segment off" },
+                                    href: "{target.to_hash()}",
+                                    aria_current: if candidate == provider { "page" } else { "false" },
+                                    "{model::provider_label(candidate)}"
+                                    if working_there {
+                                        span { class: "busy-dot", title: "Trabajando", role: "img", aria_label: "trabajando" }
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }
-            if let Some(error) = &data.error { div { class: "note bad", role: "alert", "{error}" } }
-            if !loading && !installed && data.error.is_none() {
-                div { class: "card",
-                    h3 { "{model::provider_label(provider)} no está instalado en la PC" }
-                    if let Some(agent) = &agent { p { class: "muted", "{agent.install_hint}" } }
-                }
-            }
-            div { class: "thread", aria_live: "polite",
-                if loading { p { class: "muted", "Cargando la conversación…" } }
-                for (index, message) in history.iter().enumerate() {
-                    div { key: "h{index}", class: if message.role == "user" { "msg user" } else { "msg assistant" }, "{message.text}" }
-                }
-                for view in live.iter().cloned() {
-                    Turn { key: "{view.job.id}", view }
-                }
-                div { id: "chat-end" }
-            }
-            if store::can_operate() {
-                if installed {
-                    details { class: "options-panel",
-                        summary { "Opciones" }
+                if show_options() && store::can_operate() && installed {
+                    div { class: "options-panel", id: "agent-options",
                         label { "Acceso"
                             select {
                                 value: if access == AccessMode::ReadOnly { "read-only" } else { "workspace-write" },
@@ -213,7 +231,7 @@ pub fn Chat(project: ProjectId, provider: Provider) -> Element {
                                 option { value: "workspace-write", "Leer y editar" }
                             }
                         }
-                        p { class: "muted", "Desde un dispositivo vinculado el máximo es «leer y editar»; los comandos se aprueban uno a uno." }
+                        p { class: "muted small", "Desde un dispositivo vinculado el máximo es «leer y editar»; los comandos se aprueban uno a uno." }
                         if store::role() == chxchx_protocol::Role::Admin {
                             label { class: "check",
                                 input {
@@ -249,26 +267,56 @@ pub fn Chat(project: ProjectId, provider: Provider) -> Element {
                             }
                         }
                     }
+                }
+            }
+            // Only this box scrolls: the header above and the message box below stay where they are.
+            div { class: "chat-scroll", id: "chat-scroll",
+                if let Some(error) = &data.error { div { class: "note bad", role: "alert", "{error}" } }
+                if !loading && !installed && data.error.is_none() {
+                    div { class: "card",
+                        h3 { "{label} no está instalado en la PC" }
+                        if let Some(agent) = &agent { p { class: "muted", "{agent.install_hint}" } }
+                    }
+                }
+                div { class: "thread", aria_live: "polite",
+                    if loading { p { class: "muted", "Cargando la conversación…" } }
+                    if empty && installed {
+                        div { class: "empty",
+                            h3 { "Empieza una conversación" }
+                            p { class: "muted", "Escríbele a {label}: trabaja sobre «{project}» en tu PC y puedes seguirlo desde aquí aunque cierres Studio." }
+                        }
+                    }
+                    for (index, message) in history.iter().enumerate() {
+                        div { key: "h{index}", class: if message.role == "user" { "msg user" } else { "msg assistant" }, "{message.text}" }
+                    }
+                    for view in live.iter().cloned() {
+                        Turn { key: "{view.job.id}", view }
+                    }
+                    div { id: "chat-end" }
+                }
+            }
+            if store::can_operate() {
+                if installed {
                     form { class: "composer",
                         onsubmit: {
                             let mut send = send.clone();
                             move |event: FormEvent| { event.prevent_default(); send(); }
                         },
                         textarea {
-                            rows: "2", placeholder: "Escribe un mensaje…", aria_label: "Mensaje",
+                            rows: "1", placeholder: "Escribe un mensaje…", aria_label: "Mensaje",
                             value: "{draft}", disabled: working.is_some(),
                             oninput: move |event| draft.set(event.value()),
                             onkeydown: on_key,
                         }
                         if working.is_some() {
-                            button { class: "btn danger", r#type: "button", onclick: stop, "Detener" }
+                            button { class: "btn danger send", r#type: "button", onclick: stop, "Detener" }
                         } else {
-                            button { class: "btn primary", r#type: "submit", disabled: draft.read().trim().is_empty() || sending(), "Enviar" }
+                            button { class: "btn primary send", r#type: "submit", aria_label: "Enviar", disabled: draft.read().trim().is_empty() || sending(), "Enviar" }
                         }
                     }
                 }
             } else {
-                p { class: "muted pad", "Con el rol de lector solo puedes mirar la conversación." }
+                p { class: "chat-note muted", "Con el rol de lector solo puedes mirar la conversación." }
             }
         }
     }

@@ -22,16 +22,19 @@ pub fn Home() -> Element {
         .collect();
     rsx! {
         section { class: "page",
-            div { class: "card",
-                h3 { "Tu PC" }
+            div { class: "card hero",
+                div { class: "row",
+                    h3 { "Tu PC" }
+                    if node.is_some() { span { class: "badge ok", "Conectada" } }
+                }
                 match node {
                     Some(node) => rsx! {
-                        dl { class: "facts",
-                            dt { "Versión" } dd { "{node.version}" }
-                            dt { "En curso" } dd { "{node.jobs.running}" }
-                            dt { "En cola" } dd { "{node.jobs.queued}" }
-                            dt { "Tu rol" } dd { "{model::role_label(node.you.role)}" }
+                        div { class: "stats",
+                            div { class: "stat", b { "{node.jobs.running}" } span { "En curso" } }
+                            div { class: "stat", b { "{node.jobs.queued}" } span { "En cola" } }
+                            div { class: "stat", b { "{node.version}" } span { "Versión" } }
                         }
+                        p { class: "muted small", "Tu rol en este dispositivo: " b { "{model::role_label(node.you.role)}" } }
                     },
                     None => rsx! { p { class: "muted", "Conectando con el nodo…" } },
                 }
@@ -88,13 +91,16 @@ pub fn Projects() -> Element {
                                 rsx! {
                                     li { key: "{project.id}",
                                         a { class: "card link", href: "{href}",
-                                            h3 { "{project.name}" }
-                                            p { class: "muted", "{project.profile}" }
-                                            if !project.stacks.is_empty() {
-                                                div { class: "chips",
-                                                    for stack in project.stacks.iter() { span { key: "{stack}", class: "chip", "{stack}" } }
+                                            div { class: "link-body",
+                                                h3 { "{project.name}" }
+                                                p { class: "muted small", "Perfil: {project.profile}" }
+                                                if !project.stacks.is_empty() {
+                                                    div { class: "chips",
+                                                        for stack in project.stacks.iter() { span { key: "{stack}", class: "chip", "{stack}" } }
+                                                    }
                                                 }
                                             }
+                                            span { class: "chevron", aria_hidden: "true", "›" }
                                         }
                                     }
                                 }

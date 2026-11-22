@@ -44,8 +44,9 @@ fn Shell() -> Element {
         Route::Devices => "Dispositivos".to_owned(),
         Route::Settings => "Ajustes".to_owned(),
     };
+    let chat_mode = matches!(route, Route::Chat { .. });
     rsx! {
-        div { class: "app",
+        div { class: if chat_mode { "app chat-mode" } else { "app" },
             header { class: "top",
                 h1 { "{title}" }
                 ConnDot {}

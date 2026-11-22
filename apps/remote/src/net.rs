@@ -370,7 +370,17 @@ pub fn notify(title: &str, body: &str) {
 }
 
 /// How far the page can still be scrolled down, in pixels.
+/// The box the conversation scrolls in, when the chat is on screen (the page itself does not scroll).
+fn chat_scroller() -> Option<web_sys::Element> {
+    window()
+        .document()
+        .and_then(|document| document.get_element_by_id("chat-scroll"))
+}
+
 fn distance_to_end() -> f64 {
+    if let Some(box_) = chat_scroller() {
+        return f64::from(box_.scroll_height() - box_.scroll_top() - box_.client_height());
+    }
     let window = window();
     let Some(root) = window.document().and_then(|doc| doc.document_element()) else {
         return 0.0;
@@ -384,6 +394,10 @@ fn distance_to_end() -> f64 {
 }
 
 fn scroll_down() {
+    if let Some(box_) = chat_scroller() {
+        box_.set_scroll_top(box_.scroll_height());
+        return;
+    }
     // The browser stops at the end of the page, so any large number reaches it.
     window().scroll_to_with_x_and_y(0.0, 1.0e9);
 }

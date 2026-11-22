@@ -129,7 +129,7 @@ await step("la conexión en vivo se establece", async () => {
 
 await step("Inicio muestra el estado del nodo y el rol", async () => {
   await page.getByText("Tu PC").waitFor();
-  await page.locator(".facts").first().waitFor();
+  await page.locator(".stats").first().waitFor();
   const text = await page.locator("main").innerText();
   assert.match(text, /Operador/);
   await page.screenshot({ path: `${shots}02-home.png` });
