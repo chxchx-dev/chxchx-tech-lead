@@ -12,7 +12,8 @@ use crate::features::agents::{self, Agent, Provider as AgentProvider};
 use crate::features::project_catalog::ProjectCatalog;
 use crate::integrations::chat_bridge::{Turn, TurnSpec};
 use chxchx_protocol::{
-    AccessMode, AgentTurnSpec, ErrorCode, JobAnswer, JobError, JobEventBody, ProjectId, Provider,
+    AccessMode, AgentTurnSpec, AnswerBehavior, ErrorCode, JobAnswer, JobError, JobEventBody,
+    ProjectId, Provider,
 };
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -65,13 +66,17 @@ pub fn run(
     let root = project_root(&catalog, &turn.project)?;
     let overview =
         crate::inspect_project(&root).map_err(|error| JobError::new(ErrorCode::NotFound, error))?;
-    let spec = prepare(
+    let mut spec = prepare(
         turn,
         cap,
         &root,
         overview.workspace.trusted,
         &agents::list(&root).agents,
     )?;
+    // What the person allowed «en este chat» on an earlier turn of this conversation.
+    let label = provider_label(turn.provider);
+    spec.allow =
+        super::chat_rules::rules_for(turn.project.as_str(), label, spec.session.as_deref());
     if matches!(turn.provider, Provider::Codex | Provider::OpenCode) {
         // Codex and OpenCode go through the agent service. Studio looks for it when it starts;
         // a job runs on its own thread, so it looks here (once per process, then remembered).
@@ -79,7 +84,6 @@ pub fn run(
     }
     let mut live = Turn::launch(&spec)
         .map_err(|error| JobError::new(ErrorCode::ProviderUnavailable, error))?;
-    let label = provider_label(turn.provider);
     let _ = crate::features::chat_state::begin_turn(
         &root,
         &spec.agent,
@@ -88,6 +92,12 @@ pub fn run(
         &turn.prompt,
     );
     let outcome = drive(&mut live, context, POLL, ANSWER_TIMEOUT);
+    super::chat_rules::remember(
+        turn.project.as_str(),
+        label,
+        outcome.session.as_deref().or(spec.session.as_deref()),
+        &outcome.remembered,
+    );
     let saved = crate::features::chat_state::end_turn(
         &root,
         &spec.agent,
@@ -195,6 +205,8 @@ pub struct Outcome {
     pub result: Result<Option<String>, JobError>,
     pub session: Option<String>,
     pub replies: Vec<String>,
+    /// Rules the person allowed for the rest of this chat, from the options the agent offered.
+    pub remembered: Vec<String>,
 }
 
 /// Runs a started turn to its end.
@@ -212,6 +224,9 @@ pub fn drive(
     let mut replies = Vec::new();
     let mut stopping = false;
     let mut waiting: Vec<(String, Instant)> = Vec::new();
+    let mut permissions: std::collections::HashMap<String, Value> =
+        std::collections::HashMap::new();
+    let mut remembered: Vec<String> = Vec::new();
     loop {
         if context.cancelled() && !stopping {
             stopping = true;
@@ -234,6 +249,11 @@ pub fn drive(
                 _ => {}
             }
             let request = live_request(&event);
+            if let Some(request_id) = &request
+                && event["type"] == "permission"
+            {
+                permissions.insert(request_id.clone(), event.clone());
+            }
             let wait = request.is_some() && context.attended() && !stopping;
             if let (true, Some(request_id)) = (wait, &request) {
                 // Registered before the card goes out, so even an instant answer is accepted.
@@ -247,6 +267,12 @@ pub fn drive(
         }
         for answer in context.answers() {
             waiting.retain(|(id, _)| *id != answer.request_id);
+            if answer.behavior == Some(AnswerBehavior::Allow)
+                && answer.scope.as_deref() == Some("chat")
+                && let Some(card) = permissions.get(&answer.request_id)
+            {
+                remembered.extend(super::chat_rules::offered_for_chat(card));
+            }
             deliver(turn, &answer, context);
         }
         let expired: Vec<String> = waiting
@@ -281,6 +307,7 @@ pub fn drive(
                 result,
                 session,
                 replies,
+                remembered,
             };
         }
         std::thread::sleep(poll);

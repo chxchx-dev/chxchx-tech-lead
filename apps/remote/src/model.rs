@@ -174,18 +174,36 @@ fn apply_agent(items: &mut Vec<Item>, event: &Value) {
                     let label = text(choice, "label");
                     (!label.is_empty()).then(|| Choice {
                         label,
-                        scope: choice["scope"].as_str().map(str::to_owned),
+                        // A choice the agent offers to remember for the chat tells the node so; the
+                        // rules themselves never leave the node.
+                        scope: choice["scope"].as_str().map(str::to_owned).or_else(|| {
+                            (choice["persist"].as_bool() == Some(true)).then(|| "chat".to_owned())
+                        }),
                     })
                 })
                 .collect();
-            items.push(Item::Permission(PermissionCard {
-                request_id: (!id.is_empty()).then_some(id),
-                tool: text(event, "tool"),
-                summary: text(event, "summary"),
-                detail: text(event, "detail"),
-                choices,
-                decision: Decision::Open,
-            }));
+            let (tool, summary) = (text(event, "tool"), text(event, "summary"));
+            // At the end of a turn Claude lists the permissions that were denied, and that list
+            // becomes one more card with no request to answer. When the person already decided that
+            // very command on a live card, it only repeats it: leave it out.
+            let repeats_a_decided_one = id.is_empty()
+                && items.iter().any(|item| {
+                    matches!(item, Item::Permission(card)
+                        if card.request_id.is_some()
+                            && matches!(card.decision, Decision::Answered(_))
+                            && card.tool == tool
+                            && card.summary == summary)
+                });
+            if !repeats_a_decided_one {
+                items.push(Item::Permission(PermissionCard {
+                    request_id: (!id.is_empty()).then_some(id),
+                    tool,
+                    summary,
+                    detail: text(event, "detail"),
+                    choices,
+                    decision: Decision::Open,
+                }));
+            }
         }
         "question" => {
             let asks: Vec<Ask> = event["questions"]
@@ -218,6 +236,9 @@ fn apply_agent(items: &mut Vec<Item>, event: &Value) {
             let id = text(event, "request_id");
             let automatic = event["automatic"].as_bool() == Some(true);
             let label = match event["behavior"].as_str() {
+                Some("allow") if event["scope"].as_str() == Some("chat") => {
+                    "Permitido en este chat".to_owned()
+                }
                 Some("allow") => "Permitido".to_owned(),
                 Some("deny") if automatic => "Rechazado automáticamente".to_owned(),
                 Some("deny") => "Rechazado".to_owned(),
@@ -406,6 +427,77 @@ mod tests {
             })
         );
         assert_eq!(items[2], Item::Assistant("Listo.".into()));
+    }
+
+    #[test]
+    fn a_choice_for_the_chat_says_so_to_the_node_and_the_card_says_it_was_allowed_for_the_chat() {
+        let ask = json!({
+            "type": "permission", "request_id": "req-1", "tool": "Bash", "summary": "touch x", "detail": "d",
+            "choices": [
+                {"label": "Permitir este comando", "allow": ["Bash(touch x)"], "persist": false},
+                {"label": "Permitir «touch» en este chat", "allow": ["Bash(touch:*)"], "persist": true}
+            ]
+        });
+        let open = fold(&events(vec![ask.clone()]), false);
+        let Item::Permission(card) = &open[0] else {
+            panic!("{open:?}")
+        };
+        assert_eq!(card.choices[0].scope, None, "once is the default");
+        assert_eq!(card.choices[1].scope.as_deref(), Some("chat"));
+
+        let done = fold(
+            &events(vec![
+                ask,
+                json!({"type": "answered", "request_id": "req-1", "behavior": "allow", "scope": "chat"}),
+            ]),
+            false,
+        );
+        let Item::Permission(card) = &done[0] else {
+            panic!()
+        };
+        assert_eq!(
+            card.decision,
+            Decision::Answered("Permitido en este chat".into())
+        );
+    }
+
+    #[test]
+    fn the_list_of_denials_at_the_end_does_not_repeat_a_card_the_person_already_decided() {
+        let live = json!({
+            "type": "permission", "request_id": "req-1", "tool": "Bash",
+            "summary": "touch /tmp/x", "detail": "d", "choices": []
+        });
+        let denied = json!({"type": "answered", "request_id": "req-1", "behavior": "deny"});
+        // What the bridge adds when the turn ends: the same command, with nothing to answer.
+        let echo = json!({
+            "type": "permission", "tool": "Bash", "summary": "touch /tmp/x", "detail": "d", "choices": []
+        });
+        let items = fold(
+            &events(vec![live.clone(), denied.clone(), echo.clone()]),
+            true,
+        );
+        let cards = items
+            .iter()
+            .filter(|i| matches!(i, Item::Permission(_)))
+            .count();
+        assert_eq!(cards, 1, "one card for one decision: {items:?}");
+
+        // A denial nobody was asked about (a policy) is still shown: it is the only trace.
+        let alone = fold(&events(vec![echo.clone()]), true);
+        assert_eq!(alone.len(), 1);
+
+        // Another command is another card.
+        let other = json!({
+            "type": "permission", "tool": "Bash", "summary": "rm -r /tmp/y", "detail": "d", "choices": []
+        });
+        let items = fold(&events(vec![live, denied, other]), true);
+        assert_eq!(
+            items
+                .iter()
+                .filter(|i| matches!(i, Item::Permission(_)))
+                .count(),
+            2
+        );
     }
 
     #[test]

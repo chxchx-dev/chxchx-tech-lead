@@ -353,3 +353,89 @@ fn cancelling_the_job_stops_the_turn_and_ends_it_cancelled() {
     );
     assert_eq!(runner.get(&job.id).unwrap().state, JobState::Cancelled);
 }
+
+// ---- «Permitir X en este chat» from another device ---------------------------------------------
+
+/// Like `Driving`, and keeps what the turn says the person allowed for the rest of the chat.
+struct Remembering(Mutex<Option<FakeTurn>>, Arc<Mutex<Vec<String>>>);
+
+impl Executor for Remembering {
+    fn run(&self, _job: &Job, context: &Context) -> Result<Option<String>, JobError> {
+        let mut fake = self.0.lock().unwrap().take().expect("one turn per test");
+        let outcome = drive(
+            &mut fake,
+            context,
+            Duration::from_millis(1),
+            Duration::from_secs(600),
+        );
+        *self.1.lock().unwrap() = outcome.remembered.clone();
+        outcome.result
+    }
+}
+
+/// A card offering one choice for the chat, answered with `answer`; returns what was remembered.
+fn answered_with(name: &str, choice_persists: bool, answer: JobAnswer) -> Vec<String> {
+    let fake = FakeTurn {
+        batches: VecDeque::from([vec![json!({
+            "type": "permission", "request_id": "req-9", "tool": "Bash", "summary": "touch /tmp/x",
+            "choices": [
+                {"label": "Permitir este comando", "allow": ["Bash(touch /tmp/x)"], "persist": false},
+                {"label": "Permitir «touch» en este chat", "allow": ["Bash(touch:*)"], "persist": choice_persists},
+            ]
+        })]]),
+        until_answered: true,
+        ..Default::default()
+    };
+    let remembered = Arc::new(Mutex::new(Vec::new()));
+    let dir = std::env::temp_dir().join(format!("chxchx-agent-job-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let runner = JobRunner::attended(
+        JobStore::open(&dir).unwrap(),
+        Remembering(Mutex::new(Some(fake)), remembered.clone()),
+        1,
+    );
+    let job = runner
+        .submit(JobSpec::AgentTurn(turn(AccessMode::ReadOnly)), None)
+        .unwrap();
+    wait_for_card(&runner, &job);
+    runner.answer(&job.id, answer).unwrap();
+    assert!(runner.wait_idle(Duration::from_secs(5)));
+    remembered.lock().unwrap().clone()
+}
+
+fn allow_in_chat(request_id: &str) -> JobAnswer {
+    JobAnswer {
+        scope: Some("chat".into()),
+        ..allow(request_id)
+    }
+}
+
+#[test]
+fn allowing_for_the_chat_remembers_the_rules_the_agent_offered_and_nothing_else() {
+    assert_eq!(
+        answered_with("chat-yes", true, allow_in_chat("req-9")),
+        ["Bash(touch:*)"],
+        "the rule of the choice that persists, not the one-off one"
+    );
+}
+
+#[test]
+fn allowing_once_or_refusing_or_a_choice_that_does_not_persist_remembers_nothing() {
+    assert!(
+        answered_with("chat-once", true, allow("req-9")).is_empty(),
+        "allowed once"
+    );
+    assert!(
+        answered_with("chat-nopersist", false, allow_in_chat("req-9")).is_empty(),
+        "the agent did not offer to remember it"
+    );
+    let deny = JobAnswer {
+        behavior: Some(AnswerBehavior::Deny),
+        scope: Some("chat".into()),
+        ..allow("req-9")
+    };
+    assert!(
+        answered_with("chat-deny", true, deny).is_empty(),
+        "a refusal allows nothing"
+    );
+}

@@ -2,6 +2,7 @@
 //! and the executor of the product's own jobs. The wire types come from `chxchx-protocol`.
 
 pub mod agent_turn;
+pub mod chat_rules;
 mod lock;
 pub mod product;
 pub mod runner;

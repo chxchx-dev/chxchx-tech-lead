@@ -2,6 +2,9 @@
 
 ## Sin publicar
 
+- **«Permitir X en este chat» ahora recuerda la regla desde otro dispositivo**: antes, aprobarlo desde el teléfono valía solo para esa petición. Ahora el nodo guarda la regla que el propio agente ofreció (el cliente nunca manda reglas, solo que elegiste esa opción) y se la pasa al agente en los turnos siguientes de **la misma conversación** (mismo proyecto, agente y sesión), mientras el nodo siga encendido. Una conversación nueva o reiniciar el nodo empieza limpio. La tarjeta lo dice: «Permitido en este chat». Ojo: Claude Code puede seguir preguntando por escrituras fuera de la carpeta del proyecto, aunque exista la regla.
+- **Sin tarjeta duplicada al rechazar un permiso desde el teléfono**: Claude lista al terminar los permisos que se denegaron y eso generaba una segunda tarjeta, sin nada que contestar, igual a la que ya habías rechazado. Ahora no se repite.
+
 - **«Iniciar el nodo» respeta el servicio**: si instalaste el nodo como servicio de usuario en Linux, Studio (y `manager watch`) lo arrancan con `systemctl --user start` en vez de lanzar un proceso suelto que chocaría con el servicio. Sin servicio, todo sigue como antes.
 
 ## 0.7.1 — Nodo local, app para el teléfono y Manager
