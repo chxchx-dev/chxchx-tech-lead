@@ -3,6 +3,19 @@
 Detalle de capacidades, seguridad y decisiones del producto. Para una visión general, empieza por el [README](README.md).
 La versión es `0.6.3` (la línea 0.6 es el producto Rust); reemplaza a la instalación 0.5.x al actualizar.
 
+## Carpeta de datos
+
+Por defecto ChxChx guarda sus datos en `~/.chxchx-tech-lead/`. Para usar otra (otro disco, una carpeta sincronizada):
+
+```bash
+chxchx-tech node stop
+chxchx-tech connection data-folder --to /ruta/nueva          # vista previa
+chxchx-tech connection data-folder --to /ruta/nueva --apply  # copia, comprueba y cambia
+chxchx-tech connection data-folder --back                    # vuelve a la original
+```
+
+La carpeta nueva debe estar vacía o no existir. Es una copia: la original no se toca y la borras tú cuando todo funcione. Reinicia Studio y el nodo después. En Studio está en Ajustes → Carpeta de datos. Si defines `CHXCHX_TECH_HOME`, esa variable manda.
+
 ## Capacidades compartidas actuales
 
 `project-overview` lee una ruta de proyecto y entrega el mismo DTO a CLI, TUI y
