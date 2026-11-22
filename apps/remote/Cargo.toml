@@ -23,7 +23,7 @@ wasm-bindgen-futures = "=0.4.80"
 version = "=0.3.107"
 features = [
   "AbortController", "AbortSignal", "CloseEvent", "Crypto", "Document", "Element", "Event",
-  "EventTarget", "Headers", "History", "Location", "MessageEvent", "Navigator", "Notification",
+  "EventTarget", "Headers", "History", "HtmlElement", "Location", "MessageEvent", "Navigator", "Notification",
   "NotificationOptions", "NotificationPermission", "Request", "RequestCache", "RequestInit",
   "Response", "ServiceWorkerContainer", "Storage",
   "VisibilityState", "WebSocket", "Window",

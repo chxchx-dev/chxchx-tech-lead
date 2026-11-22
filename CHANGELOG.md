@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- **Vincular el celular es más cómodo**: el código se escribe en dos casillas, con el guion dibujado entre ellas (ya no hay que teclearlo). Al llenar la primera, el cursor salta a la segunda; Retroceso vuelve atrás; y puedes pegar el código entero (con guion, con espacios o en minúsculas) en cualquiera de las dos y se reparte solo. Las letras que un código nunca lleva (`I`, `O`, `0`, `1`) se descartan al escribir, para no gastar uno de los pocos intentos que permite el nodo. Lo que se envía es el mismo `XXXXX-XXXXX`. La pantalla de vinculación ahora también explica que el código sale de Studio (Ajustes → Nodo local).
+
 - **El nodo y la app web vienen en los paquetes**: los instaladores y paquetes de Linux, Windows y macOS ya incluyen `chxchx-tech node ...` y la app para el teléfono que el nodo sirve (el CI la construye una vez y cada plataforma la incrusta; el paquete de Linux y el ZIP de Windows comprueban que el nodo está dentro). El nodo no arranca solo: lo inicias tú, desde Ajustes en Studio o con `node start`/`node service install`.
 
 > La versión del producto es 0.7.0+ (nodo, app web, manager); el encabezado se renombra a «0.7.0» al publicar la estable.

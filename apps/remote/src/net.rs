@@ -184,6 +184,18 @@ pub fn hash() -> String {
     window().location().hash().unwrap_or_default()
 }
 
+/// Gives the keyboard to the element with this id, right now. Moving between the boxes of a code
+/// must not wait for the next turn of the event loop: the next key may already be on its way.
+pub fn focus(id: &str) {
+    if let Some(element) = window()
+        .document()
+        .and_then(|document| document.get_element_by_id(id))
+        .and_then(|element| element.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        let _ = element.focus();
+    }
+}
+
 /// Changes the address without adding a history entry (used to drop a pairing code).
 pub fn replace_hash(hash: &str) {
     if let Ok(history) = window().history() {

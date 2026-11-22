@@ -3,6 +3,7 @@
 use super::chat::Chat;
 use super::pages::{Devices, Home, JobDetail, Jobs, Projects, Settings};
 use crate::actions;
+use crate::code::{self, Groups};
 use crate::engine;
 use crate::net;
 use crate::route::{Route, Tab, code_in_hash};
@@ -108,17 +109,28 @@ fn TabBar(active: Tab) -> Element {
 
 #[component]
 fn Pairing() -> Element {
-    let mut code = use_signal(|| code_in_hash(&net::hash()).unwrap_or_default());
+    let start = code_in_hash(&net::hash())
+        .map(|code| code::split(&code))
+        .unwrap_or_default();
+    let mut first = use_signal(|| start.first.clone());
+    let mut second = use_signal(|| start.second.clone());
     let mut name = use_signal(default_name);
     let mut busy = use_signal(|| false);
     let mut failure = use_signal(|| None::<String>);
     let from_qr = code_in_hash(&net::hash()).is_some();
+    let ready = move || {
+        code::join(&Groups {
+            first: first.read().clone(),
+            second: second.read().clone(),
+        })
+    };
     let submit = move |event: FormEvent| {
         event.prevent_default();
         if busy() {
             return;
         }
-        let (code_text, name_text) = (code.read().clone(), name.read().clone());
+        let Some(code_text) = ready() else { return };
+        let name_text = name.read().clone();
         busy.set(true);
         failure.set(None);
         spawn(async move {
@@ -134,12 +146,41 @@ fn Pairing() -> Element {
             h1 { "ChxChx" }
             p { class: "lead", "Vincula este dispositivo con tu PC para ver tus proyectos y hablar con tus agentes." }
             form { onsubmit: submit,
-                label { class: "field", "Código de vinculación"
-                    input {
-                        r#type: "text", value: "{code}", placeholder: "XXXXX-XXXXX",
-                        autocomplete: "off", autocapitalize: "characters", spellcheck: "false",
-                        maxlength: "11", inputmode: "text", required: true,
-                        oninput: move |event| code.set(event.value().to_ascii_uppercase()),
+                div { class: "field", role: "group", aria_label: "Código de vinculación",
+                    span { class: "field-label", "Código de vinculación" }
+                    div { class: "code-groups",
+                        input {
+                            id: "code-a", class: "code-box", r#type: "text", value: "{first}", placeholder: "XXXXX",
+                            aria_label: "Primeras cinco letras del código",
+                            autocomplete: "one-time-code", autocapitalize: "characters", spellcheck: "false",
+                            autocorrect: "off", inputmode: "text", required: true,
+                            oninput: move |event| {
+                                let (groups, advance) = code::edit_first(&event.value(), &second.read());
+                                first.set(groups.first);
+                                second.set(groups.second);
+                                if advance {
+                                    net::focus("code-b");
+                                }
+                            },
+                        }
+                        span { class: "code-sep", aria_hidden: "true", "—" }
+                        input {
+                            id: "code-b", class: "code-box", r#type: "text", value: "{second}", placeholder: "XXXXX",
+                            aria_label: "Últimas cinco letras del código",
+                            autocapitalize: "characters", spellcheck: "false", autocorrect: "off",
+                            inputmode: "text", required: true,
+                            oninput: move |event| {
+                                let groups = code::edit_second(&event.value(), &first.read());
+                                first.set(groups.first);
+                                second.set(groups.second);
+                            },
+                            onkeydown: move |event| {
+                                // Backspace in an empty second box goes back to the first.
+                                if event.key() == Key::Backspace && second.read().is_empty() {
+                                    net::focus("code-a");
+                                }
+                            },
+                        }
                     }
                 }
                 label { class: "field", "Nombre de este dispositivo"
@@ -149,12 +190,12 @@ fn Pairing() -> Element {
                     }
                 }
                 if let Some(message) = failure() { div { class: "note bad", role: "alert", "{message}" } }
-                button { class: "btn primary wide", r#type: "submit", disabled: busy() || code.read().trim().is_empty(), if busy() { "Vinculando…" } else { "Vincular" } }
+                button { class: "btn primary wide", r#type: "submit", disabled: busy() || ready().is_none(), if busy() { "Vinculando…" } else { "Vincular" } }
             }
             if from_qr { p { class: "muted", "El código vino del QR. Toca «Vincular» para confirmarlo." } }
             div { class: "card",
                 h3 { "¿Dónde saco el código?" }
-                p { class: "muted", "En tu PC ejecuta " code { "chxchx-tech node pair" } ". Vale 5 minutos y un solo uso." }
+                p { class: "muted", "En Studio (Ajustes → Nodo local → «Vincular un dispositivo») o en tu PC con " code { "chxchx-tech node pair" } ". Vale 5 minutos y un solo uso. Puedes pegarlo entero: se reparte solo." }
             }
         }
     }

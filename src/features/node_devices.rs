@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
+const CODE_ALPHABET: &[u8] = chxchx_protocol::PAIRING_ALPHABET.as_bytes();
 const CODE_LENGTH: usize = 10;
 const MAX_DEVICES: usize = 20;
 const MAX_PENDING_CODES: usize = 3;

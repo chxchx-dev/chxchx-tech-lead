@@ -40,7 +40,7 @@ async function pairWith(role, name) {
   const code = env(`pair ${role}`);
   const session = await open(role);
   await session.page.goto(`${base}/#code=${code}`);
-  await session.page.locator("input").nth(1).fill(name);
+  await session.page.getByLabel("Nombre de este dispositivo").fill(name);
   await session.page.getByRole("button", { name: "Vincular" }).click();
   await session.page.locator(".tabs").waitFor({ timeout: 10_000 });
   return session;
@@ -66,19 +66,47 @@ await step("sin sesión se pide un código y el botón espera a tenerlo", async 
   await page.screenshot({ path: `${shots}01-pairing.png` });
 });
 
+await step("el código va en dos casillas: avanza solo, ignora lo imposible y el pegado se reparte", async () => {
+  await page.goto(`${base}/`);
+  const boxes = page.locator(".code-box");
+  const values = async () => [await boxes.nth(0).inputValue(), await boxes.nth(1).inputValue()];
+  const button = page.getByRole("button", { name: "Vincular" });
+  await boxes.nth(0).click();
+  // El 0 nunca está en un código: se descarta. Al llenar la primera casilla el cursor pasa a la segunda.
+  await page.keyboard.type("ab0cdefg", { delay: 40 });
+  assert.deepEqual(await values(), ["ABCDE", "FG"]);
+  assert.equal(await button.isDisabled(), true, "con medio código no se puede vincular");
+  await page.keyboard.type("h23", { delay: 40 });
+  assert.deepEqual(await values(), ["ABCDE", "FGH23"]);
+  assert.equal(await button.isDisabled(), false);
+  // Retroceso en la segunda casilla vacía vuelve a la primera y borra su última letra, como un campo único.
+  for (let i = 0; i < 5; i++) await page.keyboard.press("Backspace");
+  assert.deepEqual(await values(), ["ABCDE", ""]);
+  await page.keyboard.press("Backspace");
+  assert.deepEqual(await values(), ["ABCD", ""]);
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute("aria-label")), "Primeras cinco letras del código");
+  // Pegar el código entero, con guion y en minúsculas, en cualquiera de las dos casillas.
+  await boxes.nth(0).fill("klmnp-qrst2");
+  assert.deepEqual(await values(), ["KLMNP", "QRST2"]);
+  await boxes.nth(1).fill(" rstuv wxyz2 ");
+  assert.deepEqual(await values(), ["RSTUV", "WXYZ2"]);
+  await page.screenshot({ path: `${shots}01b-pairing-groups.png` });
+});
+
 let operatorCode;
 await step("un QR rellena el código y no vincula solo", async () => {
   operatorCode = env("pair operator");
   await page.goto(`${base}/#code=${operatorCode}`);
   await page.reload();
   await page.locator(".pairing").waitFor();
-  assert.equal(await page.locator("input").first().inputValue(), operatorCode);
+  const boxes = page.locator(".code-box");
+  assert.equal(`${await boxes.nth(0).inputValue()}-${await boxes.nth(1).inputValue()}`, operatorCode);
   assert.match(await page.locator("body").innerText(), /vino del QR/);
   assert.equal(await page.evaluate(() => localStorage.getItem("chxchx.session")), null);
 });
 
 await step("vincular entra, guarda la sesión y borra el código de la dirección", async () => {
-  await page.locator("input").nth(1).fill("Pixel de prueba");
+  await page.getByLabel("Nombre de este dispositivo").fill("Pixel de prueba");
   await page.getByRole("button", { name: "Vincular" }).click();
   await page.locator(".tabs").waitFor({ timeout: 10_000 });
   assert.ok(await page.evaluate(() => localStorage.getItem("chxchx.session")));

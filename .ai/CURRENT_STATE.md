@@ -11,7 +11,7 @@
   - **App web** (`apps/remote`, Dioxus/WASM, 610 KB comprimida) servida por el nodo en `/`: proyectos, chat en vivo con permisos y preguntas, trabajos, dispositivos y ajustes; instalable, sin red al arrancar y con reconexión. QR de vinculación en `node pair`.
 - **Seguridad:** [NODE-SECURITY.md](NODE-SECURITY.md) (autorrevisión; riesgos aceptados y lo abierto).
 - **Verificado:** Linux (18 + 509 + 6 + 22 pruebas, tres pasadas; clippy con `--features node`; builds por defecto y `cli`; WASM) y de punta a punta con Tailscale 1.104.7 real pasando por la tailnet desde la propia PC.
-- **Cliente web:** 25 pasos de navegador en Chromium 139 (`apps/remote/e2e`); carga 0,89 s (4G típico) y 2,49 s (Slow 4G).
+- **Cliente web:** 26 pasos de navegador en Chromium 139 (`apps/remote/e2e`); carga 0,89 s (4G típico) y 2,49 s (Slow 4G).
 - **No verificado:** el cliente en Safari/iOS y Firefox, prueba desde otra red (celular con datos móviles), Windows (ACL del token y archivos) y macOS, Codex/OpenCode/Claude reales a través del nodo, CI remoto de los últimos pushes.
 - **H5:** Studio delega turnos al nodo (opt-in en Ajustes → Nodo local, que también inicia/detiene el nodo y gestiona dispositivos) y `node service install|status|uninstall` lo instala como servicio de usuario (verificado en Linux; macOS y Windows sin verificar). El nodo guarda el error de arranque en `start.log` de su carpeta.
 - **H6:** `manager status|plan|apply|update|watch|recover|keygen`: inventario, supervisión con backoff y corte, recuperación en lista cerrada, actualización firmada con vuelta atrás (solo Linux; sin clave publicada aún no aplica nada) y auto-ajuste de concurrencia. Ver HANDOFF.

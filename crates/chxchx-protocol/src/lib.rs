@@ -17,8 +17,8 @@ mod views;
 pub use access::{AccessMode, Provider};
 pub use answers::{AnswerBehavior, JobAnswer};
 pub use devices::{
-    Device, NewPairing, PAIRING_TTL_MS, PairRequest, PairResponse, PairingOffer, ProjectSummary,
-    Role, normalize_pairing_code, validate_device_name,
+    Device, NewPairing, PAIRING_ALPHABET, PAIRING_GROUP, PAIRING_TTL_MS, PairRequest, PairResponse,
+    PairingOffer, ProjectSummary, Role, normalize_pairing_code, validate_device_name,
 };
 pub use error::{ErrorCode, JobError};
 pub use events::{JobEvent, JobEventBody};

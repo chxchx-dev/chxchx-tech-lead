@@ -92,6 +92,13 @@ pub struct ProjectSummary {
     pub trusted: bool,
 }
 
+/// The characters a pairing code is made of: no `I`, `O`, `0` or `1`, which are mistaken for each
+/// other. The node draws from this and the client only lets these through.
+pub const PAIRING_ALPHABET: &str = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/// A pairing code is two groups of this many characters, shown as `XXXXX-XXXXX`.
+pub const PAIRING_GROUP: usize = 5;
+
 /// Upper case, without the dash or spaces, so `abcde-fgh23` and `ABCDEFGH23` are the same code.
 pub fn normalize_pairing_code(code: &str) -> String {
     code.chars()
