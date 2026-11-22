@@ -280,7 +280,7 @@ simulado. **No se ha hecho con la ventana real ni un teléfono.***
   versión, inspecciona el paquete, comprueba que el nuevo arranca, espera a que no haya trabajos,
   reemplaza conservando los archivos anteriores y los restaura si el programa instalado no
   responde. **Solo Linux**; en Windows, macOS y móvil manda el instalador de la plataforma.
-  **Hasta que el mantenedor genere la clave** (`manager keygen`) el programa se niega a aplicar.
+  Clave generada y publicada; probado con 0.7.0 → 0.7.1 desde el canal `dev` (2026-11-21).
 - [x] Auto-ajuste acotado: la concurrencia de trabajos del nodo sale de la memoria libre y las
   CPU (1 a 4) y solo cambia la cola del propio nodo; no toca parámetros del sistema operativo.
 
