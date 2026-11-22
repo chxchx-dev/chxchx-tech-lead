@@ -316,13 +316,16 @@ enum WorkspaceCommand {
 
 #[derive(Debug, Subcommand)]
 enum ToolsCommand {
-    /// Instala con `uv` lo que falte; lo ya instalado no se toca.
+    /// Instala las herramientas requeridas o las actualiza desde el bundle de una release.
     Install {
         /// Solo estas (`basic-memory`, `serena`); sin nombres, las dos.
         names: Vec<String>,
         /// Muestra los comandos sin ejecutarlos.
         #[arg(long)]
         dry_run: bool,
+        /// Bundle offline incluido en el instalador; actualiza aunque ya estén instaladas.
+        #[arg(long, value_name = "CARPETA")]
+        bundle: Option<PathBuf>,
     },
 }
 
@@ -594,7 +597,11 @@ pub fn run() -> Result<(), String> {
             None => Err(launch::retired("agent", &[])),
         },
         Command::Tools { command } => match command {
-            ToolsCommand::Install { names, dry_run } => view::tools_install(&ui, &names, dry_run),
+            ToolsCommand::Install {
+                names,
+                dry_run,
+                bundle,
+            } => view::tools_install(&ui, &names, dry_run, bundle.as_deref()),
         },
         Command::Doctor { path } => view::doctor(&ui, &path),
         #[cfg(feature = "tui")]

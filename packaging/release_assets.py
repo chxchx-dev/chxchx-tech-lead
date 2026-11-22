@@ -43,6 +43,10 @@ PACKAGES = {
     "macos-x86_64": ("macos-x86_64", "*.dmg", "chxchx-studio-macos-x86_64.dmg"),
     "macos-installer-arm64": ("macos-installer-arm64", "*.dmg", "chxchx-installer-macos-arm64.dmg"),
     "macos-installer-x86_64": ("macos-installer-x86_64", "*.dmg", "chxchx-installer-macos-x86_64.dmg"),
+    "required-tools-linux-x86_64": ("required-tools-linux-x86_64", "*.tar.gz", "chxchx-required-tools-linux-x86_64.tar.gz"),
+    "required-tools-windows-x86_64": ("required-tools-windows-x86_64", "*.zip", "chxchx-required-tools-windows-x86_64.zip"),
+    "required-tools-macos-arm64": ("required-tools-macos-arm64", "*.tar.gz", "chxchx-required-tools-macos-arm64.tar.gz"),
+    "required-tools-macos-x86_64": ("required-tools-macos-x86_64", "*.tar.gz", "chxchx-required-tools-macos-x86_64.tar.gz"),
 }
 # Included only when its artifact was downloaded: the native ARM64 build is not required for a release.
 OPTIONAL_PACKAGES = {"windows-arm64"}

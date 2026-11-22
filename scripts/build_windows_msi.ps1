@@ -5,6 +5,7 @@ param(
     [string]$Version,
     [string]$Commit,
     [string]$OutputDirectory = 'dist/windows-msi',
+    [string]$RequiredToolsDirectory,
     [switch]$BuildSmokeUpdate
 )
 
@@ -65,12 +66,30 @@ function Invoke-WixChecked {
 
 try {
     $Payload = Join-Path $Work 'payload'
+    $BundledTools = Join-Path $Work 'required-tools'
     $RuntimeExtract = Join-Path $Work 'python-runtime-extract'
     $RuntimeDirectory = Join-Path $Payload '.venv\python'
     $ScriptsDirectory = Join-Path $Payload '.venv\Scripts'
     $SitePackages = Join-Path $RuntimeDirectory 'Lib\site-packages'
     $WheelDirectory = Join-Path $Work 'wheel'
     New-Item -ItemType Directory -Path $Payload, $RuntimeExtract, $ScriptsDirectory, $WheelDirectory -Force | Out-Null
+
+    if ($RequiredToolsDirectory) {
+        $RequiredToolsDirectory = (Resolve-Path -LiteralPath $RequiredToolsDirectory).Path
+    } else {
+        $RequiredToolsDirectory = $BundledTools
+        & $Python.Source (Join-Path $Repository 'packaging\build_required_tools.py') `
+            --platform windows-x86_64 --bundle-id "$Version-$($Commit.Substring(0, 12))" `
+            --output $BundledTools --archive (Join-Path $Work 'required-tools.zip')
+        if ($LASTEXITCODE -ne 0) { throw 'No pude construir el bundle offline de Basic Memory y Serena.' }
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $RequiredToolsDirectory 'bundle-manifest.txt') -PathType Leaf) -or
+        -not (Test-Path -LiteralPath (Join-Path $RequiredToolsDirectory 'uv.exe') -PathType Leaf)) {
+        throw "El bundle requerido no está completo: $RequiredToolsDirectory"
+    }
+    $BundledToolsRoot = Join-Path $Payload 'required-tools'
+    New-Item -ItemType Directory -Path $BundledToolsRoot -Force | Out-Null
+    Copy-Item -Path (Join-Path $RequiredToolsDirectory '*') -Destination $BundledToolsRoot -Recurse -Force
 
     # Pinned CPython 3.11 standalone x64 distribution; its digest is published in the
     # python-build-standalone 20261110 SHA256SUMS file.

@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tarfile
 import threading
+import zipfile
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -114,6 +115,48 @@ def _studio_tarball(path: Path, version: str) -> None:
         add("qt.conf", b"[Paths]\n")
 
 
+def _required_tools_bundle(path: Path, platform: str) -> None:
+    windows = platform == "required-tools-windows-x86_64"
+    uv_name = "uv.exe" if windows else "uv"
+    files = {
+        "bundle-manifest.txt": (
+            "schema_version=1\n"
+            "bundle_id=fixture-1234567890abcdef\n"
+            f"platform={platform.removeprefix('required-tools-')}\n"
+            f"uv={uv_name}\n"
+            "python.basic-memory=python/python312\n"
+            "python.serena-agent=python/python313\n"
+            "version.basic-memory=1.0.0\n"
+            "lock.basic-memory=locks/basic_memory.txt\n"
+            "wheelhouse.basic-memory=wheels/basic_memory\n"
+            "version.serena-agent=2.1.0\n"
+            "lock.serena-agent=locks/serena_agent.txt\n"
+            "wheelhouse.serena-agent=wheels/serena_agent\n"
+        ).encode(),
+        uv_name: FAKE_UV.encode(),
+        "python/python312": b"python 3.12 fixture",
+        "python/python313": b"python 3.13 fixture",
+        "locks/basic_memory.txt": b"basic-memory==1.0.0\n",
+        "locks/serena_agent.txt": b"serena-agent==2.1.0\n",
+        "wheels/basic_memory/fixture.whl": b"fake basic memory wheel",
+        "wheels/serena_agent/fixture.whl": b"fake serena wheel",
+    }
+    if path.suffix == ".zip":
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, data in files.items():
+                info = zipfile.ZipInfo(name)
+                if name == uv_name:
+                    info.external_attr = 0o755 << 16
+                archive.writestr(info, data)
+    else:
+        with tarfile.open(path, "w:gz") as archive:
+            for name, data in files.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                info.mode = 0o755 if name == uv_name else 0o644
+                archive.addfile(info, io.BytesIO(data))
+
+
 @pytest.fixture
 def server_root(tmp_path: Path):
     """Serves tmp_path/releases over HTTP on 127.0.0.1 and yields (directory, base URL)."""
@@ -155,6 +198,8 @@ def make_release(tmp_path: Path, server_root):
             artifact = target / pattern.replace("*", f"package-{key}")
             if key.startswith("linux-"):
                 _studio_tarball(artifact, version)
+            elif key.startswith("required-tools-"):
+                _required_tools_bundle(artifact, key)
             else:
                 artifact.write_bytes(key.encode())
         wheels = downloads / "agent-adapter-wheel"

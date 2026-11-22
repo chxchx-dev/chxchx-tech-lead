@@ -102,6 +102,14 @@ jobs:
             libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
             libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev
       - uses: astral-sh/setup-uv@v5
+      - name: Build the locked offline Python tools bundle
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
+          python3 packaging/build_required_tools.py \
+            --platform linux-x86_64 --bundle-id "$version-${GITHUB_SHA:0:12}" \
+            --output dist/required-tools-linux-x86_64 \
+            --archive dist/chxchx-required-tools-linux-x86_64.tar.gz
       - name: Test the Linux installer, managed PATH and future command shims
         run: |
           python3 -m pip install pytest
@@ -128,6 +136,7 @@ jobs:
           installer=chxchx-installer-linux
           mkdir -p "$installer/bin"
           cp target/release/chxchx-installer "$installer/bin/"
+          cp dist/chxchx-required-tools-linux-x86_64.tar.gz "$installer/"
           cat > "$installer/iniciar-instalador.sh" <<'SCRIPT'
           #!/usr/bin/env sh
           exec "$(dirname "$0")/bin/chxchx-installer" "$@"
@@ -135,7 +144,8 @@ jobs:
           chmod +x "$installer/iniciar-instalador.sh"
           cat > "$installer/LEEME.txt" <<'TEXT'
           Extrae esta carpeta y abre iniciar-instalador.sh para instalar ChxChx Studio.
-          Basic Memory y Serena se descargan durante la instalación. Se necesita conexión.
+          Basic Memory y Serena vienen incluidos y se instalan o actualizan sin conexión.
+          Studio y el manifiesto de la release sí se descargan al instalar.
           TEXT
           tar -czf chxchx-installer-linux-x86_64.tar.gz "$installer"
       - uses: actions/upload-artifact@v4
@@ -148,6 +158,12 @@ jobs:
         with:
           name: linux-installer-package
           path: chxchx-installer-linux-x86_64.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: required-tools-linux-x86_64
+          path: dist/chxchx-required-tools-linux-x86_64.tar.gz
           if-no-files-found: error
           compression-level: 0
 
@@ -170,6 +186,14 @@ jobs:
         with:
           python-version: "3.11"
       - uses: astral-sh/setup-uv@v5
+      - name: Build the locked offline Python tools bundle
+        shell: pwsh
+        run: |
+          $version = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
+          $bundleId = "$version-$($env:GITHUB_SHA.Substring(0, 12))"
+          python packaging/build_required_tools.py --platform windows-x86_64 --bundle-id $bundleId `
+            --output dist/required-tools-windows-x86_64 `
+            --archive dist/chxchx-required-tools-windows-x86_64.zip
       - name: Install WiX Toolset 5.0.2
         shell: pwsh
         run: |
@@ -184,7 +208,8 @@ jobs:
         run: |
           $channel = "${{ (inputs.channel || (github.ref_type == 'tag' && 'stable' || 'dev')) }}"
           $version = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
-          ./scripts/build_windows_msi.ps1 -Channel $channel -Version $version -Commit $env:GITHUB_SHA -BuildSmokeUpdate
+          ./scripts/build_windows_msi.ps1 -Channel $channel -Version $version -Commit $env:GITHUB_SHA `
+            -RequiredToolsDirectory dist/required-tools-windows-x86_64 -BuildSmokeUpdate
       - name: Test silent MSI install, app launch, major upgrade and uninstall
         shell: pwsh
         run: |
@@ -221,17 +246,23 @@ jobs:
           path: chxchx-studio-windows-x86_64.zip
           if-no-files-found: error
           compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: required-tools-windows-x86_64
+          path: dist/chxchx-required-tools-windows-x86_64.zip
+          if-no-files-found: error
+          compression-level: 0
 
   macos:
     name: macOS ${{ matrix.name }} app
     needs: [check-version, remote-client]
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: arm64, target: aarch64-apple-darwin }
-          - { name: x86_64, target: x86_64-apple-darwin }
+          - { name: arm64, runner: macos-15, target: aarch64-apple-darwin }
+          - { name: x86_64, runner: macos-15-intel, target: x86_64-apple-darwin }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -242,6 +273,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+      - uses: astral-sh/setup-uv@v5
+      - name: Build the locked offline Python tools bundle
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
+          python3 packaging/build_required_tools.py \
+            --platform macos-${{ matrix.name }} --bundle-id "$version-${GITHUB_SHA:0:12}" \
+            --output "dist/required-tools-macos-${{ matrix.name }}" \
+            --archive "dist/chxchx-required-tools-macos-${{ matrix.name }}.tar.gz"
       - name: Build for ${{ matrix.target }}
         run: |
           rustup target add ${{ matrix.target }}
@@ -294,6 +334,7 @@ jobs:
           mkdir -p "$installer/Contents/MacOS" "$installer/Contents/Resources"
           cp target/${{ matrix.target }}/release/chxchx-installer "$installer/Contents/MacOS/"
           cp "$app/Contents/Resources/chxchx.icns" "$installer/Contents/Resources/"
+          cp "dist/chxchx-required-tools-macos-${{ matrix.name }}.tar.gz" "$installer/Contents/Resources/"
           cat > "$installer/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -314,6 +355,7 @@ jobs:
           codesign --force --deep --sign - "$installer"
           codesign --verify --deep --strict "$installer"
           test -x "$installer/Contents/MacOS/chxchx-installer"
+          test -s "$installer/Contents/Resources/chxchx-required-tools-macos-${{ matrix.name }}.tar.gz"
           mkdir installer-dmg && cp -R "$installer" installer-dmg/
           hdiutil create -volname "ChxChx Installer" -srcfolder installer-dmg -ov -format UDZO "chxchx-installer-macos-${{ matrix.name }}.dmg"
       - uses: actions/upload-artifact@v4
@@ -326,6 +368,12 @@ jobs:
         with:
           name: macos-${{ matrix.name }}-installer-package
           path: chxchx-installer-macos-${{ matrix.name }}.dmg
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: required-tools-macos-${{ matrix.name }}
+          path: dist/chxchx-required-tools-macos-${{ matrix.name }}.tar.gz
           if-no-files-found: error
           compression-level: 0
 
@@ -369,6 +417,14 @@ jobs:
         with: { name: macos-arm64-installer-package, path: dist/downloads/macos-installer-arm64 }
       - uses: actions/download-artifact@v4
         with: { name: macos-x86_64-installer-package, path: dist/downloads/macos-installer-x86_64 }
+      - uses: actions/download-artifact@v4
+        with: { name: required-tools-linux-x86_64, path: dist/downloads/required-tools-linux-x86_64 }
+      - uses: actions/download-artifact@v4
+        with: { name: required-tools-windows-x86_64, path: dist/downloads/required-tools-windows-x86_64 }
+      - uses: actions/download-artifact@v4
+        with: { name: required-tools-macos-arm64, path: dist/downloads/required-tools-macos-arm64 }
+      - uses: actions/download-artifact@v4
+        with: { name: required-tools-macos-x86_64, path: dist/downloads/required-tools-macos-x86_64 }
       - uses: actions/download-artifact@v4
         with: { name: agent-adapter-wheel, path: dist/downloads/agent-adapter-wheel }
       - name: Write the manifest and checksums
@@ -414,6 +470,14 @@ jobs:
           linux_installer=$(tar -tzf chxchx-installer-linux-x86_64.tar.gz)
           grep -q '/bin/chxchx-installer$' <<<"$linux_installer" || { echo "Falta el instalador visual Linux"; exit 1; }
           grep -q '/iniciar-instalador.sh$' <<<"$linux_installer" || { echo "Falta el lanzador del instalador Linux"; exit 1; }
+          linux_tools=$(tar -tzf chxchx-required-tools-linux-x86_64.tar.gz)
+          grep -Fx 'bundle-manifest.txt' <<<"$linux_tools" >/dev/null || { echo "El bundle Linux no tiene manifiesto"; exit 1; }
+          windows_tools=$(unzip -Z1 chxchx-required-tools-windows-x86_64.zip)
+          grep -Fx 'bundle-manifest.txt' <<<"$windows_tools" >/dev/null || { echo "El bundle Windows no tiene manifiesto"; exit 1; }
+          macos_arm_tools=$(tar -tzf chxchx-required-tools-macos-arm64.tar.gz)
+          grep -Fx 'bundle-manifest.txt' <<<"$macos_arm_tools" >/dev/null || { echo "El bundle macOS ARM64 no tiene manifiesto"; exit 1; }
+          macos_x64_tools=$(tar -tzf chxchx-required-tools-macos-x86_64.tar.gz)
+          grep -Fx 'bundle-manifest.txt' <<<"$macos_x64_tools" >/dev/null || { echo "El bundle macOS x86_64 no tiene manifiesto"; exit 1; }
           windows=$(unzip -l chxchx-studio-windows-x86_64.zip)
           grep -q 'bin/chxchx-studio.exe' <<<"$windows" || { echo "El paquete Windows no trae bin/chxchx-studio.exe"; exit 1; }
           grep -q 'bin/chxchx-tech.exe' <<<"$windows" || { echo "El paquete Windows no trae bin/chxchx-tech.exe"; exit 1; }

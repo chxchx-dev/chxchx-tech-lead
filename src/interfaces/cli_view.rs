@@ -255,22 +255,40 @@ pub(super) fn report_error(
     Ok(())
 }
 
-pub(super) fn tools_install(ui: &Ui, names: &[String], dry_run: bool) -> Result<(), String> {
-    use crate::features::tools_install::{Outcome, TOOLS, install};
+pub(super) fn tools_install(
+    ui: &Ui,
+    names: &[String],
+    dry_run: bool,
+    bundle: Option<&std::path::Path>,
+) -> Result<(), String> {
+    use crate::features::tools_install::{Outcome, TOOLS, install, install_from_bundle};
     let wanted: Vec<&str> = if names.is_empty() {
         TOOLS.iter().map(|tool| tool.name).collect()
     } else {
         names.iter().map(String::as_str).collect()
     };
     for name in wanted {
-        match install(name, dry_run)? {
+        let outcome = match bundle {
+            Some(bundle) => install_from_bundle(name, bundle, dry_run)?,
+            None => install(name, dry_run)?,
+        };
+        match outcome {
             Outcome::AlreadyInstalled => println!(
                 "{}",
                 ui.done(&format!("{name}: ya está instalado")).trim_start()
             ),
-            Outcome::Installed => {
-                println!("{}", ui.done(&format!("{name}: instalado")).trim_start())
-            }
+            Outcome::Installed => println!(
+                "{}",
+                ui.done(&format!(
+                    "{name}: {}",
+                    if bundle.is_some() {
+                        "instalado o actualizado desde el bundle offline"
+                    } else {
+                        "instalado"
+                    }
+                ))
+                .trim_start()
+            ),
             Outcome::Preview(command) => println!("DRY RUN: {}", command.join(" ")),
         }
     }

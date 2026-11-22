@@ -39,7 +39,7 @@ def test_msi_runs_required_extras_and_keeps_the_shared_tools_path(tmp_path: Path
     assert action.attrib == {
         "Id": "InstallRequiredTools",
         "FileRef": GENERATOR._id("file", "stable/stable-1.2.3/bin/chxchx-tech.exe"),
-        "ExeCommand": "tools install",
+        "ExeCommand": 'tools install --bundle "[INSTALLFOLDER]required-tools"',
         "Execute": "deferred",
         "Impersonate": "yes",
         "Return": "check",
