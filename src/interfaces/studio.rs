@@ -350,6 +350,17 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 } else {
                     Task::none()
                 },
+                #[cfg(feature = "node")]
+                if state.page == Page::Settings {
+                    settings::update(
+                        &mut state,
+                        settings::Event::Remote(settings::remote::Event::Refresh),
+                    )
+                } else {
+                    Task::none()
+                },
+                #[cfg(not(feature = "node"))]
+                Task::none(),
             ];
             (state, Task::batch(tasks))
         },

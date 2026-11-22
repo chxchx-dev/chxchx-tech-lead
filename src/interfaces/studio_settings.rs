@@ -13,6 +13,9 @@ pub(super) mod connection;
 pub(super) mod identity;
 #[path = "studio_settings_node.rs"]
 pub(super) mod node;
+#[cfg(feature = "node")]
+#[path = "studio_settings_remote.rs"]
+pub(super) mod remote;
 
 #[derive(Default)]
 pub(super) struct State {
@@ -21,6 +24,8 @@ pub(super) struct State {
     /// Settings → Identidad.
     identity: identity::State,
     connection: connection::State,
+    #[cfg(feature = "node")]
+    remote: remote::State,
     /// The action whose new shortcut is being recorded.
     capturing: Option<Action>,
     accent_input: String,
@@ -52,6 +57,8 @@ pub(super) enum Event {
     Node(node::Event),
     Identity(identity::Event),
     Connection(connection::Event),
+    #[cfg(feature = "node")]
+    Remote(remote::Event),
 }
 
 /// The next interface size up (`step` > 0) or down, within the sizes Settings offers.
@@ -90,6 +97,8 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         Event::Node(event) => return node::update(state, event),
         Event::Identity(event) => return identity::update(state, event),
         Event::Connection(event) => return connection::update(state, event),
+        #[cfg(feature = "node")]
+        Event::Remote(event) => return remote::update(state, event),
         Event::Theme(id) => {
             state.session.edit(|p| p.appearance.theme = id);
         }
@@ -255,6 +264,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
             "Cómo llega esta instalación al mundo: puertos, origen de las versiones y rutas de herramientas."
         ),
         connection::card(state),
+        remote_card(state),
         section_title(
             "keyboard",
             "Atajos de teclado",
@@ -576,6 +586,17 @@ fn shortcuts_card(state: &Dashboard) -> Element<'_, Message> {
         .width(Fill)
         .style(styles::card)
         .into()
+}
+
+/// The Tailscale card; builds without the node have no remote access to manage.
+#[cfg(feature = "node")]
+fn remote_card(state: &Dashboard) -> Element<'_, Message> {
+    remote::card(state)
+}
+
+#[cfg(not(feature = "node"))]
+fn remote_card(_: &Dashboard) -> Element<'_, Message> {
+    Space::new().into()
 }
 
 #[cfg(test)]

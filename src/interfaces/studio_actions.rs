@@ -129,10 +129,16 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
                     state,
                     settings::Event::Connection(settings::connection::Event::Load),
                 );
-                return settings::update(
+                #[cfg(feature = "node")]
+                let remote = settings::update(
                     state,
-                    settings::Event::Node(settings::node::Event::Refresh),
+                    settings::Event::Remote(settings::remote::Event::Refresh),
                 );
+                #[cfg(not(feature = "node"))]
+                let remote = Task::none();
+                let node =
+                    settings::update(state, settings::Event::Node(settings::node::Event::Refresh));
+                return Task::batch([remote, node]);
             }
             if page == Page::Integrations {
                 state.connectors.states = None;

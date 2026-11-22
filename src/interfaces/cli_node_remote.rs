@@ -3,7 +3,8 @@
 //! Like every change in this product it previews first and only `--apply` confirms. `disable` is
 //! the way back: it stops the node answering to the Tailscale name and removes the `serve` proxy,
 //! but only a local proxy that ChxChx could have set.
-use crate::features::node_state::{self, RemoteConfig};
+use crate::features::node_state;
+use crate::features::remote_access;
 use crate::integrations::tailscale::{self, Disable};
 use clap::Subcommand;
 use std::path::PathBuf;
@@ -129,10 +130,10 @@ fn enable(https_port: u16, node_port: Option<u16>, apply: bool) -> Result<(), St
     let dir = dir()?;
     let tailscale = cli()?;
     let running = node_state::read_info(&dir);
+    let plan = remote_access::preview_enable(&dir, &tailscale, node_port, https_port)?;
     let port = node_port
         .or(running.as_ref().map(|info| info.port))
-        .unwrap_or(crate::interfaces::node::DEFAULT_PORT);
-    let plan = tailscale::plan_enable(&tailscale, port, https_port)?;
+        .unwrap_or_else(crate::features::connection::node_port);
 
     println!("{}", heading(apply));
     println!("  Equipo:     {}", plan.host);
@@ -169,11 +170,11 @@ fn enable(https_port: u16, node_port: Option<u16>, apply: bool) -> Result<(), St
         None => println!(
             "  · El nodo no está en marcha: inícialo con `chxchx-tech node start` (puerto fijo {port})."
         ),
-        Some(info) if info.port != crate::interfaces::node::DEFAULT_PORT => println!(
+        Some(info) if info.port != crate::features::connection::node_port() => println!(
             "  · El nodo usa el puerto {}, elegido al azar: si lo reinicias con otro, repite este comando. \
              Con `node start` sin --port siempre usa el {}.",
             info.port,
-            crate::interfaces::node::DEFAULT_PORT
+            crate::features::connection::node_port()
         ),
         Some(_) => {}
     }
@@ -182,9 +183,7 @@ fn enable(https_port: u16, node_port: Option<u16>, apply: bool) -> Result<(), St
         return Ok(());
     }
 
-    tailscale::apply_enable(&tailscale, &plan)?;
-    let config = RemoteConfig::new(&plan.host, plan.https_port)?;
-    node_state::write_remote(&dir, &config)?;
+    remote_access::enable(&dir, &tailscale, &plan)?;
     println!("✓ Listo: {}", plan.url());
     println!("Vincula tu celular: `chxchx-tech node pair` y abre esa dirección en él.");
     Ok(())
@@ -214,11 +213,7 @@ fn disable(apply: bool) -> Result<(), String> {
         println!("Para aplicar: `chxchx-tech node remote disable --apply`.");
         return Ok(());
     }
-    // First stop answering to the name, so the safe state holds even if the next step fails.
-    node_state::remove_remote(&dir);
-    if let Disable::Remove { https_port } = plan {
-        tailscale::apply_disable(&tailscale, https_port)?;
-    }
+    remote_access::disable(&dir, &tailscale, plan)?;
     println!("✓ Acceso remoto desactivado.");
     Ok(())
 }

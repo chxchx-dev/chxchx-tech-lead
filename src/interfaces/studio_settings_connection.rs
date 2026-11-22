@@ -39,6 +39,14 @@ pub(in crate::interfaces::studio) enum Event {
     Reset,
 }
 
+impl State {
+    /// The HTTPS port of Tailscale that is saved (443 when none was chosen).
+    #[cfg(feature = "node")]
+    pub(super) fn saved_https_port(&self) -> u16 {
+        self.saved.https_port()
+    }
+}
+
 fn texts(saved: &Connection) -> State {
     State {
         loaded: true,
@@ -206,30 +214,6 @@ fn row_of<'a>(
     .into()
 }
 
-/// Tailscale and the node, as they are now (read only: changed with the boxes below or with
-/// `chxchx-tech node remote enable`).
-fn status() -> String {
-    #[cfg(feature = "node")]
-    {
-        use crate::features::node_state;
-        let cli = crate::integrations::tailscale::locate();
-        let remote = node_state::dir().and_then(|dir| node_state::read_remote(&dir));
-        let tailscale = cli.map_or_else(
-            || "Tailscale: no se encontró (pon su ruta abajo si no está en el PATH).".to_owned(),
-            |path| format!("Tailscale: encontrado en {}.", path.display()),
-        );
-        let access = remote.map_or_else(
-            || "Acceso desde fuera: apagado (`chxchx-tech node remote enable`).".to_owned(),
-            |config| format!("Acceso desde fuera: {}", config.url()),
-        );
-        format!("{tailscale}\n{access}")
-    }
-    #[cfg(not(feature = "node"))]
-    {
-        "El nodo no viene en esta versión.".to_owned()
-    }
-}
-
 pub(super) fn card(state: &Dashboard) -> Element<'_, Message> {
     let own = &state.settings.connection;
     let drafted = draft(own);
@@ -237,7 +221,6 @@ pub(super) fn card(state: &Dashboard) -> Element<'_, Message> {
     let defaults = connection::load_in(std::path::Path::new("/nonexistent"));
 
     let mut body = column![
-        text(status()).size(11).color(design::muted()),
         row_of(
             "Puerto del nodo",
             &defaults.node_port().to_string(),

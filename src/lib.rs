@@ -49,6 +49,8 @@ pub mod features {
     pub mod project_templates;
     pub mod project_trust;
     pub mod release_manifest;
+    #[cfg(feature = "node")]
+    pub mod remote_access;
     pub mod startup_log;
     pub mod studio_preferences;
     pub mod supervision;
