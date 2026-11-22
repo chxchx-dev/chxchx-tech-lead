@@ -11,6 +11,7 @@ pub mod features {
     pub mod chat_state;
     pub mod connection;
     pub mod context_compaction;
+    pub mod data_home;
     pub mod doctor;
     pub mod error_cache;
     pub mod explicit_memory;

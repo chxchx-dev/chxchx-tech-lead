@@ -41,6 +41,22 @@ pub(super) enum ConnectionCommand {
     },
     /// Vuelve a los valores de fábrica (el archivo anterior queda como `.bak`).
     Reset,
+    /// La carpeta donde ChxChx guarda sus datos: sin opciones la muestra; con `--to` enseña qué
+    /// copiaría (y con `--apply` lo hace); con `--back` vuelve a la original.
+    ///
+    /// Es una copia, no un movimiento: la carpeta de ahora no se toca y queda como respaldo.
+    /// Hay que detener el nodo antes y reiniciar Studio y el nodo después.
+    DataFolder {
+        /// La carpeta nueva (vacía o que no exista), con ruta completa.
+        #[arg(long, conflicts_with = "back")]
+        to: Option<String>,
+        /// Hace la copia y cambia a la carpeta nueva; sin esto solo se muestra.
+        #[arg(long, requires = "to")]
+        apply: bool,
+        /// Vuelve a la carpeta original (lo guardado en la otra no se copia de vuelta).
+        #[arg(long)]
+        back: bool,
+    },
 }
 
 pub(super) fn run(command: ConnectionCommand) -> Result<(), String> {
@@ -94,12 +110,45 @@ pub(super) fn run(command: ConnectionCommand) -> Result<(), String> {
             );
             Ok(())
         }
+        ConnectionCommand::DataFolder { to, apply, back } => data_folder(to, apply, back),
         ConnectionCommand::Reset => {
             connection::reset()?;
             println!("Valores de fábrica restaurados.");
             Ok(())
         }
     }
+}
+
+fn data_folder(to: Option<String>, apply: bool, back: bool) -> Result<(), String> {
+    use crate::features::data_home as data;
+    if back {
+        for line in data::back()? {
+            println!("{line}");
+        }
+        return Ok(());
+    }
+    let Some(to) = to else {
+        for line in data::describe() {
+            println!("{line}");
+        }
+        return Ok(());
+    };
+    let plan = data::preview(&to)?;
+    println!(
+        "Copiaría {} archivos ({}) de {} a {}.",
+        plan.files,
+        data::human(plan.bytes),
+        plan.from.display(),
+        plan.to.display()
+    );
+    if !apply {
+        println!("Vista previa: no se cambió nada. Añade --apply para hacerlo.");
+        return Ok(());
+    }
+    for line in data::apply(&plan)? {
+        println!("{line}");
+    }
+    Ok(())
 }
 
 /// A number, or `default` to go back to the product's.
@@ -184,5 +233,8 @@ fn show(json: bool) -> Result<(), String> {
         return Ok(());
     }
     describe(&mine);
+    for line in crate::features::data_home::describe() {
+        println!("{line}");
+    }
     Ok(())
 }

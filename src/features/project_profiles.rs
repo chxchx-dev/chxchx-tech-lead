@@ -128,5 +128,6 @@ pub fn application_home() -> Option<PathBuf> {
         }
         return Some(path);
     }
-    std::env::home_dir().map(|home| home.join(".chxchx-tech-lead"))
+    // The folder the person chose (a pointer kept in the original one), when it is there.
+    crate::features::data_home::chosen().or_else(crate::features::data_home::default_home)
 }

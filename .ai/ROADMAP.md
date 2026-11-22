@@ -33,8 +33,8 @@ tarjeta Studio → Ajustes → Conexión y los consumidores leyéndolo: puerto d
 `manager`), puerto HTTPS por defecto de `node remote enable`, origen de versiones y clave pública de firma
 (`self_update`, `manager update`), rutas de herramientas (`executable_search::chosen`, Tailscale, MCP).
 **Hecho también:** Studio activa/desactiva el acceso por Tailscale en dos pasos (`features/remote_access.rs`,
-`studio_settings_remote.rs`). **Falta:** cambiar la carpeta de datos (`CHXCHX_TECH_HOME`, necesita
-migrar lo existente), reiniciar el servicio con el puerto nuevo desde Studio, y mostrar la ruta del cliente
+`studio_settings_remote.rs`). **Hecho también:** cambiar la carpeta de datos (copia verificada + puntero `data-location.json`,
+`features/data_home.rs`, `connection data-folder`, tarjeta de Studio). **Falta:** reiniciar el servicio con el puerto nuevo desde Studio, y mostrar la ruta del cliente
 `claude` de verdad usada por el chat. Los puntos de abajo son el texto original de la decisión.
 
 Decisión del autor (2026-11-22): nada personal va fijo en el código. Lo que identifica a una instalación

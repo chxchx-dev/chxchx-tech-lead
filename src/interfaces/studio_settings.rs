@@ -9,6 +9,8 @@ use iced::widget::{column, text_input};
 
 #[path = "studio_settings_connection.rs"]
 pub(super) mod connection;
+#[path = "studio_settings_data.rs"]
+pub(super) mod data;
 #[path = "studio_settings_identity.rs"]
 pub(super) mod identity;
 #[path = "studio_settings_node.rs"]
@@ -24,6 +26,7 @@ pub(super) struct State {
     /// Settings → Identidad.
     identity: identity::State,
     connection: connection::State,
+    data: data::State,
     #[cfg(feature = "node")]
     remote: remote::State,
     /// The action whose new shortcut is being recorded.
@@ -57,6 +60,7 @@ pub(super) enum Event {
     Node(node::Event),
     Identity(identity::Event),
     Connection(connection::Event),
+    Data(data::Event),
     #[cfg(feature = "node")]
     Remote(remote::Event),
 }
@@ -97,6 +101,7 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         Event::Node(event) => return node::update(state, event),
         Event::Identity(event) => return identity::update(state, event),
         Event::Connection(event) => return connection::update(state, event),
+        Event::Data(event) => return data::update(state, event),
         #[cfg(feature = "node")]
         Event::Remote(event) => return remote::update(state, event),
         Event::Theme(id) => {
@@ -264,6 +269,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
             "Cómo llega esta instalación al mundo: puertos, origen de las versiones y rutas de herramientas."
         ),
         connection::card(state),
+        data::card(state),
         remote_card(state),
         section_title(
             "keyboard",
