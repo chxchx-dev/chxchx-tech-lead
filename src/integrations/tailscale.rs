@@ -23,6 +23,9 @@ pub fn target(node_port: u16) -> String {
 
 /// The CLI, from the `PATH` and the places each system installs it.
 pub fn locate() -> Option<PathBuf> {
+    if let Some(chosen) = super::executable_search::chosen("tailscale") {
+        return Some(chosen);
+    }
     if let Some(found) = find_in(
         if cfg!(windows) {
             "tailscale.exe"

@@ -36,10 +36,12 @@ pub(in crate::interfaces::studio) enum Event {
 }
 
 #[cfg(test)]
+pub(super) static TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+#[cfg(test)]
 pub(super) static TEST_HOME: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
 
 /// Where the identity lives. Tests point it at a folder of their own, never at the person's.
-fn home() -> Option<PathBuf> {
+pub(super) fn home() -> Option<PathBuf> {
     #[cfg(test)]
     {
         TEST_HOME
@@ -371,8 +373,9 @@ mod tests {
 
     /// Runs `test` with the identity pointed at a folder of its own, one test at a time.
     fn in_a_home(name: &str, test: impl FnOnce(&mut Dashboard)) {
-        static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _guard = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+        let _guard = TEST_SERIAL
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         let dir = std::env::temp_dir().join(format!(
             "chxchx-studio-identity-{name}-{}",
             std::process::id()

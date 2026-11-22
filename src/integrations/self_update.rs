@@ -26,8 +26,7 @@ pub struct GitHub {
 
 impl Source for GitHub {
     fn file(&self, name: &str, to: &Path) -> Result<(), String> {
-        use super::studio_update::{OWNER, REPOSITORY};
-        let base = format!("https://github.com/{OWNER}/{REPOSITORY}/releases");
+        let base = super::studio_update::releases_url();
         let url = if self.dev {
             format!("{base}/download/studio-dev-preview/{name}")
         } else {

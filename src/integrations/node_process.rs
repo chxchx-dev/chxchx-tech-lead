@@ -102,7 +102,7 @@ pub fn service_start_command(os: &str, installed: bool) -> Option<Vec<String>> {
 #[cfg(feature = "node")]
 fn start_through_service() -> Option<Result<(), String>> {
     use super::user_service as service;
-    let setup = service::current_setup(crate::interfaces::node::DEFAULT_PORT).ok()?;
+    let setup = service::current_setup(crate::features::connection::node_port()).ok()?;
     let installed = service::is_installed(&service::plan(&setup));
     let command = service_start_command(std::env::consts::OS, installed)?;
     let (program, args) = command.split_first()?;

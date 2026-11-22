@@ -26,7 +26,16 @@ crates independientes para CLI/TUI/Studio ni versiones por interfaz. Cada tarea
 incluye su caso de uso, integraciones, pruebas y presentaciones aplicables.
 La separación de presentación y dominio se mantiene dentro del paquete común.
 
-## Pendiente: que cada persona ponga sus propias cosas en la configuración
+## Que cada persona ponga sus propias cosas en la configuración (primera entrega hecha 2026-11-22)
+
+**Hecho:** `features/connection.rs` (`connection.json`, validado, con `.bak`), `chxchx-tech connection`,
+tarjeta Studio → Ajustes → Conexión y los consumidores leyéndolo: puerto del nodo (`node start`, servicio,
+`manager`), puerto HTTPS por defecto de `node remote enable`, origen de versiones y clave pública de firma
+(`self_update`, `manager update`), rutas de herramientas (`executable_search::chosen`, Tailscale, MCP).
+**Falta:** que Studio *active/desactive* el acceso por Tailscale con vista previa (hoy lo hace `node remote
+enable --apply`; Studio solo muestra el estado), cambiar la carpeta de datos (`CHXCHX_TECH_HOME`, necesita
+migrar lo existente), reiniciar el servicio con el puerto nuevo desde Studio, y mostrar la ruta del cliente
+`claude` de verdad usada por el chat. Los puntos de abajo son el texto original de la decisión.
 
 Decisión del autor (2026-11-22): nada personal va fijo en el código. Lo que identifica a una instalación
 (su nombre, su imagen, su tema) ya es **suyo y configurable** (`chxchx-tech identity`, Studio → Ajustes →

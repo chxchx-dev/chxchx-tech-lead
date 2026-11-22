@@ -37,7 +37,7 @@ fn node() -> (Option<(u16, String)>, bool) {
         let status = node_link::status(&endpoint).ok()?;
         Some((endpoint.port, status.version))
     });
-    let installed = user_service::current_setup(crate::interfaces::node::DEFAULT_PORT)
+    let installed = user_service::current_setup(crate::features::connection::node_port())
         .map(|setup| user_service::is_installed(&user_service::plan(&setup)))
         .unwrap_or(false);
     (running, installed)

@@ -99,7 +99,17 @@ pub fn agent_path() -> OsString {
 
 /// Full path of `name` (honouring PATHEXT on Windows), or `None`.
 pub fn find_executable(name: &str) -> Option<PathBuf> {
-    find_in(name, &agent_path())
+    chosen(name).or_else(|| find_in(name, &agent_path()))
+}
+
+/// The place the person said a tool is (Ajustes → Conexión), when that file is still there.
+pub fn chosen(name: &str) -> Option<PathBuf> {
+    if name.contains(['/', '\\']) {
+        return None;
+    }
+    let connection = crate::features::connection::load();
+    let path = connection.tool(name)?;
+    (path.is_file() && is_executable(path)).then(|| path.to_path_buf())
 }
 
 pub fn find_in(name: &str, path: &OsString) -> Option<PathBuf> {

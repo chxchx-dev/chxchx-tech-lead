@@ -17,7 +17,7 @@ pub(in crate::interfaces::cli) enum RemoteCommand {
     /// Sin `--apply` solo muestra la vista previa. Nunca usa Funnel: el nodo no sale a Internet.
     Enable {
         /// Puerto HTTPS de Tailscale que se usará.
-        #[arg(long, default_value_t = 443)]
+        #[arg(long, default_value_t = crate::features::connection::load().https_port())]
         https_port: u16,
         /// Puerto local del nodo; por defecto el del nodo en marcha o el fijo.
         #[arg(long)]

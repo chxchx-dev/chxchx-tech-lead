@@ -9,6 +9,7 @@ pub mod features {
     pub mod chat_journal;
     pub mod chat_model;
     pub mod chat_state;
+    pub mod connection;
     pub mod context_compaction;
     pub mod doctor;
     pub mod error_cache;

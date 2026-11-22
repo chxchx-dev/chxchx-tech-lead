@@ -412,3 +412,19 @@ port parcial de IDE, con capacidades operativas reales, no un reemplazo completo
 La compilación local se comprobó en Windows; macOS, Ubuntu y Fedora siguen
 pendientes en CI/QA. La compatibilidad de JSON es una versión nueva e independiente
 del bridge completo `chxchx.project-status` v1 del producto legado.
+
+
+## Conexión: puertos, origen de las versiones y rutas
+
+En **Studio → Ajustes → Conexión** (o con `chxchx-tech connection show|set|reset`) eliges lo que antes era fijo:
+el puerto del nodo (47821), el puerto HTTPS de Tailscale (443), de dónde vienen las versiones y la clave pública
+con la que deben estar firmadas, y dónde está cada herramienta (`claude`, `codex`, `opencode`, `python`,
+`tailscale`) si no está en el PATH. Dejar un valor vacío es usar el de fábrica. Ejemplos:
+
+```bash
+chxchx-tech connection set --tool codex=/opt/codex/bin/codex --dry-run   # solo muestra
+chxchx-tech connection set --https-port 8443
+chxchx-tech connection reset                                             # el archivo anterior queda como .bak
+```
+
+La clave de firma es siempre la parte **pública**; la privada no se pega en ningún sitio de la aplicación.

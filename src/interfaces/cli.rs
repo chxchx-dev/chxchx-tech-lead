@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 #[path = "cli_catalog.rs"]
 mod catalog;
+#[path = "cli_connection.rs"]
+mod connection;
 #[path = "cli_connectors.rs"]
 mod connectors;
 #[path = "cli_identity.rs"]
@@ -162,6 +164,11 @@ enum Command {
     Jobs {
         #[command(subcommand)]
         command: jobs::JobsCommand,
+    },
+    /// Cómo llega esta instalación al mundo: puertos, origen de las versiones y rutas de herramientas.
+    Connection {
+        #[command(subcommand)]
+        command: connection::ConnectionCommand,
     },
     /// Tu identidad: el nombre en letras de bloques, la línea, la imagen y los colores.
     Identity {
@@ -560,6 +567,7 @@ pub fn run() -> Result<(), String> {
         Command::Mods { command } => catalog::mods(&ui, command),
         Command::LocalModels { command } => local_models::run(command),
         Command::Jobs { command } => jobs::run(command),
+        Command::Connection { command } => connection::run(command),
         Command::Identity { command } => identity::run(command),
         Command::Manager { command } => manager::run_other(command),
         #[cfg(feature = "node")]

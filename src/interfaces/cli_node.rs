@@ -17,7 +17,7 @@ pub(super) enum NodeCommand {
     /// El nodo administra los trabajos: mientras corre, `jobs run` dice que lo usa otro proceso.
     Start {
         /// Puerto local; 0 elige uno libre.
-        #[arg(long, default_value_t = crate::interfaces::node::DEFAULT_PORT)]
+        #[arg(long, default_value_t = crate::features::connection::node_port())]
         port: u16,
     },
     /// Dice si el nodo está en marcha, en qué puerto y qué trabajos tiene.
@@ -68,7 +68,7 @@ pub(super) enum ServiceCommand {
     ///
     /// Nunca usa root ni administrador. Sin `--apply` solo muestra qué haría.
     Install {
-        #[arg(long, default_value_t = crate::interfaces::node::DEFAULT_PORT)]
+        #[arg(long, default_value_t = crate::features::connection::node_port())]
         port: u16,
         #[arg(long)]
         apply: bool,
@@ -299,7 +299,7 @@ fn service(command: ServiceCommand) -> Result<(), String> {
     use crate::integrations::user_service as svc;
     let port = match &command {
         ServiceCommand::Install { port, .. } => *port,
-        _ => crate::interfaces::node::DEFAULT_PORT,
+        _ => crate::features::connection::node_port(),
     };
     let plan = svc::plan(&svc::current_setup(port)?);
     match command {

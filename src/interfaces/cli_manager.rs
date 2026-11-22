@@ -97,7 +97,6 @@ pub(super) fn run_other(command: ManagerCommand) -> Result<(), String> {
 }
 
 fn update(apply: bool, dev: bool) -> Result<(), String> {
-    use crate::features::release_manifest as release;
     use crate::integrations::self_update as upd;
     let current = env!("CARGO_PKG_VERSION");
     let work = crate::features::project_profiles::application_home()
@@ -105,7 +104,13 @@ fn update(apply: bool, dev: bool) -> Result<(), String> {
         .join("manager")
         .join("update");
     let source = upd::GitHub { dev };
-    let Some(offer) = upd::check(&source, &work, current, release::built_in_key())? else {
+    let Some(offer) = upd::check(
+        &source,
+        &work,
+        current,
+        crate::features::connection::load().trusted_key(),
+    )?
+    else {
         println!("Ya tienes la última versión ({current}).");
         return Ok(());
     };
@@ -184,7 +189,7 @@ fn drain_node() -> Result<(), String> {
 #[cfg(feature = "node")]
 fn restart_node() {
     use crate::integrations::{node_process, user_service as svc};
-    let managed = svc::current_setup(crate::interfaces::node::DEFAULT_PORT)
+    let managed = svc::current_setup(crate::features::connection::node_port())
         .map(|setup| svc::is_installed(&svc::plan(&setup)))
         .unwrap_or(false);
     if managed && cfg!(target_os = "linux") {
@@ -354,7 +359,9 @@ fn perform(auto: Auto) -> Result<String, String> {
         #[cfg(feature = "node")]
         Auto::InstallNodeService => {
             use crate::integrations::user_service as svc;
-            let plan = svc::plan(&svc::current_setup(crate::interfaces::node::DEFAULT_PORT)?);
+            let plan = svc::plan(&svc::current_setup(
+                crate::features::connection::node_port(),
+            )?);
             svc::install(&plan).map(|lines| lines.join("; "))
         }
         #[cfg(not(feature = "node"))]

@@ -125,6 +125,10 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
                     state,
                     settings::Event::Identity(settings::identity::Event::Load),
                 );
+                let _ = settings::update(
+                    state,
+                    settings::Event::Connection(settings::connection::Event::Load),
+                );
                 return settings::update(
                     state,
                     settings::Event::Node(settings::node::Event::Refresh),

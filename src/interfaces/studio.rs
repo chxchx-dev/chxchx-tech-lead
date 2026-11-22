@@ -326,6 +326,10 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                     &mut state,
                     settings::Event::Identity(settings::identity::Event::Load),
                 );
+                let _ = settings::update(
+                    &mut state,
+                    settings::Event::Connection(settings::connection::Event::Load),
+                );
             }
             let tasks = [
                 editor::list(path.clone(), PathBuf::new()),
