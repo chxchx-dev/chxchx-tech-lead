@@ -356,6 +356,10 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                         &mut state,
                         settings::Event::Remote(settings::remote::Event::Refresh),
                     )
+                    .chain(settings::update(
+                        &mut state,
+                        settings::Event::Service(settings::service::Event::Refresh),
+                    ))
                 } else {
                     Task::none()
                 },

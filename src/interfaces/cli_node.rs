@@ -75,6 +75,12 @@ pub(super) enum ServiceCommand {
     },
     /// Dice si el servicio está instalado y en marcha.
     Status,
+    /// Reinicia el servicio para que use lo que elegiste en Conexión (el puerto); si no está
+    /// instalado, lo instala. No hace nada si hay trabajos en curso.
+    Restart {
+        #[arg(long)]
+        apply: bool,
+    },
     /// Detiene el servicio y borra lo que se instaló.
     Uninstall {
         #[arg(long)]
@@ -297,6 +303,25 @@ fn stop() -> Result<(), String> {
 
 fn service(command: ServiceCommand) -> Result<(), String> {
     use crate::integrations::user_service as svc;
+    if let ServiceCommand::Restart { apply } = command {
+        use crate::features::node_service as restart;
+        for line in restart::describe(&restart::overview()) {
+            println!("{line}");
+        }
+        let preview = restart::preview()?;
+        println!();
+        for line in &preview.lines {
+            println!("{line}");
+        }
+        if !apply {
+            println!("\nVista previa: no se cambió nada. Añade --apply para hacerlo.");
+            return Ok(());
+        }
+        for line in restart::apply(&preview)? {
+            println!("{line}");
+        }
+        return Ok(());
+    }
     let port = match &command {
         ServiceCommand::Install { port, .. } => *port,
         _ => crate::features::connection::node_port(),
@@ -304,6 +329,7 @@ fn service(command: ServiceCommand) -> Result<(), String> {
     let plan = svc::plan(&svc::current_setup(port)?);
     match command {
         ServiceCommand::Status => println!("{}", svc::status(&plan)),
+        ServiceCommand::Restart { .. } => unreachable!("handled above"),
         ServiceCommand::Install { apply, .. } => {
             if let Some((path, contents)) = &plan.file {
                 println!("Archivo: {}\n{contents}", path.display());

@@ -134,6 +134,14 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
                     state,
                     settings::Event::Remote(settings::remote::Event::Refresh),
                 );
+                #[cfg(feature = "node")]
+                let remote = Task::batch([
+                    remote,
+                    settings::update(
+                        state,
+                        settings::Event::Service(settings::service::Event::Refresh),
+                    ),
+                ]);
                 #[cfg(not(feature = "node"))]
                 let remote = Task::none();
                 let node =

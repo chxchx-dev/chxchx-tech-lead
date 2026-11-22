@@ -26,6 +26,8 @@ pub mod features {
     pub mod mcp_setup;
     pub mod node_audit;
     pub mod node_devices;
+    #[cfg(feature = "node")]
+    pub mod node_service;
     pub mod node_state;
     pub mod project_backup;
     pub mod project_catalog;

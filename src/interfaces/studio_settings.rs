@@ -18,6 +18,9 @@ pub(super) mod node;
 #[cfg(feature = "node")]
 #[path = "studio_settings_remote.rs"]
 pub(super) mod remote;
+#[cfg(feature = "node")]
+#[path = "studio_settings_service.rs"]
+pub(super) mod service;
 
 #[derive(Default)]
 pub(super) struct State {
@@ -29,6 +32,8 @@ pub(super) struct State {
     data: data::State,
     #[cfg(feature = "node")]
     remote: remote::State,
+    #[cfg(feature = "node")]
+    service: service::State,
     /// The action whose new shortcut is being recorded.
     capturing: Option<Action>,
     accent_input: String,
@@ -63,6 +68,8 @@ pub(super) enum Event {
     Data(data::Event),
     #[cfg(feature = "node")]
     Remote(remote::Event),
+    #[cfg(feature = "node")]
+    Service(service::Event),
 }
 
 /// The next interface size up (`step` > 0) or down, within the sizes Settings offers.
@@ -104,6 +111,8 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         Event::Data(event) => return data::update(state, event),
         #[cfg(feature = "node")]
         Event::Remote(event) => return remote::update(state, event),
+        #[cfg(feature = "node")]
+        Event::Service(event) => return service::update(state, event),
         Event::Theme(id) => {
             state.session.edit(|p| p.appearance.theme = id);
         }
@@ -271,6 +280,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         connection::card(state),
         data::card(state),
         remote_card(state),
+        service_card(state),
         section_title(
             "keyboard",
             "Atajos de teclado",
@@ -602,6 +612,17 @@ fn remote_card(state: &Dashboard) -> Element<'_, Message> {
 
 #[cfg(not(feature = "node"))]
 fn remote_card(_: &Dashboard) -> Element<'_, Message> {
+    Space::new().into()
+}
+
+/// The node service card; builds without the node have no service to manage.
+#[cfg(feature = "node")]
+fn service_card(state: &Dashboard) -> Element<'_, Message> {
+    service::card(state)
+}
+
+#[cfg(not(feature = "node"))]
+fn service_card(_: &Dashboard) -> Element<'_, Message> {
     Space::new().into()
 }
 

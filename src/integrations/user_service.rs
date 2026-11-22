@@ -51,6 +51,8 @@ pub struct Plan {
     pub install: Vec<Vec<String>>,
     /// Run before removing the file.
     pub uninstall: Vec<Vec<String>>,
+    /// Run to make a running service start again with what the file now says.
+    pub restart: Vec<Vec<String>>,
     pub notes: Vec<String>,
 }
 
@@ -101,6 +103,7 @@ pub fn plan(setup: &Setup) -> Plan {
                     words(&["systemctl", "--user", "enable", "--now", NAME]),
                 ],
                 uninstall: vec![words(&["systemctl", "--user", "disable", "--now", NAME])],
+                restart: vec![words(&["systemctl", "--user", "restart", NAME])],
                 notes: vec![
                     "Arranca al iniciar tu sesión. Para que también corra sin sesión abierta puedes \
                      ejecutar tú mismo `loginctl enable-linger` (no se hace solo)."
@@ -141,6 +144,12 @@ pub fn plan(setup: &Setup) -> Plan {
                     "bootout".into(),
                     format!("{domain}/{LABEL}"),
                 ]],
+                restart: vec![vec![
+                    "launchctl".into(),
+                    "kickstart".into(),
+                    "-k".into(),
+                    format!("{domain}/{LABEL}"),
+                ]],
                 notes: vec!["Sin verificar en macOS todavía.".to_owned()],
             }
         }
@@ -160,6 +169,10 @@ pub fn plan(setup: &Setup) -> Plan {
                 ),
             ]],
             uninstall: vec![words(&["schtasks", "/Delete", "/F", "/TN", NAME])],
+            restart: vec![
+                words(&["schtasks", "/End", "/TN", NAME]),
+                words(&["schtasks", "/Run", "/TN", NAME]),
+            ],
             notes: vec!["Sin verificar en Windows todavía.".to_owned()],
         },
     }
@@ -238,6 +251,70 @@ pub fn install(plan: &Plan) -> Result<Vec<String>, String> {
         }
     }
     Ok(done)
+}
+
+/// Starts the installed service again so it picks up what its file now says. A task that was not
+/// running (`/End` on Windows) is not an error.
+pub fn restart(plan: &Plan) -> Result<Vec<String>, String> {
+    let mut done = Vec::new();
+    for command in &plan.restart {
+        match run(command) {
+            Ok(()) => done.push(format!("Ejecutado: {}", command.join(" "))),
+            Err(error) if command.iter().any(|word| word == "/End") => {
+                done.push(format!("Aviso (¿no estaba en marcha?): {error}"));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(done)
+}
+
+/// What an installed Linux unit already says, so a new plan keeps the program and the data folder
+/// the service was installed with instead of the ones of whoever asks now.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Existing {
+    pub exe: Option<PathBuf>,
+    pub port: Option<u16>,
+    pub tech_home: Option<PathBuf>,
+}
+
+fn unquote(text: &str) -> Option<(String, &str)> {
+    let rest = text.strip_prefix('"')?;
+    let (mut out, mut chars) = (String::new(), rest.char_indices());
+    while let Some((index, c)) = chars.next() {
+        match c {
+            '\\' => out.push(chars.next()?.1),
+            '%' if rest[index + 1..].starts_with('%') => {
+                chars.next();
+                out.push('%');
+            }
+            '"' => return Some((out, &rest[index + 1..])),
+            other => out.push(other),
+        }
+    }
+    None
+}
+
+pub fn parse_unit(contents: &str) -> Existing {
+    let mut found = Existing::default();
+    for line in contents.lines() {
+        if let Some(rest) = line.strip_prefix("ExecStart=")
+            && let Some((exe, after)) = unquote(rest)
+        {
+            found.exe = Some(PathBuf::from(exe));
+            found.port = after
+                .split_whitespace()
+                .skip_while(|word| *word != "--port")
+                .nth(1)
+                .and_then(|port| port.parse().ok());
+        } else if let Some(rest) = line.strip_prefix("Environment=")
+            && let Some((pair, _)) = unquote(rest)
+            && let Some(path) = pair.strip_prefix("CHXCHX_TECH_HOME=")
+        {
+            found.tech_home = Some(PathBuf::from(path));
+        }
+    }
+    found
 }
 
 /// Stops the service and removes what `install` created. Missing things are not errors.
@@ -341,6 +418,35 @@ fn current_uid() -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_installed_unit_gives_back_its_program_port_and_folder() {
+        let mut setup = setup(Platform::Linux);
+        setup.exe = PathBuf::from("/opt/mi \"nodo\"/chxchx-tech");
+        setup.port = 50123;
+        setup.tech_home = Some(PathBuf::from("/data/chx 100%"));
+        let found = parse_unit(&plan(&setup).file.unwrap().1);
+        assert_eq!(found.exe, Some(setup.exe));
+        assert_eq!(found.port, Some(50123));
+        assert_eq!(found.tech_home, setup.tech_home);
+        assert_eq!(
+            parse_unit("[Service]\nRestart=always\n"),
+            Existing::default()
+        );
+    }
+
+    #[test]
+    fn every_platform_knows_how_to_start_again() {
+        for platform in [Platform::Linux, Platform::Macos, Platform::Windows] {
+            let found = plan(&setup(platform));
+            assert!(!found.restart.is_empty(), "{platform:?}");
+        }
+        let linux = plan(&setup(Platform::Linux));
+        assert_eq!(
+            linux.restart[0].join(" "),
+            "systemctl --user restart chxchx-node"
+        );
+    }
 
     fn setup(platform: Platform) -> Setup {
         Setup {

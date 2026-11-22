@@ -146,7 +146,7 @@ En Ajustes → *Nodo local* ves si el nodo corre, lo inicias o detienes, activas
 para los turnos del chat» (cerrar Studio no corta el turno; al reabrir lo recupera) y gestionas
 dispositivos: *Vincular un dispositivo* muestra un código de un solo uso y *Desvincular* pide
 confirmación. Para que el nodo arranque al iniciar sesión:
-`chxchx-tech node service install` (vista previa), `... install --apply`, `... status`,
+`chxchx-tech node service install` (vista previa), `... install --apply`, `... restart [--apply]` (reinicia con el puerto de Conexión), `... status`,
 `... uninstall --apply`. Es un servicio de tu usuario (nunca root); en Linux, para que corra sin
 sesión abierta, ejecuta tú `loginctl enable-linger`. macOS y Windows aún sin verificar.
 
