@@ -201,6 +201,16 @@ pub async fn load_projects() {
     }
 }
 
+/// The person's own name, line and picture. It asks without a token (the pairing screen needs it
+/// before the phone is linked) and keeps the product's if the node does not answer.
+pub async fn load_identity() {
+    if let Ok(text) = net::request("GET", "/api/v1/identity", None, None, None).await
+        && let Ok(view) = serde_json::from_str::<chxchx_protocol::IdentityView>(&text)
+    {
+        *store::IDENTITY.write() = view;
+    }
+}
+
 /// Opens a project's chat: its agents and the conversations saved so far.
 pub async fn open_chat(project: &ProjectId) {
     let Some(token) = store::token() else { return };

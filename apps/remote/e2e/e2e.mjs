@@ -93,6 +93,45 @@ await step("el código va en dos casillas: avanza solo, ignora lo imposible y el
   await page.screenshot({ path: `${shots}01b-pairing-groups.png` });
 });
 
+await step("la identidad propia (nombre, lema, imagen y tema) llega a la pantalla de vinculación y se puede quitar", async () => {
+  const look = async (target) => target.evaluate(() => ({
+    label: document.querySelector(".wordmark-art svg")?.getAttribute("aria-label"),
+    tagline: document.querySelector(".tagline")?.textContent,
+    avatar: document.querySelector(".mascot-ring img")?.getAttribute("src"),
+    accent: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim(),
+    background: getComputedStyle(document.body).backgroundColor,
+  }));
+  // De fábrica: el nombre y el lema del producto, su personaje y su propio aspecto.
+  await page.goto(`${base}/`);
+  await page.locator(".wordmark-art svg").waitFor();
+  const factory = await look(page);
+  assert.equal(factory.label, "CHXCHX");
+  assert.match(factory.tagline, /control plane local/);
+  assert.match(factory.avatar, /^\/img\/mascot/);
+
+  // Lo que la persona configura con `chxchx-tech identity set`.
+  const picture = `${here}../../../assets/brand/mark-256.png`;
+  env(`cli identity set --name "ana dev" --tagline "mi taller de agentes" --accent "#f472b6" --theme light --web-theme studio --avatar ${picture}`);
+  await page.reload();
+  await page.locator(".wordmark-art svg[aria-label='ANA DEV']").waitFor({ timeout: 10_000 });
+  const mine = await look(page);
+  assert.equal(mine.tagline, "mi taller de agentes");
+  assert.match(mine.avatar, /^\/identity\/avatar\.png\?v=\d+$/, "su imagen, con la revisión para no mostrar una vieja");
+  assert.equal(mine.accent, "#f472b6", "su color de resalte");
+  assert.equal(mine.background, "rgb(247, 249, 252)", "el tema Claro de Studio");
+  assert.ok(await page.evaluate(() => document.querySelector(".mascot-ring img").complete && document.querySelector(".mascot-ring img").naturalWidth > 0), "la imagen carga");
+  await page.screenshot({ path: `${shots}01c-identity.png` });
+
+  // Volver a lo de fábrica no borra nada, pero la pantalla vuelve a lo de siempre.
+  env("cli identity reset");
+  env("cli identity set --accent none --theme chxchx --web-theme auto");
+  await page.reload();
+  await page.locator(".wordmark-art svg[aria-label='CHXCHX']").waitFor({ timeout: 10_000 });
+  const back = await look(page);
+  assert.equal(back.tagline, factory.tagline);
+  assert.match(back.avatar, /^\/img\/mascot/);
+});
+
 let operatorCode;
 await step("un QR rellena el código y no vincula solo", async () => {
   operatorCode = env("pair operator");

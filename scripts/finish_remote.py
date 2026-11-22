@@ -12,7 +12,7 @@ build = hashlib.sha256(wasm.read_bytes()).hexdigest()[:12]
 
 # What the app needs to start. The big icons are only fetched when the app is installed.
 shell = ["/", "/boot.js", "/app.css", "/manifest.webmanifest", "/icons/favicon-32.png", "/icons/apple-touch-icon.png",
-         "/img/mark-64.png", "/img/mark-128.png", "/img/mascot-96.png", "/img/mascot-288.png", "/img/banner.png"]
+         "/img/mark-64.png", "/img/mark-128.png", "/img/mascot-96.png", "/img/mascot-288.png"]
 shell += sorted("/" + path.relative_to(dist).as_posix() for path in (dist / "pkg").rglob("*") if path.is_file())
 
 sw = dist / "sw.js"

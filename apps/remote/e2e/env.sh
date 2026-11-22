@@ -60,6 +60,10 @@ PY
 pair)
   "$BIN" node pair --role "${2:-operator}" | sed -n 's/^Código de vinculación: //p'
   ;;
+cli)
+  # Any command of the product, with this environment's home (e.g. `cli identity set --name ANA`).
+  "$BIN" "${@:2}"
+  ;;
 stop)
   "$BIN" node stop 2>&1 | tail -1
   pkill -f "$W/adapter" 2>/dev/null

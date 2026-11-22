@@ -100,6 +100,10 @@ pub static PROJECT_DATA: GlobalSignal<BTreeMap<String, ProjectData>> =
 pub static DEVICES: GlobalSignal<Option<Vec<Device>>> = Signal::global(|| None);
 pub static TOAST: GlobalSignal<Option<Toast>> = Signal::global(|| None);
 pub static PREFS: GlobalSignal<Prefs> = Signal::global(load_prefs);
+/// The person's own name, line and picture (public, so it is there before the phone is linked).
+/// Until the node answers it is the product's.
+pub static IDENTITY: GlobalSignal<chxchx_protocol::IdentityView> =
+    Signal::global(|| chxchx_protocol::Identity::default().view(None));
 /// The time, refreshed every few seconds so "hace 5 min" stays true on a screen left open.
 pub static CLOCK: GlobalSignal<u64> = Signal::global(net::now_ms);
 
@@ -208,4 +212,12 @@ pub fn waiting_for_me() -> Vec<(JobId, String)> {
                 .then(|| (view.job.id.clone(), model::describe(&view.job.spec)))
         })
         .collect()
+}
+
+/// The picture to show: the person's own when they set one, else the product's.
+pub fn avatar_src(product_default: &str) -> String {
+    match IDENTITY.read().avatar_rev {
+        Some(revision) => format!("/identity/avatar.png?v={revision}"),
+        None => product_default.to_owned(),
+    }
 }

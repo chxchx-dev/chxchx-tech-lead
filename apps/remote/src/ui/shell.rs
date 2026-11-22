@@ -15,6 +15,7 @@ pub fn app() -> Element {
     // The engine runs for the life of the page.
     use_hook(|| {
         store::detach(engine::run());
+        store::detach(actions::load_identity());
     });
     rsx! {
         if SESSION.read().is_some() { Shell {} } else { Pairing {} }
@@ -126,6 +127,9 @@ fn Pairing() -> Element {
     let mut busy = use_signal(|| false);
     let mut failure = use_signal(|| None::<String>);
     let from_qr = code_in_hash(&net::hash()).is_some();
+    let who = store::IDENTITY.read().clone();
+    let wordmark = chxchx_protocol::banner_svg(&who.wordmark, &who.accent, &who.name);
+    let avatar = store::avatar_src("/img/mascot-288.png");
     let ready = move || {
         code::join(&Groups {
             first: first.read().clone(),
@@ -152,9 +156,9 @@ fn Pairing() -> Element {
     rsx! {
         main { class: "pairing",
             header { class: "pairing-hero",
-                div { class: "mascot-ring", img { src: "/img/mascot-288.png", alt: "", width: "132", height: "132" } }
-                h1 { class: "wordmark", img { src: "/img/banner.png", alt: "ChxChx", width: "340", height: "94" } }
-                p { class: "tagline", "control plane local para proyectos con agentes de IA" }
+                div { class: "mascot-ring", img { src: "{avatar}", alt: "", width: "132", height: "132" } }
+                h1 { class: "wordmark", span { class: "wordmark-art", dangerous_inner_html: "{wordmark}" } }
+                p { class: "tagline", "{who.tagline}" }
             }
             p { class: "lead", "Vincula este dispositivo con tu PC para ver tus proyectos y hablar con tus agentes." }
             form { onsubmit: submit,

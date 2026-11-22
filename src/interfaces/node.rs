@@ -6,6 +6,8 @@
 mod api;
 #[path = "node_api_devices.rs"]
 mod api_devices;
+#[path = "node_api_identity.rs"]
+mod api_identity;
 #[path = "node_api_jobs.rs"]
 mod api_jobs;
 #[path = "node_api_projects.rs"]

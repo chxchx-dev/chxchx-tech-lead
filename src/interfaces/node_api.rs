@@ -9,7 +9,10 @@
 //!    the person at this PC (admin) and only works when the request is addressed to loopback; a
 //!    device token carries the role it was paired with.
 
-use super::{api_devices as devices, api_jobs as jobs, api_projects as projects, web};
+use super::{
+    api_devices as devices, api_identity as identity, api_jobs as jobs, api_projects as projects,
+    web,
+};
 use crate::features::node_devices::Devices;
 use crate::features::node_state::{self, RemoteConfig};
 use crate::features::{jobs::JobRunner, node_audit};
@@ -50,6 +53,8 @@ pub(crate) struct AppState {
     pub sockets: Arc<Semaphore>,
     /// The web client served at `/` (embedded at build time).
     pub assets: Arc<web::Assets>,
+    /// The application's folder, where the person's identity (name, picture) lives.
+    pub home: PathBuf,
 }
 
 impl AppState {
@@ -68,10 +73,13 @@ impl AppState {
             started_ms,
             stop,
             devices: Arc::new(Mutex::new(Devices::open(&dir)?)),
-            dir,
             in_flight: Arc::new(Semaphore::new(MAX_IN_FLIGHT)),
             sockets: Arc::new(Semaphore::new(MAX_SOCKETS)),
             assets: Arc::new(web::Assets::embedded()),
+            home: dir
+                .parent()
+                .map_or_else(|| dir.clone(), std::path::Path::to_path_buf),
+            dir,
         })
     }
 
@@ -196,6 +204,10 @@ pub(crate) fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/v1/health", get(health))
         .route("/api/v1/pair", post(devices::pair))
+        // The person's own look, read-only and public: the pairing screen needs it before linking.
+        .route("/api/v1/identity", get(identity::view))
+        .route("/identity/avatar.png", get(identity::avatar))
+        .route("/identity/theme.css", get(identity::theme))
         .merge(protected)
         // Everything that is not the API is the web client: public files, nothing secret.
         .fallback(web::serve)

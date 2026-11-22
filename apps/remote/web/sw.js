@@ -29,6 +29,23 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET" || url.origin !== location.origin || url.pathname.startsWith("/api/")) {
     return;
   }
+  // What the person made their own (picture, theme): the network first, so a change shows on the next
+  // load, and the last copy when there is no network.
+  if (url.pathname.startsWith("/identity/")) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE);
+        try {
+          const response = await fetch(request);
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        } catch {
+          return (await cache.match(request, { ignoreSearch: true })) || new Response("", { status: 503 });
+        }
+      })(),
+    );
+    return;
+  }
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE);

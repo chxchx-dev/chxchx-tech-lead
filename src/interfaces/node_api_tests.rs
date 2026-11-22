@@ -28,15 +28,18 @@ fn state_named(name: &str) -> AppState {
     let dir = std::env::temp_dir().join(format!("chxchx-node-api-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    AppState::new(
+    let mut state = AppState::new(
         JobRunner::attended(JobStore::open(&dir.join("jobs")).unwrap(), Done, 1),
         TOKEN.into(),
         PORT,
         1,
         Arc::new(Notify::new()),
-        dir,
+        dir.clone(),
     )
-    .unwrap()
+    .unwrap();
+    // The person's identity lives in the application's folder: one of its own per test.
+    state.home = dir.join("home");
+    state
 }
 
 fn turn() -> Value {
@@ -1224,4 +1227,131 @@ async fn a_build_without_the_client_says_so_on_its_home_page_and_keeps_the_api()
         Call::new("GET", "/api/v1/jobs").send(&state).await.0,
         StatusCode::OK
     );
+}
+
+// ---- the person's own look: public, read-only, always fresh --------------------------------
+
+#[tokio::test]
+async fn the_identity_is_public_and_follows_what_the_person_sets() {
+    use crate::features::identity;
+    let state = state("identity");
+    let mut open = Call::new("GET", "/api/v1/identity");
+    open.token = None; // the pairing screen of a phone has no token yet
+
+    let (status, headers, body) = open.raw(&state).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        headers[header::CACHE_CONTROL],
+        "no-cache",
+        "a change shows on the next load"
+    );
+    let view: chxchx_protocol::IdentityView = serde_json::from_slice(&body).unwrap();
+    assert_eq!(view.name, "CHXCHX");
+    assert_eq!(view.wordmark.len(), 6);
+    assert_eq!(view.avatar_rev, None);
+
+    let mine = chxchx_protocol::Identity {
+        name: "ana dev".into(),
+        tagline: "mi taller".into(),
+        ..Default::default()
+    };
+    identity::save_in(&state.home, &mine).unwrap();
+    let mut open = Call::new("GET", "/api/v1/identity");
+    open.token = None;
+    let (_, _, body) = open.raw(&state).await;
+    let view: chxchx_protocol::IdentityView = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        (view.name.as_str(), view.tagline.as_str()),
+        ("ANA DEV", "mi taller")
+    );
+}
+
+#[tokio::test]
+async fn the_picture_and_the_theme_are_served_only_when_the_person_set_them() {
+    use crate::features::identity;
+    let state = state("identity-files");
+    let get = |path: &str| {
+        let mut call = Call::new("GET", path);
+        call.token = None;
+        call
+    };
+
+    assert_eq!(
+        get("/identity/avatar.png").raw(&state).await.0,
+        StatusCode::NOT_FOUND,
+        "no picture of their own"
+    );
+    let (status, headers, css) = get("/identity/theme.css").raw(&state).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        headers[header::CONTENT_TYPE]
+            .to_str()
+            .unwrap()
+            .starts_with("text/css")
+    );
+    assert!(css.is_empty(), "nothing chosen: the app keeps its own look");
+
+    let picture = {
+        let image = image::RgbaImage::from_pixel(40, 20, image::Rgba([10, 200, 250, 255]));
+        let mut out = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(image)
+            .write_to(&mut out, image::ImageFormat::Png)
+            .unwrap();
+        out.into_inner()
+    };
+    identity::set_avatar_in(&state.home, &picture).unwrap();
+    let mut prefs = crate::features::studio_preferences::load_from(&state.home);
+    prefs.preferences.appearance.accent = Some("#f472b6".into());
+    crate::features::studio_preferences::save_to(&state.home, &prefs.preferences).unwrap();
+
+    let (status, headers, png) = get("/identity/avatar.png").raw(&state).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers[header::CONTENT_TYPE], "image/png");
+    assert_eq!(
+        &png[..8],
+        b"\x89PNG\r\n\x1a\n",
+        "a real PNG, already square"
+    );
+    assert!(
+        headers.contains_key(header::X_CONTENT_TYPE_OPTIONS),
+        "the usual hardening applies"
+    );
+    let (_, _, css) = get("/identity/theme.css").raw(&state).await;
+    assert!(
+        String::from_utf8(css)
+            .unwrap()
+            .contains("--accent: #f472b6")
+    );
+    let (_, _, body) = get("/api/v1/identity").raw(&state).await;
+    let view: chxchx_protocol::IdentityView = serde_json::from_slice(&body).unwrap();
+    assert!(view.avatar_rev.is_some() && view.accent == "#f472b6");
+}
+
+#[tokio::test]
+async fn the_identity_does_not_open_the_node_to_other_hosts_or_to_changes() {
+    let state = state("identity-guard");
+    for path in [
+        "/api/v1/identity",
+        "/identity/avatar.png",
+        "/identity/theme.css",
+    ] {
+        let mut rebinding = Call::new("GET", path);
+        rebinding.token = None;
+        rebinding.host = format!("evil.example:{PORT}");
+        assert_eq!(
+            rebinding.raw(&state).await.0,
+            StatusCode::FORBIDDEN,
+            "{path}"
+        );
+        // Only reading: nothing here changes what the person chose.
+        for method in ["POST", "PUT", "DELETE"] {
+            let mut write = Call::new(method, path);
+            write.token = None;
+            let status = write.raw(&state).await.0;
+            assert!(
+                status == StatusCode::METHOD_NOT_ALLOWED || status == StatusCode::NOT_FOUND,
+                "{method} {path}: {status}"
+            );
+        }
+    }
 }

@@ -769,7 +769,12 @@ impl Canvas {
 /// The block letters as an SVG: no font needed, so it looks the same on every device. Only box
 /// characters are ever drawn (the text of the name never reaches the SVG), so it holds no markup of
 /// the person's.
-pub fn banner_svg(rows: &[String], accent: &str) -> String {
+pub fn banner_svg(rows: &[String], accent: &str, label: &str) -> String {
+    // The label is the name, already validated; anything else is dropped so it can never close the attribute.
+    let label: String = label
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '.'))
+        .collect();
     let (top, bottom) = gradient(accent);
     let cols = rows
         .iter()
@@ -827,11 +832,11 @@ pub fn banner_svg(rows: &[String], accent: &str) -> String {
     }
     let shapes = canvas.shapes;
     format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-12 -12 {} {}\" role=\"img\" aria-label=\"nombre\">\
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-12 -12 {} {}\" role=\"img\" aria-label=\"{label}\">\
 <defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"{height}\" gradientUnits=\"userSpaceOnUse\">\
 <stop offset=\"0\" stop-color=\"{top}\"/><stop offset=\"1\" stop-color=\"{bottom}\"/></linearGradient>\
 <filter id=\"b\" x=\"-10%\" y=\"-20%\" width=\"120%\" height=\"140%\"><feGaussianBlur stdDeviation=\"7\"/></filter></defs>\
-<g fill=\"url(#g)\" filter=\"url(#b)\" opacity=\"0.55\">{shapes}</g><g fill=\"url(#g)\">{shapes}</g></svg>",
+<g fill=\"url(#g)\" filter=\"url(#b)\" opacity=\"0.55\">{shapes}</g><g fill=\"url(#g)\" shape-rendering=\"crispEdges\">{shapes}</g></svg>",
         width + 24,
         height + 24,
     )
@@ -984,12 +989,22 @@ mod tests {
 
     #[test]
     fn the_svg_draws_only_shapes_and_never_the_text_of_the_name() {
-        let svg = banner_svg(&wordmark("ana"), DEFAULT_ACCENT);
+        let svg = banner_svg(&wordmark("ana"), DEFAULT_ACCENT, "ANA");
         assert!(svg.starts_with("<svg") && svg.ends_with("</svg>"));
+        assert!(
+            svg.contains("aria-label=\"ANA\""),
+            "the name is its accessible text"
+        );
+        let hostile = banner_svg(&wordmark("ana"), DEFAULT_ACCENT, "\"><script>x</script>");
+        assert!(!hostile.contains("<script"), "no tag survives");
+        assert!(
+            hostile.contains("aria-label=\"scriptxscript\""),
+            "only harmless characters remain"
+        );
         assert!(svg.contains("<rect") && svg.contains("linearGradient"));
         assert!(
-            !svg.contains("ANA") && !svg.contains("<text"),
-            "no text in the picture"
+            !svg.contains("<text"),
+            "no text in the picture: only shapes"
         );
         assert!(!svg.contains("script"));
     }

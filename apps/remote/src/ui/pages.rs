@@ -35,7 +35,7 @@ pub fn Home() -> Element {
             div { class: "card hero",
                 div { class: "row",
                     div { class: "hero-id",
-                        img { class: "avatar", src: "/img/mascot-96.png", alt: "", width: "52", height: "52" }
+                        img { class: "avatar", src: "{store::avatar_src(\"/img/mascot-96.png\")}", alt: "", width: "52", height: "52" }
                         h3 { "Tu PC" }
                     }
                     if node.is_some() { span { class: "badge ok", "Conectada" } }
