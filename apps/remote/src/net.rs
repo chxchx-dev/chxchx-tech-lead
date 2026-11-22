@@ -402,6 +402,16 @@ fn scroll_down() {
     window().scroll_to_with_x_and_y(0.0, 1.0e9);
 }
 
+/// Goes to the newest message whatever the distance: used when a conversation is opened. A long
+/// one finishes laying out after the first paint, so it is repeated once things have settled.
+pub async fn jump_to_end() {
+    scroll_down();
+    sleep(80).await;
+    scroll_down();
+    sleep(300).await;
+    scroll_down();
+}
+
 /// Keeps the newest message in view while the conversation grows, unless the person scrolled up
 /// to read something older. It is instant (a smooth scroll is cut short by the next event) and
 /// repeated after the layout settles.

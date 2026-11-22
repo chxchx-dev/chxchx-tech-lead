@@ -1,6 +1,7 @@
 //! The conversation with an agent in one project.
 
 use super::cards::ItemView;
+use super::shell::ConnDot;
 use crate::actions::{self, Draft};
 use crate::model::{self, Item};
 use crate::net;
@@ -56,9 +57,16 @@ pub fn Chat(project: ProjectId, provider: Provider) -> Element {
 
     // Keep the latest message in view as the conversation grows.
     // `use_effect` only reruns for signals it reads; `use_reactive` makes `total` one of them.
+    // The first time there is something to show, go straight to the newest message; after that only
+    // follow it while the person is near the end (they may have scrolled up to read).
+    let mut landed = use_signal(|| false);
     use_effect(use_reactive!(|(total,)| {
-        let _ = total;
-        spawn(net::follow_end());
+        if total > 0 && !*landed.peek() {
+            landed.set(true);
+            spawn(net::jump_to_end());
+        } else {
+            spawn(net::follow_end());
+        }
     }));
 
     let mut draft = use_signal(String::new);
@@ -185,6 +193,7 @@ pub fn Chat(project: ProjectId, provider: Provider) -> Element {
                         },
                         "↻"
                     }
+                    ConnDot {}
                     if store::can_operate() && installed {
                         button {
                             class: if show_options() { "icon on" } else { "icon" },

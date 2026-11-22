@@ -93,6 +93,7 @@ a { color: var(--accent); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chip { background: var(--panel2); border-radius: 999px; padding: 2px 10px; font-size: 0.8rem; color: var(--muted); }
 .badge { flex: none; border-radius: 999px; padding: 2px 10px; font-size: 0.78rem; font-weight: 600; background: var(--panel2); color: var(--muted); }
+.job-row .badge { min-width: 5.6em; text-align: center; }
 .badge.ok { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); color: var(--ok); }
 .badge.bad { background: color-mix(in srgb, var(--bad) 22%, var(--panel)); color: var(--bad); }
 .badge.running { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); color: var(--accent); }
@@ -125,7 +126,8 @@ textarea { resize: vertical; min-height: 52px; max-height: 40vh; }
 .app.chat-mode { height: 100dvh; }
 .app.chat-mode .content { padding: 0 0 calc(var(--tab-h) + var(--safe-bottom)); display: flex; flex-direction: column; min-height: 0; }
 .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.chat-top { flex: none; background: var(--bg); border-bottom: 1px solid var(--line); padding: var(--s2) var(--gutter) var(--s3); }
+.chat-top { flex: none; background: var(--bg); border-bottom: 1px solid var(--line); padding: calc(var(--s2) + var(--safe-top)) var(--gutter) var(--s3); }
+.chat-bar .dot { margin: 0 var(--s2); }
 .chat-bar { display: flex; align-items: center; gap: var(--s1); }
 .chat-title { flex: 1; min-width: 0; }
 .chat-title h2 { font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -177,6 +179,17 @@ legend { font-weight: 700; padding: 0; }
 .composer .send { flex: none; min-height: 44px; border-radius: 22px; padding: 0 var(--s4); }
 .chat-note { flex: none; margin: 0; padding: var(--s3) var(--gutter); text-align: center; }
 #chat-end { height: 1px; }
+/* With the keyboard open the page is short: the tabs give way and the header shrinks, but the agents stay. */
+@media (max-height: 520px) {
+  .app.chat-mode .tabs { display: none; }
+  .app.chat-mode .content { padding-bottom: 0; }
+  .chat-top { padding-bottom: var(--s2); }
+  .chat-title .state { display: none; }
+  .chat-title h2 { font-size: 0.98rem; }
+  .segments { margin-top: var(--s1); }
+  .segment { min-height: 34px; }
+  .composer { margin-bottom: var(--s2); }
+}
 
 /* pairing */
 .pairing { max-width: 460px; margin: 0 auto; padding: calc(28px + var(--safe-top)) var(--gutter) 40px; }

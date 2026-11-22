@@ -47,9 +47,13 @@ fn Shell() -> Element {
     let chat_mode = matches!(route, Route::Chat { .. });
     rsx! {
         div { class: if chat_mode { "app chat-mode" } else { "app" },
-            header { class: "top",
-                h1 { "{title}" }
-                ConnDot {}
+            // The conversation has its own header (project, agent, connection): a second bar above it
+            // only takes room the messages need, above all with the keyboard open.
+            if !chat_mode {
+                header { class: "top",
+                    h1 { "{title}" }
+                    ConnDot {}
+                }
             }
             ConnBanner {}
             main { class: "content", id: "content", {page} }
@@ -59,7 +63,7 @@ fn Shell() -> Element {
 }
 
 #[component]
-fn ConnDot() -> Element {
+pub fn ConnDot() -> Element {
     let (class, text) = match CONN() {
         Conn::Online => ("dot online", "Conectado".to_owned()),
         Conn::Connecting => ("dot connecting", "Conectando".to_owned()),
