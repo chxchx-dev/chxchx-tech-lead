@@ -69,9 +69,11 @@ cargo clippy --locked --all-targets --features node -- -D warnings
 cargo test --locked --features node
 ```
 
-La feature `node` (nodo local, ADR 0017) aún no entra en el build por defecto;
-`cargo check --locked` comprueba que el producto sigue compilando sin ella. El cliente web
-(`apps/remote`) tiene su propia comprobación:
+La feature `node` (nodo local, ADR 0017) está en el build por defecto y en los paquetes de
+release; el cliente web (`apps/remote/dist`, ignorado por git) lo construye una sola vez el job
+`remote-client` de `release.yml` y lo incrustan los builds de cada plataforma.
+`cargo check --locked --no-default-features --features cli` comprueba que el producto sigue
+compilando sin GUI ni nodo. El cliente web (`apps/remote`) tiene su propia comprobación:
 
 ```bash
 cargo test --locked -p chxchx-remote

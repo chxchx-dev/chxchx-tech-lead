@@ -42,14 +42,14 @@ path = "src/bin/chxchx-agent-adapter.rs"
 required-features = ["agent-adapter-launcher"]
 
 [features]
-default = ["cli", "tui", "studio"]
+default = ["cli", "tui", "studio", "node"]
 cli = ["dep:clap"]
 tui = ["dep:ratatui"]
 studio = ["dep:iced", "dep:image", "dep:arboard", "dep:rfd", "terminal"]
 visual-installer = ["studio"]
 terminal = ["dep:portable-pty", "dep:vt100"]
 agent-adapter-launcher = []
-# The local node (ADR 0017): an HTTP API on loopback for jobs. Not in the default build yet.
+# The local node (ADR 0017): an HTTP API on loopback for jobs, and the web client it serves.
 node = ["cli", "dep:axum", "dep:tokio", "dep:tower", "dep:getrandom", "dep:qrcode"]
 
 [dependencies]

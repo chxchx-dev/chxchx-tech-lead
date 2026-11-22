@@ -7,7 +7,7 @@
 - **Qué existe** (todo en `dev`; ver [ROADMAP-HIBRIDO.md](ROADMAP-HIBRIDO.md) y [ADR 0017](adr/0017-local-node-and-remote-access.md)):
   - `crates/chxchx-protocol`: tipos del contrato (trabajos, eventos, respuestas, dispositivos, roles). Compila a WASM.
   - `features/jobs`: cola persistente (instantánea + diario), `JobRunner` con idempotencia, cancelación, tope de 50 en cola y respuestas a permisos; los turnos de agente corren como trabajos. `chxchx-tech jobs run|list|show`.
-  - **Nodo** (`--features node`, aún fuera del build por defecto y de los instaladores): `node start|status|stop`, API v1 en `127.0.0.1`, eventos por WebSocket, `node pair|devices|revoke|audit`, `node remote status|enable|disable` con Tailscale. Presupuestos medidos: 10,4 MiB en reposo, 0 de CPU, `health` p95 1,13 ms.
+  - **Nodo** (feature `node`, ya en el build por defecto y en los paquetes de release desde 2026-11-21; el comando es opt-in, nada lo arranca solo): `node start|status|stop`, API v1 en `127.0.0.1`, eventos por WebSocket, `node pair|devices|revoke|audit`, `node remote status|enable|disable` con Tailscale. Presupuestos medidos: 10,4 MiB en reposo, 0 de CPU, `health` p95 1,13 ms.
   - **App web** (`apps/remote`, Dioxus/WASM, 610 KB comprimida) servida por el nodo en `/`: proyectos, chat en vivo con permisos y preguntas, trabajos, dispositivos y ajustes; instalable, sin red al arrancar y con reconexión. QR de vinculación en `node pair`.
 - **Seguridad:** [NODE-SECURITY.md](NODE-SECURITY.md) (autorrevisión; riesgos aceptados y lo abierto).
 - **Verificado:** Linux (18 + 509 + 6 + 22 pruebas, tres pasadas; clippy con `--features node`; builds por defecto y `cli`; WASM) y de punta a punta con Tailscale 1.104.7 real pasando por la tailnet desde la propia PC.

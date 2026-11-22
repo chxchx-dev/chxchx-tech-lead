@@ -51,13 +51,47 @@ jobs:
           print("Versión del producto:", cargo)
           PY
 
+  remote-client:
+    name: Web client (PWA) the node serves
+    needs: check-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add the WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Find the wasm-bindgen version Cargo.lock wants
+        id: wbg
+        run: echo "version=$(awk '/^name = "wasm-bindgen"$/ {getline; gsub(/[^0-9.]/, ""); print; exit}' Cargo.lock)" >> "$GITHUB_OUTPUT"
+      - name: Cache wasm-bindgen's CLI
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/wasm-bindgen
+          key: wasm-bindgen-cli-${{ steps.wbg.outputs.version }}
+      - name: Install wasm-bindgen's CLI at that version
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cargo install wasm-bindgen-cli --version "=${{ steps.wbg.outputs.version }}" --locked
+      # Built once: every platform embeds the same bytes (the node serves them to the phone).
+      - name: Build the client (fails over the 1.5 MiB budget of ADR 0017)
+        run: scripts/build-remote.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-client
+          path: apps/remote/dist
+          if-no-files-found: error
+
   linux:
     name: Linux x86_64 package
-    needs: check-version
+    needs: [check-version, remote-client]
     # glibc 2.35: the oldest the installer accepts.
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: remote-client, path: apps/remote/dist }
+      - name: The client is inside what gets built
+        shell: bash
+        run: test -f apps/remote/dist/index.html.gz && test -f apps/remote/dist/pkg/app_bg.wasm.gz
       - uses: Swatinem/rust-cache@v2
       - name: Install window build dependencies
         run: |
@@ -89,6 +123,7 @@ jobs:
           test -x "$root/bin/chxchx-tech"
           test -x "$root/bin/chxchx"
           "$root/bin/chxchx-tech" --version
+          "$root/bin/chxchx-tech" node --help | grep -q "Inicia el nodo"
           tar -czf chxchx-studio-linux-x86_64.tar.gz "$root"
           installer=chxchx-installer-linux
           mkdir -p "$installer/bin"
@@ -118,10 +153,15 @@ jobs:
 
   windows:
     name: Windows x86_64 ZIP, MSI and installer lifecycle
-    needs: check-version
+    needs: [check-version, remote-client]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: remote-client, path: apps/remote/dist }
+      - name: The client is inside what gets built
+        shell: bash
+        run: test -f apps/remote/dist/index.html.gz && test -f apps/remote/dist/pkg/app_bg.wasm.gz
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-dotnet@v4
         with:
@@ -173,6 +213,7 @@ jobs:
             if (-not (Test-Path "$root/bin/$Name")) { throw "Falta $Name en el ZIP." }
           }
           & "$root/bin/chxchx-tech.exe" --version
+          if (-not ((& "$root/bin/chxchx-tech.exe" node --help) -match "Inicia el nodo")) { throw "El ZIP no trae el nodo." }
           Compress-Archive -Path $root -DestinationPath chxchx-studio-windows-x86_64.zip
       - uses: actions/upload-artifact@v4
         with:
@@ -183,7 +224,7 @@ jobs:
 
   macos:
     name: macOS ${{ matrix.name }} app
-    needs: check-version
+    needs: [check-version, remote-client]
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -193,6 +234,11 @@ jobs:
           - { name: x86_64, target: x86_64-apple-darwin }
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: remote-client, path: apps/remote/dist }
+      - name: The client is inside what gets built
+        shell: bash
+        run: test -f apps/remote/dist/index.html.gz && test -f apps/remote/dist/pkg/app_bg.wasm.gz
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}

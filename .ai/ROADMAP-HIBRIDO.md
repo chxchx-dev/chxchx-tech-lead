@@ -134,7 +134,7 @@ Linux con el binario real, un `codex` y un servicio de agentes falsos (turno com
 
 ### H2 — Nodo local · M
 
-- [x] `chxchx-tech node start|status|stop` (feature `node`, fuera del build por defecto: `axum`
+- [x] `chxchx-tech node start|status|stop` (feature `node`, desde 2026-11-21 en el build por defecto y en los paquetes de release; entonces estaba fuera: `axum`
   0.8.9, `tokio` 1.54.1, `tower` 0.5.3 y `getrandom` 0.3.4, todos con versión exacta). Escucha
   solo en `127.0.0.1` y rechaza un `Host` u `Origin` ajeno (páginas web y DNS rebinding).
 - [x] Token local de 256 bits en un archivo `0600` dentro de una carpeta `0700`, comparado en

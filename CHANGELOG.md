@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- **El nodo y la app web vienen en los paquetes**: los instaladores y paquetes de Linux, Windows y macOS ya incluyen `chxchx-tech node ...` y la app para el teléfono que el nodo sirve (el CI la construye una vez y cada plataforma la incrusta; el paquete de Linux y el ZIP de Windows comprueban que el nodo está dentro). El nodo no arranca solo: lo inicias tú, desde Ajustes en Studio o con `node start`/`node service install`.
+
 > La versión del producto es 0.7.0+ (nodo, app web, manager); el encabezado se renombra a «0.7.0» al publicar la estable.
 
 - **Manager completo (H6)**: `chxchx-tech manager update [--apply]` aplica una versión nueva solo si el manifiesto está firmado (ed25519), el paquete coincide con su SHA-256 y es más nueva; espera a que no haya trabajos, conserva los archivos anteriores y los restaura si el programa no responde (solo Linux; hasta que haya clave de firma publicada no aplica nada). `manager watch` levanta el nodo y el servicio de agentes si se caen, con espera creciente y corte tras 3 reinicios por hora; `manager recover` repara copias viejas o rotas del servicio de agentes; `manager keygen` genera la clave de firma. El nodo ajusta cuántos turnos corre a la vez según tu memoria y CPU, y `manager status` muestra también el disco.
