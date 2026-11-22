@@ -161,7 +161,12 @@ pub fn present(
         .map_err(|_| compositor::SurfaceError::Lost)?;
 
     let last_layers = {
-        let age = buffer.age();
+        // ChxChx patch: every frame is drawn whole. Reusing what an older buffer held left stale
+        // glyphs piled up when scrolling on Wayland. `CHXCHX_PARTIAL_REDRAW=1` brings the upstream
+        // behavior back (it is lighter, but shows that defect).
+        static PARTIAL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let full = !*PARTIAL.get_or_init(|| std::env::var_os("CHXCHX_PARTIAL_REDRAW").is_some());
+        let age = if full { 0 } else { buffer.age() };
 
         surface.max_age = surface.max_age.max(age);
         surface.layer_stack.truncate(surface.max_age as usize);
