@@ -6,11 +6,12 @@ use iced::widget::column;
 pub(super) fn hero<'a>() -> Element<'a, Message> {
     container(
         row![
-            brand::logo(124.0),
+            brand::mascot(118.0),
             column![
+                brand::wordmark(13.0),
                 container(
                     text(concat!(
-                        "ENTORNO DE DESARROLLO  ·  v",
+                        "STUDIO  ·  ENTORNO DE DESARROLLO  ·  v",
                         env!("CARGO_PKG_VERSION")
                     ))
                     .size(10)
@@ -18,7 +19,6 @@ pub(super) fn hero<'a>() -> Element<'a, Message> {
                 )
                 .padding([3, 10])
                 .style(styles::chip(design::brand_cyan())),
-                text("ChxChx Studio").size(30).font(design::UI_BOLD),
                 text("Prepara, conecta y controla tus proyectos asistidos por agentes desde un solo lugar.")
                     .size(14)
                     .color(design::muted()),

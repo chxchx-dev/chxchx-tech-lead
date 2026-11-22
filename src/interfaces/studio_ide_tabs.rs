@@ -108,7 +108,7 @@ pub(super) fn editor_area(state: &Dashboard) -> Element<'_, Message> {
     let Some(tab) = selected_tab(state) else {
         return container(
             column![
-                brand::mark(96.0).opacity(0.35_f32),
+                brand::mascot(110.0).opacity(0.55_f32),
                 text("Abre un archivo desde el explorador")
                     .size(13)
                     .color(design::muted()),

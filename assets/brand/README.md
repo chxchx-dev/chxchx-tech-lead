@@ -8,4 +8,5 @@
 - `apps/remote/web/img/banner.png`: el rótulo `CHXCHX` de bloques del terminal, dibujado como imagen con el
   degradado cian → azul (`#00e5ff` → `#2a70ff`) para que se vea igual en cualquier teléfono, sin depender de
   una fuente con caracteres de caja.
+- `mascot-256.png`: la mascota a 256 px, para la ventana de Studio.
 - Colores: fondo `#070a10`, acento `#00d9ff`, degradado `#00e5ff → #2a8bff → #3a63ff`.

@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- **Studio con la misma identidad que la app web**: la portada de Inicio muestra tu personaje y el rótulo `CHXCHX` de bloques en degradado cian→azul (dibujado como texto, nítido a cualquier escala, como el banner de la línea de comandos), con «STUDIO · ENTORNO DE DESARROLLO · versión» debajo. El editor sin archivos abiertos lleva el personaje en vez del isotipo desvaído, y un chat nuevo lo muestra como avatar junto a «Chat con …». El logo grande antiguo de la portada ya no se usa.
+
 - **La app web ya tiene la identidad de ChxChx**: tu personaje y el rótulo `CHXCHX` de bloques (con el degradado cian→azul del terminal) dan la bienvenida en la pantalla de vinculación; el isotipo del nudo en X acompaña la barra superior y la pestaña del navegador; Inicio muestra el avatar con una línea con la voz del prompt (`CHXCHX-DEV › listo para trabajar`, `› N trabajando`, `› esperan tu respuesta`) y el chat vacío lleva el personaje. La paleta pasa a la de la marca (fondo casi negro `#070a10`, acento `#00d9ff`, botones y mensajes con degradado y un resplandor suave) y el icono de la app instalada es el personaje. El cliente pesa menos que antes (515 KB). Las imágenes derivadas están descritas en `assets/brand/README.md`.
 
 - **Respaldo para el teclado de Safari (iPhone/iPad)**: Safari no encoge la página cuando sale el teclado, solo la zona visible, y además desplaza la página hacia el campo. La conversación ahora se dimensiona y se coloca según la zona visible real (`visualViewport`), de modo que la cabecera con los agentes no se va y el cuadro de escribir queda sobre el teclado. Comprobado con una simulación en Chromium y sin regresiones en Chrome del teléfono; **sin probar en un iPhone real**.
