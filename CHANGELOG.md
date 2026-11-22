@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- **«Iniciar el nodo» respeta el servicio**: si instalaste el nodo como servicio de usuario en Linux, Studio (y `manager watch`) lo arrancan con `systemctl --user start` en vez de lanzar un proceso suelto que chocaría con el servicio. Sin servicio, todo sigue como antes.
+
 ## 0.7.1 — Nodo local, app para el teléfono y Manager
 
 Tus agentes siguen trabajando aunque cierres Studio, y los puedes seguir y aprobar desde el teléfono.

@@ -32,6 +32,12 @@ pub fn locate() -> Option<PathBuf> {
 /// Starts the node and waits a moment to see it did not exit at once. A `chxchx-tech` built
 /// without the node says so and stops, and that message is what the person gets.
 pub fn start() -> Result<(), String> {
+    // With the user service installed (Linux), the service is the one way to start the node: a loose
+    // process next to it would fight the service for the port the next time it is started.
+    #[cfg(feature = "node")]
+    if let Some(result) = start_through_service() {
+        return result;
+    }
     let program = locate().ok_or(
         "No encuentro `chxchx-tech`. Instala el paquete completo o ejecuta `chxchx-tech node start` en una terminal.",
     )?;
@@ -82,6 +88,47 @@ pub fn start() -> Result<(), String> {
     Ok(()) // still running: the node is on its own now
 }
 
+/// The command that starts the node through its user service, if it should: only on Linux with the
+/// service installed. Pure, so it is tested without systemd.
+pub fn service_start_command(os: &str, installed: bool) -> Option<Vec<String>> {
+    (os == "linux" && installed).then(|| {
+        ["systemctl", "--user", "start", "chxchx-node"]
+            .map(str::to_owned)
+            .to_vec()
+    })
+}
+
+/// `Some(result)` when the user service handled it; `None` to start a loose process as before.
+#[cfg(feature = "node")]
+fn start_through_service() -> Option<Result<(), String>> {
+    use super::user_service as service;
+    let setup = service::current_setup(crate::interfaces::node::DEFAULT_PORT).ok()?;
+    let installed = service::is_installed(&service::plan(&setup));
+    let command = service_start_command(std::env::consts::OS, installed)?;
+    let (program, args) = command.split_first()?;
+    let started = Command::new(program).args(args).output();
+    Some(match started {
+        Ok(output) if output.status.success() => {
+            // `start` returns once systemd accepted it: wait for the node itself to answer.
+            for _ in 0..50 {
+                if super::node_link::endpoint().is_some() {
+                    return Some(Ok(()));
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err("El servicio arrancó pero el nodo no responde todavía: mira `systemctl --user status chxchx-node`.".to_owned())
+        }
+        Ok(output) => Err(format!(
+            "El servicio no pudo arrancar: {}",
+            String::from_utf8_lossy(&output.stderr)
+                .lines()
+                .last()
+                .unwrap_or("sin detalle")
+        )),
+        Err(error) => Err(format!("No se pudo ejecutar systemctl: {error}")),
+    })
+}
+
 /// What was added to the log after `from`, as one short line.
 fn new_text(log: &std::path::Path, from: u64) -> Option<String> {
     let bytes = std::fs::read(log).ok()?;
@@ -93,6 +140,21 @@ fn new_text(log: &std::path::Path, from: u64) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_service_starts_the_node_only_on_linux_and_only_when_it_is_installed() {
+        assert_eq!(
+            service_start_command("linux", true).unwrap(),
+            ["systemctl", "--user", "start", "chxchx-node"]
+        );
+        assert_eq!(
+            service_start_command("linux", false),
+            None,
+            "no service: a loose process"
+        );
+        assert_eq!(service_start_command("macos", true), None);
+        assert_eq!(service_start_command("windows", true), None);
+    }
 
     #[test]
     fn the_last_new_line_of_the_log_is_the_reason() {
