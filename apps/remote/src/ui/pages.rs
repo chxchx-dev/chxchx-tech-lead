@@ -116,12 +116,25 @@ pub fn Projects() -> Element {
 #[component]
 fn JobRow(job: Job) -> Element {
     let now = CLOCK();
+    // Several turns of the same agent look alike: what was asked tells them apart.
+    let excerpt = match &job.spec {
+        JobSpec::AgentTurn(turn) => {
+            Some(turn.prompt.split_whitespace().collect::<Vec<_>>().join(" "))
+        }
+        _ => None,
+    }
+    .filter(|text| !text.is_empty());
     rsx! {
         li { class: "job-row",
             a { href: "{Route::Job(job.id.clone()).to_hash()}",
-                span { class: "badge {model::state_class(job.state)}", "{model::state_label(job.state)}" }
-                span { class: "job-what", "{model::describe(&job.spec)}" }
-                span { class: "muted when", "{model::ago(now, job.updated_ms)}" }
+                span { class: "job-main",
+                    span { class: "job-what", "{model::describe(&job.spec)}" }
+                    if let Some(prompt) = &excerpt { span { class: "job-prompt", "{prompt}" } }
+                }
+                span { class: "job-side",
+                    span { class: "badge {model::state_class(job.state)}", "{model::state_label(job.state)}" }
+                    span { class: "muted when", "{model::ago(now, job.updated_ms)}" }
+                }
             }
         }
     }
