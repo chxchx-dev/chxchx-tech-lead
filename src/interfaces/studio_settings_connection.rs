@@ -404,7 +404,14 @@ mod tests {
             event(state, Event::Load);
             event(
                 state,
-                Event::Type(Field::Tool(1), "/no/existe/codex".into()),
+                Event::Type(
+                    Field::Tool(1),
+                    std::env::temp_dir()
+                        .join("no-existe-chxchx")
+                        .join("codex")
+                        .display()
+                        .to_string(),
+                ),
             );
             assert!(
                 draft(&state.settings.connection)
