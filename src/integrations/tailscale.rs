@@ -68,6 +68,36 @@ pub struct ServeConfig {
     pub funnel: Vec<u16>,
 }
 
+/// Whether what `tailscale serve` shows on the HTTPS port actually reaches the node.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Reach {
+    /// Served, and to the port the node is on.
+    Serving(String),
+    /// Served to another port than the node's: the phone gets a 502.
+    WrongPort { proxy: String, node_port: u16 },
+    /// Served, but there is no node to compare with (it is not running).
+    NodeDown(String),
+    /// The port serves something that is not a proxy.
+    Other,
+    /// The port is no longer served.
+    NotServed,
+}
+
+pub fn reach(config: &ServeConfig, https_port: u16, node_port: Option<u16>) -> Reach {
+    match (config.ports.get(&https_port), node_port) {
+        (Some(Serving::Proxy(proxy)), Some(port)) if *proxy == target(port) => {
+            Reach::Serving(proxy.clone())
+        }
+        (Some(Serving::Proxy(proxy)), Some(port)) => Reach::WrongPort {
+            proxy: proxy.clone(),
+            node_port: port,
+        },
+        (Some(Serving::Proxy(proxy)), None) => Reach::NodeDown(proxy.clone()),
+        (Some(Serving::Other), _) => Reach::Other,
+        (None, _) => Reach::NotServed,
+    }
+}
+
 pub fn parse_machine(json: &str) -> Result<Machine, String> {
     let value: serde_json::Value = serde_json::from_str(json)
         .map_err(|error| format!("Respuesta de Tailscale ilegible: {error}"))?;
@@ -384,6 +414,33 @@ mod tests {
             assert!(error.contains(expected), "{state}: {error}");
         }
         assert!(parse_machine("not json").is_err());
+    }
+
+    #[test]
+    fn serving_a_different_port_than_the_nodes_is_told_apart_from_serving_it() {
+        let mut config = ServeConfig::default();
+        config
+            .ports
+            .insert(443, Serving::Proxy("http://127.0.0.1:47821".into()));
+        assert_eq!(
+            reach(&config, 443, Some(47821)),
+            Reach::Serving("http://127.0.0.1:47821".into())
+        );
+        // The node was started on another port: the phone would get a 502.
+        assert_eq!(
+            reach(&config, 443, Some(47900)),
+            Reach::WrongPort {
+                proxy: "http://127.0.0.1:47821".into(),
+                node_port: 47900
+            }
+        );
+        assert_eq!(
+            reach(&config, 443, None),
+            Reach::NodeDown("http://127.0.0.1:47821".into())
+        );
+        assert_eq!(reach(&config, 8443, Some(47821)), Reach::NotServed);
+        config.ports.insert(8443, Serving::Other);
+        assert_eq!(reach(&config, 8443, Some(47821)), Reach::Other);
     }
 
     #[test]

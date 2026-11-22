@@ -247,12 +247,32 @@ fn write(project: &Path, agent_id: &str, state: &ChatState) -> Result<(), String
         file.write_all(b"\n").map_err(|error| error.to_string())?;
         file.sync_all().map_err(|error| error.to_string())?;
         drop(file);
-        fs::rename(&temporary, &target).map_err(|error| error.to_string())
+        replace_file(&temporary, &target).map_err(|error| error.to_string())
     })();
     if result.is_err() {
         let _ = fs::remove_file(&temporary);
     }
     result
+}
+
+/// Puts `from` in place of `to`. On Windows a file that was just written can be held for a moment by
+/// the antivirus or the indexer, and the rename then fails for no lasting reason: a few short tries
+/// are enough. Elsewhere it is a single plain rename, and the first error is the one reported.
+fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    let tries = if cfg!(windows) { 5 } else { 1 };
+    let mut attempt = 0;
+    loop {
+        match fs::rename(from, to) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                attempt += 1;
+                if attempt >= tries {
+                    return Err(error);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(25 * attempt));
+            }
+        }
+    }
 }
 
 fn clean(text: &str) -> String {
@@ -364,6 +384,25 @@ mod tests {
         ));
         fs::create_dir_all(&root).unwrap();
         root
+    }
+
+    #[test]
+    fn replacing_a_file_keeps_the_new_contents_and_reports_a_missing_source() {
+        let root = project("replace");
+        let (old, new) = (root.join("state.json"), root.join(".state.tmp"));
+        fs::write(&old, "viejo").unwrap();
+        fs::write(&new, "nuevo").unwrap();
+        replace_file(&new, &old).unwrap();
+        assert_eq!(fs::read_to_string(&old).unwrap(), "nuevo");
+        assert!(!new.exists(), "the temporary file is gone");
+        // A source that does not exist is an error after the tries, not a hang or a silent success.
+        assert!(replace_file(&root.join("no-existe"), &old).is_err());
+        assert_eq!(
+            fs::read_to_string(&old).unwrap(),
+            "nuevo",
+            "nothing was lost"
+        );
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

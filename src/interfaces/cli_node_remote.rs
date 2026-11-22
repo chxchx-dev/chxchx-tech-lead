@@ -4,7 +4,7 @@
 //! the way back: it stops the node answering to the Tailscale name and removes the `serve` proxy,
 //! but only a local proxy that ChxChx could have set.
 use crate::features::node_state::{self, RemoteConfig};
-use crate::integrations::tailscale::{self, Disable, Serving};
+use crate::integrations::tailscale::{self, Disable};
 use clap::Subcommand;
 use std::path::PathBuf;
 
@@ -111,17 +111,14 @@ fn status() -> Result<(), String> {
             remote.https_port, remote.https_port
         );
     }
-    match (config.ports.get(&remote.https_port), info) {
-        (Some(Serving::Proxy(proxy)), Some(info)) if *proxy == tailscale::target(info.port) => {
-            println!("Tailscale sirve el nodo ({proxy}) ✓");
-        }
-        (Some(Serving::Proxy(proxy)), Some(info)) => println!(
-            "⚠ Tailscale apunta a {proxy}, pero el nodo está en el puerto {}. Vuelve a ejecutar `node remote enable --apply`.",
-            info.port
+    match tailscale::reach(&config, remote.https_port, info.map(|info| info.port)) {
+        tailscale::Reach::Serving(proxy) => println!("Tailscale sirve el nodo ({proxy}) ✓"),
+        tailscale::Reach::WrongPort { proxy, node_port } => println!(
+            "⚠ Tailscale apunta a {proxy}, pero el nodo está en el puerto {node_port}. Vuelve a ejecutar `node remote enable --apply`."
         ),
-        (Some(Serving::Proxy(proxy)), None) => println!("Tailscale apunta a {proxy}"),
-        (Some(Serving::Other), _) => println!("⚠ El puerto {} sirve otra cosa.", remote.https_port),
-        (None, _) => println!(
+        tailscale::Reach::NodeDown(proxy) => println!("Tailscale apunta a {proxy}"),
+        tailscale::Reach::Other => println!("⚠ El puerto {} sirve otra cosa.", remote.https_port),
+        tailscale::Reach::NotServed => println!(
             "⚠ Tailscale ya no sirve ese puerto: vuelve a ejecutar `node remote enable --apply`."
         ),
     }

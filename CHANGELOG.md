@@ -2,6 +2,9 @@
 
 ## Sin publicar
 
+- **Studio avisa cuando el celular no llegaría al nodo**: si el acceso remoto está activado pero Tailscale apunta a otro puerto que el del nodo (lo que da el error 502 en el teléfono), Ajustes → Nodo local lo dice en palabras y da el comando para corregirlo (`node remote enable --apply`). También avisa si Tailscale ya no sirve el nodo o el puerto sirve otra cosa. `node remote status` usa ahora la misma comprobación.
+- **Guardado del chat más robusto en Windows**: el archivo del historial se renombra con unos pocos reintentos cortos (solo en Windows), por si el antivirus o el indexador lo retiene un instante.
+
 - **Trabajos más legibles en el teléfono**: cada fila muestra el nombre completo («Claude en tu-proyecto»), el inicio del mensaje que se envió (varios turnos del mismo agente se parecían) y, a la derecha, el estado y la hora en una columna alineada.
 
 - **La app web probada en un teléfono real (Android, Chrome, modo oscuro y teclado)**: se corrigieron tres cosas que solo se veían ahí. Con el teclado abierto la cabecera con los agentes desaparecía y la barra de pestañas quitaba espacio: ahora el teclado reduce el área de la página, las pestañas se ocultan y los tres agentes siguen a la vista. Al abrir una conversación larga ahora baja al último mensaje (antes se quedaba arriba). Y en el chat se quitó la barra «Conversación» redundante (el punto de conexión pasó a la cabecera del chat) para ganar altura. Las etiquetas de estado de «Recientes» tienen el mismo ancho.

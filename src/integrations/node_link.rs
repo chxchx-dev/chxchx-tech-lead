@@ -17,6 +17,7 @@ use std::time::Duration;
 
 /// Time a call to the node may take. On loopback a healthy node answers in milliseconds.
 const QUICK: Duration = Duration::from_millis(1_500);
+#[cfg(not(test))]
 const HEALTH: Duration = Duration::from_millis(500);
 
 /// How to reach a running node.
@@ -61,10 +62,15 @@ fn test_node() -> Option<(Endpoint, ProjectId)> {
 /// The node of this user, if one is running and answers: its file says where it is, its process
 /// is alive and `health` replies. `None` otherwise (Studio then runs everything itself).
 pub fn endpoint() -> Option<Endpoint> {
+    // Tests only ever see the node they stand up themselves, never the one of whoever runs them.
     #[cfg(test)]
-    if let Some((endpoint, _)) = test_node() {
-        return Some(endpoint);
-    }
+    return test_node().map(|(endpoint, _)| endpoint);
+    #[cfg(not(test))]
+    real_endpoint()
+}
+
+#[cfg(not(test))]
+fn real_endpoint() -> Option<Endpoint> {
     let dir = node_state::dir()?;
     let info = node_state::read_info(&dir)?;
     if !crate::features::workspace_processes::pid_alive(info.pid) {
@@ -186,6 +192,54 @@ pub fn stop(endpoint: &Endpoint) -> Result<(), String> {
 pub fn pairing(endpoint: &Endpoint, role: Role) -> Result<PairingOffer, String> {
     let body = serde_json::json!({ "role": role }).to_string();
     call(endpoint, "POST", "/api/v1/devices/pairing", Some(body), &[])
+}
+
+/// What the node says about itself, for the screen that shows it.
+#[derive(Clone, Debug)]
+pub struct RunningNode {
+    pub port: u16,
+    pub version: String,
+    pub running: usize,
+    pub queued: usize,
+    /// `None` when the devices could not be read (the node is up but refused or failed).
+    pub devices: Option<Vec<Device>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Overview {
+    /// `None` when no node answers.
+    pub running: Option<RunningNode>,
+    /// The address devices open, when remote access is enabled.
+    pub address: Option<String>,
+    /// Why that address would not reach the node (Tailscale points elsewhere), in words for the person.
+    pub remote_warning: Option<String>,
+}
+
+/// Asks the node (if there is one) who it is and which devices are linked to it. Blocking.
+pub fn overview_with(endpoint: Option<Endpoint>, address: Option<String>) -> Overview {
+    let running = endpoint.and_then(|endpoint| {
+        let status = status(&endpoint).ok()?;
+        Some(RunningNode {
+            port: endpoint.port,
+            version: status.version,
+            running: status.jobs.running,
+            queued: status.jobs.queued,
+            devices: devices(&endpoint).ok(),
+        })
+    });
+    Overview {
+        running,
+        address,
+        remote_warning: None,
+    }
+}
+
+/// [`overview_with`] for this user's node and the remote address it is configured with.
+pub fn overview() -> Overview {
+    let address = node_state::dir()
+        .and_then(|dir| node_state::read_remote(&dir))
+        .map(|remote| remote.url());
+    overview_with(endpoint(), address)
 }
 
 /// The alias the project registry gives the project at `root`, which is how the node names it.

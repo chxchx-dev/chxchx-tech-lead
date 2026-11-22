@@ -6,27 +6,10 @@
 use super::*;
 use crate::integrations::node_link::{self, Endpoint};
 use crate::integrations::node_process;
-use chxchx_protocol::{Device, DeviceId, PairingOffer, Role};
+use chxchx_protocol::{DeviceId, PairingOffer, Role};
 use iced::widget::column;
 
-/// What was found the last time the node was asked.
-#[derive(Clone, Debug)]
-pub(in crate::interfaces::studio) struct Snapshot {
-    /// `None` when no node answers.
-    pub running: Option<Running>,
-    /// The address devices open, when remote access is enabled.
-    pub address: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub(in crate::interfaces::studio) struct Running {
-    pub port: u16,
-    pub version: String,
-    pub running: usize,
-    pub queued: usize,
-    /// `None` when the devices could not be read.
-    pub devices: Option<Vec<Device>>,
-}
+pub(super) use node_link::{Overview as Snapshot, RunningNode as Running};
 
 #[derive(Default)]
 pub(super) struct State {
@@ -60,20 +43,49 @@ pub(in crate::interfaces::studio) enum Event {
 
 /// Reads the node. Blocking: off the UI thread.
 fn read() -> Snapshot {
-    let address = crate::features::node_state::dir()
-        .and_then(|dir| crate::features::node_state::read_remote(&dir))
-        .map(|remote| remote.url());
-    let running = node_link::endpoint().and_then(|endpoint| {
-        let status = node_link::status(&endpoint).ok()?;
-        Some(Running {
-            port: endpoint.port,
-            version: status.version,
-            running: status.jobs.running,
-            queued: status.jobs.queued,
-            devices: node_link::devices(&endpoint).ok(),
-        })
-    });
-    Snapshot { running, address }
+    let mut overview = node_link::overview();
+    overview.remote_warning = remote_warning(&overview);
+    overview
+}
+
+/// Remote access is on but `tailscale serve` does not lead to the node: the phone would see a 502.
+#[cfg(feature = "node")]
+fn remote_warning(overview: &Snapshot) -> Option<String> {
+    use crate::integrations::tailscale;
+    let remote = crate::features::node_state::dir()
+        .and_then(|dir| crate::features::node_state::read_remote(&dir))?;
+    let cli = tailscale::locate()?;
+    let config = tailscale::serve_config(&cli).ok()?;
+    let port = overview.running.as_ref().map(|node| node.port);
+    explain(tailscale::reach(&config, remote.https_port, port))
+}
+
+#[cfg(not(feature = "node"))]
+fn remote_warning(_: &Snapshot) -> Option<String> {
+    None
+}
+
+/// What each way of not reaching the node means for the person.
+#[cfg(feature = "node")]
+fn explain(reach: crate::integrations::tailscale::Reach) -> Option<String> {
+    use crate::integrations::tailscale::Reach;
+    match reach {
+        Reach::Serving(_) | Reach::NodeDown(_) => None,
+        Reach::WrongPort { node_port, .. } => Some(format!(
+            "El celular verá un error 502: Tailscale apunta a otro puerto y el nodo está en el {node_port}. \
+             Corrígelo con `chxchx-tech node remote enable --apply`."
+        )),
+        Reach::Other => Some(
+            "El puerto de acceso remoto sirve otra cosa: el celular no llegará al nodo. \
+             Revisa `chxchx-tech node remote status`."
+                .to_owned(),
+        ),
+        Reach::NotServed => Some(
+            "Tailscale ya no sirve el nodo: el celular no llegará. Vuelve a activarlo con \
+             `chxchx-tech node remote enable --apply`."
+                .to_owned(),
+        ),
+    }
 }
 
 /// A node to talk to for an action, or why there is none.
@@ -295,6 +307,9 @@ pub(super) fn card(state: &Dashboard) -> Element<'_, Message> {
         .spacing(10)
         .align_y(iced::Center),
     );
+    if let Some(warning) = &snapshot.remote_warning {
+        body = body.push(text(warning.clone()).size(12).color(design::danger()));
+    }
     if delegate && snapshot.running.is_none() {
         body = body.push(
             text("El nodo no está en marcha: por ahora los turnos corren en Studio.")
@@ -426,4 +441,260 @@ fn finish<'a>(body: iced::widget::Column<'a, Message>, node: &'a State) -> Eleme
         .width(Fill)
         .style(styles::card)
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chxchx_protocol::Device;
+
+    fn studio() -> Dashboard {
+        super::super::super::editor::fixture()
+    }
+
+    fn device(id: &str, name: &str) -> Device {
+        Device {
+            id: DeviceId::parse(id).unwrap(),
+            name: name.into(),
+            role: Role::Operator,
+            created_ms: 1,
+            last_seen_ms: None,
+        }
+    }
+
+    fn running(devices: Option<Vec<Device>>) -> Snapshot {
+        Snapshot {
+            running: Some(Running {
+                port: 47821,
+                version: "0.7.1".into(),
+                running: 1,
+                queued: 2,
+                devices,
+            }),
+            address: Some("https://pc.tail1234.ts.net/".into()),
+            remote_warning: None,
+        }
+    }
+
+    fn stopped() -> Snapshot {
+        Snapshot {
+            running: None,
+            address: None,
+            remote_warning: None,
+        }
+    }
+
+    fn event(state: &mut Dashboard, event: Event) {
+        let _ = update(state, event);
+    }
+
+    #[test]
+    fn what_the_node_says_is_shown_and_a_stopped_node_forgets_what_depended_on_it() {
+        let mut state = studio();
+        event(
+            &mut state,
+            Event::Loaded(running(Some(vec![device("d1", "Pixel")]))),
+        );
+        let node = &state.settings.node;
+        let shown = node
+            .snapshot
+            .as_ref()
+            .and_then(|s| s.running.as_ref())
+            .unwrap();
+        assert_eq!((shown.port, shown.running, shown.queued), (47821, 1, 2));
+
+        // A code and a pending unlink make no sense once the node is gone.
+        event(&mut state, Event::AskUnlink(DeviceId::parse("d1").unwrap()));
+        state.settings.node.code = Some(("ABCDE-FGH23".into(), None, 0));
+        event(&mut state, Event::Loaded(stopped()));
+        assert!(state.settings.node.code.is_none());
+        assert!(state.settings.node.confirming.is_none());
+        assert!(
+            state
+                .settings
+                .node
+                .snapshot
+                .as_ref()
+                .unwrap()
+                .running
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn unlinking_takes_two_taps_and_can_be_called_off() {
+        let mut state = studio();
+        let id = DeviceId::parse("d1").unwrap();
+        event(
+            &mut state,
+            Event::Loaded(running(Some(vec![device("d1", "Pixel")]))),
+        );
+
+        event(&mut state, Event::AskUnlink(id.clone()));
+        assert_eq!(state.settings.node.confirming.as_ref(), Some(&id));
+        assert!(!state.settings.node.busy, "asking changes nothing yet");
+
+        event(&mut state, Event::CancelUnlink);
+        assert!(state.settings.node.confirming.is_none());
+        assert!(!state.settings.node.busy);
+
+        event(&mut state, Event::AskUnlink(id.clone()));
+        event(&mut state, Event::Unlink(id));
+        assert!(
+            state.settings.node.confirming.is_none(),
+            "the question is over"
+        );
+        assert!(state.settings.node.busy, "the request is in flight");
+    }
+
+    #[test]
+    fn the_result_of_an_unlink_or_a_stop_is_told_to_the_person() {
+        let mut state = studio();
+        state.settings.node.busy = true;
+        event(&mut state, Event::Unlinked(Ok(())));
+        assert!(!state.settings.node.busy);
+        assert!(state.settings.node.notice.contains("desvinculado"));
+
+        event(
+            &mut state,
+            Event::Unlinked(Err("El nodo no responde.".into())),
+        );
+        assert_eq!(state.settings.node.notice, "El nodo no responde.");
+
+        event(&mut state, Event::Stopped(Ok(())));
+        assert!(state.settings.node.notice.contains("deteniendo"));
+        event(&mut state, Event::Started(Err("puerto ocupado".into())));
+        assert_eq!(state.settings.node.notice, "puerto ocupado");
+    }
+
+    #[test]
+    fn a_pairing_code_comes_with_the_address_to_open_when_remote_access_is_on() {
+        let mut state = studio();
+        let offer = || PairingOffer {
+            code: "ABCDE-FGH23".into(),
+            role: Role::Operator,
+            expires_ms: 99,
+        };
+        event(&mut state, Event::Loaded(running(None)));
+        event(&mut state, Event::Code(Ok(offer())));
+        let (code, address, _) = state.settings.node.code.clone().unwrap();
+        assert_eq!(code, "ABCDE-FGH23");
+        assert_eq!(
+            address.as_deref(),
+            Some("https://pc.tail1234.ts.net/#code=ABCDE-FGH23"),
+            "the code goes after the #: it never reaches a server"
+        );
+
+        // Without remote access there is no address to give, only the code.
+        let mut local = studio();
+        event(
+            &mut local,
+            Event::Loaded(Snapshot {
+                address: None,
+                ..running(None)
+            }),
+        );
+        event(&mut local, Event::Code(Ok(offer())));
+        assert_eq!(local.settings.node.code.unwrap().1, None);
+    }
+
+    #[test]
+    fn a_refused_pairing_code_shows_why_and_keeps_no_code() {
+        let mut state = studio();
+        state.settings.node.busy = true;
+        event(
+            &mut state,
+            Event::Code(Err("Vinculación cerrada por intentos fallidos".into())),
+        );
+        assert!(!state.settings.node.busy);
+        assert!(state.settings.node.code.is_none());
+        assert!(state.settings.node.notice.contains("cerrada"));
+    }
+
+    #[test]
+    fn refreshing_while_something_is_in_flight_does_nothing() {
+        let mut state = studio();
+        state.settings.node.snapshot = Some(stopped());
+        state.settings.node.busy = true;
+        event(&mut state, Event::Refresh);
+        assert!(state.settings.node.busy, "still the same request");
+    }
+
+    #[test]
+    fn using_the_node_for_chat_turns_is_remembered() {
+        let mut state = studio();
+        assert!(!state.session.preferences().node.delegate, "off by default");
+        event(&mut state, Event::Delegate(true));
+        assert!(state.session.preferences().node.delegate);
+        event(&mut state, Event::Delegate(false));
+        assert!(!state.session.preferences().node.delegate);
+    }
+
+    #[cfg(feature = "node")]
+    #[test]
+    fn a_tailscale_that_does_not_lead_to_the_node_is_explained_in_words() {
+        use crate::integrations::tailscale::Reach;
+        assert_eq!(
+            explain(Reach::Serving("http://127.0.0.1:47821".into())),
+            None
+        );
+        assert_eq!(
+            explain(Reach::NodeDown("http://127.0.0.1:47821".into())),
+            None
+        );
+        let wrong = explain(Reach::WrongPort {
+            proxy: "http://127.0.0.1:47821".into(),
+            node_port: 47900,
+        })
+        .unwrap();
+        assert!(wrong.contains("502") && wrong.contains("47900"), "{wrong}");
+        assert!(wrong.contains("node remote enable --apply"), "{wrong}");
+        assert!(explain(Reach::NotServed).unwrap().contains("ya no sirve"));
+        assert!(explain(Reach::Other).unwrap().contains("otra cosa"));
+    }
+
+    #[test]
+    fn the_warning_is_kept_with_what_the_node_said() {
+        let mut state = studio();
+        let mut snapshot = running(Some(vec![]));
+        snapshot.remote_warning = Some("El celular verá un error 502".into());
+        event(&mut state, Event::Loaded(snapshot));
+        let kept = state.settings.node.snapshot.as_ref().unwrap();
+        assert!(kept.remote_warning.as_deref().unwrap().contains("502"));
+        let _ = card(&state);
+    }
+
+    #[test]
+    fn the_card_draws_in_every_state_without_panicking() {
+        let mut state = studio();
+        let id = DeviceId::parse("d1").unwrap();
+        let mut states: Vec<Option<Snapshot>> = vec![
+            None,
+            Some(stopped()),
+            Some(running(None)),
+            Some(running(Some(vec![]))),
+            Some(running(Some(vec![
+                device("d1", "Pixel"),
+                device("d2", "Tablet"),
+            ]))),
+        ];
+        for snapshot in states.drain(..) {
+            state.settings.node.snapshot = snapshot;
+            for (busy, confirming, code, notice) in [
+                (false, None, None, ""),
+                (
+                    true,
+                    Some(id.clone()),
+                    Some(("ABCDE-FGH23".to_owned(), None, 0)),
+                    "algo",
+                ),
+            ] {
+                state.settings.node.busy = busy;
+                state.settings.node.confirming = confirming;
+                state.settings.node.code = code;
+                state.settings.node.notice = notice.to_owned();
+                let _ = card(&state);
+            }
+        }
+    }
 }

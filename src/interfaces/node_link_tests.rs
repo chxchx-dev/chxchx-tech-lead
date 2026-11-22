@@ -223,3 +223,93 @@ fn a_node_that_cannot_be_reached_fails_the_launch_or_ends_the_turn_with_a_reason
         "Se perdió la conexión con el nodo"
     ));
 }
+
+// ---- what the Settings panel of Studio asks of the node -----------------------------------------
+
+/// An agent that has nothing to do: these tests are about the devices, not about turns.
+struct Idle;
+
+impl Executor for Idle {
+    fn run(&self, _job: &Job, _context: &Context) -> Result<Option<String>, JobError> {
+        Ok(None)
+    }
+}
+
+fn status_with(port: u16, token: &str) -> u16 {
+    crate::integrations::node_client::request(port, "GET", "/api/v1/node", Some(token), None)
+        .map(|reply| reply.status)
+        .unwrap_or(0)
+}
+
+#[test]
+fn the_overview_lists_the_linked_devices_and_a_code_links_one_exactly_once() {
+    with_real_node_using("overview", Idle, |port| {
+        let endpoint = Endpoint::new(port, TOKEN);
+        let address = Some("https://pc.tail1234.ts.net/".to_owned());
+
+        // A node with nobody linked.
+        let overview = node_link::overview_with(Some(endpoint.clone()), address.clone());
+        assert_eq!(overview.address, address);
+        let node = overview.running.expect("the node answers");
+        assert_eq!((node.port, node.running, node.queued), (port, 0, 0));
+        assert_eq!(node.devices.unwrap().len(), 0);
+
+        // The panel's "Vincular un dispositivo": a one-use code, then the phone redeems it.
+        let offer = node_link::pairing(&endpoint, chxchx_protocol::Role::Operator).unwrap();
+        assert_eq!(offer.code.len(), 11, "XXXXX-XXXXX");
+        let body = json!({ "code": offer.code, "name": "Pixel de prueba" }).to_string();
+        let redeem = |body: &str| {
+            crate::integrations::node_client::request(
+                port,
+                "POST",
+                "/api/v1/pair",
+                None,
+                Some(body),
+            )
+            .unwrap()
+        };
+        let reply = redeem(&body);
+        assert_eq!(reply.status, 200, "{}", reply.body);
+        let token = serde_json::from_str::<Value>(&reply.body).unwrap()["token"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(redeem(&body).status, 401, "a code works once");
+
+        // The new device shows in the list, and its token works.
+        let overview = node_link::overview_with(Some(endpoint.clone()), None);
+        let devices = overview.running.unwrap().devices.unwrap();
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].name, "Pixel de prueba");
+        assert_eq!(status_with(port, &token), 200);
+
+        // The panel's "Desvincular": its token stops working at once and it leaves the list.
+        node_link::revoke(&endpoint, &devices[0].id).unwrap();
+        assert_eq!(status_with(port, &token), 401);
+        let overview = node_link::overview_with(Some(endpoint.clone()), None);
+        assert!(overview.running.unwrap().devices.unwrap().is_empty());
+        assert!(
+            node_link::revoke(&endpoint, &devices[0].id).is_err(),
+            "unlinking it again says it is gone"
+        );
+    });
+}
+
+#[test]
+fn without_a_node_the_overview_says_so_instead_of_failing() {
+    let unused = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+    let gone = node_link::overview_with(Some(Endpoint::new(unused, TOKEN)), None);
+    assert!(gone.running.is_none(), "an unreachable node is not running");
+    assert!(node_link::overview_with(None, None).running.is_none());
+}
+
+#[test]
+fn a_wrong_local_token_shows_the_node_as_not_usable_not_as_a_crash() {
+    with_real_node_using("badtoken", Idle, |port| {
+        let overview = node_link::overview_with(Some(Endpoint::new(port, "not-the-token")), None);
+        assert!(overview.running.is_none());
+    });
+}
