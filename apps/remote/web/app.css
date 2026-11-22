@@ -1,8 +1,11 @@
 /* ChxChx remote client. Classes only: the page's policy forbids inline styles. */
 :root {
   color-scheme: dark light;
-  --bg: #0f1520; --panel: #171e2b; --panel2: #1e2736; --text: #e8edf5; --muted: #9aa7ba;
-  --line: #2b3648; --accent: #2bbcff; --accent-ink: #03141f; --ok: #34d399; --bad: #f87171;
+  --bg: #070a10; --panel: #0d141f; --panel2: #131d2c; --text: #e9f1fb; --muted: #8fa3bd;
+  --line: #1a2a40; --accent: #00d9ff; --accent-ink: #00131a; --ok: #34d399; --bad: #f87171;
+  --brand: linear-gradient(135deg, #00e5ff 0%, #2a8bff 62%, #3a63ff 100%);
+  --glow: 0 0 22px rgba(0, 217, 255, 0.16);
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Roboto Mono", monospace;
   --warn: #fbbf24; --radius: 16px; --tab-h: 64px; --gutter: 16px;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
   --shadow: 0 1px 2px rgba(0,0,0,0.25), 0 6px 18px rgba(0,0,0,0.18);
@@ -10,13 +13,16 @@
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #f4f6f9; --panel: #ffffff; --panel2: #eaeff5; --text: #121821; --muted: #566274;
-    --line: #d9e0ea; --accent: #0b7fc0; --accent-ink: #ffffff; --ok: #0f9d6b; --bad: #d23b3b; --warn: #a86b00;
+    --bg: #f2f6fb; --panel: #ffffff; --panel2: #e8f0f9; --text: #0b1320; --muted: #51627a;
+    --line: #d6e0ec; --accent: #0a7fd4; --accent-ink: #ffffff; --ok: #0f9d6b; --bad: #d23b3b; --warn: #a86b00;
+    --brand: linear-gradient(135deg, #0aa9e6 0%, #1c78e8 62%, #3a55e8 100%);
+    --glow: 0 0 18px rgba(10, 127, 212, 0.14);
     --shadow: 0 1px 2px rgba(18,24,33,0.05), 0 6px 18px rgba(18,24,33,0.07);
   }
 }
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; accent-color: var(--accent); }
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 body {
   margin: 0; background: var(--bg); color: var(--text);
   font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -44,7 +50,7 @@ a { color: var(--accent); }
 /* Every page is a column with the same space between its blocks. */
 .page { display: flex; flex-direction: column; gap: var(--s4); }
 .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; background: var(--muted); }
-.dot.online { background: var(--ok); } .dot.offline { background: var(--bad); } .dot.connecting { background: var(--warn); }
+.dot.online { background: var(--ok); box-shadow: 0 0 10px color-mix(in srgb, var(--ok) 70%, transparent); } .dot.offline { background: var(--bad); } .dot.connecting { background: var(--warn); }
 .banner { margin: 0; padding: 10px var(--gutter); background: color-mix(in srgb, var(--bad) 18%, var(--bg)); border-bottom: 1px solid var(--bad); font-size: 0.92rem; }
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; justify-content: center;
@@ -56,7 +62,7 @@ a { color: var(--accent); }
   gap: 2px; text-decoration: none; color: var(--muted); font-size: 0.74rem; position: relative;
 }
 .tab .glyph { font-size: 1.25rem; line-height: 1; }
-.tab.active { color: var(--accent); }
+.tab.active { color: var(--accent); text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 55%, transparent); }
 .pip { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--bad); color: #fff; font-size: 0.7rem; text-align: center; }
 
 /* things */
@@ -69,7 +75,7 @@ a { color: var(--accent); }
 .link-body { flex: 1; min-width: 0; }
 .link-body h3 { margin-bottom: var(--s1); }
 .chevron { flex: none; font-size: 1.8rem; line-height: 1; color: var(--muted); }
-.hero .row { margin-bottom: var(--s3); }
+.hero .row { margin-bottom: var(--s2); }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); margin-bottom: var(--s3); }
 .stat { background: var(--panel2); border-radius: 12px; padding: var(--s3) var(--s2); text-align: center; min-width: 0; }
 .stat b { display: block; font-size: 1.4rem; line-height: 1.2; overflow-wrap: anywhere; }
@@ -108,7 +114,7 @@ a { color: var(--accent); }
   min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2);
   color: var(--text); font: inherit; font-weight: 600; cursor: pointer;
 }
-.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.primary { background: var(--brand); color: var(--accent-ink); border-color: transparent; box-shadow: var(--glow); }
 .btn.danger { color: var(--bad); }
 .btn.wide { width: 100%; }
 .btn:disabled { opacity: 0.5; cursor: default; }
@@ -155,7 +161,7 @@ textarea { resize: vertical; min-height: 52px; max-height: 40vh; }
 .thread { display: flex; flex-direction: column; gap: var(--s3); }
 .turn { display: flex; flex-direction: column; gap: var(--s3); }
 .msg { max-width: 88%; padding: 10px 14px; border-radius: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 6px; }
+.msg.user { align-self: flex-end; background: var(--brand); color: var(--accent-ink); border-bottom-right-radius: 6px; }
 .msg.assistant { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
 .note { align-self: center; max-width: 92%; padding: 6px 12px; border-radius: 10px; font-size: 0.88rem; color: var(--muted); background: var(--panel); text-align: center; overflow-wrap: anywhere; }
 .note.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, var(--panel)); }
@@ -180,7 +186,7 @@ legend { font-weight: 700; padding: 0; }
 }
 .composer textarea { margin: 0; flex: 1; min-height: 44px; max-height: 30vh; padding: 10px 0; border: 0; background: transparent; resize: none; }
 .composer textarea:focus-visible { outline: none; }
-.composer:focus-within { border-color: var(--accent); }
+.composer:focus-within { border-color: var(--accent); box-shadow: var(--glow); }
 .composer .send { flex: none; min-height: 44px; border-radius: 22px; padding: 0 var(--s4); }
 .chat-note { flex: none; margin: 0; padding: var(--s3) var(--gutter); text-align: center; }
 #chat-end { height: 1px; }
@@ -217,3 +223,23 @@ html.kbd-open .composer { margin-bottom: var(--s2); }
   .dot.connecting { animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.35; } }
 }
+
+/* ---- identity: the mask, the knot, the block letters and a voice of their own ---- */
+.mono { font-family: var(--mono); letter-spacing: 0.01em; }
+.prompt { color: var(--accent); margin: 0 0 var(--s3); font-size: 0.86rem; }
+.prompt::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); vertical-align: 1px; }
+.brand { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.brand-mark { width: 28px; height: 28px; flex: none; }
+.boot { display: flex; flex-direction: column; align-items: center; gap: var(--s2); padding-top: 28vh; text-align: center; }
+.boot-mark { width: 56px; height: 56px; filter: drop-shadow(0 0 14px rgba(0, 217, 255, 0.45)); }
+.pairing-hero { display: flex; flex-direction: column; align-items: center; gap: var(--s3); margin-bottom: var(--s5); text-align: center; }
+.mascot-ring { width: 132px; height: 132px; border-radius: 50%; line-height: 0; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 38px rgba(0, 217, 255, 0.28); }
+.mascot-ring img { width: 100%; height: 100%; border-radius: 50%; }
+.wordmark { margin: 0; line-height: 0; width: min(100%, 340px); }
+.wordmark img { width: 100%; height: auto; }
+.tagline { margin: 0; color: var(--muted); font-family: var(--mono); font-size: 0.78rem; text-wrap: balance; }
+.pairing .lead { text-align: center; }
+.hero-id { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+.hero-id h3 { margin: 0; }
+.avatar { width: 52px; height: 52px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 18px rgba(0, 217, 255, 0.22); }
+.empty-mascot { width: 88px; height: 88px; border-radius: 50%; margin-bottom: var(--s3); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent), 0 0 26px rgba(0, 217, 255, 0.22); }

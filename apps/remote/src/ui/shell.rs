@@ -51,7 +51,10 @@ fn Shell() -> Element {
             // only takes room the messages need, above all with the keyboard open.
             if !chat_mode {
                 header { class: "top",
-                    h1 { "{title}" }
+                    div { class: "brand",
+                        img { class: "brand-mark", src: "/img/mark-64.png", alt: "", width: "28", height: "28" }
+                        h1 { "{title}" }
+                    }
                     ConnDot {}
                 }
             }
@@ -148,7 +151,11 @@ fn Pairing() -> Element {
     };
     rsx! {
         main { class: "pairing",
-            h1 { "ChxChx" }
+            header { class: "pairing-hero",
+                div { class: "mascot-ring", img { src: "/img/mascot-288.png", alt: "", width: "132", height: "132" } }
+                h1 { class: "wordmark", img { src: "/img/banner.png", alt: "ChxChx", width: "340", height: "94" } }
+                p { class: "tagline", "control plane local para proyectos con agentes de IA" }
+            }
             p { class: "lead", "Vincula este dispositivo con tu PC para ver tus proyectos y hablar con tus agentes." }
             form { onsubmit: submit,
                 div { class: "field", role: "group", aria_label: "Código de vinculación",

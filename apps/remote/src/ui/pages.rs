@@ -20,13 +20,27 @@ pub fn Home() -> Element {
         .take(5)
         .map(|view| view.job.clone())
         .collect();
+    // A line in the voice of the terminal prompt: what the PC is doing right now.
+    let voice = node.as_ref().map(|node| {
+        if !waiting.is_empty() {
+            "CHXCHX-DEV › esperan tu respuesta".to_owned()
+        } else if node.jobs.running > 0 {
+            format!("CHXCHX-DEV › {} trabajando", node.jobs.running)
+        } else {
+            "CHXCHX-DEV › listo para trabajar".to_owned()
+        }
+    });
     rsx! {
         section { class: "page",
             div { class: "card hero",
                 div { class: "row",
-                    h3 { "Tu PC" }
+                    div { class: "hero-id",
+                        img { class: "avatar", src: "/img/mascot-96.png", alt: "", width: "52", height: "52" }
+                        h3 { "Tu PC" }
+                    }
                     if node.is_some() { span { class: "badge ok", "Conectada" } }
                 }
+                if let Some(line) = &voice { p { class: "mono prompt", "{line}" } }
                 match node {
                     Some(node) => rsx! {
                         div { class: "stats",

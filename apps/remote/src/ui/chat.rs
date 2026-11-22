@@ -291,6 +291,7 @@ pub fn Chat(project: ProjectId, provider: Provider) -> Element {
                     if loading { p { class: "muted", "Cargando la conversación…" } }
                     if empty && installed {
                         div { class: "empty",
+                            img { class: "empty-mascot", src: "/img/mascot-96.png", alt: "", width: "88", height: "88" }
                             h3 { "Empieza una conversación" }
                             p { class: "muted", "Escríbele a {label}: trabaja sobre «{project}» en tu PC y puedes seguirlo desde aquí aunque cierres Studio." }
                         }
