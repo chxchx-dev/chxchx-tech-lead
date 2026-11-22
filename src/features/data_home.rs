@@ -448,6 +448,7 @@ mod tests {
         assert!(check("").contains("Escribe"));
         assert!(check("relativa/carpeta").contains("ruta completa"));
         assert!(check(&format!("{}/../x", root.display())).contains(".."));
+        #[cfg(unix)]
         assert!(check("/").contains("propia"));
         assert!(check(root.to_str().unwrap()).contains("propia"));
         assert!(check(default.to_str().unwrap()).contains("ya es la carpeta"));
@@ -456,28 +457,26 @@ mod tests {
         assert!(!root.join("dentro").exists());
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_failed_copy_leaves_the_new_folder_empty_and_no_pointer() {
+        use std::os::unix::fs::PermissionsExt;
         let root = sandbox("fail");
         let (default, to) = (root.join("default"), root.join("data"));
         fill(&default);
         let plan = preview_in(&default, None, to.to_str().unwrap()).unwrap();
         // A file that cannot be read stops the copy halfway.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(
-                default.join("projects.json"),
-                fs::Permissions::from_mode(0o000),
-            )
-            .unwrap();
-            if fs::read(default.join("projects.json")).is_ok() {
-                return; // running as root: nothing is unreadable
-            }
-            assert!(apply_in(&default, &plan).is_err());
-            assert!(!to.exists(), "lo copiado a medias se quita");
-            assert!(chosen_in(&default).is_none());
+        fs::set_permissions(
+            default.join("projects.json"),
+            fs::Permissions::from_mode(0o000),
+        )
+        .unwrap();
+        if fs::read(default.join("projects.json")).is_ok() {
+            return; // running as root: nothing is unreadable
         }
+        assert!(apply_in(&default, &plan).is_err());
+        assert!(!to.exists(), "lo copiado a medias se quita");
+        assert!(chosen_in(&default).is_none());
     }
 
     #[test]
