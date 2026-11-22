@@ -125,7 +125,10 @@ textarea { resize: vertical; min-height: 52px; max-height: 40vh; }
 .check input { width: 22px; height: 22px; }
 
 /* chat: the page fills the screen; only the messages scroll */
-.app.chat-mode { height: 100dvh; }
+.app.chat-mode {
+  position: fixed; top: var(--vvtop, 0px); left: 0; right: 0; margin: 0 auto;
+  height: var(--vvh, 100dvh); min-height: 0;
+}
 .app.chat-mode .content { padding: 0 0 calc(var(--tab-h) + var(--safe-bottom)); display: flex; flex-direction: column; min-height: 0; }
 .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .chat-top { flex: none; background: var(--bg); border-bottom: 1px solid var(--line); padding: calc(var(--s2) + var(--safe-top)) var(--gutter) var(--s3); }
@@ -181,17 +184,16 @@ legend { font-weight: 700; padding: 0; }
 .composer .send { flex: none; min-height: 44px; border-radius: 22px; padding: 0 var(--s4); }
 .chat-note { flex: none; margin: 0; padding: var(--s3) var(--gutter); text-align: center; }
 #chat-end { height: 1px; }
-/* With the keyboard open the page is short: the tabs give way and the header shrinks, but the agents stay. */
-@media (max-height: 520px) {
-  .app.chat-mode .tabs { display: none; }
-  .app.chat-mode .content { padding-bottom: 0; }
-  .chat-top { padding-bottom: var(--s2); }
-  .chat-title .state { display: none; }
-  .chat-title h2 { font-size: 0.98rem; }
-  .segments { margin-top: var(--s1); }
-  .segment { min-height: 34px; }
-  .composer { margin-bottom: var(--s2); }
-}
+/* With the keyboard open the visible part is short (boot.js sets the class): the tabs give way and the
+   header shrinks, but the agents stay. */
+html.kbd-open .app.chat-mode .tabs { display: none; }
+html.kbd-open .app.chat-mode .content { padding-bottom: 0; }
+html.kbd-open .chat-top { padding-bottom: var(--s2); }
+html.kbd-open .chat-title .state { display: none; }
+html.kbd-open .chat-title h2 { font-size: 0.98rem; }
+html.kbd-open .segments { margin-top: var(--s1); }
+html.kbd-open .segment { min-height: 34px; }
+html.kbd-open .composer { margin-bottom: var(--s2); }
 
 /* pairing */
 .pairing { max-width: 460px; margin: 0 auto; padding: calc(28px + var(--safe-top)) var(--gutter) 40px; }

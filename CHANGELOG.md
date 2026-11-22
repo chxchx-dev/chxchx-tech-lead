@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- **Respaldo para el teclado de Safari (iPhone/iPad)**: Safari no encoge la página cuando sale el teclado, solo la zona visible, y además desplaza la página hacia el campo. La conversación ahora se dimensiona y se coloca según la zona visible real (`visualViewport`), de modo que la cabecera con los agentes no se va y el cuadro de escribir queda sobre el teclado. Comprobado con una simulación en Chromium y sin regresiones en Chrome del teléfono; **sin probar en un iPhone real**.
+
 - **«Permitir X en este chat» ahora recuerda la regla desde otro dispositivo**: antes, aprobarlo desde el teléfono valía solo para esa petición. Ahora el nodo guarda la regla que el propio agente ofreció (el cliente nunca manda reglas, solo que elegiste esa opción) y se la pasa al agente en los turnos siguientes de **la misma conversación** (mismo proyecto, agente y sesión), mientras el nodo siga encendido. Una conversación nueva o reiniciar el nodo empieza limpio. La tarjeta lo dice: «Permitido en este chat». Ojo: Claude Code puede seguir preguntando por escrituras fuera de la carpeta del proyecto, aunque exista la regla.
 - **Sin tarjeta duplicada al rechazar un permiso desde el teléfono**: Claude lista al terminar los permisos que se denegaron y eso generaba una segunda tarjeta, sin nada que contestar, igual a la que ya habías rechazado. Ahora no se repite.
 

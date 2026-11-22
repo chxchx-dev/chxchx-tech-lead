@@ -151,6 +151,37 @@ await step("abrir el proyecto muestra los agentes y permite cambiar a Codex", as
   await page.locator("textarea").waitFor({ timeout: 15_000 });
 });
 
+await step("con el teclado de Safari (zona visible baja y desplazada) la cabecera y el cuadro caben en ella", async () => {
+  // Safari no encoge la página: solo la zona visible, que además se desplaza. boot.js lo refleja en
+  // --vvh, --vvtop y la clase kbd-open; aquí se ponen a mano.
+  await page.evaluate(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--vvh", "380px");
+    root.style.setProperty("--vvtop", "120px");
+    root.classList.add("kbd-open");
+  });
+  const box = async (selector) => page.locator(selector).first().boundingBox();
+  const app = await box(".app.chat-mode");
+  const head = await box(".chat-top");
+  const agents = await box(".segments");
+  const composer = await box("form.composer");
+  assert.equal(Math.round(app.y), 120, "la app empieza donde empieza la zona visible");
+  assert.equal(Math.round(app.height), 380, "y mide lo que mide esa zona");
+  assert.ok(head.y >= 120 && agents.y + agents.height <= 120 + 380, "la cabecera y los agentes están dentro");
+  assert.ok(composer.y + composer.height <= 120 + 380 + 1, `el cuadro de escribir (${composer.y + composer.height}) cabe en la zona`);
+  assert.equal(await page.locator(".tabs").isVisible(), false, "las pestañas ceden su sitio");
+  await page.screenshot({ path: `${shots}04b-safari-keyboard.png` });
+  await page.evaluate(() => {
+    const root = document.documentElement;
+    root.style.removeProperty("--vvh");
+    root.style.removeProperty("--vvtop");
+    root.classList.remove("kbd-open");
+  });
+  const back = await box(".app.chat-mode");
+  assert.equal(Math.round(back.y), 0, "sin teclado vuelve a ocupar la pantalla");
+  assert.equal(await page.locator(".tabs").isVisible(), true);
+});
+
 await step("un mensaje corre como trabajo y se ve la respuesta, la herramienta y el final", async () => {
   await sendMessage(page, "hola");
   await page.locator(".msg.assistant", { hasText: "Listo." }).waitFor({ timeout: 20_000 });
