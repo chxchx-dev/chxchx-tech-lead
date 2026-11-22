@@ -37,7 +37,7 @@ self.addEventListener("fetch", (event) => {
         const cache = await caches.open(CACHE);
         try {
           const response = await fetch(request);
-          if (response.ok) cache.put(request, response.clone());
+          if (response.ok) cache.put(url.origin + url.pathname, response.clone()); // one copy, however it was asked for
           return response;
         } catch {
           return (await cache.match(request, { ignoreSearch: true })) || new Response("", { status: 503 });

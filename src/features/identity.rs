@@ -79,7 +79,16 @@ pub fn view_in(home: &Path) -> IdentityView {
     if avatar_in(home).is_none() {
         identity.avatar_rev = None;
     }
-    identity.view(look.accent.as_deref(), look.accent2.as_deref())
+    let mut view = identity.view(look.accent.as_deref(), look.accent2.as_deref());
+    // Everything the web client draws, in one value: what the view says plus the style sheet.
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    serde_json::to_string(&view)
+        .unwrap_or_default()
+        .hash(&mut hasher);
+    css_in(home).hash(&mut hasher);
+    view.revision = format!("{:016x}", hasher.finish());
+    view
 }
 
 /// The CSS for the web client: the Studio theme when the person asked for it, plus the accent.
@@ -210,6 +219,22 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn the_revision_changes_with_anything_the_web_client_draws_and_only_then() {
+        let dir = home("revision");
+        let first = view_in(&dir).revision;
+        assert_eq!(first, view_in(&dir).revision, "sin cambios, la misma");
+        let mut mine = load_in(&dir);
+        mine.name = "ANA".into();
+        save_in(&dir, &mine).unwrap();
+        let named = view_in(&dir).revision;
+        assert_ne!(first, named, "el nombre");
+        let mut loaded = studio_preferences::load_from(&dir).preferences;
+        loaded.appearance.theme = "light".into();
+        studio_preferences::save_to(&dir, &loaded).unwrap();
+        assert_ne!(named, view_in(&dir).revision, "el tema");
     }
 
     #[cfg(any(feature = "studio", feature = "node"))]

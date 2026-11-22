@@ -104,6 +104,8 @@ pub static PREFS: GlobalSignal<Prefs> = Signal::global(load_prefs);
 /// Until the node answers it is the product's.
 pub static IDENTITY: GlobalSignal<chxchx_protocol::IdentityView> =
     Signal::global(|| chxchx_protocol::Identity::default().view(None, None));
+/// True while the phone is bringing in a change of the person's identity (a short "syncing" notice).
+pub static SYNCING: GlobalSignal<bool> = Signal::global(|| false);
 /// The time, refreshed every few seconds so "hace 5 min" stays true on a screen left open.
 pub static CLOCK: GlobalSignal<u64> = Signal::global(net::now_ms);
 

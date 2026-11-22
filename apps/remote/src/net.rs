@@ -42,6 +42,20 @@ pub async fn sleep(ms: i32) {
     let _ = JsFuture::from(promise).await;
 }
 
+/// Swaps in the PC's current style sheet (`boot.js` does it without a flash and repaints the
+/// browser bar). Without that helper there is nothing to wait for.
+pub async fn reload_theme() {
+    let function = js_sys::Reflect::get(&window(), &JsValue::from_str("chxchxReloadTheme"))
+        .ok()
+        .and_then(|value| value.dyn_into::<js_sys::Function>().ok());
+    if let Some(function) = function
+        && let Ok(promise) = function.call0(&JsValue::NULL)
+        && let Ok(promise) = promise.dyn_into::<js_sys::Promise>()
+    {
+        let _ = JsFuture::from(promise).await;
+    }
+}
+
 pub fn now_ms() -> u64 {
     js_sys::Date::now() as u64
 }

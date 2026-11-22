@@ -53,6 +53,10 @@ pub struct IdentityView {
     /// The second color of the gradient (the one chosen, or the one derived from the accent).
     pub accent2: String,
     pub avatar_rev: Option<u64>,
+    /// Changes whenever anything the web client draws changes (name, line, picture, colors or
+    /// theme), so a phone left open can tell it is out of date with one small request.
+    #[serde(default)]
+    pub revision: String,
 }
 
 impl Identity {
@@ -84,6 +88,7 @@ impl Identity {
             accent,
             accent2,
             avatar_rev: clean.avatar_rev,
+            revision: String::new(),
         }
     }
 }

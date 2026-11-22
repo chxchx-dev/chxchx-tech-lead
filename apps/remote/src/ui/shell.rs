@@ -15,9 +15,12 @@ pub fn app() -> Element {
     // The engine runs for the life of the page.
     use_hook(|| {
         store::detach(engine::run());
-        store::detach(actions::load_identity());
+        store::detach(actions::watch_identity());
     });
     rsx! {
+        if *store::SYNCING.read() {
+            div { class: "syncing", role: "status", "Sincronizando con tu PC…" }
+        }
         if SESSION.read().is_some() { Shell {} } else { Pairing {} }
         Toasts {}
     }

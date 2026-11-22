@@ -201,13 +201,29 @@ pub async fn load_projects() {
     }
 }
 
-/// The person's own name, line and picture. It asks without a token (the pairing screen needs it
-/// before the phone is linked) and keeps the product's if the node does not answer.
-pub async fn load_identity() {
-    if let Ok(text) = net::request("GET", "/api/v1/identity", None, None, None).await
-        && let Ok(view) = serde_json::from_str::<chxchx_protocol::IdentityView>(&text)
-    {
-        *store::IDENTITY.write() = view;
+/// Keeps the phone in step with the PC: every few seconds, while the page is in view, it asks for
+/// the identity's revision; when it changed it says so ("sincronizando"), brings the new style
+/// sheet in (the old one stays on screen until the new one is ready, so nothing flashes) and then
+/// the new name and picture. Nothing needs reloading by hand.
+pub async fn watch_identity() {
+    let mut known: Option<String> = None;
+    loop {
+        if !net::is_hidden()
+            && let Ok(text) = net::request("GET", "/api/v1/identity", None, None, None).await
+            && let Ok(view) = serde_json::from_str::<chxchx_protocol::IdentityView>(&text)
+        {
+            if known.as_deref().is_some_and(|rev| rev != view.revision) {
+                *store::SYNCING.write() = true;
+                net::reload_theme().await;
+                *store::IDENTITY.write() = view.clone();
+                net::sleep(600).await;
+                *store::SYNCING.write() = false;
+            } else if known.is_none() {
+                *store::IDENTITY.write() = view.clone();
+            }
+            known = Some(view.revision);
+        }
+        net::sleep(4000).await;
     }
 }
 

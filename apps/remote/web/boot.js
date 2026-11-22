@@ -42,6 +42,28 @@ addEventListener("load", paintBar);
 new MutationObserver(paintBar).observe(document.head, { childList: true, subtree: true, attributeFilter: ["href"], attributes: true });
 window.chxchxPaintBar = paintBar;
 
+// Brings the PC's current theme in while the page stays as it is: the new sheet loads next to the
+// old one, and only when it is ready does it take its place (no flash of unstyled page).
+window.chxchxReloadTheme = () =>
+  new Promise((done) => {
+    const old = document.querySelector('link[href^="/identity/theme.css"]');
+    if (!old) return done();
+    const fresh = document.createElement("link");
+    fresh.rel = "stylesheet";
+    fresh.href = "/identity/theme.css?v=" + Date.now();
+    const finish = () => {
+      old.remove();
+      paintBar();
+      done();
+    };
+    fresh.onload = finish;
+    fresh.onerror = () => {
+      fresh.remove();
+      done();
+    };
+    old.after(fresh);
+  });
+
 // Installable and able to start without a network. The API is never served from the cache.
 if ("serviceWorker" in navigator) {
   addEventListener("load", () => {

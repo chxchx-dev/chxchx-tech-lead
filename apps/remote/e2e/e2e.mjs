@@ -139,6 +139,17 @@ await step("la identidad propia (nombre, lema, imagen y tema) llega a la pantall
   assert.equal(pair.bar, pair.bg, "la barra del navegador toma el fondo del tema");
   await page.screenshot({ path: `${shots}01d-gradient.png` });
 
+  // Con la pantalla abierta, un cambio hecho en la PC llega solo (sin recargar) y avisa que sincroniza.
+  await page.evaluate(() => { window.__same = true; });
+  env('cli identity set --name "ana pc" --colors ocean --theme forest');
+  await page.locator(".wordmark-art svg[aria-label='ANA PC']").waitFor({ timeout: 15_000 });
+  assert.ok(await page.evaluate(() => window.__same === true), "se actualizó sin recargar la página");
+  const synced = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--bg").trim());
+  assert.notEqual(synced, pair.bg, "el fondo cambió con el tema nuevo");
+  assert.equal(await page.evaluate(() => document.querySelector('meta[name="theme-color"]').content), synced, "la barra siguió al tema");
+  await page.locator(".syncing").waitFor({ state: "detached", timeout: 5_000 });
+  env('cli identity set --name "ana dev"');
+
   // Volver a lo de fábrica no borra nada, pero la pantalla vuelve a lo de siempre.
   env("cli identity reset");
   env("cli identity set --accent none --accent2 none --theme chxchx --web-theme auto");
