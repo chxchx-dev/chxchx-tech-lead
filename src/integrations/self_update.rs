@@ -150,6 +150,19 @@ fn inspect_archive(archive: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Whether this program can apply the package a release carries: only Linux on x86_64. On the
+/// other systems the installers (MSI, DMG, `.tar.gz`) are the way to update, and applying a Linux
+/// package there would only fail late and confusingly.
+pub fn platform_supported(os: &str, arch: &str) -> Result<(), String> {
+    if os == "linux" && arch == "x86_64" {
+        return Ok(());
+    }
+    Err(format!(
+        "Aplicar la actualización por sí solo solo está disponible en Linux x86_64 (esto es {os} {arch}). \
+         Descarga el instalador de tu sistema de la página de lanzamientos."
+    ))
+}
+
 /// Where a release is applied: the folder of the running program, which must be an installation.
 pub fn install_dir() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|error| error.to_string())?;
@@ -270,6 +283,28 @@ fn swap(
                 let _ = std::fs::rename(backup.join(name), install.join(name));
             }
             Err(format!("{error} Se restauraron los archivos anteriores."))
+        }
+    }
+}
+
+#[cfg(test)]
+mod platform_tests {
+    use super::platform_supported;
+
+    #[test]
+    fn only_linux_x86_64_applies_updates_by_itself() {
+        assert!(platform_supported("linux", "x86_64").is_ok());
+        for (os, arch) in [
+            ("windows", "x86_64"),
+            ("macos", "aarch64"),
+            ("macos", "x86_64"),
+            ("linux", "aarch64"),
+        ] {
+            let error = platform_supported(os, arch).unwrap_err();
+            assert!(
+                error.contains(os) && error.contains("instalador"),
+                "{error}"
+            );
         }
     }
 }

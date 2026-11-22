@@ -117,6 +117,7 @@ fn update(apply: bool, dev: bool) -> Result<(), String> {
         println!("Vista previa: no se cambió nada. Añade --apply para instalarla.");
         return Ok(());
     }
+    upd::platform_supported(std::env::consts::OS, std::env::consts::ARCH)?;
     let install = upd::install_dir()?;
     let was_running = node_is_running();
     let outcome = upd::apply(
