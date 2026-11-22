@@ -50,7 +50,7 @@ visual-installer = ["studio"]
 terminal = ["dep:portable-pty", "dep:vt100"]
 agent-adapter-launcher = []
 # The local node (ADR 0017): an HTTP API on loopback for jobs, and the web client it serves.
-node = ["cli", "dep:axum", "dep:tokio", "dep:tower", "dep:getrandom", "dep:qrcode"]
+node = ["cli", "dep:axum", "dep:tokio", "dep:tower", "dep:getrandom", "dep:qrcode", "dep:image"]
 
 [dependencies]
 chxchx-protocol = { path = "crates/chxchx-protocol" }

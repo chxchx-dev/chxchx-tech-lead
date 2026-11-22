@@ -15,6 +15,7 @@ pub mod features {
     pub mod explicit_memory;
     pub mod explicit_memory_prune;
     pub mod git;
+    pub mod identity;
     pub mod jobs;
     pub mod manager;
     pub mod mcp_connectors;

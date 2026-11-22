@@ -7,6 +7,8 @@ use std::path::PathBuf;
 mod catalog;
 #[path = "cli_connectors.rs"]
 mod connectors;
+#[path = "cli_identity.rs"]
+mod identity;
 #[path = "cli_jobs.rs"]
 mod jobs;
 #[path = "cli_launch.rs"]
@@ -160,6 +162,11 @@ enum Command {
     Jobs {
         #[command(subcommand)]
         command: jobs::JobsCommand,
+    },
+    /// Tu identidad: el nombre en letras de bloques, la línea, la imagen y los colores.
+    Identity {
+        #[command(subcommand)]
+        command: identity::IdentityCommand,
     },
     /// Qué tiene esta máquina, qué falta y dejarla lista (agentes, servicio, nodo).
     Manager {
@@ -553,6 +560,7 @@ pub fn run() -> Result<(), String> {
         Command::Mods { command } => catalog::mods(&ui, command),
         Command::LocalModels { command } => local_models::run(command),
         Command::Jobs { command } => jobs::run(command),
+        Command::Identity { command } => identity::run(command),
         Command::Manager { command } => manager::run_other(command),
         #[cfg(feature = "node")]
         Command::Node { command } => node::run(command),
