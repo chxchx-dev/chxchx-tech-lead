@@ -135,7 +135,7 @@ def generate(
         {
             "Id": "InstallRequiredTools",
             "FileRef": tools_command,
-            "ExeCommand": "tools install",
+            "ExeCommand": 'tools install --bundle "[INSTALLFOLDER]required-tools"',
             "Execute": "deferred",
             "Impersonate": "yes",
             "Return": "check",

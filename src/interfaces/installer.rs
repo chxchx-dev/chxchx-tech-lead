@@ -182,7 +182,7 @@ impl Installer {
         let log = self.output.iter().cloned().collect::<Vec<_>>().join("\n");
         let content = column![
             text("Instalador de ChxChx").size(30),
-            text("Instala Studio, los comandos de ChxChx y sus extras requeridos: Basic Memory y Serena. Se necesita conexión a Internet."),
+            text("Instala Studio, los comandos de ChxChx y sus extras requeridos: Basic Memory y Serena. Las herramientas vienen incluidas; el instalador necesita conexión para descargar Studio y sus componentes generales."),
             actions,
             text(&self.status).size(16),
             scrollable(container(text(log).font(iced::Font::MONOSPACE).size(12)).padding(12))
@@ -251,6 +251,9 @@ fn run_script(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if let Some(bundle) = bundled_required_tools() {
+        command.env("CHXCHX_REQUIRED_TOOLS_BUNDLE", bundle);
+    }
     match action {
         Action::DryRun => {
             command.args(["--channel", channel.argument(), "--dry-run"]);
@@ -277,6 +280,34 @@ fn run_script(
     let _ = out_reader.join();
     let _ = err_reader.join();
     status.map(|status| status.code().unwrap_or(1))
+}
+
+fn bundled_required_tools() -> Option<std::path::PathBuf> {
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    return None;
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        let executable = std::env::current_exe().ok()?;
+        let executable_dir = executable.parent()?;
+        #[cfg(target_os = "macos")]
+        let candidate = {
+            let architecture = if cfg!(target_arch = "aarch64") {
+                "arm64"
+            } else {
+                "x86_64"
+            };
+            executable_dir
+                .parent()?
+                .join("Resources")
+                .join(format!("chxchx-required-tools-macos-{architecture}.tar.gz"))
+        };
+        #[cfg(target_os = "linux")]
+        let candidate = executable_dir
+            .parent()?
+            .join("chxchx-required-tools-linux-x86_64.tar.gz");
+        let metadata = std::fs::symlink_metadata(&candidate).ok()?;
+        (metadata.is_file() && !metadata.file_type().is_symlink()).then_some(candidate)
+    }
 }
 
 fn forward_lines(reader: impl std::io::Read, sender: Sender<WorkerEvent>) {

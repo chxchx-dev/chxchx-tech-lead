@@ -27,7 +27,7 @@ def test_dry_run_verifies_the_download_and_changes_nothing(box, make_release) ->
 
     assert result.returncode == 0, result.stderr
     assert "DRY RUN" in result.stdout and "0.5.0" in result.stdout and "linux-ubuntu-x86_64" in result.stdout
-    assert "Basic Memory y Serena" in result.stdout and "extras requeridos" in result.stdout
+    assert "bundle offline de Basic Memory/Serena" in result.stdout and "actualizarían desde el bundle" in result.stdout
     assert box.tree() == set()  # not even ~/.local was created
 
 

@@ -55,9 +55,13 @@ def test_stable_release_writes_a_complete_manifest_and_checksums(tmp_path: Path)
     assert values["asset.linux-installer-x86_64"] == "chxchx-installer-linux-x86_64.tar.gz"
     assert values["asset.macos-installer-arm64"] == "chxchx-installer-macos-arm64.dmg"
     assert values["asset.macos-installer-x86_64"] == "chxchx-installer-macos-x86_64.dmg"
+    assert values["asset.required-tools-linux-x86_64"] == "chxchx-required-tools-linux-x86_64.tar.gz"
+    assert values["asset.required-tools-windows-x86_64"] == "chxchx-required-tools-windows-x86_64.zip"
+    assert values["asset.required-tools-macos-arm64"] == "chxchx-required-tools-macos-arm64.tar.gz"
+    assert values["asset.required-tools-macos-x86_64"] == "chxchx-required-tools-macos-x86_64.tar.gz"
     assert values["asset.install-sh"] == "install.sh" and values["asset.install-ps1"] == "install.ps1"
     assert values["asset.agent-adapter-wheel"] == "chxchx_agent_adapter-0.5.0-py3-none-any.whl"
-    for key in ("linux-ubuntu-x86_64", "linux-fedora-x86_64", "linux-installer-x86_64", "windows-x86_64", "windows-setup", "windows-msi", "macos-arm64", "macos-x86_64", "macos-installer-arm64", "macos-installer-x86_64", "agent-adapter-wheel", "install-sh", "install-ps1"):
+    for key in ("linux-ubuntu-x86_64", "linux-fedora-x86_64", "linux-installer-x86_64", "windows-x86_64", "windows-setup", "windows-msi", "macos-arm64", "macos-x86_64", "macos-installer-arm64", "macos-installer-x86_64", "required-tools-linux-x86_64", "required-tools-windows-x86_64", "required-tools-macos-arm64", "required-tools-macos-x86_64", "agent-adapter-wheel", "install-sh", "install-ps1"):
         assert len(values[f"sha256.{key}"]) == 64 and (output / values[f"asset.{key}"]).is_file()
     sums = (output / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
     assert f"{values['sha256.install-sh']}  install.sh" in sums

@@ -305,7 +305,13 @@ PACKAGE=""
       ;;
     *) fail "No hay paquete para ${OS}/${ARCH}." ;;
   esac
+  case "$OS/$ARCH" in
+    Darwin/arm64) TOOLS_PLATFORM="required-tools-macos-arm64"; TOOLS_ARCHIVE="chxchx-required-tools-macos-arm64.tar.gz" ;;
+    Darwin/x86_64) TOOLS_PLATFORM="required-tools-macos-x86_64"; TOOLS_ARCHIVE="chxchx-required-tools-macos-x86_64.tar.gz" ;;
+    Linux/x86_64) TOOLS_PLATFORM="required-tools-linux-x86_64"; TOOLS_ARCHIVE="chxchx-required-tools-linux-x86_64.tar.gz" ;;
+  esac
   [[ "$PACKAGE" != *.tar.gz ]] || command -v tar >/dev/null 2>&1 || fail "Falta 'tar'."
+  command -v tar >/dev/null 2>&1 || fail "Falta 'tar' para extraer el bundle de herramientas."
 
 WORK_DIR="$(mktemp -d)"
 MOUNT_DIR=""
@@ -353,8 +359,12 @@ if [[ "$CHANNEL" == "stable" ]]; then
 fi
 PACKAGE_SHA="$(manifest_value "sha256.${PLATFORM}")" || fail "No hay checksum para ${PLATFORM}."
 EXPECTED_PACKAGE="$(manifest_value "asset.${PLATFORM}")" || fail "No hay paquete para ${PLATFORM}."
+TOOLS_SHA="$(manifest_value "sha256.${TOOLS_PLATFORM}")" || fail "No hay checksum para ${TOOLS_PLATFORM}."
+EXPECTED_TOOLS="$(manifest_value "asset.${TOOLS_PLATFORM}")" || fail "No hay bundle de herramientas para ${TOOLS_PLATFORM}."
 [[ "$PACKAGE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "El manifiesto contiene un SHA-256 inválido."
 [[ "$EXPECTED_PACKAGE" == "$PACKAGE" ]] || fail "El manifiesto apunta a un paquete inesperado."
+[[ "$TOOLS_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "El manifiesto contiene un SHA-256 inválido para las herramientas."
+[[ "$EXPECTED_TOOLS" == "$TOOLS_ARCHIVE" ]] || fail "El manifiesto apunta a un bundle de herramientas inesperado."
 
 SHORT_COMMIT="${COMMIT_SHA:0:12}"
 if [[ "$CHANNEL" == "dev" ]]; then
@@ -415,10 +425,23 @@ curl_get "${BASE}/${PACKAGE}?t=${BUSTER}" -o "$WORK_DIR/$PACKAGE"
 [[ "$(sha_file "$WORK_DIR/$PACKAGE")" == "$PACKAGE_SHA" ]] || fail "El SHA-256 de Studio no coincide; no se instaló nada."
 curl_get "${BASE}/${WHEEL_NAME}?t=${BUSTER}" -o "$WORK_DIR/$WHEEL_NAME"
 [[ "$(sha_file "$WORK_DIR/$WHEEL_NAME")" == "$WHEEL_SHA" ]] || fail "El SHA-256 del servicio de agentes no coincide; no se instaló nada."
+EMBEDDED_TOOLS="${CHXCHX_REQUIRED_TOOLS_BUNDLE:-}"
+if [[ -n "$EMBEDDED_TOOLS" && -f "$EMBEDDED_TOOLS" && ! -L "$EMBEDDED_TOOLS" ]]; then
+  cp "$EMBEDDED_TOOLS" "$WORK_DIR/$TOOLS_ARCHIVE"
+  if [[ "$(sha_file "$WORK_DIR/$TOOLS_ARCHIVE")" != "$TOOLS_SHA" ]]; then
+    rm -f "$WORK_DIR/$TOOLS_ARCHIVE"
+  else
+    note "Bundle offline incluido en el instalador: verificado."
+  fi
+fi
+if [[ ! -f "$WORK_DIR/$TOOLS_ARCHIVE" ]]; then
+  curl_get "${BASE}/${TOOLS_ARCHIVE}?t=${BUSTER}" -o "$WORK_DIR/$TOOLS_ARCHIVE"
+fi
+[[ "$(sha_file "$WORK_DIR/$TOOLS_ARCHIVE")" == "$TOOLS_SHA" ]] || fail "El SHA-256 del bundle Basic Memory/Serena no coincide; no se instaló nada."
 
 printf 'Instalación de Studio: %s\nServicio de agentes aislado: %s/.venv\n' "$APP_ROOT" "$CLI_ROOT"
 if [[ "$DRY_RUN" == true ]]; then
-  printf 'DRY RUN: descargas y checksums válidos; no se instalaron paquetes ni se escribieron archivos fuera de /tmp. Basic Memory y Serena son extras requeridos y se descargarían al instalar.\n'
+  printf 'DRY RUN: Studio, servicio y bundle offline de Basic Memory/Serena descargados y verificados; no se instalaron paquetes ni se escribieron archivos fuera de /tmp. Las herramientas existentes se actualizarían desde el bundle.\n'
   exit 0
 fi
 if [[ "$NEEDS_CLI_INSTALL" == false ]] && ! "$ADAPTER_BINARY" contract >/dev/null 2>&1; then
@@ -448,6 +471,12 @@ if [[ "$OS" == "Linux" && "$INSTALL_DEPS" == true ]]; then
 fi
 
 # ---------- Instalación del paquete -----------------------------------------------------------------------
+TOOLS_BUNDLE_DIR="$WORK_DIR/required-tools"
+mkdir -p "$TOOLS_BUNDLE_DIR"
+tar -xzf "$WORK_DIR/$TOOLS_ARCHIVE" -C "$TOOLS_BUNDLE_DIR"
+[[ -f "$TOOLS_BUNDLE_DIR/bundle-manifest.txt" && -x "$TOOLS_BUNDLE_DIR/uv" ]] \
+  || fail "El bundle de herramientas no contiene su manifiesto o uv."
+
 write_marker() { # carpeta
   printf '%s\n' "$COMMIT_SHA" > "$1/.chxchx-managed.tmp.$$"
   mv -f "$1/.chxchx-managed.tmp.$$" "$1/.chxchx-managed"
@@ -482,12 +511,8 @@ else
 fi
 
 # ---------- Comando chxchx-tech (entorno aislado con uv) ----------------------------------------------------
-if ! command -v uv >/dev/null 2>&1 && [[ ! -x "$HOME/.local/bin/uv" ]]; then
-  curl --fail --silent --show-error --location --proto '=https' https://astral.sh/uv/install.sh | sh
-fi
-UV_BIN="$(command -v uv || true)"
-[[ -n "$UV_BIN" ]] || UV_BIN="$HOME/.local/bin/uv"
-[[ -x "$UV_BIN" ]] || fail "No se encontró uv después de instalarlo."
+UV_BIN="$TOOLS_BUNDLE_DIR/uv"
+[[ -x "$UV_BIN" ]] || fail "No se encontró uv en el bundle offline."
 if [[ "$NEEDS_CLI_INSTALL" == true ]]; then
   if [[ ! -x "$CLI_ROOT/.venv/bin/python" || ! -x "$ADAPTER_BINARY" ]]; then
     "$UV_BIN" venv --clear --python 3.11 "$CLI_ROOT/.venv"
@@ -504,7 +529,8 @@ UV_TOOL_BIN_DIR="$LOCAL_BIN"
 export UV_TOOL_BIN_DIR
 PATH="$LOCAL_BIN:$(dirname "$UV_BIN"):$PATH"
 export PATH
-"$RUST_BIN_DIR/chxchx-tech" tools install || fail "No se pudieron instalar Basic Memory y Serena. Revisa tu conexión e inténtalo de nuevo."
+"$RUST_BIN_DIR/chxchx-tech" tools install --bundle "$TOOLS_BUNDLE_DIR" \
+  || fail "No se pudieron instalar o actualizar Basic Memory y Serena desde el bundle offline."
 [[ -z "$APP_LINK" ]] || ln -sfn "$APP_ROOT" "$APP_LINK"
 
 # ---------- Launcher, comandos y menú de aplicaciones ------------------------------------------------------------

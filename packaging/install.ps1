@@ -3,10 +3,10 @@
 Instala o actualiza ChxChx Studio y el comando `chxchx-tech` en Windows 10/11.
 
 .DESCRIPTION
-No necesita permisos de administrador ni clonar el repositorio. Descarga solo los
-paquetes de Windows, comprueba su SHA-256 contra el manifiesto del release e instala
-en tu perfil (%LOCALAPPDATA%\Programs\ChxChxStudio). También instala Basic Memory
-y Serena con uv; esos extras requieren Internet y se conservan al desinstalar ChxChx.
+No necesita permisos de administrador ni clonar el repositorio. Descarga los paquetes
+de Windows, comprueba sus SHA-256 contra el manifiesto del release e instala en tu perfil
+(%LOCALAPPDATA%\Programs\ChxChxStudio). Basic Memory y Serena viajan en un bundle offline
+del release; al actualizar reemplaza sus versiones anteriores y se conservan al desinstalar.
 
   & ([scriptblock]::Create((irm https://github.com/chxchx-dev/chxchx-tech-lead/releases/latest/download/install.ps1)))
   & ([scriptblock]::Create((irm .../install.ps1))) -DryRun
@@ -28,7 +28,7 @@ Instala solo el comando chxchx-tech, sin la aplicación de escritorio.
 Quita ChxChx. No toca tus datos, tus proyectos ni los extras Basic Memory y Serena.
 
 .PARAMETER DryRun
-Descarga y verifica (o lista lo que quitaría) sin cambiar nada.
+Descarga y verifica los bundles (o lista lo que quitaría) sin cambiar nada.
 #>
 [CmdletBinding()]
 param(
@@ -234,6 +234,10 @@ try {
     $WheelName = $Manifest['asset.agent-adapter-wheel']
     if ($WheelName -notmatch '^chxchx_agent_adapter-[A-Za-z0-9.+!_-]+-py3-none-any\.whl$') { throw 'El manifiesto apunta a un wheel inesperado.' }
     $Keys = @('sha256.agent-adapter-wheel')
+    $ToolsKey = 'required-tools-windows-x86_64'
+    $ToolsArchive = 'chxchx-required-tools-windows-x86_64.zip'
+    if ($Manifest["asset.$ToolsKey"] -ne $ToolsArchive) { throw 'El manifiesto apunta a un bundle de herramientas inesperado.' }
+    $Keys += "sha256.$ToolsKey"
     if (-not $CliOnly -and $WindowsArchitecture -eq 'ARM64') {
         if ($Manifest['asset.windows-arm64'] -eq $NativeArm64Package) {
             $Platform = 'windows-arm64'; $ExpectedPackage = $NativeArm64Package
@@ -316,9 +320,14 @@ try {
     # ---- Descarga y verificación ----------------------------------------------------------------------------------------------------
     if ($Channel -eq 'dev') { Write-Note "Preview $ManifestVersion ($ShortCommit) · $Platform" } else { Write-Note "ChxChx $ManifestVersion (canal estable) · $Platform" }
     $WheelPath = Join-Path $TempRoot $WheelName
+    $ToolsArchivePath = Join-Path $TempRoot $ToolsArchive
     Invoke-WebRequest -UseBasicParsing -Uri "$Base/${WheelName}?t=$CacheBuster" -OutFile $WheelPath
     if ((Get-FileHash -LiteralPath $WheelPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Manifest['sha256.agent-adapter-wheel']) {
         throw 'El SHA-256 del CLI no coincide; no se instaló nada.'
+    }
+    Invoke-WebRequest -UseBasicParsing -Uri "$Base/${ToolsArchive}?t=$CacheBuster" -OutFile $ToolsArchivePath
+    if ((Get-FileHash -LiteralPath $ToolsArchivePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Manifest["sha256.$ToolsKey"]) {
+        throw 'El SHA-256 del bundle Basic Memory/Serena no coincide; no se instaló nada.'
     }
     if (-not $CliOnly) {
         $PackagePath = Join-Path $TempRoot $ExpectedPackage
@@ -329,8 +338,14 @@ try {
     }
     Write-Note "Instalación: $AppRoot"
     if ($DryRun) {
-        Write-Note 'DRY RUN: descargas y checksums válidos; no se instaló nada. Basic Memory y Serena son extras requeridos y se descargarían durante la instalación.'
+        Write-Note 'DRY RUN: Studio, servicio y bundle offline de Basic Memory/Serena descargados y verificados; no se instaló nada. Las herramientas existentes se actualizarían desde el bundle.'
         return
+    }
+    $ToolsBundle = Join-Path $TempRoot 'required-tools'
+    Expand-Archive -LiteralPath $ToolsArchivePath -DestinationPath $ToolsBundle
+    if (-not (Test-Path -LiteralPath (Join-Path $ToolsBundle 'bundle-manifest.txt') -PathType Leaf) -or
+        -not (Test-Path -LiteralPath (Join-Path $ToolsBundle 'uv.exe') -PathType Leaf)) {
+        throw 'El bundle offline no contiene su manifiesto o uv.exe.'
     }
     if (-not $NeedsCliInstall) {
         $CliReady = $false
@@ -374,7 +389,7 @@ try {
     }
 
     # ---- Comando chxchx-tech (entorno aislado con uv) ------------------------------------------------------------------------------------
-    # uv también es necesario para los extras, incluso al actualizar una instalación existente.
+    # El release aporta uv y los wheels; la instalación de Basic Memory y Serena no usa red.
     $PreviousErrorActionPreference = $ErrorActionPreference
     $PreviousPath = $env:PATH
     $HadToolBin = Test-Path Env:UV_TOOL_BIN_DIR
@@ -382,16 +397,7 @@ try {
     try {
         # Windows PowerShell 5.1 trata el progreso en stderr de uv como errores de PowerShell.
         $ErrorActionPreference = 'Continue'
-        $Uv = Get-Command uv -ErrorAction SilentlyContinue | Where-Object { $_.CommandType -eq 'Application' } | Select-Object -First 1
-        if ($null -eq $Uv) {
-            $UvPath = Join-Path $HOME '.local\bin\uv.exe'
-            if (-not (Test-Path -LiteralPath $UvPath)) {
-                Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
-            }
-            if (-not (Test-Path -LiteralPath $UvPath)) { throw 'No se encontró uv después de instalarlo.' }
-        } else {
-            $UvPath = $Uv.Source
-        }
+        $UvPath = Join-Path $ToolsBundle 'uv.exe'
         $PythonEnvironment = Join-Path $AppRoot '.venv'
         if ($NeedsCliInstall) {
             if (-not (Test-Path -LiteralPath $Python -PathType Leaf) -or -not (Test-Path -LiteralPath $AdapterBinary -PathType Leaf)) {
@@ -409,9 +415,9 @@ try {
         New-Item -ItemType Directory -Path $ToolBin -Force | Out-Null
         $env:UV_TOOL_BIN_DIR = $ToolBin
         $env:PATH = "$ToolBin;$(Split-Path -Parent $UvPath);$PreviousPath"
-        Write-Note 'Instalando extras requeridos: Basic Memory y Serena (se necesita Internet)...'
-        & (Join-Path $AppRoot 'bin\chxchx-tech.exe') tools install
-        if ($LASTEXITCODE -ne 0) { throw 'No se pudieron instalar Basic Memory y Serena. Revisa tu conexión e inténtalo de nuevo.' }
+        Write-Note 'Instalando o actualizando Basic Memory y Serena desde el bundle offline...'
+        & (Join-Path $AppRoot 'bin\chxchx-tech.exe') tools install --bundle $ToolsBundle
+        if ($LASTEXITCODE -ne 0) { throw 'No se pudieron instalar o actualizar Basic Memory y Serena desde el bundle offline.' }
         Add-UserPath $ToolBin
     } finally {
         $env:PATH = $PreviousPath

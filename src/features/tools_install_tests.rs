@@ -8,6 +8,43 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
+fn write_bundle(root: &Path, id: &str) {
+    let manifest = format!(
+        "schema_version=1\n\
+         bundle_id={id}\n\
+         platform=linux-x86_64\n\
+         uv=uv\n\
+         python.basic-memory=python/python312\n\
+         python.serena-agent=python/python313\n\
+         version.basic-memory=1.0.0\n\
+         lock.basic-memory=locks/basic_memory.txt\n\
+         wheelhouse.basic-memory=wheels/basic_memory\n\
+         version.serena-agent=2.1.0\n\
+         lock.serena-agent=locks/serena_agent.txt\n\
+         wheelhouse.serena-agent=wheels/serena_agent\n"
+    );
+    fs::write(root.join("bundle-manifest.txt"), manifest).unwrap();
+    fs::create_dir_all(root.join("python")).unwrap();
+    fs::create_dir_all(root.join("locks")).unwrap();
+    for wheelhouse in ["wheels/basic_memory", "wheels/serena_agent"] {
+        fs::create_dir_all(root.join(wheelhouse)).unwrap();
+        fs::write(root.join(wheelhouse).join("fixture.whl"), b"fixture wheel").unwrap();
+    }
+    fs::write(root.join("uv"), b"uv fixture").unwrap();
+    fs::write(root.join("python/python312"), b"python 3.12").unwrap();
+    fs::write(root.join("python/python313"), b"python 3.13").unwrap();
+    fs::write(
+        root.join("locks/basic_memory.txt"),
+        b"basic-memory==1.0.0\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("locks/serena_agent.txt"),
+        b"serena-agent==2.1.0\n",
+    )
+    .unwrap();
+}
+
 #[cfg(unix)]
 fn fake_uv(dir: &Path, body: &str) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
@@ -107,4 +144,108 @@ fn uv_runs_with_the_tool_directory_and_a_failure_is_reported() {
         error.contains("basic-memory") && error.contains('7'),
         "{error}"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_bundle_update_replaces_old_shims_and_uses_only_persistent_offline_files() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = scratch("bundle-update");
+    let source = root.join("download");
+    let data_root = root.join("user-data");
+    let tool_bin = root.join("tools");
+    fs::create_dir_all(&source).unwrap();
+    fs::create_dir_all(&tool_bin).unwrap();
+    write_bundle(&source, "fixture-1234567890abcdef");
+
+    let uv = root.join("uv");
+    let captured = root.join("uv-arguments.txt");
+    let script = format!(
+        "#!/bin/sh\n\
+         printf '%s\\n' \"$*\" > '{}'\n\
+         package=''\n\
+         for argument in \"$@\"; do package=\"$argument\"; done\n\
+         case \"$package\" in\n\
+           basic-memory==1.0.0) commands='basic-memory bm' ;;\n\
+           serena-agent==2.1.0) commands='serena' ;;\n\
+           *) exit 9 ;;\n\
+         esac\n\
+         for command in $commands; do\n\
+           printf '#!/bin/sh\\necho updated\\n' > \"$UV_TOOL_BIN_DIR/$command\"\n\
+           chmod +x \"$UV_TOOL_BIN_DIR/$command\"\n\
+         done\n",
+        captured.display()
+    );
+    fs::write(&uv, script).unwrap();
+    fs::set_permissions(&uv, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::copy(&uv, source.join("uv")).unwrap();
+    for command in ["basic-memory", "bm"] {
+        fs::write(tool_bin.join(command), b"old shim").unwrap();
+    }
+
+    let outcome = install_from_bundle_at(
+        find_tool("basic-memory").unwrap(),
+        &source,
+        &tool_bin,
+        Some(&data_root),
+        false,
+    )
+    .unwrap();
+
+    assert_eq!(outcome, Outcome::Installed);
+    let persisted = data_root.join("fixture-1234567890abcdef");
+    assert!(persisted.join("bundle-manifest.txt").is_file());
+    assert!(persisted.join("python/python312").is_file());
+    assert_eq!(
+        fs::read_to_string(tool_bin.join("bm")).unwrap(),
+        "#!/bin/sh\necho updated\n"
+    );
+    let arguments = fs::read_to_string(captured).unwrap();
+    for expected in [
+        "--force".to_owned(),
+        "--offline".to_owned(),
+        "--no-index".to_owned(),
+        "--no-python-downloads".to_owned(),
+        persisted.join("wheels/basic_memory").display().to_string(),
+        persisted
+            .join("locks/basic_memory.txt")
+            .display()
+            .to_string(),
+        persisted.join("python/python312").display().to_string(),
+        "basic-memory==1.0.0".to_owned(),
+    ] {
+        assert!(
+            arguments.contains(&expected),
+            "missing {expected} in {arguments}"
+        );
+    }
+    assert!(
+        !arguments.contains("--prerelease"),
+        "the pinned stable bundle must not enable prerelease resolution: {arguments}"
+    );
+}
+
+#[test]
+fn a_bundle_preview_is_offline_and_does_not_persist_the_bundle() {
+    let root = scratch("bundle-preview");
+    let source = root.join("download");
+    let data_root = root.join("user-data");
+    let tool_bin = root.join("tools");
+    fs::create_dir_all(&source).unwrap();
+    write_bundle(&source, "fixture-1234567890abcdef");
+
+    let outcome =
+        install_from_bundle_at(find_tool("serena").unwrap(), &source, &tool_bin, None, true)
+            .unwrap();
+
+    assert!(matches!(
+        outcome,
+        Outcome::Preview(command)
+            if command.contains(&"--offline".to_owned())
+                && command.contains(&"--force".to_owned())
+                && command.contains(&"serena-agent==2.1.0".to_owned())
+    ));
+    assert!(!data_root.exists());
+    assert!(!tool_bin.exists());
 }

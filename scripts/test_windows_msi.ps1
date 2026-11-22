@@ -146,6 +146,11 @@ try {
     foreach ($Command in @('basic-memory.exe', 'bm.exe', 'serena.exe')) {
         Invoke-Executable (Join-Path $SharedTools $Command) @('--help') "El extra $Command instalado por el MSI"
     }
+    $RequiredToolsRoot = Join-Path $env:LOCALAPPDATA 'ChxChxStudio\required-tools'
+    if (-not (Get-ChildItem -LiteralPath $RequiredToolsRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'bundle-manifest.txt') } | Select-Object -First 1)) {
+        throw 'El MSI no conservó el bundle offline que usan los entornos Basic Memory y Serena.'
+    }
     if (-not (Test-UserPathContains $SharedTools)) { throw 'El MSI no agregó los comandos de los extras al PATH de usuario.' }
     if (-not (Test-Path -LiteralPath (Join-Path $CurrentRoot '.venv\python\uv.exe') -PathType Leaf)) {
         throw 'El MSI no incluyó uv para instalar los extras sin depender de una instalación global.'
@@ -156,6 +161,11 @@ try {
     $RegistrationKey = "Registry::HKEY_CURRENT_USER\Software\ChxChx\Studio\Installers\$Channel\$CurrentName"
     if (-not (Test-Path -LiteralPath $RegistrationKey)) { throw 'El MSI no registró sus componentes por usuario.' }
     Assert-AppOpens $CurrentRoot
+
+    # Simulates stale/broken command shims from an earlier install: the MSI update must force-replace them.
+    foreach ($Command in @('basic-memory.exe', 'bm.exe', 'serena.exe')) {
+        Set-Content -LiteralPath (Join-Path $SharedTools $Command) -Value 'stale ChxChx shim' -NoNewline -Encoding Ascii
+    }
 
     $UpdateCode = Invoke-Msi @('/i', $UpdateInstaller, '/qn', '/norestart') 'update.log'
     if (Test-Path -LiteralPath $CurrentRoot) { throw 'La actualización mayor no quitó la carpeta MSI anterior.' }
@@ -173,6 +183,7 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $SharedTools $Command) -PathType Leaf)) {
             throw "La actualización quitó el extra requerido $Command."
         }
+        Invoke-Executable (Join-Path $SharedTools $Command) @('--help') "El extra $Command actualizado desde el bundle"
     }
     Assert-AppOpens $UpdateRoot
 
@@ -186,6 +197,9 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $SharedTools $Command) -PathType Leaf)) {
             throw "La desinstalación quitó el extra administrado por uv: $Command."
         }
+    }
+    if (-not (Test-Path -LiteralPath $RequiredToolsRoot -PathType Container)) {
+        throw 'La desinstalación quitó el bundle que todavía necesita el entorno de herramientas.'
     }
     Write-Host "MSI por usuario: instalar=$CurrentCode, actualizar=$UpdateCode, desinstalar=$UninstallCode."
 } catch {
