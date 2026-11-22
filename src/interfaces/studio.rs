@@ -258,6 +258,11 @@ pub fn run(path: PathBuf) -> Result<(), String> {
 pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String> {
     let path = std::path::absolute(&path).unwrap_or(path);
     let loaded = crate::features::studio_preferences::load();
+    // The person's own name, line and picture, when they set them (Settings → Identidad).
+    brand::apply(
+        &crate::features::identity::load(),
+        crate::features::identity::avatar(),
+    );
     let window_size = loaded
         .preferences
         .layout
@@ -310,6 +315,18 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
             };
             session::apply(&mut state);
             settings::apply(&state);
+            // A page to open at start, for screenshots and tests (like `CHXCHX_STUDIO_CHAT`).
+            if std::env::var("CHXCHX_STUDIO_PAGE").ok().as_deref() == Some("settings") {
+                state.page = Page::Settings;
+            }
+            // Settings can be the first page (the session restores it): its Identity card reads
+            // what is saved now, not only when the person navigates there.
+            if state.page == Page::Settings {
+                let _ = settings::update(
+                    &mut state,
+                    settings::Event::Identity(settings::identity::Event::Load),
+                );
+            }
             let tasks = [
                 editor::list(path.clone(), PathBuf::new()),
                 session::restore(&state),

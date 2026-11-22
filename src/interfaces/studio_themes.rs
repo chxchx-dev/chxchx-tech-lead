@@ -260,4 +260,31 @@ mod tests {
         assert_eq!(custom.bg_base, LIGHT.bg_base);
         assert_eq!(build("light", Some("zzz")), LIGHT);
     }
+
+    /// The web client draws the themes of Studio from `chxchx_protocol::WEB_THEMES`. If a color
+    /// they share changes in one place and not in the other, the phone stops looking like the PC.
+    #[test]
+    fn every_studio_theme_has_a_web_theme_with_the_same_shared_colors() {
+        assert_eq!(THEMES.len(), chxchx_protocol::WEB_THEMES.len());
+        for (id, name, palette) in THEMES {
+            let web =
+                chxchx_protocol::web_theme(id).unwrap_or_else(|| panic!("{id} has no web theme"));
+            assert_eq!(*name, web.name, "{id}: the name");
+            let same = |what: &str, studio: Color, shared: u32| {
+                assert_eq!(studio, hex(shared), "{id}: {what}");
+            };
+            same("accent", palette.accent, web.accent);
+            same("text", palette.fg, web.text);
+            same("muted", palette.muted, web.muted);
+            same("line", palette.border, web.line);
+            same("ok", palette.success, web.ok);
+            same("warn", palette.warning, web.warn);
+            same("bad", palette.danger, web.bad);
+            if web.dark {
+                same("background", palette.bg_deep, web.bg);
+                same("panel", palette.bg_panel, web.panel);
+                same("raised", palette.bg_raised, web.panel2);
+            }
+        }
+    }
 }

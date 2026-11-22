@@ -9,6 +9,10 @@ pub(super) fn hero<'a>() -> Element<'a, Message> {
             brand::mascot(118.0),
             column![
                 brand::wordmark(13.0),
+                text(brand::tagline())
+                    .size(12)
+                    .font(design::MONO)
+                    .color(design::muted()),
                 container(
                     text(concat!(
                         "STUDIO  ·  ENTORNO DE DESARROLLO  ·  v",

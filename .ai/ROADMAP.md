@@ -26,6 +26,29 @@ crates independientes para CLI/TUI/Studio ni versiones por interfaz. Cada tarea
 incluye su caso de uso, integraciones, pruebas y presentaciones aplicables.
 La separación de presentación y dominio se mantiene dentro del paquete común.
 
+## Pendiente: que cada persona ponga sus propias cosas en la configuración
+
+Decisión del autor (2026-11-22): nada personal va fijo en el código. Lo que identifica a una instalación
+(su nombre, su imagen, su tema) ya es **suyo y configurable** (`chxchx-tech identity`, Studio → Ajustes →
+Identidad, `.ai/ROADMAP-HIBRIDO.md`). Falta llevar el mismo principio al resto de lo que hoy es un valor
+fijo o se detecta sin dejar elegir, con una pantalla de **Ajustes → Conexión** en Studio (y su equivalente
+en la línea de comandos), cada valor con su vista previa y su vuelta atrás:
+
+- **Tailscale:** el nombre de la máquina y el puerto HTTPS del acceso remoto se detectan y se guardan en
+  `remote.json` (`node remote enable`), pero no se pueden escribir ni cambiar desde Ajustes. Que la persona
+  ponga el suyo, vea si Tailscale está listo y active/desactive el acceso desde ahí.
+- **Puerto del nodo** (47821 por defecto) y su servicio de usuario: elegible y visible en Ajustes.
+- **Origen de las actualizaciones:** el dueño y el repositorio de los lanzamientos (`OWNER`/`REPOSITORY` en
+  `integrations/studio_update.rs`) y la **clave pública de firma** (`packaging/release-public-key.txt`) son
+  los del autor. Quien distribuya su propia versión o un fork debe poder poner los suyos sin recompilar.
+- **Rutas y herramientas:** dónde están `claude`, `codex`, `opencode`, Python y Tailscale cuando no están en el
+  `PATH`, y la carpeta donde ChxChx guarda sus datos (`CHXCHX_TECH_HOME`).
+- **Valores por defecto del producto** (nombre `CHXCHX`, lema, mascota): se quedan como el punto de partida,
+  nunca como lo único posible.
+
+Reglas para cada uno: lo escribe la persona (no hay valores suyos en el repositorio), se valida y se muestra qué
+quedaría antes de aplicarlo (`--dry-run`), lo anterior queda como `.bak`, y las pruebas usan una carpeta aislada.
+
 ## Secuencia de hitos
 
 Los ítems se marcan completos con evidencia enlazada, no por existir un

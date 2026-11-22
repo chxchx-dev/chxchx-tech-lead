@@ -121,6 +121,10 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
                 return catalog::update(state, catalog::Event::Load);
             }
             if page == Page::Settings {
+                let _ = settings::update(
+                    state,
+                    settings::Event::Identity(settings::identity::Event::Load),
+                );
                 return settings::update(
                     state,
                     settings::Event::Node(settings::node::Event::Refresh),

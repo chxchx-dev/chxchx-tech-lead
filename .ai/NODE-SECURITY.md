@@ -99,6 +99,19 @@ vista previa sin cambios, `--apply` idempotente, `401` sin token, `403` con el t
 - `manager watch/recover` solo tocan lo que ChxChx creó (el nodo y las copias del servicio de agentes
   bajo su carpeta); nunca ajustes de usuario ni proyectos.
 
+## Identidad propia: rutas públicas de solo lectura
+
+`GET /api/v1/identity`, `GET /identity/avatar.png` y `GET /identity/theme.css` se sirven **sin token**: la
+pantalla de vinculación de un teléfono las necesita antes de estar vinculado. Solo dicen lo que la persona
+eligió mostrar (nombre, lema, imagen, colores), llegan por el mismo canal que la propia app web (loopback o su
+tailnet, con la comprobación de `Host`), no aceptan escritura (la identidad se cambia con `chxchx-tech identity`
+o en Studio, con acceso al equipo) y llevan las cabeceras de endurecimiento de siempre. La imagen se procesa al
+guardarla (se decodifica y se reescribe como PNG cuadrado de 256 px, con límites de tamaño y de memoria): no se
+sirven archivos de la persona tal cual, y se rechaza SVG por poder llevar scripts. El nombre solo admite
+caracteres que la tipografía sabe dibujar, y el SVG del rótulo se compone de rectángulos: el texto de la persona
+nunca llega a ser marcado. **Riesgo aceptado:** quien alcance el nodo (su propia tailnet) puede ver el nombre y
+la imagen elegidos; no ponga ahí nada que no quiera enseñar a sus otros dispositivos.
+
 ## Abierto
 
 - **Windows:** el token y los archivos del nodo heredan la ACL del perfil; no se probó que otro

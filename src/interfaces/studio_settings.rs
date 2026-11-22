@@ -7,6 +7,8 @@ use super::keymap::{self, Action};
 use super::*;
 use iced::widget::{column, text_input};
 
+#[path = "studio_settings_identity.rs"]
+pub(super) mod identity;
 #[path = "studio_settings_node.rs"]
 pub(super) mod node;
 
@@ -14,6 +16,8 @@ pub(super) mod node;
 pub(super) struct State {
     /// Settings → Nodo local.
     node: node::State,
+    /// Settings → Identidad.
+    identity: identity::State,
     /// The action whose new shortcut is being recorded.
     capturing: Option<Action>,
     accent_input: String,
@@ -36,6 +40,7 @@ pub(super) enum Event {
     ResetKey(Action),
     ResetKeys,
     Node(node::Event),
+    Identity(identity::Event),
 }
 
 /// The next interface size up (`step` > 0) or down, within the sizes Settings offers.
@@ -67,6 +72,7 @@ pub(super) fn apply(state: &Dashboard) {
 pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     match event {
         Event::Node(event) => return node::update(state, event),
+        Event::Identity(event) => return identity::update(state, event),
         Event::Theme(id) => {
             state.session.edit(|p| p.appearance.theme = id);
         }
@@ -191,6 +197,12 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         themes_card(&look.theme),
         accent_card(state, look.accent.as_deref()),
         scale_card(look.scale),
+        section_title(
+            "sparkle",
+            "Identidad",
+            "Tu nombre, tu lema y tu imagen: se ven aquí y en la app web de tu teléfono."
+        ),
+        identity::card(state),
         section_title(
             "keyboard",
             "Atajos de teclado",

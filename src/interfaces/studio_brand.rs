@@ -1,6 +1,8 @@
-//! ChxChx brand assets, pre-scaled from `assets/` at the repository root.
+//! ChxChx brand assets, pre-scaled from `assets/` at the repository root, and the person's own
+//! identity (their name in block letters, their line and their picture) when they set one.
+use chxchx_protocol::{DEFAULT_NAME, DEFAULT_TAGLINE, Identity};
 use iced::widget::image::{self, Handle};
-use std::sync::LazyLock;
+use std::sync::{LazyLock, RwLock};
 
 const MARK_SMALL: &[u8] = include_bytes!("../../assets/brand/mark-40.png");
 const MARK_LARGE: &[u8] = include_bytes!("../../assets/brand/mark-256.png");
@@ -11,6 +13,30 @@ const MASCOT: &[u8] = include_bytes!("../../assets/brand/mascot-256.png");
 static MARK_SMALL_HANDLE: LazyLock<Handle> = LazyLock::new(|| Handle::from_bytes(MARK_SMALL));
 static MARK_LARGE_HANDLE: LazyLock<Handle> = LazyLock::new(|| Handle::from_bytes(MARK_LARGE));
 static MASCOT_HANDLE: LazyLock<Handle> = LazyLock::new(|| Handle::from_bytes(MASCOT));
+
+/// What the person made their own. `None` while nothing is set: the product's own identity.
+struct Own {
+    lines: Vec<String>,
+    tagline: String,
+    avatar: Option<Handle>,
+}
+
+static OWN: RwLock<Option<Own>> = RwLock::new(None);
+
+/// Puts the person's identity to use: from now on the welcome screen, the empty editor and new
+/// chats draw it. `avatar` is the stored picture, if there is one.
+pub(super) fn apply(identity: &Identity, avatar: Option<Vec<u8>>) {
+    let clean = identity.sanitized();
+    let own = Own {
+        lines: chxchx_protocol::wordmark(&clean.name),
+        tagline: clean.tagline,
+        // `from_bytes` decodes on first use, so a new handle is a new picture: it never shows the old one.
+        avatar: avatar.map(Handle::from_bytes),
+    };
+    if let Ok(mut slot) = OWN.write() {
+        *slot = Some(own);
+    }
+}
 
 /// The ChxChx mark, square, for chrome and empty states.
 pub(super) fn mark(size: f32) -> image::Image<Handle> {
@@ -24,22 +50,54 @@ pub(super) fn mark(size: f32) -> image::Image<Handle> {
         .height(size)
 }
 
-/// The character, square, for the welcome screen, empty states and avatars.
+/// The picture of the person, square: their own when they set one, else the product's character.
 pub(super) fn mascot(size: f32) -> image::Image<Handle> {
-    image::Image::new(MASCOT_HANDLE.clone())
-        .width(size)
-        .height(size)
+    let handle = OWN
+        .read()
+        .ok()
+        .and_then(|own| own.as_ref().and_then(|own| own.avatar.clone()))
+        .unwrap_or_else(|| MASCOT_HANDLE.clone());
+    image::Image::new(handle).width(size).height(size)
 }
 
-/// The CHXCHX block letters of the terminal banner, one per row of the art.
-const WORDMARK: [&str; 6] = [
-    " ██████╗██╗  ██╗██╗  ██╗ ██████╗██╗  ██╗██╗  ██╗",
-    "██╔════╝██║  ██║╚██╗██╔╝██╔════╝██║  ██║╚██╗██╔╝",
-    "██║     ███████║ ╚███╔╝ ██║     ███████║ ╚███╔╝ ",
-    "██║     ██╔══██║ ██╔██╗ ██║     ██╔══██║ ██╔██╗ ",
-    "╚██████╗██║  ██║██╔╝ ██╗╚██████╗██║  ██║██╔╝ ██╗",
-    " ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝",
-];
+/// The line under the name.
+pub(super) fn tagline() -> String {
+    OWN.read()
+        .ok()
+        .and_then(|own| own.as_ref().map(|own| own.tagline.clone()))
+        .unwrap_or_else(|| DEFAULT_TAGLINE.to_owned())
+}
+
+fn lines() -> Vec<String> {
+    OWN.read()
+        .ok()
+        .and_then(|own| own.as_ref().map(|own| own.lines.clone()))
+        .unwrap_or_else(|| chxchx_protocol::wordmark(DEFAULT_NAME))
+}
+
+fn color((r, g, b): (u8, u8, u8)) -> iced::Color {
+    iced::Color::from_rgb8(r, g, b)
+}
+
+fn hex_of(color: iced::Color) -> String {
+    let byte = |value: f32| (value * 255.0).round().clamp(0.0, 255.0) as u8;
+    format!(
+        "#{:02x}{:02x}{:02x}",
+        byte(color.r),
+        byte(color.g),
+        byte(color.b)
+    )
+}
+
+/// The colors a name fades between: the accent in use at the top and a little toward blue at the
+/// bottom, the same two the web client draws with.
+fn fade() -> (iced::Color, iced::Color) {
+    let (top, bottom) = chxchx_protocol::gradient(&hex_of(super::design::accent()));
+    (
+        color(chxchx_protocol::rgb(&top).unwrap_or((0, 217, 255))),
+        color(chxchx_protocol::rgb(&bottom).unwrap_or((42, 139, 255))),
+    )
+}
 
 fn mix(from: iced::Color, to: iced::Color, amount: f32) -> iced::Color {
     iced::Color {
@@ -50,26 +108,28 @@ fn mix(from: iced::Color, to: iced::Color, amount: f32) -> iced::Color {
     }
 }
 
-/// The name in block letters, fading from the brand cyan at the top to the brand blue at the
-/// bottom, like the banner of the command line. Drawn as text, so it stays sharp at any scale.
+/// The person's name in block letters, fading from the accent at the top to blue at the bottom, like
+/// the banner of the command line. Drawn as text, so it stays sharp at any scale.
 pub(super) fn wordmark<'a, M: 'a>(size: f32) -> iced::Element<'a, M> {
-    let mut lines = iced::widget::column![].spacing(0);
-    for (index, line) in WORDMARK.iter().enumerate() {
-        let color = mix(
-            super::design::brand_cyan(),
-            super::design::brand_blue(),
-            index as f32 / (WORDMARK.len() - 1) as f32,
-        );
-        lines = lines.push(
-            iced::widget::text(*line)
+    wordmark_of(&lines(), size)
+}
+
+/// Any rows of block letters in the same colors (for the preview while the name is being typed).
+pub(super) fn wordmark_of<'a, M: 'a>(rows: &[String], size: f32) -> iced::Element<'a, M> {
+    let (top, bottom) = fade();
+    let last = rows.len().saturating_sub(1).max(1) as f32;
+    let mut column = iced::widget::column![].spacing(0);
+    for (index, line) in rows.iter().enumerate() {
+        column = column.push(
+            iced::widget::text(line.clone())
                 .size(size)
                 .font(super::design::MONO)
                 .line_height(1.0)
-                .color(color)
+                .color(mix(top, bottom, index as f32 / last))
                 .wrapping(iced::widget::text::Wrapping::None),
         );
     }
-    lines.into()
+    column.into()
 }
 
 /// Window and taskbar icon. Returns `None` if the embedded PNG cannot be read.
@@ -86,12 +146,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_wordmark_is_a_clean_rectangle_of_monospace_cells() {
-        let width = WORDMARK[0].chars().count();
+    fn the_default_name_is_a_clean_rectangle_of_monospace_cells() {
+        let rows = chxchx_protocol::wordmark(DEFAULT_NAME);
+        let width = rows[0].chars().count();
         assert!(width > 40);
-        for line in WORDMARK {
-            assert_eq!(line.chars().count(), width, "{line:?}");
-        }
+        assert!(rows.iter().all(|row| row.chars().count() == width));
     }
 
     #[test]
@@ -102,6 +161,16 @@ mod tests {
         );
         assert_eq!(mix(a, b, 0.0), a);
         assert_eq!(mix(a, b, 1.0), b);
+    }
+
+    #[test]
+    fn a_color_goes_to_hex_and_back_without_changing() {
+        let accent = iced::Color::from_rgb8(0x22, 0xd3, 0xff);
+        assert_eq!(hex_of(accent), "#22d3ff");
+        assert_eq!(
+            chxchx_protocol::rgb(&hex_of(accent)),
+            Some((0x22, 0xd3, 0xff))
+        );
     }
 
     #[test]

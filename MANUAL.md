@@ -109,6 +109,16 @@ atiende como mucho 128 peticiones a la vez, 16 flujos de eventos y 50 trabajos e
 cola. Las claves de idempotencia se ligan a quien las envía (la clave completa, con
 su dueño, no pasa de 128 caracteres).
 
+**Tu identidad.** El nombre que se dibuja en letras de bloques, el lema, la imagen y el tema son tuyos.
+En Studio: Ajustes → Identidad (vista previa en vivo; «Elegir imagen…» abre el selector de archivos). En la
+línea de comandos: `chxchx-tech identity show`; `identity set --name "ana dev" --tagline "mi taller" --avatar
+foto.png --theme forest --accent "#f472b6" --web-theme studio` (añade `--dry-run` para ver cómo quedaría);
+`identity clear-avatar`; `identity reset`; `identity themes`. El nombre admite hasta 12 caracteres (letras sin
+tilde, números, espacio, `-` y `.`). Lo que cambies se ve en Studio y, al recargar, en la app web del teléfono;
+nada se borra (lo anterior queda como `.bak` en la carpeta `identity` de ChxChx). `--web-theme auto` hace que la
+app web siga al dispositivo (claro u oscuro) y `studio` que use tu tema de Studio; el color de resalte se aplica
+en los dos casos.
+
 **Manager (H6).** `chxchx-tech manager status` dice qué tiene la máquina y `manager plan`
 qué falta; `manager apply [--dry-run]` hace solo lo que es de ChxChx. `manager watch` mantiene vivos
 el nodo y el servicio de agentes (si algo se cae 3 veces en una hora, se detiene y lo explica) y
