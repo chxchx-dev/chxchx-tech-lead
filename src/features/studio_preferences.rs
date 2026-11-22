@@ -52,6 +52,8 @@ impl Default for Layout {
 pub struct Appearance {
     pub theme: String,
     pub accent: Option<String>,
+    /// The second color of the two-color gradient (rótulo, botones, mensajes).
+    pub accent2: Option<String>,
     pub scale: f32,
 }
 
@@ -60,9 +62,19 @@ impl Default for Appearance {
         Self {
             theme: "chxchx".to_owned(),
             accent: None,
+            accent2: None,
             scale: 1.0,
         }
     }
+}
+
+/// How Studio uses the local node (ADR 0017, H5).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NodePrefs {
+    /// Hand chat turns to the node when it is running, so they go on after the window is closed
+    /// and can be followed from other devices. Off until the person turns it on.
+    pub delegate: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -86,6 +98,7 @@ pub struct Preferences {
     pub shortcuts: BTreeMap<String, String>,
     pub recent_projects: Vec<String>,
     pub projects: BTreeMap<String, ProjectSession>,
+    pub node: NodePrefs,
 }
 
 impl Default for Preferences {
@@ -97,6 +110,7 @@ impl Default for Preferences {
             shortcuts: BTreeMap::new(),
             recent_projects: Vec::new(),
             projects: BTreeMap::new(),
+            node: NodePrefs::default(),
         }
     }
 }
@@ -166,6 +180,13 @@ impl Preferences {
                 || !hex[1..].chars().all(|c| c.is_ascii_hexdigit())
         }) {
             look.accent = None;
+        }
+        if look.accent2.as_deref().is_some_and(|hex| {
+            hex.len() != 7
+                || !hex.starts_with('#')
+                || !hex[1..].chars().all(|c| c.is_ascii_hexdigit())
+        }) {
+            look.accent2 = None;
         }
         self.shortcuts.retain(|action, binding| {
             action.len() <= 32 && binding.len() <= 40 && binding.is_ascii()

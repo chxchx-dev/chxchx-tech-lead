@@ -10,9 +10,6 @@ use std::cmp::Ordering;
 use std::process::Command;
 use std::time::Duration;
 
-pub const OWNER: &str = "chxchx-dev";
-pub const REPOSITORY: &str = "chxchx-tech-lead";
-
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Info {
     /// The version this program is.
@@ -24,8 +21,14 @@ pub struct Info {
     pub url: String,
 }
 
-fn releases_url() -> String {
-    format!("https://github.com/{OWNER}/{REPOSITORY}/releases")
+/// The page of the releases: the product's, or the ones the person chose in Ajustes → Conexión.
+pub fn releases_url() -> String {
+    let source = crate::features::connection::load();
+    format!(
+        "https://github.com/{}/{}/releases",
+        source.owner(),
+        source.repository()
+    )
 }
 
 /// The tag a `releases/latest` redirect points at: `…/releases/tag/v0.6.3` → `v0.6.3`.

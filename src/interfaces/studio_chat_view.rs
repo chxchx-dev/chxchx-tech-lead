@@ -124,9 +124,14 @@ fn welcome(chat: &Chat) -> Element<'_, Message> {
     }
     let mut intro = column![
         art::banner(chat.agent.provider, chat.agent.label()),
-        text(format!("Chat con {}", chat.agent.label()))
-            .size(14)
-            .font(design::UI_BOLD),
+        row![
+            brand::mascot(34.0),
+            text(format!("Chat con {}", chat.agent.label()))
+                .size(14)
+                .font(design::UI_BOLD),
+        ]
+        .spacing(10)
+        .align_y(iced::Center),
     ]
     .spacing(10);
     if chat

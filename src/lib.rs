@@ -9,16 +9,26 @@ pub mod features {
     pub mod chat_journal;
     pub mod chat_model;
     pub mod chat_state;
+    pub mod connection;
     pub mod context_compaction;
+    pub mod data_home;
     pub mod doctor;
     pub mod error_cache;
     pub mod explicit_memory;
     pub mod explicit_memory_prune;
     pub mod git;
+    pub mod identity;
+    pub mod jobs;
+    pub mod manager;
     pub mod mcp_connectors;
     pub mod mcp_connectors_plan;
     pub mod mcp_diagnostics;
     pub mod mcp_setup;
+    pub mod node_audit;
+    pub mod node_devices;
+    #[cfg(feature = "node")]
+    pub mod node_service;
+    pub mod node_state;
     pub mod project_backup;
     pub mod project_catalog;
     pub mod project_changes;
@@ -41,8 +51,12 @@ pub mod features {
     pub mod project_sync;
     pub mod project_templates;
     pub mod project_trust;
+    pub mod release_manifest;
+    #[cfg(feature = "node")]
+    pub mod remote_access;
     pub mod startup_log;
     pub mod studio_preferences;
+    pub mod supervision;
     pub mod tools_install;
     pub mod workspace_lifecycle;
     pub mod workspace_processes;
@@ -62,6 +76,9 @@ pub mod interfaces {
 
     #[cfg(feature = "visual-installer")]
     pub mod installer;
+
+    #[cfg(feature = "node")]
+    pub mod node;
 
     #[cfg(feature = "tui")]
     pub mod tui;

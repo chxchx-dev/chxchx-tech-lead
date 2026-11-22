@@ -28,6 +28,9 @@ mod e2e_tests;
 mod editor;
 #[path = "studio_explorer.rs"]
 mod explorer;
+#[cfg(all(test, unix))]
+#[path = "studio_fake_node.rs"]
+mod fake_node;
 #[path = "studio_file_types.rs"]
 mod file_types;
 #[path = "studio_git.rs"]
@@ -255,6 +258,11 @@ pub fn run(path: PathBuf) -> Result<(), String> {
 pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String> {
     let path = std::path::absolute(&path).unwrap_or(path);
     let loaded = crate::features::studio_preferences::load();
+    // The person's own name, line and picture, when they set them (Settings → Identidad).
+    brand::apply(
+        &crate::features::identity::load(),
+        crate::features::identity::avatar(),
+    );
     let window_size = loaded
         .preferences
         .layout
@@ -307,6 +315,22 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
             };
             session::apply(&mut state);
             settings::apply(&state);
+            // A page to open at start, for screenshots and tests (like `CHXCHX_STUDIO_CHAT`).
+            if std::env::var("CHXCHX_STUDIO_PAGE").ok().as_deref() == Some("settings") {
+                state.page = Page::Settings;
+            }
+            // Settings can be the first page (the session restores it): its Identity card reads
+            // what is saved now, not only when the person navigates there.
+            if state.page == Page::Settings {
+                let _ = settings::update(
+                    &mut state,
+                    settings::Event::Identity(settings::identity::Event::Load),
+                );
+                let _ = settings::update(
+                    &mut state,
+                    settings::Event::Connection(settings::connection::Event::Load),
+                );
+            }
             let tasks = [
                 editor::list(path.clone(), PathBuf::new()),
                 session::restore(&state),
@@ -326,6 +350,21 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 } else {
                     Task::none()
                 },
+                #[cfg(feature = "node")]
+                if state.page == Page::Settings {
+                    settings::update(
+                        &mut state,
+                        settings::Event::Remote(settings::remote::Event::Refresh),
+                    )
+                    .chain(settings::update(
+                        &mut state,
+                        settings::Event::Service(settings::service::Event::Refresh),
+                    ))
+                } else {
+                    Task::none()
+                },
+                #[cfg(not(feature = "node"))]
+                Task::none(),
             ];
             (state, Task::batch(tasks))
         },
@@ -384,11 +423,19 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                     .map(|_| Message::Local(local::Event::Tick)),
             );
         }
-        if state.chat.busy() {
+        if state.chat.following() {
             // Safety net only: the agent's output wakes the window by itself.
             subscriptions.push(
                 iced::time::every(std::time::Duration::from_secs(2))
                     .map(|_| Message::Chat(chat::Event::Tick)),
+            );
+        }
+        if state.session.preferences().node.delegate && !state.chat.chats.is_empty() {
+            // Turns the node is running that this window is not following yet (a phone asked, or
+            // Studio was closed meanwhile).
+            subscriptions.push(
+                iced::time::every(std::time::Duration::from_secs(3))
+                    .map(|_| Message::Chat(chat::Event::Adopt)),
             );
         }
         iced::Subscription::batch(subscriptions)

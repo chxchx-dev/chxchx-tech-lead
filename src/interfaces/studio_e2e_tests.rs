@@ -548,3 +548,273 @@ fn opening_a_file_brings_the_editor_back_over_chats_and_a_markdown_file_previews
         .expect("the preview is rendered");
     assert_eq!(preview.0, Path::new("README.md"));
 }
+
+// ---- H5: Studio and the local node ------------------------------------------------------------
+
+mod with_the_node {
+    use super::super::fake_node::{self, FakeNode};
+    use super::*;
+    use crate::integrations::node_link::{TEST_NODE, TEST_NODE_LOCK};
+    use chxchx_protocol::{JobState, ProjectId};
+    use serde_json::json;
+
+    /// Points the code at `node` for as long as the guard lives. Tests of this kind run one at a
+    /// time: the setting is shared by the whole process.
+    struct Pointed(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
+
+    fn point_at(node: &FakeNode) -> Pointed {
+        let guard = TEST_NODE_LOCK
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        *TEST_NODE
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner()) =
+            Some((node.endpoint(), ProjectId::parse("demo").unwrap()));
+        Pointed(guard)
+    }
+
+    impl Drop for Pointed {
+        fn drop(&mut self) {
+            *TEST_NODE
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner()) = None;
+        }
+    }
+
+    fn delegating(dir: &Path) -> Dashboard {
+        let mut state = studio(dir);
+        state
+            .session
+            .edit(|preferences| preferences.node.delegate = true);
+        state
+    }
+
+    #[test]
+    fn a_turn_goes_to_the_node_when_it_is_on_and_studio_does_not_save_it_twice() {
+        let dir = sandbox();
+        let node = FakeNode::start();
+        node.script.lock().unwrap().on_create = vec![
+            fake_node::agent(json!({"type": "session", "session_id": "ses-node"})),
+            fake_node::agent(
+                json!({"type": "message", "role": "assistant", "text": "Desde el nodo."}),
+            ),
+        ];
+        let _pointed = point_at(&node);
+        let mut state = delegating(&dir);
+        open_chat(&mut state, &agent("opencode", Provider::OpenCode));
+
+        say(&mut state, "hola desde Studio");
+        assert!(
+            state.chat.chats[0]
+                .turn
+                .as_ref()
+                .is_some_and(|turn| turn.is_remote()),
+            "the turn is the node's"
+        );
+        wait_for_answer(&mut state);
+
+        let chat = &state.chat.chats[0];
+        assert_eq!(chat.model.session_id, "ses-node");
+        assert_eq!(chat.model.entries[0].text, "hola desde Studio");
+        assert!(
+            chat.model
+                .entries
+                .iter()
+                .any(|e| e.kind == model_kind::Assistant && e.text == "Desde el nodo.")
+        );
+        assert!(chat.turn.is_none(), "it ended");
+        // What the node was asked: the same turn, as a job of this project.
+        let asked = node.script.lock().unwrap().created.clone();
+        assert_eq!(asked.len(), 1);
+        assert_eq!(asked[0]["kind"], "agent_turn");
+        assert_eq!(asked[0]["project"], "demo");
+        assert_eq!(asked[0]["provider"], "opencode");
+        assert_eq!(asked[0]["prompt"], "hola desde Studio");
+        assert_eq!(asked[0]["access"], "workspace-write");
+        // The node keeps the conversation, the memory and the journal; Studio writes none of them.
+        assert!(
+            !dir.join(".ai/chat-state/opencode.json").exists(),
+            "saved twice otherwise"
+        );
+    }
+
+    #[test]
+    fn it_stays_local_when_the_setting_is_off() {
+        // Off: nothing reaches the node and the turn runs here, saved by Studio as always.
+        let dir = sandbox();
+        crate::integrations::agent_adapter::set_known_for_tests(fake_adapter(&dir));
+        let node = FakeNode::start();
+        let _pointed = point_at(&node);
+        let mut state = studio(&dir);
+        open_chat(&mut state, &agent("opencode", Provider::OpenCode));
+        say(&mut state, "hola");
+        assert!(
+            state.chat.chats[0]
+                .turn
+                .as_ref()
+                .is_some_and(|turn| !turn.is_remote())
+        );
+        wait_for_answer(&mut state);
+        assert!(
+            node.script.lock().unwrap().created.is_empty(),
+            "the node was never asked"
+        );
+        assert!(dir.join(".ai/chat-state/opencode.json").exists());
+    }
+
+    #[test]
+    fn a_node_that_refuses_the_turn_does_not_stop_the_conversation() {
+        let dir = sandbox();
+        crate::integrations::agent_adapter::set_known_for_tests(fake_adapter(&dir));
+        let node = FakeNode::start();
+        node.script.lock().unwrap().refuse_create = true;
+        let _pointed = point_at(&node);
+        let mut state = delegating(&dir);
+        open_chat(&mut state, &agent("opencode", Provider::OpenCode));
+
+        say(&mut state, "hola");
+        assert!(
+            state.chat.chats[0]
+                .turn
+                .as_ref()
+                .is_some_and(|turn| !turn.is_remote()),
+            "it runs here instead"
+        );
+        wait_for_answer(&mut state);
+        assert!(
+            state.chat.chats[0]
+                .model
+                .entries
+                .iter()
+                .any(|e| e.text == "OpenCode respondió.")
+        );
+        assert!(
+            dir.join(".ai/chat-state/opencode.json").exists(),
+            "and Studio saves it"
+        );
+    }
+
+    #[test]
+    fn a_turn_the_node_is_already_running_is_picked_up_with_what_was_asked() {
+        let dir = sandbox();
+        let node = FakeNode::start();
+        {
+            let mut script = node.script.lock().unwrap();
+            let job = fake_node::turn_job(
+                "run-1",
+                "demo",
+                chxchx_protocol::Provider::OpenCode,
+                "pedido desde el celular",
+                JobState::Running,
+            );
+            let events = vec![
+                fake_node::event(
+                    &job.id,
+                    1,
+                    chxchx_protocol::JobEventBody::State {
+                        state: JobState::Running,
+                    },
+                ),
+                fake_node::event(
+                    &job.id,
+                    2,
+                    chxchx_protocol::JobEventBody::Agent {
+                        event: fake_node::agent(
+                            json!({"type": "message", "role": "assistant", "text": "Trabajando en ello."}),
+                        ),
+                    },
+                ),
+            ];
+            // Another project's turn and a finished one are not this chat's.
+            let other = fake_node::turn_job(
+                "run-2",
+                "otro",
+                chxchx_protocol::Provider::OpenCode,
+                "ajeno",
+                JobState::Running,
+            );
+            let done = fake_node::turn_job(
+                "run-3",
+                "demo",
+                chxchx_protocol::Provider::OpenCode,
+                "viejo",
+                JobState::Succeeded,
+            );
+            script.jobs = vec![(job, events), (other, vec![]), (done, vec![])];
+        }
+        let _pointed = point_at(&node);
+        let mut state = delegating(&dir);
+        open_chat(&mut state, &agent("opencode", Provider::OpenCode));
+        assert!(state.chat.chats[0].turn.is_none());
+
+        // What the background search finds, applied on the window's thread.
+        let found = chat::node::search(&state.root);
+        chat::node::attach(&mut state, found);
+
+        let chat = &state.chat.chats[0];
+        assert!(chat.turn.as_ref().is_some_and(|turn| turn.is_remote()));
+        assert_eq!(
+            chat.model.entries[0].text, "pedido desde el celular",
+            "the question is shown"
+        );
+        until("the node's words to arrive", || {
+            let _ = chat::update(&mut state, chat::Event::Tick);
+            state.chat.chats[0]
+                .model
+                .entries
+                .iter()
+                .any(|e| e.text == "Trabajando en ello.")
+        });
+        assert!(
+            state.chat.chats[0].turn.is_some(),
+            "it is still running, and Studio follows it"
+        );
+
+        // Nothing is picked up twice, and another agent's chat is left alone.
+        let found = chat::node::search(&state.root);
+        chat::node::attach(&mut state, found);
+        assert_eq!(
+            state.chat.chats[0]
+                .model
+                .entries
+                .iter()
+                .filter(|e| e.text == "pedido desde el celular")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_turn_restored_with_its_question_is_not_asked_again_on_screen() {
+        let dir = sandbox();
+        std::fs::create_dir_all(dir.join(".ai/chat-state")).unwrap();
+        std::fs::write(
+            dir.join(".ai/chat-state/opencode.json"),
+            r#"{"schema":"chxchx.chat-state","schema_version":1,"agent":"opencode","provider":"OpenCode","session_id":"s","updated":"2026-11-20T00:00:00Z","verified":true,"messages":[{"role":"user","text":"sigue"}]}"#,
+        )
+        .unwrap();
+        let node = FakeNode::start();
+        node.script.lock().unwrap().jobs = vec![(
+            fake_node::turn_job(
+                "run-1",
+                "demo",
+                chxchx_protocol::Provider::OpenCode,
+                "sigue",
+                JobState::Running,
+            ),
+            vec![],
+        )];
+        let _pointed = point_at(&node);
+        let mut state = delegating(&dir);
+        open_chat(&mut state, &agent("opencode", Provider::OpenCode));
+        let found = chat::node::search(&state.root);
+        chat::node::attach(&mut state, found);
+        let asked = state.chat.chats[0]
+            .model
+            .entries
+            .iter()
+            .filter(|e| e.text == "sigue")
+            .count();
+        assert_eq!(asked, 1, "the saved question already shows it");
+    }
+}

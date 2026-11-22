@@ -422,6 +422,7 @@ impl Turn {
             pending_claude,
             exit: None,
             pre_events: Vec::new(),
+            remote: None,
             native: Some(NativeRun {
                 pid,
                 planned_session: session,

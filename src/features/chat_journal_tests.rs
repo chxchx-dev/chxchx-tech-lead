@@ -8,11 +8,18 @@ struct Project(PathBuf);
 
 impl Project {
     fn new() -> Self {
+        // The clock alone is not enough: tests run in parallel, and on Windows two of them can read
+        // the same tick and then delete each other's folder.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("chxchx-chat-journal-{nonce}"));
+        let unique = NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let path = std::env::temp_dir().join(format!(
+            "chxchx-chat-journal-{}-{unique}-{nonce}",
+            std::process::id()
+        ));
         fs::create_dir_all(&path).unwrap();
         // Windows temp dirs use 8.3 short names; the code under test canonicalizes.
         let path = path.canonicalize().unwrap();

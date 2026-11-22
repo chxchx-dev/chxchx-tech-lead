@@ -149,6 +149,11 @@ fn command_builder(
 
 pub fn find_executable(name: &str) -> Option<PathBuf> {
     let requested = Path::new(name);
+    if requested.components().count() <= 1
+        && let Some(chosen) = super::executable_search::chosen(name)
+    {
+        return Some(chosen);
+    }
     if requested.components().count() > 1 {
         return executable_candidate(requested);
     }

@@ -6,9 +6,11 @@
 //! and Claude's live control responses.
 pub use crate::integrations::agent_catalog::{AgentOptions, ModelOption};
 mod claude_runner;
+mod node_runner;
 mod service_runner;
 use crate::integrations::executable_search::agent_path;
 pub use claude_runner::{missing_runner_hint, prepare_native, runs_natively};
+pub use node_runner::delegable;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -116,6 +118,8 @@ pub struct Turn {
     pre_events: Vec<Value>,
     /// Present when Rust runs the provider directly.
     native: Option<claude_runner::NativeRun>,
+    /// Present when the local node runs the turn and Studio only follows it.
+    remote: Option<node_runner::RemoteRun>,
 }
 
 #[derive(Clone, Debug)]
@@ -226,6 +230,19 @@ const INTERNAL_TURN_RESULT: &str = "chxchx_internal_turn_result";
 impl Turn {
     /// Events printed since the last call.
     pub fn poll(&mut self) -> Vec<Value> {
+        if let Some(remote) = &self.remote {
+            // Whether the job is over is read first, then the events: whatever was sent before
+            // it finished is already in the channel by then.
+            let over = remote.finished();
+            let found: Vec<Value> = self.events.try_iter().collect();
+            if self.exit.is_none()
+                && let Some((code, cancelled)) = over
+            {
+                self.exit = Some(code);
+                self.cancelled |= cancelled;
+            }
+            return found;
+        }
         let mut found = std::mem::take(&mut self.pre_events);
         found.extend(self.consume_internal_events(self.events.try_iter().collect()));
         if self.exit.is_none()
@@ -283,6 +300,9 @@ impl Turn {
 
     /// Answers a live permission or question: `{"type": "answer", "request_id": …, …}`.
     pub fn answer(&mut self, answer: &Value) -> Result<(), String> {
+        if let Some(remote) = &self.remote {
+            return remote.answer(answer);
+        }
         if self.provider == "Claude" && answer["type"].as_str() == Some("answer") {
             let request_id = answer["request_id"]
                 .as_str()
@@ -305,6 +325,11 @@ impl Turn {
     }
 
     pub fn cancel(&mut self) {
+        if let Some(remote) = &self.remote {
+            self.cancelled = true;
+            remote.cancel();
+            return;
+        }
         if self.stop_native() {
             return;
         }
@@ -388,6 +413,11 @@ impl Turn {
 impl Drop for Turn {
     fn drop(&mut self) {
         if self.exit.is_some() {
+            return;
+        }
+        if self.remote.is_some() {
+            // The node runs this turn. Closing the window only stops following it: the job goes on
+            // and a new Studio picks it up again.
             return;
         }
         self.cancel();

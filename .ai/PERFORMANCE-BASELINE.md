@@ -1,17 +1,75 @@
-# Baseline de rendimiento del legado
+# Baseline de rendimiento
+
+## Producto Rust (R0.4, 2026-11-20)
+
+- Mismo equipo que el legado: Fedora 44 x86_64, Ryzen 5 3500U (4C/8T), 21 GiB RAM.
+- Build: `cargo build --release --locked` de la versión 0.6.3 (`dev` en `613f546`, con LTO thin).
+- Script: `python3 -I scripts/perf/measure_rust.py --bin target/release --out <dir> --runs 30 --studio-runs 3`.
+  Crea árboles deterministas equivalentes a los del legado (21 y 5,001 archivos indexables, con
+  `.git`, `target` y `node_modules` excluidos) y usa un `CHXCHX_TECH_HOME` aislado.
+
+| Medida | Fixture pequeño | Fixture grande | Legado (Python/Qt) | Presupuesto |
+| --- | ---: | ---: | ---: | ---: |
+| CLI `status PATH` p50/p95 | 6.9 / 7.9 ms | 12.7 / 14.2 ms | 321–340 / 372–381 ms | p95 ≤ 200 ms ✔ |
+| Studio RSS en reposo, mediana/máximo | 27.7 / 28.0 MiB | 28.0 / 28.0 MiB | 65.7–67.1 MiB | ≤ 80 MiB ✔ |
+| Studio CPU en reposo, máximo | 0.3 % | 0.0 % | 0.0 % | ≤ 1 % ✔ |
+
+| Binario | Tamaño |
+| --- | ---: |
+| `chxchx-tech` (CLI, TUI y Studio) | 21,368,352 bytes |
+| `chxchx-studio` | 19,748,264 bytes |
+
+Método: CLI con 30 ejecuciones por árbol después de una de calentamiento. Studio con 3
+lanzamientos por árbol en una sesión Wayland real, 5 s de calentamiento y diez muestras de 1 s
+leídas de `/proc` (RSS y tiempo de CPU del proceso). Es un único proceso, sin hijos, con
+`lean_allocator`. Del RSS de 28 MiB, unos 5 MiB son anónimos y el resto, páginas de archivo y
+memoria compartida. **No medido:** el arranque de Studio hasta el primer frame (no hay proxy
+instrumentado), Windows, macOS ni escenarios activos (chat largo, editor, búsqueda). Los
+presupuestos del nodo están en [ADR 0017](adr/0017-local-node-and-remote-access.md).
+
+### Cliente web (H4, 2026-11-20)
+
+Chromium 139 con perfil de Pixel 7, caché desactivada, `apps/remote/e2e/perf.mjs` (cinco cargas por
+perfil; las cifras son casi idénticas entre ellas porque la red simulada manda).
+
+| Medida | Resultado | Presupuesto (ADR 0017) |
+| --- | ---: | ---: |
+| Cliente comprimido, total | 610 KB (WASM 315 KB, JS 5 KB) | ≤ 1,5 MiB ✔ |
+| Recibido en la primera visita | 336 KiB | — |
+| Primera visita, sin límite | 111 ms | — |
+| Primera visita, 4G típico (10 Mbps, 60 ms) | 0,89 s | ≤ 3 s ✔ |
+| Primera visita, Slow 4G de Lighthouse (1,6 Mbps, 150 ms) | 2,49 s | ≤ 3 s ✔ (sin precarga: 2,996 s) |
+| Segunda visita (service worker) | ~70 ms | — |
+
+### Nodo local (H2, 2026-11-20)
+
+`cargo build --release --locked --features node`, mismo equipo. `node start --port 0` sin
+trabajos, 5 s de calentamiento y diez muestras de 1 s; latencia con 200 `GET /api/v1/health`
+seguidos desde Python (`urllib`, incluye el costo del cliente).
+
+| Medida | Resultado | Presupuesto (ADR 0017) |
+| --- | ---: | ---: |
+| RSS en reposo, mediana/máximo | 10.4 / 10.4 MiB | ≤ 20 MiB ✔ |
+| CPU en reposo (10 s) | 0 ticks | ≤ 0,5 % ✔ |
+| `GET /api/v1/health` p50/p95 | 0.53 / 1.13 ms | p95 ≤ 5 ms ✔ |
+| `chxchx-tech` con `node` | 22,514,784 bytes (+1.1 MB) | — |
+
+---
+
+## Legado (Python/Qt, 2026-11-12)
 
 - Medido: 2026-11-12, Fedora 44 x86_64; Ryzen 5 3500U (4C/8T), 21 GiB RAM.
 - Release del Studio: GCC 16.2.1, CMake 4.3.0, Ninja 1.13.2, Qt 6.11.2.
 - Los resultados son locales y con caché de filesystem cálida; no comparan Rust.
 
-## Fixtures
+### Fixtures
 
 `scripts/perf/create_fixtures.py /tmp/chxchx-perf-baseline.MNI0jw/fixtures`
 creó dos árboles deterministas que no existían antes. El pequeño tiene 21
 archivos indexables; el grande, 5,001. Ambos incluyen directorios `.git`,
 `target` y `node_modules` con sentinelas para comprobar que se excluyen.
 
-## Medidas
+### Medidas
 
 | Operación | Fixture pequeño | Fixture grande |
 | --- | ---: | ---: |
@@ -31,7 +89,7 @@ y diez muestras de 1 s. CPU es tiempo del proceso durante esas diez muestras.
 El caché de filesystem estaba cálido después de la primera pasada. No se midió
 un escenario activo de edición/búsqueda ni memoria de otro proceso hijo.
 
-## Tamaños y validez del paquete
+### Tamaños y validez del paquete
 
 - Wheel Python `chxchx_tech_lead-0.5.4-py3-none-any.whl`: 361,235 bytes.
 - Ejecutable Release `chxchx-studio`: 9,106,008 bytes.
@@ -45,7 +103,7 @@ un escenario activo de edición/búsqueda ni memoria de otro proceso hijo.
   también falla al reajustar el RPATH de un plugin Fedora sin entrada RPATH.
   Ese intento se revirtió, sin dejar una modificación experimental.
 
-## Presupuestos provisionales para comparar el primer prototipo Rust
+### Presupuestos provisionales para comparar el primer prototipo Rust
 
 Aplicar en el mismo equipo, fixtures y condiciones; no son SLO de release:
 
@@ -57,7 +115,7 @@ Aplicar en el mismo equipo, fixtures y condiciones; no son SLO de release:
 - No fijar todavía un límite de paquete Studio: primero corregir el TGZ y
   verificarlo. Comparar el paquete Rust tras elegir distribución/runtime.
 
-## Reproducción
+### Reproducción
 
 ```bash
 python scripts/perf/create_fixtures.py /tmp/chxchx-perf-baseline.MNI0jw/fixtures

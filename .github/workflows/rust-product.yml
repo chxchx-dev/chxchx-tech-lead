@@ -12,6 +12,75 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --all -- --check
 
+  protocol-wasm:
+    name: chxchx-protocol builds for WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add the WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+      # The Dioxus PWA uses these types (ADR 0017): nothing tied to an OS may slip in.
+      - name: Check the protocol crate for wasm32
+        run: cargo check --locked -p chxchx-protocol --target wasm32-unknown-unknown
+
+  remote-web:
+    name: web client (wasm, size budget)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add the WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Test the client's own logic (runs natively)
+        run: cargo test --locked -p chxchx-remote
+      - name: Lint the client for the browser
+        run: cargo clippy --locked -p chxchx-remote --target wasm32-unknown-unknown -- -D warnings
+      - name: Find the wasm-bindgen version Cargo.lock wants
+        id: wbg
+        run: echo "version=$(awk '/^name = "wasm-bindgen"$/ {getline; gsub(/[^0-9.]/, ""); print; exit}' Cargo.lock)" >> "$GITHUB_OUTPUT"
+      - name: Cache wasm-bindgen's CLI
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/wasm-bindgen
+          key: wasm-bindgen-cli-${{ steps.wbg.outputs.version }}
+      - name: Install wasm-bindgen's CLI at that version
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cargo install wasm-bindgen-cli --version "=${{ steps.wbg.outputs.version }}" --locked
+      # Fails when the compressed client is over the 1.5 MiB budget of ADR 0017.
+      - name: Build the client
+        run: scripts/build-remote.sh
+      # No Studio: the node alone needs none of the window libraries.
+      - name: Build the node with the client inside
+        run: cargo build --locked --no-default-features --features node --bin chxchx-tech
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test the client in a real browser
+        working-directory: apps/remote/e2e
+        env:
+          CHXCHX_BIN: ${{ github.workspace }}/target/debug/chxchx-tech
+        run: |
+          npm ci
+          npx playwright-core install --with-deps chromium
+          node e2e.mjs
+        # Not yet seen running on this runner: when it has been green, drop this line so a
+        # failure stops the build.
+        continue-on-error: true
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-web-screens
+          path: apps/remote/e2e/shots/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Keep the client
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-web
+          path: apps/remote/dist/**/*.gz
+          retention-days: 7
+
   agent-adapter:
     name: agent-adapter service (${{ matrix.os }}, Python ${{ matrix.python }})
     strategy:
@@ -75,14 +144,15 @@ jobs:
         run: cargo check --locked
       - name: Check the console-only build without GUI dependencies
         run: cargo check --locked --no-default-features --features cli
-      - name: Run Clippy for the full product
-        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Run Clippy for the full product and the local node
+        run: cargo clippy --locked --all-targets --features node -- -D warnings
       - name: Run Rust capability integration tests
         shell: bash
         run: |
           # The end of the output goes into the annotation: the job log is not visible from outside.
           set -o pipefail
-          cargo test --locked 2>&1 | tee test.log && exit 0
+          # `node` is not in the default build yet (ADR 0017); its API and server are tested here.
+          cargo test --locked --features node 2>&1 | tee test.log && exit 0
           code=${PIPESTATUS[0]}
           echo "::error title=cargo test falló ($code)::$(tail -n 45 test.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
           exit "$code"

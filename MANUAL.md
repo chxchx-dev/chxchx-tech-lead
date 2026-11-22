@@ -3,6 +3,19 @@
 Detalle de capacidades, seguridad y decisiones del producto. Para una visión general, empieza por el [README](README.md).
 La versión es `0.6.3` (la línea 0.6 es el producto Rust); reemplaza a la instalación 0.5.x al actualizar.
 
+## Carpeta de datos
+
+Por defecto ChxChx guarda sus datos en `~/.chxchx-tech-lead/`. Para usar otra (otro disco, una carpeta sincronizada):
+
+```bash
+chxchx-tech node stop
+chxchx-tech connection data-folder --to /ruta/nueva          # vista previa
+chxchx-tech connection data-folder --to /ruta/nueva --apply  # copia, comprueba y cambia
+chxchx-tech connection data-folder --back                    # vuelve a la original
+```
+
+La carpeta nueva debe estar vacía o no existir. Es una copia: la original no se toca y la borras tú cuando todo funcione. Reinicia Studio y el nodo después. En Studio está en Ajustes → Carpeta de datos. Si defines `CHXCHX_TECH_HOME`, esa variable manda.
+
 ## Capacidades compartidas actuales
 
 `project-overview` lee una ruta de proyecto y entrega el mismo DTO a CLI, TUI y
@@ -40,6 +53,133 @@ registro y archivos, respalda cada proyecto modificado e intenta rollback si una
 escritura falla. Omite proyectos ausentes o inseguros con avisos. CLI, TUI (`s`,
 luego `y`) y Studio usan el mismo caso de uso. `projects switch` espera al runtime
 de workspace/agentes.
+
+`jobs run --project ALIAS --provider claude|codex|opencode "mensaje"` habla con
+el agente de un proyecto registrado y de confianza sin abrir Studio ([ADR
+0017](.ai/adr/0017-local-node-and-remote-access.md)). Acepta `--access` (por
+defecto `workspace-write`), `--network`, `--model`, `--effort`, `--session` y
+`--key`. Este último es una clave de idempotencia: repetir el comando con la
+misma clave devuelve el trabajo existente en lugar de crear otro. La respuesta se
+muestra en vivo y la conversación queda en `.ai/chat-state/`, igual que en
+Studio, que la retoma al abrirlo. Sin nadie que apruebe, cada permiso o pregunta
+del agente se rechaza y se anota en el trabajo; las aprobaciones remotas llegan
+con el nodo. Los trabajos se guardan en `$CHXCHX_TECH_HOME/jobs/`. Si el comando
+se corta, el trabajo queda `interrupted` con su historial, y nada lo reanuda solo.
+`jobs list [--json]` y `jobs show ID [--events] [--json]` los consultan sin
+modificarlos. Si `jobs run` se corta, el agente puede seguir vivo hasta terminar
+su turno. Claude corre en su propio grupo de procesos, así que `Ctrl+C` en la
+terminal no lo detiene; Codex y OpenCode, a través del servicio, sí lo reciben.
+Cancelar de forma limpia un trabajo en curso llega con el nodo (H2).
+
+### Nodo local (feature `node`, en desarrollo)
+
+`chxchx-tech node start [--port 47821]` levanta el nodo en primer plano. Solo se
+compila con `--features node` y todavía no entra en los instaladores. El nodo
+administra los trabajos de este usuario. Mientras corre, `jobs run` lo indica y
+pide usar su API. Escucha **solo en `127.0.0.1`**: rechaza toda petición cuyo
+`Host` u `Origin` no sea `127.0.0.1` o `localhost` en su puerto, lo que protege
+contra páginas web que intenten llamarlo y contra el DNS rebinding. Todas las
+rutas, salvo `GET /api/v1/health`, piden el token de
+`$CHXCHX_TECH_HOME/node/token` (`Authorization: Bearer …`), un archivo `0600`
+dentro de una carpeta `0700` que se crea una vez y se reutiliza. Rutas:
+`GET /api/v1/node`, `GET|POST /api/v1/jobs` (con cabecera `Idempotency-Key`
+opcional), `GET /api/v1/jobs/{id}`, `GET /api/v1/jobs/{id}/events?since=N`,
+`POST /api/v1/jobs/{id}/cancel`, `POST /api/v1/jobs/{id}/answers` y
+`POST /api/v1/node/stop`. `GET /api/v1/events` es un WebSocket (subprotocolo
+`chxchx.v1`; el token puede ir como subprotocolo `bearer.<token>`) que envía cada
+`JobEvent` en vivo. Con `?job=ID&since=N` manda antes lo que ese trabajo tuvo
+después de `N`, para que una reconexión reciba solo lo que le faltó. Cuando el
+agente pide permiso o pregunta algo, el trabajo espera la respuesta en
+`…/answers` (`{"request_id", "behavior": "allow"|"deny", "scope"?}` o
+`{"request_id", "answers": {pregunta: respuesta}}`) hasta 10 minutos. Si nadie
+responde, la petición se rechaza y queda anotada como evento `answered`. El nodo
+escribe `node/node.log` (rota a 1 MiB) sin tokens ni textos de respuestas. Los errores son JSON
+`{code, message}` con el código HTTP correspondiente, y el cuerpo de una petición
+está limitado a unos 320 KiB. `node status` y `node stop` usan el mismo token.
+Al detenerse (Ctrl+C o `node stop`), el nodo cancela lo que esté en curso, espera
+hasta 10 s y borra `node.json`.
+
+**Dispositivos vinculados (H3).** Un celular u otro equipo no usa el token local:
+se vincula en la PC. `chxchx-tech node pair [--role reader|operator|admin]` crea un
+código de un solo uso (`XXXXX-XXXXX`, 5 min). El dispositivo lo envía a
+`POST /api/v1/pair` con un nombre (`{"code","name"}`) y recibe **su propio token,
+que se muestra una sola vez**. El nodo solo guarda su hash SHA-256 (también el del
+código), así que `devices.json` no sirve para entrar. Cinco códigos incorrectos
+cierran la vinculación diez minutos y cancelan los códigos pendientes. Roles:
+`reader` mira proyectos, trabajos y eventos; `operator` además lanza y cancela
+trabajos y responde a permisos; `admin` además gestiona dispositivos
+(`node devices`, `node revoke ID`) y lee `GET /api/v1/audit`. Detener el nodo y
+crear códigos de vinculación solo se puede hacer con el token local, en la PC.
+Revocar corta el token en la siguiente petición y cierra los eventos en vivo que el
+dispositivo tuviera abiertos. Los trabajos que pide un dispositivo se recortan
+**antes de guardarlos**: el acceso nunca pasa de `workspace-write`, aunque pida
+`full-access`, y la red solo se permite a un `admin`. Lo que se lista, lo que
+corre y lo que se audita es lo efectivo. `GET /api/v1/projects` lista solo los
+proyectos de confianza, sin rutas. `node audit` muestra quién hizo qué (vinculaciones,
+revocaciones, trabajos, cancelaciones, respuestas y cambios de acceso) y no
+necesita el nodo en marcha; nunca guarda prompts, textos de respuesta ni tokens. El nodo
+atiende como mucho 128 peticiones a la vez, 16 flujos de eventos y 50 trabajos en
+cola. Las claves de idempotencia se ligan a quien las envía (la clave completa, con
+su dueño, no pasa de 128 caracteres).
+
+**Tu identidad.** El nombre que se dibuja en letras de bloques, el lema, la imagen y el tema son tuyos.
+En Studio: Ajustes → Identidad (vista previa en vivo; «Elegir imagen…» abre el selector de archivos). En la
+línea de comandos: `chxchx-tech identity show`; `identity colors` lista los degradados y `identity set --colors sunset` pone uno; `identity set --name "ana dev" --tagline "mi taller" --avatar
+foto.png --theme forest --accent "#f472b6" --web-theme studio` (añade `--dry-run` para ver cómo quedaría);
+`identity clear-avatar`; `identity reset`; `identity themes`. El nombre admite hasta 12 caracteres (letras sin
+tilde, números, espacio, `-` y `.`). Lo que cambies se ve en Studio y, al recargar, en la app web del teléfono;
+nada se borra (lo anterior queda como `.bak` en la carpeta `identity` de ChxChx). `--web-theme auto` hace que la
+app web siga al dispositivo (claro u oscuro) y `studio` que use tu tema de Studio; el color de resalte se aplica
+en los dos casos.
+
+**Manager (H6).** `chxchx-tech manager status` dice qué tiene la máquina y `manager plan`
+qué falta; `manager apply [--dry-run]` hace solo lo que es de ChxChx. `manager watch` mantiene vivos
+el nodo y el servicio de agentes (si algo se cae 3 veces en una hora, se detiene y lo explica) y
+`manager recover [--dry-run]` repara copias viejas o rotas del servicio. `manager update` busca una
+versión firmada más nueva y `--apply` la instala (solo Linux; espera a que no haya trabajos y guarda
+la anterior en `.update-backup`). Para publicar actualizaciones el mantenedor ejecuta una vez
+`manager keygen --out ARCHIVO`, guarda la clave privada como secreto `RELEASE_SIGNING_KEY` en GitHub
+y sube la pública a `packaging/release-public-key.txt`.
+
+**Studio y servicio de usuario (H5).**
+En Ajustes → *Nodo local* ves si el nodo corre, lo inicias o detienes, activas «Usar el nodo
+para los turnos del chat» (cerrar Studio no corta el turno; al reabrir lo recupera) y gestionas
+dispositivos: *Vincular un dispositivo* muestra un código de un solo uso y *Desvincular* pide
+confirmación. Para que el nodo arranque al iniciar sesión:
+`chxchx-tech node service install` (vista previa), `... install --apply`, `... restart [--apply]` (reinicia con el puerto de Conexión), `... status`,
+`... uninstall --apply`. Es un servicio de tu usuario (nunca root); en Linux, para que corra sin
+sesión abierta, ejecuta tú `loginctl enable-linger`. macOS y Windows aún sin verificar.
+
+**Acceso desde tus dispositivos por Tailscale (H3).**
+`chxchx-tech node remote status|enable|disable` configura `tailscale serve` para que
+el nodo, que solo escucha en `127.0.0.1`, responda también al nombre de tu máquina
+en la tailnet (`https://máquina.tailnet.ts.net/`). Como el resto del producto,
+`enable` y `disable` muestran una vista previa con el comando exacto y solo
+`--apply` lo ejecuta; `disable` es la vuelta atrás. Solo usa `tailscale serve` y
+`tailscale status`: nunca `funnel` (no sale a Internet), no toca el firewall, no
+cambia un puerto HTTPS que ya sirva otra cosa y rechaza uno con Funnel activo.
+Con el puerto fijo `47821` (por defecto de `node start`) el acceso sigue
+funcionando entre reinicios; si el nodo se inicia con `--port 0`, repite
+`enable --apply`. La primera vez Tailscale tarda hasta ~1 min en emitir el
+certificado HTTPS. El nodo solo acepta ese nombre si `node/remote.json` lo dice y
+solo para nombres `*.ts.net`. El token local no vale por la tailnet: cada
+dispositivo se vincula con su código. Ver [.ai/NODE-SECURITY.md](.ai/NODE-SECURITY.md)
+para los riesgos y lo que queda abierto.
+
+**App web (PWA, H4).** El nodo sirve en `/` una app web (Dioxus compilado a WebAssembly,
+`apps/remote`) para el teléfono o cualquier navegador: ver proyectos de confianza, hablar con
+Claude, Codex u OpenCode con la respuesta en vivo, aprobar o rechazar sus permisos, responder sus
+preguntas, cancelar trabajos y, siendo administrador, desvincular dispositivos. Se instala desde el
+menú del navegador («Instalar app» en Android, «Añadir a pantalla de inicio» en iPhone), arranca
+sin red desde su service worker y, si cae la conexión, se reconecta y recupera lo que pasó. Para
+incluirla en el nodo: `scripts/build-remote.sh && cargo build --features node` (necesita
+`rustup target add wasm32-unknown-unknown` y `cargo install wasm-bindgen-cli` en la versión de
+`Cargo.lock`); sin ese paso el nodo funciona igual y su portada lo indica. La primera vez se
+vincula con el código de `chxchx-tech node pair` o, con el acceso remoto activado, escaneando el QR
+que imprime (la dirección lleva el código tras la `#`, que no llega a ningún servidor). El acceso
+predeterminado es solo leer; «leer y editar» se elige en el chat o en Ajustes. Los avisos son
+locales (mientras la página viva): no hay notificaciones push. Pruebas de navegador en
+`apps/remote/e2e`.
 
 Skills, Tech Packs y Mods están portados (CLI y Studio). El catálogo del legado
 (40 skills, 22 packs, 31 mods) se empaqueta en el binario al compilar leyendo
@@ -285,3 +425,19 @@ port parcial de IDE, con capacidades operativas reales, no un reemplazo completo
 La compilación local se comprobó en Windows; macOS, Ubuntu y Fedora siguen
 pendientes en CI/QA. La compatibilidad de JSON es una versión nueva e independiente
 del bridge completo `chxchx.project-status` v1 del producto legado.
+
+
+## Conexión: puertos, origen de las versiones y rutas
+
+En **Studio → Ajustes → Conexión** (o con `chxchx-tech connection show|set|reset`) eliges lo que antes era fijo:
+el puerto del nodo (47821), el puerto HTTPS de Tailscale (443), de dónde vienen las versiones y la clave pública
+con la que deben estar firmadas, y dónde está cada herramienta (`claude`, `codex`, `opencode`, `python`,
+`tailscale`) si no está en el PATH. Dejar un valor vacío es usar el de fábrica. Ejemplos:
+
+```bash
+chxchx-tech connection set --tool codex=/opt/codex/bin/codex --dry-run   # solo muestra
+chxchx-tech connection set --https-port 8443
+chxchx-tech connection reset                                             # el archivo anterior queda como .bak
+```
+
+La clave de firma es siempre la parte **pública**; la privada no se pega en ningún sitio de la aplicación.

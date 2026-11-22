@@ -648,11 +648,13 @@ fn refresh(record: &mut ProcessRecord) {
         Status::Unknown
     };
 }
-fn pid_alive(pid: u32) -> bool {
+pub(crate) fn pid_alive(pid: u32) -> bool {
     #[cfg(unix)]
     {
         Command::new("/bin/kill")
             .args(["-0", &pid.to_string()])
+            // "No such process" is the answer, not something to show.
+            .stderr(std::process::Stdio::null())
             .status()
             .is_ok_and(|s| s.success())
     }

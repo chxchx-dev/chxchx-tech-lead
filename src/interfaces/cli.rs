@@ -5,12 +5,23 @@ use std::path::PathBuf;
 
 #[path = "cli_catalog.rs"]
 mod catalog;
+#[path = "cli_connection.rs"]
+mod connection;
 #[path = "cli_connectors.rs"]
 mod connectors;
+#[path = "cli_identity.rs"]
+mod identity;
+#[path = "cli_jobs.rs"]
+mod jobs;
 #[path = "cli_launch.rs"]
 mod launch;
 #[path = "cli_local_models.rs"]
 mod local_models;
+#[path = "cli_manager.rs"]
+mod manager;
+#[cfg(feature = "node")]
+#[path = "cli_node.rs"]
+mod node;
 #[path = "cli_style.rs"]
 mod style;
 #[path = "cli_view.rs"]
@@ -148,6 +159,32 @@ enum Command {
     LocalModels {
         #[command(subcommand)]
         command: local_models::LocalModelsCommand,
+    },
+    /// Trabajos que siguen aunque se cierre la ventana: hablar con un agente sin Studio.
+    Jobs {
+        #[command(subcommand)]
+        command: jobs::JobsCommand,
+    },
+    /// Cómo llega esta instalación al mundo: puertos, origen de las versiones y rutas de herramientas.
+    Connection {
+        #[command(subcommand)]
+        command: connection::ConnectionCommand,
+    },
+    /// Tu identidad: el nombre en letras de bloques, la línea, la imagen y los colores.
+    Identity {
+        #[command(subcommand)]
+        command: identity::IdentityCommand,
+    },
+    /// Qué tiene esta máquina, qué falta y dejarla lista (agentes, servicio, nodo).
+    Manager {
+        #[command(subcommand)]
+        command: manager::ManagerCommand,
+    },
+    /// El nodo local: los trabajos y su API en 127.0.0.1 (ver ADR 0017).
+    #[cfg(feature = "node")]
+    Node {
+        #[command(subcommand)]
+        command: node::NodeCommand,
     },
     /// Lee o reinicia el historial persistido de un chat visual.
     #[command(subcommand_required = false)]
@@ -529,6 +566,12 @@ pub fn run() -> Result<(), String> {
         Command::Packs { command } => catalog::packs(&ui, command),
         Command::Mods { command } => catalog::mods(&ui, command),
         Command::LocalModels { command } => local_models::run(command),
+        Command::Jobs { command } => jobs::run(command),
+        Command::Connection { command } => connection::run(command),
+        Command::Identity { command } => identity::run(command),
+        Command::Manager { command } => manager::run_other(command),
+        #[cfg(feature = "node")]
+        Command::Node { command } => node::run(command),
         Command::Agent { command } => match command {
             Some(AgentCommand::ChatState {
                 agent_id,

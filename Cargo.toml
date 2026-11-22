@@ -1,10 +1,16 @@
 [package]
 name = "chxchx-tech"
-version = "0.6.3"
+version = "0.7.1"
 edition = "2024"
 publish = false
 description = "ChxChx local development control plane"
 build = "build.rs"
+
+# One product (this package) plus the wire contract its clients share (ADR 0017). No crate per
+# interface: CLI, TUI and Studio stay features of this package.
+[workspace]
+members = ["crates/chxchx-protocol", "apps/remote"]
+default-members = [".", "crates/chxchx-protocol"]
 
 [lib]
 name = "chxchx_tech"
@@ -36,15 +42,18 @@ path = "src/bin/chxchx-agent-adapter.rs"
 required-features = ["agent-adapter-launcher"]
 
 [features]
-default = ["cli", "tui", "studio"]
+default = ["cli", "tui", "studio", "node"]
 cli = ["dep:clap"]
 tui = ["dep:ratatui"]
 studio = ["dep:iced", "dep:image", "dep:arboard", "dep:rfd", "terminal"]
 visual-installer = ["studio"]
 terminal = ["dep:portable-pty", "dep:vt100"]
 agent-adapter-launcher = []
+# The local node (ADR 0017): an HTTP API on loopback for jobs, and the web client it serves.
+node = ["cli", "dep:axum", "dep:tokio", "dep:tower", "dep:getrandom", "dep:qrcode", "dep:image"]
 
 [dependencies]
+chxchx-protocol = { path = "crates/chxchx-protocol" }
 clap = { version = "=4.6.7", features = ["derive"], optional = true }
 iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "tokio", "x11", "wayland", "highlighter", "svg", "image-without-codecs", "canvas", "advanced", "markdown"], optional = true }
 image = { version = "=0.25.10", default-features = false, features = ["gif", "jpeg", "png", "webp"], optional = true }
@@ -55,8 +64,14 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.149", features = ["preserve_order"] }
 sha1 = "=0.10.6"
 sha2 = "=0.10.9"
+ed25519-dalek = { version = "=3.0.0", default-features = false }
 time = { version = "=0.3.55", features = ["formatting", "parsing"] }
 toml = "=0.9.12"
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "json", "query", "tokio", "ws"], optional = true }
+getrandom = { version = "=0.3.4", optional = true }
+qrcode = { version = "=0.14.1", default-features = false, optional = true }
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "net", "sync", "signal", "macros", "time"], optional = true }
+tower = { version = "=0.5.3", features = ["util"], optional = true }
 arboard = { version = "=3.7.0", features = ["image-data", "wayland-data-control"], optional = true }
 rfd = { version = "=0.18.0", default-features = false, features = ["xdg-portal"], optional = true }
 
@@ -67,6 +82,15 @@ embed-resource = "=3.0.11"
 # optimised even in dev builds; the product crate stays fast to rebuild.
 [profile.dev.package."*"]
 opt-level = 3
+
+# The web client: size matters more than speed (ADR 0017 budget: 1.5 MiB compressed).
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+panic = "abort"
+codegen-units = 1
+strip = "debuginfo"
 
 [profile.release]
 opt-level = 3

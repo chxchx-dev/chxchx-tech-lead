@@ -120,6 +120,34 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
             if page == Page::Catalog && state.catalog.view.is_none() {
                 return catalog::update(state, catalog::Event::Load);
             }
+            if page == Page::Settings {
+                let _ = settings::update(
+                    state,
+                    settings::Event::Identity(settings::identity::Event::Load),
+                );
+                let _ = settings::update(
+                    state,
+                    settings::Event::Connection(settings::connection::Event::Load),
+                );
+                #[cfg(feature = "node")]
+                let remote = settings::update(
+                    state,
+                    settings::Event::Remote(settings::remote::Event::Refresh),
+                );
+                #[cfg(feature = "node")]
+                let remote = Task::batch([
+                    remote,
+                    settings::update(
+                        state,
+                        settings::Event::Service(settings::service::Event::Refresh),
+                    ),
+                ]);
+                #[cfg(not(feature = "node"))]
+                let remote = Task::none();
+                let node =
+                    settings::update(state, settings::Event::Node(settings::node::Event::Refresh));
+                return Task::batch([remote, node]);
+            }
             if page == Page::Integrations {
                 state.connectors.states = None;
                 return connectors::update(state, connectors::Event::Load);

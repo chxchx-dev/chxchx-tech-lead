@@ -461,3 +461,144 @@ impl renderer::Headless for Renderer {
         window::compositor::screenshot(self, &viewport, background_color)
     }
 }
+
+#[cfg(test)]
+mod chxchx_scroll_tests {
+    use super::*;
+    use crate::core::renderer::{Quad, Renderer as _};
+    use crate::core::text::{Paragraph as _, Renderer as _};
+    use crate::core::{Border, Shadow, alignment, text};
+    use crate::graphics::damage;
+
+    const W: u32 = 400;
+    const H: u32 = 300;
+
+    /// One frame of a page that scrolls: a fixed header and a clipped, translated list of cards
+    /// with text, like Studio's pages.
+    fn frame(renderer: &mut Renderer, offset: f32, rounded: bool, paragraphs: bool) {
+        renderer.reset(Rectangle::with_size(Size::new(W as f32, H as f32)));
+        renderer.fill_quad(
+            Quad {
+                bounds: Rectangle::new(Point::ORIGIN, Size::new(W as f32, 40.0)),
+                border: Border::default(),
+                shadow: Shadow::default(),
+                snap: false,
+            },
+            Color::from_rgb(0.1, 0.1, 0.2),
+        );
+        let view = Rectangle::new(Point::new(0.0, 40.0), Size::new(W as f32, 220.0));
+        renderer.start_layer(view);
+        renderer.start_transformation(Transformation::translate(0.0, 40.0 - offset));
+        for index in 0..40 {
+            let top = index as f32 * 56.0;
+            renderer.fill_quad(
+                Quad {
+                    bounds: Rectangle::new(Point::new(8.0, top), Size::new(384.0, 48.0)),
+                    border: Border {
+                        radius: if rounded { 10.0.into() } else { 0.0.into() },
+                        ..Border::default()
+                    },
+                    shadow: Shadow::default(),
+                    snap: false,
+                },
+                Color::from_rgb(0.2, 0.3, 0.4),
+            );
+            let spec = text::Text {
+        content: format!("Tarjeta número {index} con un texto de ejemplo"),
+        bounds: Size::new(360.0, 20.0),
+        size: Pixels(14.0),
+        line_height: text::LineHeight::default(),
+        font: Font::DEFAULT,
+        align_x: text::Alignment::Default,
+        align_y: alignment::Vertical::Top,
+        shaping: text::Shaping::Advanced,
+        wrapping: text::Wrapping::default(),
+                };
+            let clip = Rectangle::new(Point::ORIGIN, Size::new(W as f32, 100000.0));
+            if paragraphs {
+                let paragraph = <Renderer as text::Renderer>::Paragraph::with_text(text::Text {
+                    content: spec.content.as_str(),
+                    bounds: spec.bounds,
+                    size: spec.size,
+                    line_height: spec.line_height,
+                    font: spec.font,
+                    align_x: spec.align_x,
+                    align_y: spec.align_y,
+                    shaping: spec.shaping,
+                    wrapping: spec.wrapping,
+                });
+                renderer.fill_paragraph(&paragraph, Point::new(16.0, top + 14.0), Color::WHITE, clip);
+            } else {
+                renderer.fill_text(spec, Point::new(16.0, top + 14.0), Color::WHITE, clip);
+            }
+        }
+        renderer.end_transformation();
+        renderer.end_layer();
+    }
+
+    fn paint(
+        renderer: &mut Renderer,
+        pixels: &mut [u32],
+        mask: &mut tiny_skia::Mask,
+        damage: &[Rectangle],
+    ) {
+        let viewport = Viewport::with_physical_size(Size::new(W, H), 1.0);
+        let mut map = tiny_skia::PixmapMut::from_bytes(bytemuck::cast_slice_mut(pixels), W, H)
+            .expect("pixel map");
+        renderer.draw(&mut map, mask, &viewport, damage, Color::BLACK);
+    }
+
+    /// Scrolling with the window's own damage handling must leave exactly what a full redraw would.
+    fn scroll_matches_full_redraw(buffers: usize, rounded: bool, paragraphs: bool) {
+        let mut renderer = Renderer::new(Font::DEFAULT, Pixels(16.0));
+        let mut mask = tiny_skia::Mask::new(W, H).unwrap();
+        let mut surfaces = vec![vec![0u32; (W * H) as usize]; buffers];
+        let mut history: std::collections::VecDeque<Vec<Layer>> = Default::default();
+        let full = [Rectangle::with_size(Size::new(W as f32, H as f32))];
+        let offsets = [0.0, 3.0, 17.0, 40.0, 41.0, 90.0, 200.0, 199.0, 350.0, 600.0, 640.0, 12.0];
+        for (step, offset) in offsets.into_iter().enumerate() {
+            frame(&mut renderer, offset, rounded, paragraphs);
+            let age = if step < buffers { 0 } else { buffers };
+            let last = (age > 0).then(|| history.get(age - 1)).flatten();
+            let damage = last
+                .map(|last| {
+                    damage::diff(last, renderer.layers(), |layer| vec![layer.bounds], Layer::damage)
+                })
+                .unwrap_or_else(|| full.to_vec());
+            if damage.is_empty() {
+                if let Some(last) = last {
+                    history.push_front(last.clone());
+                }
+            } else {
+                history.push_front(renderer.layers().to_vec());
+                history.truncate(buffers);
+                let damage = damage::group(damage, full[0]);
+                paint(&mut renderer, &mut surfaces[step % buffers], &mut mask, &damage);
+            }
+            let mut expected = vec![0u32; (W * H) as usize];
+            paint(&mut renderer, &mut expected, &mut mask, &full);
+            let wrong = surfaces[step % buffers]
+                .iter()
+                .zip(&expected)
+                .filter(|(a, b)| a != b)
+                .count();
+            assert_eq!(wrong, 0, "step {step} (offset {offset}): {wrong} pixels differ from a full redraw");
+        }
+    }
+
+    #[test]
+    fn scrolling_one_buffer() {
+        scroll_matches_full_redraw(1, true, false);
+    }
+
+    #[test]
+    fn scrolling_two_buffers() {
+        scroll_matches_full_redraw(2, true, false);
+        scroll_matches_full_redraw(2, true, true);
+    }
+
+    #[test]
+    fn scrolling_three_buffers_square() {
+        scroll_matches_full_redraw(3, false, true);
+    }
+}
