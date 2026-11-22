@@ -111,7 +111,7 @@ su dueño, no pasa de 128 caracteres).
 
 **Tu identidad.** El nombre que se dibuja en letras de bloques, el lema, la imagen y el tema son tuyos.
 En Studio: Ajustes → Identidad (vista previa en vivo; «Elegir imagen…» abre el selector de archivos). En la
-línea de comandos: `chxchx-tech identity show`; `identity set --name "ana dev" --tagline "mi taller" --avatar
+línea de comandos: `chxchx-tech identity show`; `identity colors` lista los degradados y `identity set --colors sunset` pone uno; `identity set --name "ana dev" --tagline "mi taller" --avatar
 foto.png --theme forest --accent "#f472b6" --web-theme studio` (añade `--dry-run` para ver cómo quedaría);
 `identity clear-avatar`; `identity reset`; `identity themes`. El nombre admite hasta 12 caracteres (letras sin
 tilde, números, espacio, `-` y `.`). Lo que cambies se ve en Studio y, al recargar, en la app web del teléfono;

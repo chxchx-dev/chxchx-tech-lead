@@ -457,15 +457,21 @@ mod tests {
     fn the_web_theme_choice_is_saved_and_reset_goes_back_keeping_a_copy() {
         in_a_home("web", |state| {
             event(state, Event::Load);
-            event(state, Event::WebTheme(true));
-            assert_eq!(identity::load_in(&home().unwrap()).web_theme, "studio");
+            assert_eq!(
+                identity::load_in(&home().unwrap()).web_theme,
+                "studio",
+                "Studio's theme by default"
+            );
+            event(state, Event::WebTheme(false));
+            assert_eq!(identity::load_in(&home().unwrap()).web_theme, "auto");
             event(state, Event::Name("beto".into()));
             event(state, Event::Apply);
             event(state, Event::Reset);
             let mine = identity::load_in(&home().unwrap());
             assert_eq!(
                 (mine.name.as_str(), mine.web_theme.as_str()),
-                ("CHXCHX", "auto")
+                ("CHXCHX", "studio"),
+                "reset goes back to the default, which follows Studio"
             );
             assert_eq!(state.settings.identity.name, "CHXCHX", "the box follows");
             assert!(

@@ -26,6 +26,22 @@ if (window.visualViewport) {
   follow();
 }
 
+// The browser bar takes the colour of the chosen theme (the same background the page uses), also
+// when the person changes it: the identity style sheet is read again and the colour follows.
+const paintBar = () => {
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  const metas = document.querySelectorAll('meta[name="theme-color"]');
+  if (!bg || (metas.length === 1 && metas[0].content === bg)) return;
+  metas.forEach((meta) => meta.remove());
+  const meta = document.createElement("meta");
+  meta.name = "theme-color";
+  meta.content = bg;
+  document.head.appendChild(meta);
+};
+addEventListener("load", paintBar);
+new MutationObserver(paintBar).observe(document.head, { childList: true, subtree: true, attributeFilter: ["href"], attributes: true });
+window.chxchxPaintBar = paintBar;
+
 // Installable and able to start without a network. The API is never served from the cache.
 if ("serviceWorker" in navigator) {
   addEventListener("load", () => {

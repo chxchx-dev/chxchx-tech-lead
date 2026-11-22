@@ -103,7 +103,7 @@ pub static PREFS: GlobalSignal<Prefs> = Signal::global(load_prefs);
 /// The person's own name, line and picture (public, so it is there before the phone is linked).
 /// Until the node answers it is the product's.
 pub static IDENTITY: GlobalSignal<chxchx_protocol::IdentityView> =
-    Signal::global(|| chxchx_protocol::Identity::default().view(None));
+    Signal::global(|| chxchx_protocol::Identity::default().view(None, None));
 /// The time, refreshed every few seconds so "hace 5 min" stays true on a screen left open.
 pub static CLOCK: GlobalSignal<u64> = Signal::global(net::now_ms);
 

@@ -128,7 +128,7 @@ fn Pairing() -> Element {
     let mut failure = use_signal(|| None::<String>);
     let from_qr = code_in_hash(&net::hash()).is_some();
     let who = store::IDENTITY.read().clone();
-    let wordmark = chxchx_protocol::banner_svg(&who.wordmark, &who.accent, &who.name);
+    let wordmark = chxchx_protocol::banner_svg(&who.wordmark, &who.accent, &who.accent2, &who.name);
     let avatar = store::avatar_src("/img/mascot-288.png");
     let ready = move || {
         code::join(&Groups {

@@ -21,6 +21,7 @@ pub(super) struct State {
     /// The action whose new shortcut is being recorded.
     capturing: Option<Action>,
     accent_input: String,
+    accent2_input: String,
     notice: String,
 }
 
@@ -31,6 +32,12 @@ pub(super) enum Event {
     Accent(Option<String>),
     AccentInput(String),
     AccentApply,
+    /// A two-color gradient: sets the accent and the second color together.
+    Gradient(String, String),
+    /// `None` goes back to the second color derived from the accent.
+    Accent2(Option<String>),
+    Accent2Input(String),
+    Accent2Apply,
     Scale(f32),
     /// Zoom in (+1), out (-1) or back to 100 % (0).
     Zoom(i32),
@@ -65,7 +72,12 @@ pub(super) const SCALES: [(&str, f32); 5] = [
 pub(super) fn apply(state: &Dashboard) {
     let preferences = state.session.preferences();
     let look = &preferences.appearance;
-    themes::set_palette(themes::build(&look.theme, look.accent.as_deref()));
+    themes::set_palette(themes::build(
+        &look.theme,
+        look.accent.as_deref(),
+        look.accent2.as_deref(),
+    ));
+    brand::set_second_color(look.accent2.as_deref());
     keymap::apply(&preferences.shortcuts);
 }
 
@@ -93,6 +105,34 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
                 state.session.edit(|p| p.appearance.accent = Some(value));
             } else {
                 state.settings.notice = "Escribe un color como #22D3FF.".to_owned();
+            }
+        }
+        Event::Gradient(first, second) => {
+            state.settings.accent_input = first.clone();
+            state.settings.accent2_input = second.clone();
+            state.settings.notice.clear();
+            state.session.edit(|p| {
+                p.appearance.accent = Some(first);
+                p.appearance.accent2 = Some(second);
+            });
+        }
+        Event::Accent2(second) => {
+            state.settings.accent2_input = second.clone().unwrap_or_default();
+            state.session.edit(|p| p.appearance.accent2 = second);
+        }
+        Event::Accent2Input(value) => state.settings.accent2_input = value,
+        Event::Accent2Apply => {
+            let value = state.settings.accent2_input.trim().to_owned();
+            let value = if value.starts_with('#') {
+                value
+            } else {
+                format!("#{value}")
+            };
+            if themes::parse_hex(&value).is_some() {
+                state.settings.notice.clear();
+                state.session.edit(|p| p.appearance.accent2 = Some(value));
+            } else {
+                state.settings.notice = "Escribe el segundo color como #2A6BFF.".to_owned();
             }
         }
         Event::Scale(scale) => state.session.edit(|p| p.appearance.scale = scale),
@@ -196,6 +236,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         ),
         themes_card(&look.theme),
         accent_card(state, look.accent.as_deref()),
+        gradient_card(state, look.accent.as_deref(), look.accent2.as_deref()),
         scale_card(look.scale),
         section_title(
             "sparkle",
@@ -379,6 +420,67 @@ fn accent_card<'a>(state: &'a Dashboard, current: Option<&'a str>) -> Element<'a
     .into()
 }
 
+/// Two-color gradients: the name, the buttons and the messages fade between the two colors, here and
+/// on the phone.
+fn gradient_card<'a>(
+    state: &'a Dashboard,
+    accent: Option<&'a str>,
+    accent2: Option<&'a str>,
+) -> Element<'a, Message> {
+    let mut pairs = row![].spacing(10);
+    for (_, name, first, second) in chxchx_protocol::COLOR_PAIRS {
+        let selected = accent.is_some_and(|c| c.eq_ignore_ascii_case(first))
+            && accent2.is_some_and(|c| c.eq_ignore_ascii_case(second));
+        let color = |value: &str| themes::parse_hex(value).unwrap_or(iced::Color::WHITE);
+        pairs = pairs.push(styles::tip(
+            button(row![swatch(color(first), 16.0), swatch(color(second), 16.0)].spacing(2))
+                .padding(4)
+                .style(styles::ghost(selected))
+                .on_press(Message::Settings(Event::Gradient(
+                    (*first).to_owned(),
+                    (*second).to_owned(),
+                ))),
+            *name,
+            iced::widget::tooltip::Position::Top,
+        ));
+    }
+    let custom = row![
+        text("Segundo color").size(12).color(design::muted()),
+        text_input("#2A6BFF", &state.settings.accent2_input)
+            .on_input(|value| Message::Settings(Event::Accent2Input(value)))
+            .on_submit(Message::Settings(Event::Accent2Apply))
+            .size(12)
+            .padding([6, 10])
+            .width(110)
+            .style(styles::input),
+        button(text("Aplicar").size(12))
+            .padding([6, 12])
+            .style(styles::secondary)
+            .on_press(Message::Settings(Event::Accent2Apply)),
+        button(text("Quitar").size(12))
+            .padding([6, 12])
+            .style(styles::ghost(false))
+            .on_press(Message::Settings(Event::Accent2(None))),
+    ]
+    .spacing(8)
+    .align_y(iced::Center);
+    container(
+        column![
+            text("Degradado de dos colores").size(13).font(design::UI_BOLD),
+            text("El nombre, los botones y tus mensajes pasan de un color al otro, aquí y en el teléfono.")
+                .size(11)
+                .color(design::muted()),
+            pairs,
+            custom,
+        ]
+        .spacing(10),
+    )
+    .padding(14)
+    .width(Fill)
+    .style(styles::card)
+    .into()
+}
+
 fn scale_card<'a>(current: f32) -> Element<'a, Message> {
     let mut sizes = row![].spacing(8);
     for (label, value) in SCALES {
@@ -467,6 +569,52 @@ fn shortcuts_card(state: &Dashboard) -> Element<'_, Message> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_gradient_sets_both_colors_and_the_second_one_can_be_typed_or_removed() {
+        let mut state = super::super::editor::fixture();
+        let _ = update(
+            &mut state,
+            Event::Gradient("#fb923c".into(), "#f472b6".into()),
+        );
+        let look = &state.session.preferences().appearance;
+        assert_eq!(
+            (look.accent.as_deref(), look.accent2.as_deref()),
+            (Some("#fb923c"), Some("#f472b6"))
+        );
+        assert_eq!(
+            design::accent(),
+            themes::hex(0xFB923C),
+            "the palette in use follows"
+        );
+
+        let _ = update(&mut state, Event::Accent2Input("2a6bff".into()));
+        let _ = update(&mut state, Event::Accent2Apply);
+        assert_eq!(
+            state.session.preferences().appearance.accent2.as_deref(),
+            Some("#2a6bff")
+        );
+        let _ = update(&mut state, Event::Accent2Input("rojo".into()));
+        let _ = update(&mut state, Event::Accent2Apply);
+        assert!(state.settings.notice.contains("segundo color"));
+        assert_eq!(
+            state.session.preferences().appearance.accent2.as_deref(),
+            Some("#2a6bff"),
+            "a bad one changes nothing"
+        );
+
+        let _ = update(&mut state, Event::Accent2(None));
+        assert_eq!(state.session.preferences().appearance.accent2, None);
+    }
+
+    #[test]
+    fn every_ready_made_gradient_is_drawn_in_the_card() {
+        let state = super::super::editor::fixture();
+        let _ = gradient_card(&state, None, None);
+        for (_, _, first, second) in chxchx_protocol::COLOR_PAIRS {
+            let _ = gradient_card(&state, Some(first), Some(second));
+        }
+    }
+
     use super::*;
 
     #[test]
@@ -478,7 +626,10 @@ mod tests {
         assert_eq!(saved.theme, "light");
         assert_eq!(saved.accent.as_deref(), Some("#FF0000"));
         assert_eq!(design::accent(), themes::hex(0xFF0000));
-        assert_eq!(design::bg_base(), themes::build("light", None).bg_base);
+        assert_eq!(
+            design::bg_base(),
+            themes::build("light", None, None).bg_base
+        );
         state.settings.accent_input = "nonsense".into();
         let _ = update(&mut state, Event::AccentApply);
         assert!(!state.settings.notice.is_empty());

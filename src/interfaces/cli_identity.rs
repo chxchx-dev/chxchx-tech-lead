@@ -30,7 +30,13 @@ pub(super) enum IdentityCommand {
         /// Color de resalte `#rrggbb`, o `none` para el de tu tema.
         #[arg(long)]
         accent: Option<String>,
-        /// `auto` (la app web sigue al dispositivo) o `studio` (usa el tema de Studio).
+        /// Segundo color del degradado `#rrggbb`, o `none` para el que se deriva del resalte.
+        #[arg(long)]
+        accent2: Option<String>,
+        /// Un degradado de dos colores ya hecho (mira `identity colors`); pone los dos colores.
+        #[arg(long)]
+        colors: Option<String>,
+        /// `studio` (la app web usa el tema de Studio, lo normal) o `auto` (sigue al dispositivo).
         #[arg(long)]
         web_theme: Option<String>,
         /// Muestra lo que haría sin cambiar nada.
@@ -49,6 +55,8 @@ pub(super) enum IdentityCommand {
     },
     /// Lista los temas.
     Themes,
+    /// Lista los degradados de dos colores ya hechos.
+    Colors,
 }
 
 pub(super) fn run(command: IdentityCommand) -> Result<(), String> {
@@ -60,9 +68,23 @@ pub(super) fn run(command: IdentityCommand) -> Result<(), String> {
             avatar,
             theme,
             accent,
+            accent2,
+            colors,
             web_theme,
             dry_run,
-        } => set(name, tagline, avatar, theme, accent, web_theme, dry_run),
+        } => set(
+            name,
+            tagline,
+            avatar,
+            theme,
+            Colors {
+                accent,
+                accent2,
+                pair: colors,
+            },
+            web_theme,
+            dry_run,
+        ),
         IdentityCommand::ClearAvatar { dry_run } => {
             if dry_run {
                 println!(
@@ -93,6 +115,12 @@ pub(super) fn run(command: IdentityCommand) -> Result<(), String> {
             }
             Ok(())
         }
+        IdentityCommand::Colors => {
+            for (id, name, first, second) in protocol::COLOR_PAIRS {
+                println!("{id:<8} {name:<10} {first} → {second}");
+            }
+            Ok(())
+        }
     }
 }
 
@@ -112,6 +140,7 @@ fn show(json: bool) -> Result<(), String> {
             "name": view.name,
             "tagline": view.tagline,
             "accent": view.accent,
+            "accent2": view.accent2,
             "theme": loaded.appearance.theme,
             "web_theme": mine.web_theme,
             "avatar": view.avatar_rev.is_some(),
@@ -125,10 +154,11 @@ fn show(json: bool) -> Result<(), String> {
     print_wordmark(&view.name);
     println!("\n{}", view.tagline);
     println!(
-        "\nNombre: {} · Tema: {} · Resalte: {} · App web: {} · Imagen: {}",
+        "\nNombre: {} · Tema: {} · Colores: {} → {} · App web: {} · Imagen: {}",
         view.name,
         loaded.appearance.theme,
         view.accent,
+        view.accent2,
         if mine.web_theme == "studio" {
             "usa el tema de Studio"
         } else {
@@ -143,12 +173,19 @@ fn show(json: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// What was asked about the colors.
+struct Colors {
+    accent: Option<String>,
+    accent2: Option<String>,
+    pair: Option<String>,
+}
+
 fn set(
     name: Option<String>,
     tagline: Option<String>,
     avatar: Option<PathBuf>,
     theme: Option<String>,
-    accent: Option<String>,
+    colors: Colors,
     web_theme: Option<String>,
     dry_run: bool,
 ) -> Result<(), String> {
@@ -174,13 +211,31 @@ fn set(
         }
         loaded.preferences.appearance.theme = id.clone();
     }
-    if let Some(accent) = &accent {
-        loaded.preferences.appearance.accent = if accent.eq_ignore_ascii_case("none") {
-            None
-        } else {
-            Some(protocol::normalize_accent(accent).ok_or("--accent debe ser `#rrggbb` o `none`")?)
-        };
+    // A ready-made pair sets both; `--accent` and `--accent2` then adjust either of them.
+    if let Some(id) = &colors.pair {
+        let (first, second) = protocol::color_pair(id).ok_or_else(|| {
+            format!("Degradado desconocido «{id}». Mira `chxchx-tech identity colors`.")
+        })?;
+        loaded.preferences.appearance.accent = Some(first.to_owned());
+        loaded.preferences.appearance.accent2 = Some(second.to_owned());
     }
+    let color = |value: &Option<String>, flag: &str| -> Result<Option<Option<String>>, String> {
+        match value {
+            None => Ok(None),
+            Some(text) if text.eq_ignore_ascii_case("none") => Ok(Some(None)),
+            Some(text) => protocol::normalize_accent(text)
+                .map(|hex| Some(Some(hex)))
+                .ok_or_else(|| format!("{flag} debe ser `#rrggbb` o `none`")),
+        }
+    };
+    if let Some(accent) = color(&colors.accent, "--accent")? {
+        loaded.preferences.appearance.accent = accent;
+    }
+    if let Some(second) = color(&colors.accent2, "--accent2")? {
+        loaded.preferences.appearance.accent2 = second;
+    }
+    let colors_changed =
+        colors.pair.is_some() || colors.accent.is_some() || colors.accent2.is_some();
     let picture = match &avatar {
         Some(path) => {
             let bytes =
@@ -209,7 +264,7 @@ fn set(
         avatar_rev: identity::load().avatar_rev,
         ..mine
     })?;
-    if theme.is_some() || accent.is_some() {
+    if theme.is_some() || colors_changed {
         if !loaded.writable {
             return Err(
                 "Las preferencias de Studio no se pueden escribir (¿son de una versión más nueva?)"

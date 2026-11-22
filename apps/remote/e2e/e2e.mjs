@@ -122,9 +122,26 @@ await step("la identidad propia (nombre, lema, imagen y tema) llega a la pantall
   assert.ok(await page.evaluate(() => document.querySelector(".mascot-ring img").complete && document.querySelector(".mascot-ring img").naturalWidth > 0), "la imagen carga");
   await page.screenshot({ path: `${shots}01c-identity.png` });
 
+  // Un degradado de dos colores ya hecho, y la barra del navegador con el color del tema.
+  env("cli identity set --colors sunset --theme midnight");
+  await page.reload();
+  await page.locator(".wordmark-art svg[aria-label='ANA DEV']").waitFor({ timeout: 10_000 });
+  const pair = await page.evaluate(() => {
+    const css = getComputedStyle(document.documentElement);
+    return {
+      accent: css.getPropertyValue("--accent").trim(),
+      accent2: css.getPropertyValue("--accent2").trim(),
+      bar: document.querySelector('meta[name="theme-color"]')?.content,
+      bg: css.getPropertyValue("--bg").trim(),
+    };
+  });
+  assert.notEqual(pair.accent, pair.accent2, "dos colores distintos");
+  assert.equal(pair.bar, pair.bg, "la barra del navegador toma el fondo del tema");
+  await page.screenshot({ path: `${shots}01d-gradient.png` });
+
   // Volver a lo de fábrica no borra nada, pero la pantalla vuelve a lo de siempre.
   env("cli identity reset");
-  env("cli identity set --accent none --theme chxchx --web-theme auto");
+  env("cli identity set --accent none --accent2 none --theme chxchx --web-theme auto");
   await page.reload();
   await page.locator(".wordmark-art svg[aria-label='CHXCHX']").waitFor({ timeout: 10_000 });
   const back = await look(page);

@@ -24,9 +24,9 @@ pub use devices::{
 pub use error::{ErrorCode, JobError};
 pub use events::{JobEvent, JobEventBody};
 pub use identity::{
-    DEFAULT_ACCENT, DEFAULT_NAME, DEFAULT_TAGLINE, GLYPH_ROWS, Identity, IdentityView, MAX_NAME,
-    MAX_TAGLINE, WEB_THEMES, WebTheme, banner_svg, gradient, normalize_accent, normalize_name,
-    normalize_tagline, rgb, theme_css, web_theme, wordmark,
+    COLOR_PAIRS, DEFAULT_ACCENT, DEFAULT_NAME, DEFAULT_TAGLINE, GLYPH_ROWS, Identity, IdentityView,
+    MAX_NAME, MAX_TAGLINE, WEB_THEMES, WebTheme, banner_svg, color_pair, gradient,
+    normalize_accent, normalize_name, normalize_tagline, rgb, theme_css, web_theme, wordmark,
 };
 pub use ids::{DeviceId, IdError, IdempotencyKey, JobId, ProjectId};
 pub use jobs::{AgentTurnSpec, Job, JobSpec, JobState, MAX_PROMPT_BYTES};

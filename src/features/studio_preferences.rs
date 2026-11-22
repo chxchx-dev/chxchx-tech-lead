@@ -52,6 +52,8 @@ impl Default for Layout {
 pub struct Appearance {
     pub theme: String,
     pub accent: Option<String>,
+    /// The second color of the two-color gradient (rótulo, botones, mensajes).
+    pub accent2: Option<String>,
     pub scale: f32,
 }
 
@@ -60,6 +62,7 @@ impl Default for Appearance {
         Self {
             theme: "chxchx".to_owned(),
             accent: None,
+            accent2: None,
             scale: 1.0,
         }
     }
@@ -177,6 +180,13 @@ impl Preferences {
                 || !hex[1..].chars().all(|c| c.is_ascii_hexdigit())
         }) {
             look.accent = None;
+        }
+        if look.accent2.as_deref().is_some_and(|hex| {
+            hex.len() != 7
+                || !hex.starts_with('#')
+                || !hex[1..].chars().all(|c| c.is_ascii_hexdigit())
+        }) {
+            look.accent2 = None;
         }
         self.shortcuts.retain(|action, binding| {
             action.len() <= 32 && binding.len() <= 40 && binding.is_ascii()

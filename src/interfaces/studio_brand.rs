@@ -22,6 +22,15 @@ struct Own {
 }
 
 static OWN: RwLock<Option<Own>> = RwLock::new(None);
+/// The second color of the gradient the person chose (`#rrggbb`), if any.
+static SECOND: RwLock<Option<String>> = RwLock::new(None);
+
+/// Tells the brand which second color the person chose (from the appearance preferences).
+pub(super) fn set_second_color(color: Option<&str>) {
+    if let Ok(mut slot) = SECOND.write() {
+        *slot = color.map(str::to_owned);
+    }
+}
 
 /// Puts the person's identity to use: from now on the welcome screen, the empty editor and new
 /// chats draw it. `avatar` is the stored picture, if there is one.
@@ -92,7 +101,9 @@ fn hex_of(color: iced::Color) -> String {
 /// The colors a name fades between: the accent in use at the top and a little toward blue at the
 /// bottom, the same two the web client draws with.
 fn fade() -> (iced::Color, iced::Color) {
-    let (top, bottom) = chxchx_protocol::gradient(&hex_of(super::design::accent()));
+    let second = SECOND.read().ok().and_then(|second| second.clone());
+    let (top, bottom) =
+        chxchx_protocol::gradient(&hex_of(super::design::accent()), second.as_deref());
     (
         color(chxchx_protocol::rgb(&top).unwrap_or((0, 217, 255))),
         color(chxchx_protocol::rgb(&bottom).unwrap_or((42, 139, 255))),

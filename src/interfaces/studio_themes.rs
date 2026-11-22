@@ -234,7 +234,11 @@ fn mix(from: Color, to: Color, amount: f32) -> Color {
 }
 
 /// The palette of a theme (the default one when the id is unknown) with the person's accent.
-pub(in crate::interfaces::studio) fn build(theme: &str, accent: Option<&str>) -> Palette {
+pub(in crate::interfaces::studio) fn build(
+    theme: &str,
+    accent: Option<&str>,
+    accent2: Option<&str>,
+) -> Palette {
     let mut palette = THEMES
         .iter()
         .find(|(id, ..)| *id == theme)
@@ -245,6 +249,11 @@ pub(in crate::interfaces::studio) fn build(theme: &str, accent: Option<&str>) ->
         palette.brand_blue = mix(color, Color::BLACK, 0.12);
         palette.brand_deep = mix(color, Color::BLACK, 0.38);
     }
+    // The second color of a two-color gradient is the other end of the brand colors.
+    if let Some(second) = accent2.and_then(parse_hex) {
+        palette.brand_blue = second;
+        palette.brand_deep = mix(second, Color::BLACK, 0.3);
+    }
     palette
 }
 
@@ -254,11 +263,25 @@ mod tests {
 
     #[test]
     fn unknown_themes_fall_back_and_an_accent_replaces_the_highlight() {
-        assert_eq!(build("nope", None), DARK);
-        let custom = build("light", Some("#ff0000"));
+        assert_eq!(build("nope", None, None), DARK);
+        let custom = build("light", Some("#ff0000"), None);
         assert_eq!(custom.accent, hex(0xFF0000));
         assert_eq!(custom.bg_base, LIGHT.bg_base);
-        assert_eq!(build("light", Some("zzz")), LIGHT);
+        assert_eq!(build("light", Some("zzz"), None), LIGHT);
+        // A second color is the other end of the brand colors, with or without a first one.
+        let pair = build("chxchx", Some("#fb923c"), Some("#f472b6"));
+        assert_eq!(
+            (pair.brand_cyan, pair.brand_blue),
+            (hex(0xFB923C), hex(0xF472B6))
+        );
+        assert_eq!(
+            build("chxchx", None, Some("#f472b6")).brand_blue,
+            hex(0xF472B6)
+        );
+        assert_eq!(
+            build("chxchx", Some("#fb923c"), Some("zzz")).brand_blue,
+            mix(hex(0xFB923C), Color::BLACK, 0.12)
+        );
     }
 
     /// The web client draws the themes of Studio from `chxchx_protocol::WEB_THEMES`. If a color

@@ -4,7 +4,7 @@
   --bg: #070a10; --panel: #0d141f; --panel2: #131d2c; --text: #e9f1fb; --muted: #8fa3bd;
   --line: #1a2a40; --accent: #00d9ff; --accent-ink: #00131a; --ok: #34d399; --bad: #f87171;
   --brand: linear-gradient(135deg, #00e5ff 0%, #2a8bff 62%, #3a63ff 100%);
-  --glow: 0 0 22px rgba(0, 217, 255, 0.16);
+  --glow: 0 0 22px color-mix(in srgb, var(--accent) 16%, transparent);
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Roboto Mono", monospace;
   --warn: #fbbf24; --radius: 16px; --tab-h: 64px; --gutter: 16px;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
@@ -231,9 +231,9 @@ html.kbd-open .composer { margin-bottom: var(--s2); }
 .brand { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .brand-mark { width: 28px; height: 28px; flex: none; }
 .boot { display: flex; flex-direction: column; align-items: center; gap: var(--s2); padding-top: 28vh; text-align: center; }
-.boot-mark { width: 56px; height: 56px; filter: drop-shadow(0 0 14px rgba(0, 217, 255, 0.45)); }
+.boot-mark { width: 56px; height: 56px; filter: drop-shadow(0 0 14px color-mix(in srgb, var(--accent) 45%, transparent)); }
 .pairing-hero { display: flex; flex-direction: column; align-items: center; gap: var(--s3); margin-bottom: var(--s5); text-align: center; }
-.mascot-ring { width: 132px; height: 132px; border-radius: 50%; line-height: 0; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 38px rgba(0, 217, 255, 0.28); }
+.mascot-ring { width: 132px; height: 132px; border-radius: 50%; line-height: 0; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 38px color-mix(in srgb, var(--accent) 28%, transparent); }
 .mascot-ring img { width: 100%; height: 100%; border-radius: 50%; }
 .wordmark { margin: 0; line-height: 0; max-width: 100%; }
 .wordmark-art { display: block; }
@@ -243,5 +243,5 @@ html.kbd-open .composer { margin-bottom: var(--s2); }
 .pairing .lead { text-align: center; }
 .hero-id { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
 .hero-id h3 { margin: 0; }
-.avatar { width: 52px; height: 52px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 18px rgba(0, 217, 255, 0.22); }
-.empty-mascot { width: 88px; height: 88px; border-radius: 50%; margin-bottom: var(--s3); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent), 0 0 26px rgba(0, 217, 255, 0.22); }
+.avatar { width: 52px; height: 52px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 22%, transparent); }
+.empty-mascot { width: 88px; height: 88px; border-radius: 50%; margin-bottom: var(--s3); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent), 0 0 26px color-mix(in srgb, var(--accent) 22%, transparent); }

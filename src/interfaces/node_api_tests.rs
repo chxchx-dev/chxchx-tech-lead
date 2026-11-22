@@ -1289,7 +1289,15 @@ async fn the_picture_and_the_theme_are_served_only_when_the_person_set_them() {
             .unwrap()
             .starts_with("text/css")
     );
-    assert!(css.is_empty(), "nothing chosen: the app keeps its own look");
+    let css = String::from_utf8(css).unwrap();
+    assert!(
+        css.contains("--bg: #070b14"),
+        "Studio's default theme: {css}"
+    );
+    assert!(
+        css.contains("--accent: #22d3ff"),
+        "the theme's own accent: {css}"
+    );
 
     let picture = {
         let image = image::RgbaImage::from_pixel(40, 20, image::Rgba([10, 200, 250, 255]));

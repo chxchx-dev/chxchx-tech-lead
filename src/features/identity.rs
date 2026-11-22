@@ -74,15 +74,12 @@ pub fn avatar_in(home: &Path) -> Option<Vec<u8>> {
 /// What the node tells its clients: the identity ready to draw, with the accent of the person's
 /// appearance preferences.
 pub fn view_in(home: &Path) -> IdentityView {
-    let accent = studio_preferences::load_from(home)
-        .preferences
-        .appearance
-        .accent;
+    let look = studio_preferences::load_from(home).preferences.appearance;
     let mut identity = load_in(home);
     if avatar_in(home).is_none() {
         identity.avatar_rev = None;
     }
-    identity.view(accent.as_deref())
+    identity.view(look.accent.as_deref(), look.accent2.as_deref())
 }
 
 /// The CSS for the web client: the Studio theme when the person asked for it, plus the accent.
@@ -90,7 +87,7 @@ pub fn css_in(home: &Path) -> String {
     let look = studio_preferences::load_from(home).preferences.appearance;
     let identity = load_in(home);
     let theme = (identity.web_theme == "studio").then_some(look.theme.as_str());
-    chxchx_protocol::theme_css(theme, look.accent.as_deref())
+    chxchx_protocol::theme_css(theme, look.accent.as_deref(), look.accent2.as_deref())
 }
 
 /// Turns any picture the person has into the square one the product stores: the largest centred
@@ -186,7 +183,7 @@ pub fn avatar() -> Option<Vec<u8>> {
 pub fn view() -> IdentityView {
     match here() {
         Ok(home) => view_in(&home),
-        Err(_) => Identity::default().view(None),
+        Err(_) => Identity::default().view(None, None),
     }
 }
 
@@ -237,10 +234,15 @@ mod tests {
         );
         assert!(avatar_in(&home).is_none());
         assert_eq!(view_in(&home).name, DEFAULT_NAME);
-        assert_eq!(
-            css_in(&home),
-            "",
-            "no theme or accent chosen: the app's own look"
+        // Nothing chosen: the web client wears Studio's default theme, with no accent of its own.
+        let css = css_in(&home);
+        assert!(
+            css.contains("--bg: #070b14"),
+            "Studio's default theme: {css}"
+        );
+        assert!(
+            css.contains("--accent: #22d3ff"),
+            "the theme's own accent: {css}"
         );
     }
 
@@ -279,7 +281,8 @@ mod tests {
         let identity = load_in(&home);
         assert_eq!(
             (identity.name.as_str(), identity.web_theme.as_str()),
-            (DEFAULT_NAME, "auto")
+            (DEFAULT_NAME, "studio"),
+            "an unknown mode is the default one"
         );
     }
 
@@ -289,14 +292,24 @@ mod tests {
         let mut loaded = studio_preferences::load_from(&home);
         loaded.preferences.appearance.theme = "forest".into();
         loaded.preferences.appearance.accent = Some("#f472b6".into());
+        loaded.preferences.appearance.accent2 = Some("#22d3ff".into());
         studio_preferences::save_to(&home, &loaded.preferences).unwrap();
-        // The web client follows the device unless asked to use the theme: the accent applies anyway.
+        // The web client wears Studio's theme by default, with the accent of the person.
+        let css = css_in(&home);
+        assert!(css.contains("--bg: #08110e"), "the forest theme: {css}");
+        assert!(css.contains("--accent: #f472b6"), "{css}");
+        // Asked to follow the device, it keeps only the colors of the person.
+        let mut device = load_in(&home);
+        device.web_theme = "auto".into();
+        save_in(&home, &device).unwrap();
         let css = css_in(&home);
         assert!(
             css.contains("--accent: #f472b6") && !css.contains("--bg:"),
             "{css}"
         );
         assert_eq!(view_in(&home).accent, "#f472b6");
+        assert_eq!(view_in(&home).accent2, "#22d3ff", "the second color too");
+        assert!(css.contains("--accent2: #22d3ff"), "{css}");
         let mut identity = load_in(&home);
         identity.web_theme = "studio".into();
         save_in(&home, &identity).unwrap();

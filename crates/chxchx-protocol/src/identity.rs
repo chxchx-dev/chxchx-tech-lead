@@ -24,8 +24,8 @@ pub const GLYPH_ROWS: usize = 6;
 pub struct Identity {
     pub name: String,
     pub tagline: String,
-    /// `"auto"`: the web client follows the device (light or dark). `"studio"`: it uses the theme
-    /// chosen in Studio.
+    /// `"studio"` (the default): the web client wears the theme chosen in Studio. `"auto"`: it follows
+    /// the device (light or dark) instead.
     pub web_theme: String,
     pub avatar_rev: Option<u64>,
 }
@@ -35,7 +35,7 @@ impl Default for Identity {
         Self {
             name: DEFAULT_NAME.to_owned(),
             tagline: DEFAULT_TAGLINE.to_owned(),
-            web_theme: "auto".to_owned(),
+            web_theme: "studio".to_owned(),
             avatar_rev: None,
         }
     }
@@ -50,6 +50,8 @@ pub struct IdentityView {
     pub wordmark: Vec<String>,
     /// The accent, `#rrggbb`.
     pub accent: String,
+    /// The second color of the gradient (the one chosen, or the one derived from the accent).
+    pub accent2: String,
     pub avatar_rev: Option<u64>,
 }
 
@@ -60,24 +62,27 @@ impl Identity {
             name: normalize_name(&self.name).unwrap_or_else(|_| DEFAULT_NAME.to_owned()),
             tagline: normalize_tagline(&self.tagline)
                 .unwrap_or_else(|_| DEFAULT_TAGLINE.to_owned()),
-            web_theme: if self.web_theme == "studio" {
-                "studio".to_owned()
-            } else {
+            web_theme: if self.web_theme == "auto" {
                 "auto".to_owned()
+            } else {
+                "studio".to_owned()
             },
             avatar_rev: self.avatar_rev,
         }
     }
 
-    pub fn view(&self, accent: Option<&str>) -> IdentityView {
+    pub fn view(&self, accent: Option<&str>, accent2: Option<&str>) -> IdentityView {
         let clean = self.sanitized();
+        let accent = accent
+            .and_then(normalize_accent)
+            .unwrap_or_else(|| DEFAULT_ACCENT.to_owned());
+        let (_, accent2) = gradient(&accent, accent2);
         IdentityView {
             wordmark: wordmark(&clean.name),
             name: clean.name,
             tagline: clean.tagline,
-            accent: accent
-                .and_then(normalize_accent)
-                .unwrap_or_else(|| DEFAULT_ACCENT.to_owned()),
+            accent,
+            accent2,
             avatar_rev: clean.avatar_rev,
         }
     }
@@ -575,13 +580,36 @@ fn mix(a: (u8, u8, u8), b: (u8, u8, u8), toward_b: f32) -> (u8, u8, u8) {
     (blend(a.0, b.0), blend(a.1, b.1), blend(a.2, b.2))
 }
 
-/// The two colors of the brand gradient for an accent: the accent itself on top and, a little
-/// toward blue, at the bottom. With the default cyan this is the cyan-to-blue of the terminal banner.
-pub fn gradient(accent: &str) -> (String, String) {
+/// The two colors of the brand gradient: the accent on top and the second color at the bottom. When
+/// the person chose no second color it is the accent a little toward blue, so with the default cyan
+/// this is the cyan-to-blue of the terminal banner.
+pub fn gradient(accent: &str, accent2: Option<&str>) -> (String, String) {
     let top = rgb(accent)
         .or_else(|| rgb(DEFAULT_ACCENT))
         .unwrap_or((0, 217, 255));
-    (to_hex(top), to_hex(mix(top, (0x2a, 0x4b, 0xff), 0.55)))
+    let bottom = accent2
+        .and_then(rgb)
+        .unwrap_or_else(|| mix(top, (0x2a, 0x4b, 0xff), 0.55));
+    (to_hex(top), to_hex(bottom))
+}
+
+/// Two-color gradients ready to pick: `(id, name, accent, second color)`.
+pub const COLOR_PAIRS: &[(&str, &str, &str, &str)] = &[
+    ("neon", "Neón", "#22d3ff", "#2a6bff"),
+    ("aurora", "Aurora", "#34d399", "#22d3ff"),
+    ("ocean", "Océano", "#4c9aff", "#a78bfa"),
+    ("violet", "Violeta", "#a78bfa", "#f472b6"),
+    ("sunset", "Atardecer", "#fb923c", "#f472b6"),
+    ("fire", "Fuego", "#fbbf24", "#f2707a"),
+    ("mint", "Menta", "#5eead4", "#34d399"),
+];
+
+/// A preset of [`COLOR_PAIRS`] by id.
+pub fn color_pair(id: &str) -> Option<(&'static str, &'static str)> {
+    COLOR_PAIRS
+        .iter()
+        .find(|pair| pair.0 == id)
+        .map(|pair| (pair.2, pair.3))
 }
 
 /// A theme of the web client, with the colors of the Studio theme of the same id.
@@ -694,7 +722,11 @@ fn css_hex(value: u32) -> String {
 /// The CSS that makes the web client look like the person's choice, served before the app starts so
 /// nothing flashes. `studio_theme` is `Some(id)` when the client must use a Studio theme (otherwise
 /// it follows the device); `accent` replaces the highlight in both cases.
-pub fn theme_css(studio_theme: Option<&str>, accent: Option<&str>) -> String {
+pub fn theme_css(
+    studio_theme: Option<&str>,
+    accent: Option<&str>,
+    accent2: Option<&str>,
+) -> String {
     let theme = studio_theme.and_then(web_theme);
     let accent = accent
         .and_then(normalize_accent)
@@ -702,7 +734,7 @@ pub fn theme_css(studio_theme: Option<&str>, accent: Option<&str>) -> String {
     let mut css = String::new();
     if let Some(theme) = theme {
         css.push_str(&format!(
-            ":root {{ color-scheme: {scheme}; --bg: {}; --panel: {}; --panel2: {}; --line: {}; --text: {}; --muted: {}; --ok: {}; --warn: {}; --bad: {}; }}\n",
+            ":root {{ color-scheme: {scheme}; --bg: {}; --panel: {}; --panel2: {}; --line: {}; --text: {}; --muted: {}; --ok: {}; --warn: {}; --bad: {}; --shadow: {shadow}; }}\n",
             css_hex(theme.bg),
             css_hex(theme.panel),
             css_hex(theme.panel2),
@@ -713,10 +745,15 @@ pub fn theme_css(studio_theme: Option<&str>, accent: Option<&str>) -> String {
             css_hex(theme.warn),
             css_hex(theme.bad),
             scheme = if theme.dark { "dark" } else { "light" },
+            shadow = if theme.dark {
+                "0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.28)"
+            } else {
+                "0 1px 2px rgba(18, 24, 33, 0.05), 0 6px 18px rgba(18, 24, 33, 0.07)"
+            },
         ));
     }
     if let Some(accent) = accent {
-        let (top, bottom) = gradient(&accent);
+        let (top, bottom) = gradient(&accent, accent2);
         let (r, g, b) = rgb(&accent).unwrap_or((0, 217, 255));
         // Dark text on a bright accent, light text on a dark one.
         let luminance = 0.299 * f32::from(r) + 0.587 * f32::from(g) + 0.114 * f32::from(b);
@@ -726,7 +763,7 @@ pub fn theme_css(studio_theme: Option<&str>, accent: Option<&str>) -> String {
             "#ffffff"
         };
         css.push_str(&format!(
-            ":root {{ --accent: {accent}; --accent-ink: {ink}; --brand: linear-gradient(135deg, {top} 0%, {bottom} 100%); --glow: 0 0 22px rgba({r}, {g}, {b}, 0.18); }}\n"
+            ":root {{ --accent: {accent}; --accent2: {bottom}; --accent-ink: {ink}; --brand: linear-gradient(135deg, {top} 0%, {bottom} 100%); --glow: 0 0 22px rgba({r}, {g}, {b}, 0.18); }}\n"
         ));
     }
     css
@@ -769,13 +806,13 @@ impl Canvas {
 /// The block letters as an SVG: no font needed, so it looks the same on every device. Only box
 /// characters are ever drawn (the text of the name never reaches the SVG), so it holds no markup of
 /// the person's.
-pub fn banner_svg(rows: &[String], accent: &str, label: &str) -> String {
+pub fn banner_svg(rows: &[String], top: &str, bottom: &str, label: &str) -> String {
     // The label is the name, already validated; anything else is dropped so it can never close the attribute.
     let label: String = label
         .chars()
         .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '.'))
         .collect();
-    let (top, bottom) = gradient(accent);
+    let (top, bottom) = gradient(top, Some(bottom));
     let cols = rows
         .iter()
         .map(|row| row.chars().count())
@@ -933,11 +970,17 @@ mod tests {
 
     #[test]
     fn the_default_gradient_is_the_cyan_to_blue_of_the_brand() {
-        let (top, bottom) = gradient(DEFAULT_ACCENT);
+        let (top, bottom) = gradient(DEFAULT_ACCENT, None);
         assert_eq!(top, "#00d9ff");
         assert_eq!(bottom, "#178bff");
-        let (_, pink_bottom) = gradient("#f472b6");
+        let (_, pink_bottom) = gradient("#f472b6", None);
         assert_ne!(pink_bottom, bottom, "another accent, another gradient");
+        // A second color of their own replaces the derived one; a bad one is ignored.
+        assert_eq!(
+            gradient("#f472b6", Some("#22d3ff")),
+            ("#f472b6".to_owned(), "#22d3ff".to_owned())
+        );
+        assert_eq!(gradient("#f472b6", Some("rojo")).1, pink_bottom);
     }
 
     #[test]
@@ -951,9 +994,12 @@ mod tests {
         let clean = broken.sanitized();
         assert_eq!(clean.name, DEFAULT_NAME);
         assert_eq!(clean.tagline, DEFAULT_TAGLINE);
-        assert_eq!(clean.web_theme, "auto");
+        assert_eq!(
+            clean.web_theme, "studio",
+            "an unknown mode is the default one"
+        );
         assert_eq!(clean.avatar_rev, Some(3));
-        let view = broken.view(Some("rojo"));
+        let view = broken.view(Some("rojo"), Some("azul"));
         assert_eq!(view.accent, DEFAULT_ACCENT);
         assert_eq!(view.wordmark.len(), GLYPH_ROWS);
     }
@@ -961,41 +1007,46 @@ mod tests {
     #[test]
     fn the_css_follows_the_device_unless_a_studio_theme_is_asked_for() {
         assert_eq!(
-            theme_css(None, None),
+            theme_css(None, None, None),
             "",
             "nothing chosen: the app's own look"
         );
-        let accent_only = theme_css(None, Some("#f472b6"));
+        let accent_only = theme_css(None, Some("#f472b6"), None);
         assert!(accent_only.contains("--accent: #f472b6") && !accent_only.contains("--bg"));
-        let themed = theme_css(Some("light"), None);
+        let themed = theme_css(Some("light"), None, None);
         assert!(themed.contains("color-scheme: light") && themed.contains("--bg: #f7f9fc"));
         assert!(
             themed.contains("--accent: #0a7ea4"),
             "the theme's own highlight"
         );
-        let both = theme_css(Some("graphite"), Some("#ff0000"));
+        let both = theme_css(Some("graphite"), Some("#ff0000"), None);
         assert!(
             both.contains("--accent: #ff0000"),
             "the person's accent wins: {both}"
         );
-        assert_eq!(theme_css(Some("nope"), None), "");
+        assert_eq!(theme_css(Some("nope"), None, None), "");
     }
 
     #[test]
     fn a_bright_accent_gets_dark_ink_and_a_dark_one_light_ink() {
-        assert!(theme_css(None, Some("#ffd400")).contains("--accent-ink: #00131a"));
-        assert!(theme_css(None, Some("#1a2a8c")).contains("--accent-ink: #ffffff"));
+        assert!(theme_css(None, Some("#ffd400"), None).contains("--accent-ink: #00131a"));
+        assert!(theme_css(None, Some("#1a2a8c"), None).contains("--accent-ink: #ffffff"));
     }
 
     #[test]
     fn the_svg_draws_only_shapes_and_never_the_text_of_the_name() {
-        let svg = banner_svg(&wordmark("ana"), DEFAULT_ACCENT, "ANA");
+        let svg = banner_svg(&wordmark("ana"), DEFAULT_ACCENT, "#178bff", "ANA");
         assert!(svg.starts_with("<svg") && svg.ends_with("</svg>"));
         assert!(
             svg.contains("aria-label=\"ANA\""),
             "the name is its accessible text"
         );
-        let hostile = banner_svg(&wordmark("ana"), DEFAULT_ACCENT, "\"><script>x</script>");
+        let hostile = banner_svg(
+            &wordmark("ana"),
+            DEFAULT_ACCENT,
+            "#178bff",
+            "\"><script>x</script>",
+        );
         assert!(!hostile.contains("<script"), "no tag survives");
         assert!(
             hostile.contains("aria-label=\"scriptxscript\""),
@@ -1007,6 +1058,64 @@ mod tests {
             "no text in the picture: only shapes"
         );
         assert!(!svg.contains("script"));
+    }
+
+    #[test]
+    fn the_web_client_wears_the_theme_of_studio_unless_the_person_asks_it_to_follow_the_device() {
+        assert_eq!(Identity::default().web_theme, "studio");
+        let device = Identity {
+            web_theme: "auto".into(),
+            ..Identity::default()
+        };
+        assert_eq!(device.sanitized().web_theme, "auto");
+    }
+
+    #[test]
+    fn a_second_color_reaches_the_gradient_the_glow_and_the_view() {
+        let css = theme_css(None, Some("#fb923c"), Some("#f472b6"));
+        assert!(
+            css.contains("--accent: #fb923c") && css.contains("--accent2: #f472b6"),
+            "{css}"
+        );
+        assert!(
+            css.contains("linear-gradient(135deg, #fb923c 0%, #f472b6 100%)"),
+            "{css}"
+        );
+        let view = Identity::default().view(Some("#fb923c"), Some("#f472b6"));
+        assert_eq!(
+            (view.accent.as_str(), view.accent2.as_str()),
+            ("#fb923c", "#f472b6")
+        );
+        // Without one, the derived color is what the picture and the page both use.
+        let plain = Identity::default().view(Some("#fb923c"), None);
+        assert_eq!(plain.accent2, gradient("#fb923c", None).1);
+        assert!(
+            theme_css(None, Some("#fb923c"), None)
+                .contains(&format!("--accent2: {}", plain.accent2))
+        );
+    }
+
+    #[test]
+    fn a_theme_sets_the_shadow_for_its_kind_of_background() {
+        assert!(theme_css(Some("chxchx"), None, None).contains("rgba(0, 0, 0, 0.35)"));
+        assert!(theme_css(Some("light"), None, None).contains("rgba(18, 24, 33, 0.05)"));
+    }
+
+    #[test]
+    fn every_ready_made_gradient_is_valid_and_has_its_own_id() {
+        let mut ids: Vec<_> = COLOR_PAIRS.iter().map(|pair| pair.0).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), COLOR_PAIRS.len());
+        for (id, name, a, b) in COLOR_PAIRS {
+            assert!(
+                rgb(a).is_some() && rgb(b).is_some() && !name.is_empty(),
+                "{id}"
+            );
+            assert_ne!(a, b, "{id}: two different colors");
+            assert_eq!(color_pair(id), Some((*a, *b)));
+        }
+        assert_eq!(color_pair("nope"), None);
     }
 
     #[test]
