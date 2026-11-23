@@ -3,6 +3,12 @@
 Detalle de capacidades, seguridad y decisiones del producto. Para una visión general, empieza por el [README](README.md).
 La versión es `0.6.3` (la línea 0.6 es el producto Rust); reemplaza a la instalación 0.5.x al actualizar.
 
+## Modo plan (Codex)
+
+En un chat de Codex, `/plan` activa el modo plan: planeas con un modelo y otro escribe el plan. Por defecto `gpt-6.1-terra` (`high`) piensa, lee el proyecto y pregunta, siempre en solo lectura; cuando dice «Listo para escribir el plan · complejidad: …» (o le pides «escribe el plan»), el turno siguiente lo hace `gpt-6-luna` en `high`, o en `xhigh` si la complejidad es alta. Un turno no puede cambiar de modelo a la mitad: el cambio ocurre entre dos turnos de la misma conversación, y Studio lo avisa en el chat. `/plan` otra vez lo apaga.
+
+Para usar otros modelos, crea `<carpeta de ChxChx>/model-route/model-route.json`, por ejemplo `{"writer_model": "gpt-6-luna", "writer_deep_effort": "max"}`. Lo que falte conserva su valor; los esfuerzos válidos son low, medium, high, xhigh, max y ultra.
+
 ## Carpeta de datos
 
 Por defecto ChxChx guarda sus datos en `~/.chxchx-tech-lead/`. Para usar otra (otro disco, una carpeta sincronizada):

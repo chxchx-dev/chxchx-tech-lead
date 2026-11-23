@@ -21,6 +21,8 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
         options: None,
         model_id: None,
         effort: None,
+        plan: None,
+        follow_up: None,
         resume_recap: String::new(),
         recovered_memories: String::new(),
         preparing: true,

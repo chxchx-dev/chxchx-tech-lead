@@ -87,6 +87,10 @@ pub(super) struct Chat {
     pub options: Option<AgentOptions>,
     pub model_id: Option<String>,
     pub effort: Option<String>,
+    /// Plan mode (Codex): one model plans, another writes the plan. `None` is off.
+    pub plan: Option<crate::features::model_route::PlanState>,
+    /// The planning model said it is ready: the writing turn that follows, with its complexity.
+    pub follow_up: Option<crate::features::model_route::Depth>,
     /// Recap supplied to the adapter for a provider session Rust found missing.
     pub resume_recap: String,
     pub recovered_memories: String,
@@ -189,6 +193,8 @@ pub(super) enum Event {
     Permissions,
     /// Opens or closes the model picker.
     ModelMenu,
+    /// Turns plan mode on or off.
+    TogglePlan,
     ProviderMemoriesPrepared(String, String, Result<usize, String>),
     /// A `/command` picked in the menu.
     Slash(String),
@@ -299,6 +305,7 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             chat.perms_open = !chat.perms_open;
             chat.models_open = false;
         }),
+        Event::TogglePlan => with_chat(state, slash::toggle_plan),
         Event::ModelMenu => with_chat(state, |chat| {
             chat.models_open = !chat.models_open;
             chat.perms_open = false;
@@ -469,6 +476,22 @@ fn tick(state: &mut Dashboard) {
             let remote = turn.is_remote();
             drop(turn);
             let replies = std::mem::take(&mut chat.turn_replies);
+            if let Some(plan) = chat.plan.as_mut() {
+                if code == 0 && !cancelled {
+                    if let Some(depth) = plan.end(&replies) {
+                        use crate::features::model_route as route;
+                        chat.follow_up = Some(depth);
+                        let next = route::pick(&route::load(), route::Phase::Writing, depth);
+                        let _ = chat.model.apply(&json!({
+                            "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
+                            "type": "notice",
+                            "message": format!("Listo para escribir el plan: lo redacta {} ({}).", next.model, next.effort),
+                        }));
+                    }
+                } else {
+                    plan.abort();
+                }
+            }
             // The node that ran the turn also saved the conversation, the explicit memory and the
             // journal: saving them here as well would write every answer twice.
             let saved_state = if remote {
@@ -548,6 +571,33 @@ fn tick(state: &mut Dashboard) {
             }
         }
         sync(chat);
+    }
+    start_follow_ups(state);
+}
+
+/// The writing turn after a planning model said it is ready: it starts by itself once the chat is free.
+fn start_follow_ups(state: &mut Dashboard) {
+    let pending: Vec<usize> = state
+        .chat
+        .chats
+        .iter()
+        .enumerate()
+        .filter(|(_, chat)| chat.follow_up.is_some() && chat.turn.is_none() && !chat.preparing)
+        .map(|(index, _)| index)
+        .collect();
+    for index in pending {
+        let previous = state.chat.active;
+        state.chat.active = index;
+        let started = turns::start_turn_as(
+            state,
+            crate::features::model_route::WRITE_NOW,
+            Some("Escribir el plan"),
+            false,
+        );
+        state.chat.active = previous;
+        if !started && let Some(chat) = state.chat.chats.get_mut(index) {
+            chat.follow_up = None;
+        }
     }
 }
 

@@ -2,7 +2,7 @@
 
 ## Sin publicar
 
-(nada todavía)
+- **Modo plan en los chats de Codex (`/plan`)**: un modelo piensa y otro escribe el plan. Con `/plan` el chat pasa a solo lectura: planeas con `gpt-6.1-terra` en `high`; cuando Terra termina con «Listo para escribir el plan · complejidad: normal|alta» (o tú le pides «escribe el plan»), Studio lanza solo el turno siguiente con `gpt-6-luna`: en `high`, o en `xhigh` si el trabajo es complejo. Después del plan el chat vuelve a planear; `/plan` otra vez lo apaga y vuelves a tu modelo y esfuerzo. El chip «Plan · modelo · esfuerzo» del encabezado muestra con qué corrió el último turno. Los modelos y esfuerzos se cambian en `<carpeta de ChxChx>/model-route/model-route.json` (campos `planner_model`, `planner_effort`, `writer_model`, `writer_effort`, `writer_deep_effort`; lo inválido se ignora).
 
 ## 0.7.1 — Nodo local, app para el teléfono y Manager
 

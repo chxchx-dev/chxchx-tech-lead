@@ -14,11 +14,12 @@ pub(super) enum Local {
     Terminal,
     Retry,
     Skills,
+    Plan,
     Help,
 }
 
 /// The actions of the chat itself, which never reach the agent.
-const LOCAL: [(&str, &str, Local); 7] = [
+const LOCAL: [(&str, &str, Local); 8] = [
     ("nuevo", "Empieza un chat de cero", Local::New),
     ("modelo", "Elige modelo y esfuerzo", Local::Model),
     (
@@ -36,6 +37,11 @@ const LOCAL: [(&str, &str, Local); 7] = [
         "skills",
         "Lista las skills y comandos del proyecto",
         Local::Skills,
+    ),
+    (
+        "plan",
+        "Modo plan (Codex): un modelo piensa y otro escribe el plan",
+        Local::Plan,
     ),
     ("ayuda", "Muestra los comandos disponibles", Local::Help),
 ];
@@ -144,6 +150,38 @@ pub(super) fn enter(state: &mut Dashboard) -> bool {
         return true;
     }
     false
+}
+
+/// `/plan`: turns plan mode on or off for this chat.
+pub(super) fn toggle_plan(chat: &mut Chat) {
+    use crate::features::model_route as route;
+    if chat.agent.provider != crate::features::agents::Provider::Codex {
+        note(
+            chat,
+            "El modo plan funciona solo con Codex por ahora.".to_owned(),
+        );
+    } else if chat.plan.take().is_some() {
+        chat.follow_up = None;
+        note(
+            chat,
+            "Modo plan desactivado: vuelves al modelo y al esfuerzo que elegiste.".to_owned(),
+        );
+    } else {
+        let mine = route::load();
+        chat.plan = Some(route::PlanState::default());
+        note(
+            chat,
+            format!(
+                "Modo plan activado (solo lectura). Planeas con {} ({}). Cuando esté listo para escribir el plan, \
+                 o se lo pidas, lo redacta {} ({}, o {} si el trabajo es complejo). `/plan` otra vez lo desactiva.",
+                mine.planner_model,
+                mine.planner_effort,
+                mine.writer_model,
+                mine.writer_effort,
+                mine.writer_deep_effort
+            ),
+        );
+    }
 }
 
 fn note(chat: &mut Chat, text: String) {
@@ -256,6 +294,7 @@ fn run(state: &mut Dashboard, action: Local) -> Task<Message> {
                         let text = listing(&chat.commands);
                         note(chat, text);
                     }
+                    Local::Plan => toggle_plan(chat),
                     _ => note(chat, help()),
                 }
             }

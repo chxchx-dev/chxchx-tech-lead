@@ -42,7 +42,12 @@ fn start_turn(state: &mut Dashboard, prompt: &str, show: bool) -> bool {
 }
 
 /// Like `start_turn`, with the text the transcript shows when it differs from what the agent reads.
-fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, show: bool) -> bool {
+pub(super) fn start_turn_as(
+    state: &mut Dashboard,
+    prompt: &str,
+    display: Option<&str>,
+    show: bool,
+) -> bool {
     if !trusted(state) {
         state.message = "Concede confianza al proyecto para hablar con un agente.".into();
         return false;
@@ -58,6 +63,19 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
     }
     let mut allow = chat.approved.clone();
     allow.append(&mut chat.once);
+    // Plan mode (Codex): the model and effort of this turn depend on whether it plans or writes.
+    let follow_up = chat.follow_up.take();
+    let routed = if chat.agent.provider == crate::features::agents::Provider::Codex {
+        chat.plan
+            .as_mut()
+            .map(|plan| plan.begin(&crate::features::model_route::load(), prompt, follow_up))
+    } else {
+        None
+    };
+    let agent_prompt = match &routed {
+        Some(route) => format!("{prompt}\n\n{}", route.instructions),
+        None => prompt.to_owned(),
+    };
     let attached = if show {
         std::mem::take(&mut chat.images)
     } else {
@@ -67,7 +85,7 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         agent: chat.agent.id.clone(),
         provider: state_provider(chat.agent.provider).to_owned(),
         project: root,
-        prompt: with_images(prompt, attached.len()),
+        prompt: with_images(&agent_prompt, attached.len()),
         resume_recap: chat.resume_recap.clone(),
         recovered_memories: chat.recovered_memories.clone(),
         images: attached.iter().map(|i| i.prepared.path.clone()).collect(),
@@ -82,10 +100,17 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         agent_cwd: chat.agent.cwd.clone(),
         trusted: true, // checked above: nothing starts in an untrusted project
     };
+    let mut spec = spec;
+    if let Some(route) = &routed {
+        spec.model = Some(route.pick.model.clone());
+        spec.effort = Some(route.pick.effort.clone());
+        // Planning and writing the plan never change files.
+        spec.mode = "read-only".to_owned();
+    }
     let visible_prompt = shown(display.unwrap_or(prompt), attached.len());
     // Only what the person typed goes to the node as it is: a hidden retry or a `/command` that
     // expands into something else stays here.
-    let typed = show && display.is_none();
+    let typed = show && display.is_none() && routed.is_none();
     let launched = if to_node {
         super::node::launch(&spec, typed)
     } else {
@@ -121,6 +146,10 @@ fn start_turn_as(state: &mut Dashboard, prompt: &str, display: Option<&str>, sho
         }
         Err(error) => {
             chat.images = attached;
+            if let Some(plan) = chat.plan.as_mut() {
+                plan.abort();
+            }
+            chat.follow_up = follow_up;
             state.message = error;
             false
         }

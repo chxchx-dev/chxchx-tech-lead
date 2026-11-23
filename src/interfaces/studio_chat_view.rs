@@ -314,6 +314,23 @@ fn header<'a>(chat: &'a Chat) -> Element<'a, Message> {
             ));
         }
     }
+    if let Some(plan) = &chat.plan {
+        chips = chips.push(chip(
+            "check",
+            match plan.last() {
+                Some(last) => format!(
+                    "Plan · {} · {}",
+                    models::short_name(&last.model),
+                    last.effort
+                ),
+                None => "Plan".to_owned(),
+            },
+            true,
+            false,
+            send(Event::TogglePlan),
+            "Modo plan activo: pulsa para desactivarlo",
+        ));
+    }
     chips = chips.push(chip(
         "shield",
         format!(

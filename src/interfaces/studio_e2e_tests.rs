@@ -34,6 +34,15 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
+/// The agent-adapter service Studio finds is one per process: tests that stand up their own fake one
+/// take turns, or each would end up talking to the other's.
+fn use_adapter(path: PathBuf) -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let guard = LOCK.lock().unwrap_or_else(|poison| poison.into_inner());
+    crate::integrations::agent_adapter::set_known_for_tests(path);
+    guard
+}
+
 /// The agent-adapter service as Studio sees it: it answers `contract` and, for `run`, prints the
 /// events the real service prints for an OpenCode turn.
 fn fake_adapter(dir: &Path) -> PathBuf {
@@ -334,7 +343,7 @@ fn studio_persists_explicit_memory_requests_but_skips_secrets_and_injected_text(
 #[test]
 fn opencode_raw_events_flow_through_the_studio_chat() {
     let dir = sandbox();
-    crate::integrations::agent_adapter::set_known_for_tests(fake_adapter(&dir));
+    let _adapter = use_adapter(fake_adapter(&dir));
     let mut state = studio(&dir);
     open_chat(&mut state, &agent("opencode", Provider::OpenCode));
 
@@ -365,6 +374,122 @@ fn opencode_raw_events_flow_through_the_studio_chat() {
 }
 
 use crate::features::chat_model::Kind as model_kind;
+
+/// A Codex service that records every request and answers the first turn «listo» (complex work) and
+/// the second one with the plan.
+fn fake_planning_adapter(dir: &Path) -> PathBuf {
+    let event = |json: &str| {
+        let mut full = serde_json::from_str::<serde_json::Value>(json).unwrap();
+        full["schema"] = "chxchx.agent-event".into();
+        full["schema_version"] = 1.into();
+        shell_quote(&full.to_string())
+    };
+    let ready = event(
+        r#"{"type":"message","role":"assistant","text":"Revisé el login.\n\nListo para escribir el plan · complejidad: alta"}"#,
+    );
+    let plan = event(r#"{"type":"message","role":"assistant","text":"El plan: 1. migrar."}"#);
+    let done =
+        event(r#"{"type":"adapter_done","exit_code":0,"cancelled":false,"session_id":"ses-plan"}"#);
+    let log = dir.join("requests.log");
+    let script = format!(
+        "#!/bin/sh\nif [ \"$1\" = contract ]; then echo '{{\"schema\":\"chxchx.agent-adapter\",\"contract_version\":1,\"version\":\"test\",\"providers\":[\"Codex\",\"OpenCode\"]}}'; exit 0; fi\nread -r request\nprintf '%s\\n' \"$request\" >> \"{log}\"\nn=$(wc -l < \"{log}\")\nif [ \"$n\" -eq 1 ]; then printf '%s\\n' {ready} {done}; else printf '%s\\n' {plan} {done}; fi\ncat >/dev/null\n",
+        log = log.display(),
+    );
+    let path = dir.join("chxchx-agent-adapter");
+    std::fs::write(&path, script).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+#[test]
+fn plan_mode_plans_with_one_model_and_writes_the_plan_with_another() {
+    let dir = sandbox();
+    let _adapter = use_adapter(fake_planning_adapter(&dir));
+    let mut state = studio(&dir);
+    open_chat(&mut state, &agent("codex", Provider::Codex));
+
+    say(&mut state, "/plan");
+    assert!(
+        state.chat.chats[0].plan.is_some(),
+        "/plan activates plan mode"
+    );
+    say(&mut state, "quiero migrar el login");
+    wait_for_answer(&mut state);
+
+    let requests: Vec<serde_json::Value> = std::fs::read_to_string(dir.join("requests.log"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(
+        requests.len(),
+        2,
+        "planning, then the writing turn by itself"
+    );
+    assert_eq!(requests[0]["model"], "gpt-6.1-terra");
+    assert_eq!(requests[0]["effort"], "high");
+    assert_eq!(
+        requests[0]["codex"]["sandbox"], "read-only",
+        "{}",
+        requests[0]["codex"]
+    );
+    assert!(
+        requests[0]["prompt"]
+            .as_str()
+            .unwrap()
+            .contains("quiero migrar el login")
+    );
+    assert!(
+        requests[0]["prompt"]
+            .as_str()
+            .unwrap()
+            .contains("Listo para escribir el plan")
+    );
+    assert_eq!(requests[1]["model"], "gpt-6-luna");
+    assert_eq!(
+        requests[1]["effort"], "xhigh",
+        "the planner said the work is complex"
+    );
+    assert_eq!(requests[1]["codex"]["sandbox"], "read-only");
+
+    let chat = &state.chat.chats[0];
+    // The person's message is shown as typed, without the instructions the agent got.
+    let typed = chat
+        .model
+        .entries
+        .iter()
+        .find(|e| e.kind == model_kind::User)
+        .expect("the person's message is in the chat");
+    assert_eq!(typed.text, "quiero migrar el login");
+    assert!(
+        chat.model
+            .entries
+            .iter()
+            .any(|e| e.text == "El plan: 1. migrar.")
+    );
+    assert!(chat.follow_up.is_none());
+    // After the plan the chat plans again, and turning plan mode off goes back to the chosen model.
+    say(&mut state, "/plan");
+    assert!(state.chat.chats[0].plan.is_none());
+}
+
+#[test]
+fn plan_mode_is_only_for_codex() {
+    let dir = sandbox();
+    let mut state = studio(&dir);
+    open_chat(&mut state, &claude_agent(&dir));
+    say(&mut state, "/plan");
+    let chat = &state.chat.chats[0];
+    assert!(chat.plan.is_none());
+    assert!(
+        chat.model
+            .entries
+            .last()
+            .unwrap()
+            .text
+            .contains("solo con Codex")
+    );
+}
 
 #[test]
 fn a_project_command_travels_as_typed_and_a_chat_command_stays_in_the_app() {
@@ -642,7 +767,7 @@ mod with_the_node {
     fn it_stays_local_when_the_setting_is_off() {
         // Off: nothing reaches the node and the turn runs here, saved by Studio as always.
         let dir = sandbox();
-        crate::integrations::agent_adapter::set_known_for_tests(fake_adapter(&dir));
+        let _adapter = use_adapter(fake_adapter(&dir));
         let node = FakeNode::start();
         let _pointed = point_at(&node);
         let mut state = studio(&dir);
@@ -665,7 +790,7 @@ mod with_the_node {
     #[test]
     fn a_node_that_refuses_the_turn_does_not_stop_the_conversation() {
         let dir = sandbox();
-        crate::integrations::agent_adapter::set_known_for_tests(fake_adapter(&dir));
+        let _adapter = use_adapter(fake_adapter(&dir));
         let node = FakeNode::start();
         node.script.lock().unwrap().refuse_create = true;
         let _pointed = point_at(&node);

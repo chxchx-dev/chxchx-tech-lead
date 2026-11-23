@@ -24,6 +24,7 @@ pub mod features {
     pub mod mcp_connectors_plan;
     pub mod mcp_diagnostics;
     pub mod mcp_setup;
+    pub mod model_route;
     pub mod node_audit;
     pub mod node_devices;
     #[cfg(feature = "node")]
