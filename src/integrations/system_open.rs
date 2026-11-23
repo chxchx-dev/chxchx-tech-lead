@@ -44,9 +44,53 @@ pub fn reveal(path: &Path) -> Result<(), String> {
         .map_err(|error| format!("No pude abrir el explorador de archivos ({program}): {error}"))
 }
 
+/// The program and arguments that open a web link in the default browser.
+pub fn url_command(url: &str) -> (&'static str, Vec<String>) {
+    if cfg!(target_os = "macos") {
+        ("open", vec![url.to_owned()])
+    } else if cfg!(windows) {
+        (
+            "rundll32",
+            vec!["url.dll,FileProtocolHandler".to_owned(), url.to_owned()],
+        )
+    } else {
+        ("xdg-open", vec![url.to_owned()])
+    }
+}
+
+/// Opens a web link in the browser. Only `http` and `https` links are ever opened: the text of an agent
+/// is not trusted, so anything else (`file:`, `javascript:`, a custom scheme) is refused here.
+pub fn open_url(url: &str) -> Result<(), String> {
+    let url = crate::features::chat_links::safe_url(url)
+        .ok_or("Ese enlace no es de la web (http o https): no lo abro desde aquí.")?;
+    let (program, arguments) = url_command(&url);
+    Command::new(program)
+        .args(&arguments)
+        .env("PATH", agent_path())
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| {
+            format!("No pude abrir el navegador ({program}): {error}. Abre {url} a mano.")
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_web_links_are_opened() {
+        for bad in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "ftp://x.dev",
+            "no es un enlace",
+        ] {
+            assert!(open_url(bad).unwrap_err().contains("no lo abro"), "{bad}");
+        }
+        let (program, arguments) = url_command("https://a.dev/x?y=1&z=2");
+        assert!(!program.is_empty() && arguments.last().unwrap() == "https://a.dev/x?y=1&z=2");
+    }
 
     #[test]
     fn a_missing_item_is_reported_before_anything_is_started() {

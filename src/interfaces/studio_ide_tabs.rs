@@ -148,7 +148,7 @@ pub(super) fn editor_area(state: &Dashboard) -> Element<'_, Message> {
                 content.items(),
                 iced::widget::markdown::Settings::with_text_size(14, design::theme()),
             )
-            .map(|_| Message::Chat(super::chat::Event::Link)),
+            .map(|url| Message::Chat(super::chat::Event::OpenLink(url))),
             None => text("").into(),
         };
         styles::vscroll(

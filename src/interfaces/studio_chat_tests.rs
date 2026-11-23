@@ -470,3 +470,61 @@ fn studio_releases_context_generates_a_hidden_handoff_and_consumes_it_after_a_fr
     );
     let _ = fs::remove_dir_all(root);
 }
+
+#[test]
+fn a_message_offers_its_link_and_its_code_only_web_links_open_and_a_code_can_be_copied() {
+    let mut state = dashboard();
+    state.chat.chats[0].model.apply(&json!({
+        "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
+        "type": "message", "role": "assistant",
+        "text": "Abre https://github.com/login/device y escribe el código ABCD-1234.\n\n```\nhttps://no-se-toca.dev\n```",
+    }));
+    sync(&mut state.chat.chats[0]);
+    let chat = &state.chat.chats[0];
+    assert!(
+        chat.rendered
+            .iter()
+            .any(|(_, content)| !content.items().is_empty()),
+        "the answer is drawn as Markdown"
+    );
+    // The message offers its links and its code as buttons.
+    let entry = chat
+        .model
+        .entries
+        .iter()
+        .find(|e| e.kind == Kind::Assistant)
+        .unwrap();
+    let offered = crate::features::chat_links::actions(&entry.text);
+    assert_eq!(offered.len(), 3, "{offered:?}");
+
+    // Clicking anything that is not a web link is refused, never opened.
+    let _ = update(&mut state, Event::OpenLink("file:///etc/passwd".into()));
+    assert!(state.message.contains("no lo abro"), "{}", state.message);
+    let _ = update(&mut state, Event::OpenLink("javascript:alert(1)".into()));
+    assert!(state.message.contains("no lo abro"));
+    // Copying a code confirms it.
+    let _ = update(&mut state, Event::CopyText("ABCD-1234".into()));
+    assert_eq!(state.message, "Copiado al portapapeles.");
+}
+
+#[test]
+fn a_link_that_is_still_being_written_makes_the_markdown_start_again() {
+    use super::prepare::touches_a_link;
+    assert!(
+        touches_a_link("Entra a https://auth.exam", 10),
+        "the tail holds the start of a link"
+    );
+    assert!(
+        touches_a_link("Entra a https://auth.exampleple.com/x ahora", 30),
+        "the link is cut at what was parsed"
+    );
+    assert!(!touches_a_link(
+        "Una respuesta larga sin enlaces, escrita poco a poco.",
+        20
+    ));
+    let long = format!("https://a.dev/x {}", "palabra ".repeat(100));
+    assert!(
+        !touches_a_link(&long, 700),
+        "a link far behind is already parsed"
+    );
+}

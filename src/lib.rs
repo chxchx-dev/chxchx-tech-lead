@@ -7,6 +7,7 @@ pub mod features {
     pub mod catalog_view;
     pub mod chat_handoff;
     pub mod chat_journal;
+    pub mod chat_links;
     pub mod chat_model;
     pub mod chat_state;
     pub mod connection;
