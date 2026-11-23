@@ -140,3 +140,23 @@ una nueva medición del paquete para cerrar R0.4.
 
 Las rutas se eligieron como temporales para esta corrida y deben estar vacías
 al repetirla, ya que el generador de fixtures no sobrescribe árboles existentes.
+
+## Memoria con agentes en marcha (medido 2026-11-22, Linux, PSS)
+
+Cuánto pesa cada pieza cuando Studio tiene agentes trabajando. PSS (memoria propia más su parte de lo
+compartido) leído de `/proc/<pid>/smaps_rollup` sumando el árbol de procesos. Tareas chicas reales
+(leer 25 archivos y contarlos) y una sesión larga de Codex abierta en Studio.
+
+| Pieza | PSS |
+|---|---|
+| Studio (1 chat; 44 MB anónimos, 14 de archivos, 15 de pantalla) | 73 MB |
+| Nodo (servicio de usuario) | 9 MB |
+| Claude CLI, un turno | ~260 MB (sesiones largas: ~260–350) |
+| Codex por Studio: adaptador 16–24 + `app-server` 147–238 + `code-mode-host` 14–24 | 165 (turno corto) – 290 (sesión larga) |
+| OpenCode por Studio: adaptador + `opencode serve` propio del turno | ~170 |
+
+Con todos trabajando a la vez, base de ~82 MB (Studio + nodo) más: 1 agente ≈ 0,35 GB, 2 ≈ 0,6–0,65 GB,
+3 ≈ 0,8–0,95 GB, 5 ≈ 1,4–1,5 GB (hasta ~1,8 GB con contextos grandes de Claude). Regla práctica: ~0,3 GB por
+agente más ~0,1 GB. No hay fugas: el adaptador y `codex` salen al terminar el turno (comprobado), y para Claude
+el host cierra la entrada al llegar el `result`. Casi toda la memoria es de los programas de los agentes, no de
+ChxChx; `LEAN_ENV` no ayuda con Codex (es musl, ignora `MALLOC_*`). Pendiente: medir Studio con 5 chats abiertos.
