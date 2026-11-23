@@ -101,6 +101,10 @@ jobs:
             libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
             libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev
+      # `tomllib` (it reads the version out of Cargo.toml) needs Python 3.11+: ubuntu-22.04 ships 3.10.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
       - name: Build the locked offline Python tools bundle
         run: |
@@ -273,6 +277,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+      # `tomllib` (it reads the version out of Cargo.toml) needs Python 3.11+: ubuntu-22.04 ships 3.10.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
       - name: Build the locked offline Python tools bundle
         run: |
