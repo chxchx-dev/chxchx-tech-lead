@@ -2,6 +2,11 @@
 
 ## Sin publicar
 
+(nada todavía)
+
+## 0.7.2 — Modo plan para Codex y Claude
+
+- **Instaladores con las herramientas requeridas dentro**: cada instalador (MSI de Windows, Linux y macOS) trae Basic Memory `1.0.0` y Serena `2.1.0` con versiones y dependencias fijadas, y `tools install --bundle` actualiza instalaciones anteriores sin red. Al actualizar se reemplazan aunque ya existan. Instalar Studio todavía necesita conexión para bajar sus componentes generales.
 - **Modo plan también para Claude, y el gasto por modelo**: en un chat de Claude, `/plan` planea con `opus` en `high` (solo lectura). Cuando dices «adelante» (o `/desarrollar`), todo el desarrollo sigue con `sonnet` en `medium` y con los permisos que tenga el chat; `/planear` vuelve a planear y `/plan` lo apaga. Claude no empieza a desarrollar solo: al terminar el plan avisa «Plan listo» y esperas tu orden. La barra de uso del chat muestra ahora lo que gastó cada modelo en el modo plan (entrada/salida y, si el agente lo informa, el costo en dólares), por ejemplo `opus · high: 13k/3.5k · US$ 0.50  ·  sonnet · medium: 30k/9k · US$ 0.20`. Los modelos de Claude se cambian en `model-route.json` (`claude_planner_model`, `claude_planner_effort`, `claude_developer_model`, `claude_developer_effort`).
 - **Modo plan en los chats de Codex (`/plan`)**: un modelo piensa y otro escribe el plan. Con `/plan` el chat pasa a solo lectura: planeas con `gpt-6.1-terra` en `high`; cuando Terra termina con «Listo para escribir el plan · complejidad: normal|alta» (o tú le pides «escribe el plan»), Studio lanza solo el turno siguiente con `gpt-6-luna`: en `high`, o en `xhigh` si el trabajo es complejo. Después del plan el chat vuelve a planear; `/plan` otra vez lo apaga y vuelves a tu modelo y esfuerzo. El chip «Plan · modelo · esfuerzo» del encabezado muestra con qué corrió el último turno. Los modelos y esfuerzos se cambian en `<carpeta de ChxChx>/model-route/model-route.json` (campos `planner_model`, `planner_effort`, `writer_model`, `writer_effort`, `writer_deep_effort`; lo inválido se ignora).
 
