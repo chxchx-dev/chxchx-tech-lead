@@ -18,14 +18,36 @@ fn window_label(label: &str, window: &Window) -> String {
     format!("{span}: {:.0}%", window.used_percent)
 }
 
+/// What the running turn has used so far, and with which model when plan mode chose one.
+pub(super) struct Running {
+    pub input: i64,
+    pub output: i64,
+    pub label: String,
+}
+
 pub(super) fn usage_bar<'a>(
     usage: &'a Usage,
     spend: &[crate::features::model_route::Spent],
+    running: Option<Running>,
 ) -> Element<'a, Message> {
     let mut line = row![].spacing(14).align_y(iced::Center);
     let summary = usage.summary();
     if !summary.is_empty() {
         line = line.push(text(summary).size(11).color(design::muted()));
+    }
+    if let Some(now) = running {
+        line = line.push(styles::tip(
+            text(format!(
+                "En curso{}: {} de entrada · {} de salida",
+                if now.label.is_empty() { String::new() } else { format!(" ({})", now.label) },
+                compact_tokens(now.input),
+                compact_tokens(now.output)
+            ))
+            .size(11)
+            .color(design::accent()),
+            "Lo que va usando este turno; al terminar se suma a los totales con las cifras finales del agente.",
+            tooltip::Position::Top,
+        ));
     }
     let by_model = crate::features::model_route::spend_summary(spend);
     if !by_model.is_empty() {

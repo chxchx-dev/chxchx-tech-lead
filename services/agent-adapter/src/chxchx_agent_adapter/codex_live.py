@@ -135,6 +135,7 @@ class LiveCodex:
             return _item_events(params["item"], completed=method == "item/completed")
         if method == "thread/tokenUsage/updated" and isinstance(params.get("tokenUsage"), dict):
             self._track_usage(params["tokenUsage"])
+            return [self._live_usage()]
         elif method == "error":
             error = params.get("error") if isinstance(params.get("error"), dict) else params
             if not params.get("willRetry"):
@@ -149,6 +150,13 @@ class LiveCodex:
         if self._baseline is None:  # what the thread had spent before this turn's first model call
             self._baseline = {key: _count(total.get(key)) - _count(last.get(key)) for key in ("inputTokens", "outputTokens")}
         self._latest = {"total": total, "last": last, "window": usage.get("modelContextWindow")}
+
+    def _live_usage(self) -> Event:
+        """What this turn has used so far (the host shows it while the turn runs; the final figures replace it)."""
+        total, base = self._latest.get("total", {}), self._baseline or {}
+        return {"type": "usage_live", "message_id": "turn",
+                "input_tokens": max(0, _count(total.get("inputTokens")) - base.get("inputTokens", 0)),
+                "output_tokens": max(0, _count(total.get("outputTokens")) - base.get("outputTokens", 0))}
 
     def _turn_completed(self, turn: dict[str, Any]) -> list[Event]:
         self.done = True

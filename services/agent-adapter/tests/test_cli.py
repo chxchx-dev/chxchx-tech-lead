@@ -54,7 +54,7 @@ def test_run_as_a_real_process_end_to_end(tmp_path: Path, fake_bin) -> None:
     process.stdin.close()
     assert process.wait(timeout=30) == 0, process.stderr.read() if process.stderr else ""
 
-    assert [e["type"] for e in events] == ["session", "message", "usage", "limits", "adapter_done"]
+    assert [e["type"] for e in events] == ["session", "message", "usage_live", "usage", "limits", "adapter_done"]
     assert events[-1]["exit_code"] == 0 and events[1]["text"] == "eco: hola"
 
 

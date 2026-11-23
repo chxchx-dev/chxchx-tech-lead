@@ -483,10 +483,14 @@ fn tick(state: &mut Dashboard) {
             let replies = std::mem::take(&mut chat.turn_replies);
             if let Some(pick) = chat.turn_pick.take() {
                 let usage = &chat.model.usage;
-                let (input, output) = (
+                let (mut input, mut output) = (
                     usage.input_tokens - chat.usage_mark.0,
                     usage.output_tokens - chat.usage_mark.1,
                 );
+                if input <= 0 && output <= 0 {
+                    // The turn ended without its final figures (stopped, failed): what it used live still counts.
+                    (input, output) = chat.model.live_tokens();
+                }
                 let cost = usage
                     .cost_usd
                     .map(|now| now - chat.usage_mark.2.unwrap_or(0.0));
@@ -562,6 +566,7 @@ fn tick(state: &mut Dashboard) {
             }
             crate::integrations::process_memory::give_back_soon();
             images::cleanup(chat);
+            chat.model.live.clear();
             chat.model.expire_live_requests();
             if code != 0 && !cancelled && !chat.model.entries.iter().any(|e| e.kind == Kind::Error)
             {

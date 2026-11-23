@@ -290,6 +290,21 @@ fn claude(record: &Map<String, Value>) -> Vec<Value> {
         return Vec::new();
     };
     let mut events = Vec::new();
+    // What this message cost so far: shown live, and replaced by the turn's final figures.
+    if kind == "assistant"
+        && let Some(message) = record.get("message").and_then(Value::as_object)
+        && let Some(id) = message.get("id").and_then(Value::as_str)
+        && let Some(usage_data) = message.get("usage").and_then(Value::as_object)
+    {
+        let count = |key: &str| usage_data.get(key).and_then(Value::as_i64).unwrap_or(0);
+        let input = count("input_tokens")
+            + count("cache_read_input_tokens")
+            + count("cache_creation_input_tokens");
+        events.push(event(json!({
+            "type":"usage_live", "message_id": id,
+            "input_tokens": input, "output_tokens": count("output_tokens"),
+        })));
+    }
     for block in content.iter().filter_map(Value::as_object) {
         let block_type = string(block.get("type"));
         match (kind.as_str(), block_type.as_str()) {

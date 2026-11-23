@@ -561,6 +561,70 @@ fn claude_plan_mode_plans_with_opus_then_develops_with_sonnet_and_counts_what_ea
     );
 }
 
+/// A Codex service that reports what the turn has used, waits a moment and then finishes with the final figures.
+fn fake_live_usage_adapter(dir: &Path) -> PathBuf {
+    let event = |json: &str| {
+        let mut full = serde_json::from_str::<serde_json::Value>(json).unwrap();
+        full["schema"] = "chxchx.agent-event".into();
+        full["schema_version"] = 1.into();
+        shell_quote(&full.to_string())
+    };
+    let first =
+        event(r#"{"type":"usage_live","message_id":"turn","input_tokens":120,"output_tokens":10}"#);
+    let rest = [
+        r#"{"type":"message","role":"assistant","text":"Listo."}"#,
+        r#"{"type":"usage","input_tokens":300,"output_tokens":40,"cost_usd":null}"#,
+        r#"{"type":"adapter_done","exit_code":0,"cancelled":false,"session_id":"ses-live"}"#,
+    ]
+    .map(event)
+    .join(" ");
+    let script = format!(
+        "#!/bin/sh\nif [ \"$1\" = contract ]; then echo '{{\"schema\":\"chxchx.agent-adapter\",\"contract_version\":1,\"version\":\"test\",\"providers\":[\"Codex\",\"OpenCode\"]}}'; exit 0; fi\nread -r request\nprintf '%s\\n' {first}\nsleep 2\nprintf '%s\\n' {rest}\ncat >/dev/null\n"
+    );
+    let path = dir.join("chxchx-agent-adapter");
+    std::fs::write(&path, script).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+#[test]
+fn what_a_running_turn_has_used_shows_live_and_the_final_figures_replace_it() {
+    let dir = sandbox();
+    let _adapter = use_adapter(fake_live_usage_adapter(&dir));
+    let mut state = studio(&dir);
+    open_chat(&mut state, &agent("codex", Provider::Codex));
+    say(&mut state, "hola");
+    until("the live usage to arrive", || {
+        let _ = chat::update(&mut state, chat::Event::Tick);
+        state.chat.chats[0].model.live_tokens() != (0, 0)
+    });
+    let chat = &state.chat.chats[0];
+    assert!(
+        chat.turn.is_some(),
+        "it shows while the turn is still running"
+    );
+    assert_eq!(chat.model.live_tokens(), (120, 10));
+    assert_eq!(
+        chat.model.usage.input_tokens, 0,
+        "the totals are not touched yet"
+    );
+
+    wait_for_answer(&mut state);
+    let chat = &state.chat.chats[0];
+    assert_eq!(
+        chat.model.live_tokens(),
+        (0, 0),
+        "the final figures replace it"
+    );
+    assert_eq!(
+        (
+            chat.model.usage.input_tokens,
+            chat.model.usage.output_tokens
+        ),
+        (300, 40)
+    );
+}
+
 #[test]
 fn plan_mode_is_not_there_for_the_other_agents() {
     let dir = sandbox();

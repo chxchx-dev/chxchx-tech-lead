@@ -74,7 +74,7 @@ pub(in crate::interfaces::studio) fn view<'a>(
         column![
             header(chat),
             body,
-            usage::usage_bar(&chat.model.usage, &chat.spend),
+            usage::usage_bar(&chat.model.usage, &chat.spend, running(chat)),
             composer::composer(chat)
         ]
         .height(Fill),
@@ -83,6 +83,21 @@ pub(in crate::interfaces::studio) fn view<'a>(
     .height(Fill)
     .style(styles::surface(design::bg_base()))
     .into()
+}
+
+/// What the turn in progress has used so far, when the agent reports it.
+fn running(chat: &Chat) -> Option<usage::Running> {
+    chat.turn.as_ref()?;
+    let (input, output) = chat.model.live_tokens();
+    (input > 0 || output > 0).then(|| usage::Running {
+        input,
+        output,
+        label: chat
+            .turn_pick
+            .as_ref()
+            .map(|pick| format!("{} · {}", pick.model, pick.effort))
+            .unwrap_or_default(),
+    })
 }
 
 fn cards_note(problem: &str) -> Element<'_, Message> {

@@ -165,3 +165,24 @@ fn claude_live_control_requests_become_permission_and_question_cards() {
     assert_eq!(events[0]["questions"][0]["options"][0]["label"], "Azul");
     assert_event_schema(&events);
 }
+
+#[test]
+fn a_claude_message_reports_what_it_used_live_once_per_message_id() {
+    let record = json!({"type":"assistant", "message":{"id":"msg_1",
+        "usage":{"input_tokens":10, "cache_read_input_tokens":90, "cache_creation_input_tokens":5, "output_tokens":7},
+        "content":[{"type":"text", "text":"Hola"}]}});
+    let events = normalize("Claude", &record);
+    assert_eq!(kinds(&events), ["usage_live", "message"]);
+    assert_eq!(events[0]["message_id"], "msg_1");
+    assert_eq!(
+        (
+            events[0]["input_tokens"].as_i64(),
+            events[0]["output_tokens"].as_i64()
+        ),
+        (Some(105), Some(7))
+    );
+    assert_event_schema(&events);
+    // A message without an id or without usage reports nothing live.
+    let bare = json!({"type":"assistant", "message":{"content":[{"type":"text", "text":"x"}]}});
+    assert_eq!(kinds(&normalize("Claude", &bare)), ["message"]);
+}

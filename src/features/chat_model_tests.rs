@@ -266,3 +266,32 @@ fn old_entries_give_up_their_output_but_keep_their_place() {
         "the latest stay whole"
     );
 }
+
+#[test]
+fn live_usage_is_summed_by_message_replaced_on_repeat_and_cleared_by_the_final_figures() {
+    let live = |id: &str, input: i64, output: i64| {
+        json!({"schema": SCHEMA, "schema_version": SCHEMA_VERSION, "type": "usage_live",
+               "message_id": id, "input_tokens": input, "output_tokens": output})
+    };
+    let mut model = Model::default();
+    assert!(model.apply(&live("a", 100, 10)));
+    assert!(model.apply(&live("b", 50, 5)));
+    assert!(
+        model.apply(&live("a", 120, 20)),
+        "the same message reports again: it replaces"
+    );
+    assert_eq!(model.live_tokens(), (170, 25));
+    assert_eq!(
+        model.usage.input_tokens, 0,
+        "lo en vivo no toca los totales"
+    );
+    model.apply(
+        &json!({"schema": SCHEMA, "schema_version": SCHEMA_VERSION, "type": "usage",
+                        "input_tokens": 400, "output_tokens": 30}),
+    );
+    assert_eq!(model.live_tokens(), (0, 0));
+    assert_eq!(
+        (model.usage.input_tokens, model.usage.output_tokens),
+        (400, 30)
+    );
+}

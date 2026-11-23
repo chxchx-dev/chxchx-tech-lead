@@ -19,11 +19,13 @@ def _card(events):
 def test_a_plain_turn_streams_session_message_usage_and_limits(tmp_path: Path, fake_bin) -> None:
     events = turn(codex_request(tmp_path))
 
-    assert [e["type"] for e in events] == ["session", "message", "usage", "limits", "adapter_done"]
+    assert [e["type"] for e in events] == ["session", "message", "usage_live", "usage", "limits", "adapter_done"]
     assert events[0]["session_id"] == "thread-fake-1" and events[1]["text"] == "eco: hola"
-    # Tokens of this turn: the thread total minus what it had before the turn's first model call.
+    # What the turn has used so far is reported as it grows, then the final figures replace it.
     assert events[2]["input_tokens"] == 120 and events[2]["output_tokens"] == 8
-    assert events[3]["context_tokens"] == 120 and events[3]["context_window"] == 200000
+    # Tokens of this turn: the thread total minus what it had before the turn's first model call.
+    assert events[3]["input_tokens"] == 120 and events[3]["output_tokens"] == 8
+    assert events[4]["context_tokens"] == 120 and events[4]["context_window"] == 200000
     assert events[-1] == {**events[-1], "session_id": "thread-fake-1", "exit_code": 0, "cancelled": False}
     assert all(e["schema"] == "chxchx.agent-event" and e["schema_version"] == 1 for e in events)
 
@@ -124,3 +126,17 @@ def test_usage_adds_every_model_call_of_the_turn_but_not_the_threads_past() -> N
     events = live.handle({"method": "turn/completed", "params": {"turn": {"status": "completed"}}})
     assert events[0] == {"type": "usage", "input_tokens": 300, "output_tokens": 0, "cost_usd": None}
     assert events[1]["context_tokens"] == 180 and live.done
+
+
+def test_each_usage_update_is_also_reported_live_without_the_threads_past() -> None:
+    live = LiveCodex(io.StringIO(), cwd=Path("."), settings={"sandbox": "workspace-write", "approvalPolicy": "never",
+                     "sandboxPolicy": {}}, session_id=None, model=None, effort=None)
+    seen = []
+    for total, out, last, last_out in ((5_120, 10, 120, 10), (5_300, 40, 180, 30)):  # 5_000 tokens of earlier turns
+        seen += live.handle({"method": "thread/tokenUsage/updated", "params": {"tokenUsage": {
+            "total": {"inputTokens": total, "outputTokens": out},
+            "last": {"inputTokens": last, "outputTokens": last_out}, "modelContextWindow": 9}}})
+    assert seen == [
+        {"type": "usage_live", "message_id": "turn", "input_tokens": 120, "output_tokens": 10},
+        {"type": "usage_live", "message_id": "turn", "input_tokens": 300, "output_tokens": 40},
+    ]

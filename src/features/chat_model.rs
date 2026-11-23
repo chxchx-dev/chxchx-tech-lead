@@ -160,6 +160,9 @@ pub struct Model {
     pub entries: Vec<Entry>,
     pub session_id: String,
     pub usage: Usage,
+    /// What the running turn has used so far, by message (a new report of the same message replaces
+    /// the old one): (input, output). Cleared when the turn's final usage arrives or the turn ends.
+    pub live: std::collections::BTreeMap<String, (i64, i64)>,
 }
 
 fn text_of(event: &Value, key: &str) -> String {
@@ -262,7 +265,17 @@ impl Model {
                 }
                 return true;
             }
+            "usage_live" => {
+                let count = |key: &str| event.get(key).and_then(Value::as_i64).unwrap_or(0).max(0);
+                let id = text_of(event, "message_id");
+                self.live.insert(
+                    if id.is_empty() { "turn".into() } else { id },
+                    (count("input_tokens"), count("output_tokens")),
+                );
+                return true;
+            }
             "usage" => {
+                self.live.clear();
                 // Each turn is a separate run: the session total is the running sum.
                 let count = |key: &str| event.get(key).and_then(Value::as_i64).unwrap_or(0);
                 self.usage.input_tokens += count("input_tokens");
@@ -388,6 +401,13 @@ impl Model {
                 entry.text = String::new();
             }
         }
+    }
+
+    /// Tokens the running turn has used so far (input, output); zero when nothing was reported.
+    pub fn live_tokens(&self) -> (i64, i64) {
+        self.live
+            .values()
+            .fold((0, 0), |(i, o), (input, output)| (i + input, o + output))
     }
 
     pub fn clear(&mut self) {
