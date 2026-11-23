@@ -2,7 +2,8 @@
 
 ## Sin publicar
 
-(nada todavía)
+- **Enlaces y códigos de los agentes, fáciles de usar**: los enlaces sueltos de una respuesta son clicables y se abren en el navegador (solo `http` y `https`, y solo con tu clic); debajo de cada respuesta salen botones «Abrir …» y «Copiar enlace»; un código de inicio de sesión (`ABCD-1234`, un PIN) sale como «Copiar código …» (solo donde el texto habla de un código); y cada bloque de código lleva «Copiar».
+- **El logo en vez de una letra (Linux/Wayland)**: Studio ahora se identifica como `chxchx-studio`, que es como el escritorio asocia el icono con el lanzador.
 
 ## 0.7.2 — Modo plan para Codex y Claude
 

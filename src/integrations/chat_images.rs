@@ -203,6 +203,8 @@ mod tests {
         assert!(file.exists(), "the original is left alone");
         discard(&prepared);
         assert!(!prepared.path.exists());
+        // The photo is 18 MB of noise: do not leave it in the temporary folder run after run.
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
