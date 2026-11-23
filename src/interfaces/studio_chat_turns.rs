@@ -65,13 +65,10 @@ pub(super) fn start_turn_as(
     allow.append(&mut chat.once);
     // Plan mode (Codex): the model and effort of this turn depend on whether it plans or writes.
     let follow_up = chat.follow_up.take();
-    let routed = if chat.agent.provider == crate::features::agents::Provider::Codex {
-        chat.plan
-            .as_mut()
-            .map(|plan| plan.begin(&crate::features::model_route::load(), prompt, follow_up))
-    } else {
-        None
-    };
+    let routed = chat
+        .plan
+        .as_mut()
+        .map(|plan| plan.begin(&crate::features::model_route::load(), prompt, follow_up));
     let agent_prompt = match &routed {
         Some(route) => format!("{prompt}\n\n{}", route.instructions),
         None => prompt.to_owned(),
@@ -104,8 +101,10 @@ pub(super) fn start_turn_as(
     if let Some(route) = &routed {
         spec.model = Some(route.pick.model.clone());
         spec.effort = Some(route.pick.effort.clone());
-        // Planning and writing the plan never change files.
-        spec.mode = "read-only".to_owned();
+        // Planning and writing the plan never change files; developing keeps the chat's permissions.
+        if route.read_only {
+            spec.mode = "read-only".to_owned();
+        }
     }
     let visible_prompt = shown(display.unwrap_or(prompt), attached.len());
     // Only what the person typed goes to the node as it is: a hidden retry or a `/command` that
@@ -139,6 +138,12 @@ pub(super) fn start_turn_as(
                 }
             }
             chat.turn_replies.clear();
+            chat.turn_pick = routed.as_ref().map(|route| route.pick.clone());
+            chat.usage_mark = (
+                chat.model.usage.input_tokens,
+                chat.model.usage.output_tokens,
+                chat.model.usage.cost_usd,
+            );
             chat.turn = Some(turn);
             chat.turn_started = Some(std::time::Instant::now());
             sync(chat);
@@ -308,6 +313,8 @@ pub(super) fn new_chat(state: &mut Dashboard) -> Task<Message> {
     }
     chat.turn = None;
     chat.model.clear();
+    chat.spend.clear();
+    chat.turn_pick = None;
     chat.turn_replies.clear();
     chat.resume_recap.clear();
     chat.once.clear();

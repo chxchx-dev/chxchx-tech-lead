@@ -474,10 +474,98 @@ fn plan_mode_plans_with_one_model_and_writes_the_plan_with_another() {
 }
 
 #[test]
-fn plan_mode_is_only_for_codex() {
+fn claude_plan_mode_plans_with_opus_then_develops_with_sonnet_and_counts_what_each_spent() {
     let dir = sandbox();
     let mut state = studio(&dir);
     open_chat(&mut state, &claude_agent(&dir));
+
+    say(&mut state, "/plan");
+    assert!(state.chat.chats[0].plan.is_some());
+    say(&mut state, "quiero migrar el login");
+    wait_for_answer(&mut state);
+    say(&mut state, "Adelante, impleméntalo");
+    wait_for_answer(&mut state);
+    say(&mut state, "ahora corrige el paso 2");
+    wait_for_answer(&mut state);
+
+    let commands: Vec<String> = std::fs::read_to_string(dir.join("prompts.log.commands"))
+        .unwrap()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(commands.len(), 3, "{commands:?}");
+    assert!(
+        commands[0].contains("--model opus") && commands[0].contains("--effort high"),
+        "{}",
+        commands[0]
+    );
+    assert!(
+        commands[0].contains("--permission-mode plan"),
+        "planear es solo lectura: {}",
+        commands[0]
+    );
+    for later in &commands[1..] {
+        assert!(
+            later.contains("--model sonnet") && later.contains("--effort medium"),
+            "{later}"
+        );
+        assert!(
+            !later.contains("--permission-mode plan"),
+            "desarrollar puede editar: {later}"
+        );
+    }
+
+    let spend = &state.chat.chats[0].spend;
+    assert_eq!(spend.len(), 2, "{spend:?}");
+    assert_eq!(
+        (
+            spend[0].pick.model.as_str(),
+            spend[0].input,
+            spend[0].output
+        ),
+        ("opus", 12, 7)
+    );
+    assert_eq!(
+        (
+            spend[1].pick.model.as_str(),
+            spend[1].input,
+            spend[1].output
+        ),
+        ("sonnet", 24, 14)
+    );
+    assert!(
+        (spend[1].cost.unwrap() - 0.02).abs() < 1e-9,
+        "{:?}",
+        spend[1].cost
+    );
+    let said = crate::features::model_route::spend_summary(spend);
+    assert!(
+        said.contains("opus · high") && said.contains("sonnet · medium"),
+        "{said}"
+    );
+    // The person's own words are what the chat shows, never the internal instructions.
+    let typed: Vec<&str> = state.chat.chats[0]
+        .model
+        .entries
+        .iter()
+        .filter(|e| e.kind == model_kind::User)
+        .map(|e| e.text.as_str())
+        .collect();
+    assert_eq!(
+        typed,
+        [
+            "quiero migrar el login",
+            "Adelante, impleméntalo",
+            "ahora corrige el paso 2"
+        ]
+    );
+}
+
+#[test]
+fn plan_mode_is_not_there_for_the_other_agents() {
+    let dir = sandbox();
+    let mut state = studio(&dir);
+    open_chat(&mut state, &agent("opencode", Provider::OpenCode));
     say(&mut state, "/plan");
     let chat = &state.chat.chats[0];
     assert!(chat.plan.is_none());
@@ -487,7 +575,18 @@ fn plan_mode_is_only_for_codex() {
             .last()
             .unwrap()
             .text
-            .contains("solo con Codex")
+            .contains("Codex y con Claude")
+    );
+    // `/desarrollar` outside plan mode says what it is for instead of doing something.
+    say(&mut state, "/desarrollar");
+    assert!(
+        state.chat.chats[0]
+            .model
+            .entries
+            .last()
+            .unwrap()
+            .text
+            .contains("modo plan de Claude")
     );
 }
 

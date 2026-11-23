@@ -91,6 +91,11 @@ pub(super) struct Chat {
     pub plan: Option<crate::features::model_route::PlanState>,
     /// The planning model said it is ready: the writing turn that follows, with its complexity.
     pub follow_up: Option<crate::features::model_route::Depth>,
+    /// What each model and effort spent in plan mode.
+    pub spend: Vec<crate::features::model_route::Spent>,
+    /// What the running turn was routed to, and the usage totals when it started (tokens in, out, cost).
+    pub turn_pick: Option<crate::features::model_route::Pick>,
+    pub usage_mark: (i64, i64, Option<f64>),
     /// Recap supplied to the adapter for a provider session Rust found missing.
     pub resume_recap: String,
     pub recovered_memories: String,
@@ -476,12 +481,38 @@ fn tick(state: &mut Dashboard) {
             let remote = turn.is_remote();
             drop(turn);
             let replies = std::mem::take(&mut chat.turn_replies);
+            if let Some(pick) = chat.turn_pick.take() {
+                let usage = &chat.model.usage;
+                let (input, output) = (
+                    usage.input_tokens - chat.usage_mark.0,
+                    usage.output_tokens - chat.usage_mark.1,
+                );
+                let cost = usage
+                    .cost_usd
+                    .map(|now| now - chat.usage_mark.2.unwrap_or(0.0));
+                crate::features::model_route::add_spent(
+                    &mut chat.spend,
+                    &pick,
+                    input,
+                    output,
+                    cost,
+                );
+            }
             if let Some(plan) = chat.plan.as_mut() {
                 if code == 0 && !cancelled {
-                    if let Some(depth) = plan.end(&replies) {
+                    let follow = plan.end(&replies);
+                    if plan.take_ready_to_develop() {
+                        let _ = chat.model.apply(&json!({
+                            "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
+                            "type": "notice",
+                            "message": "Plan listo. Di «adelante» (o /desarrollar) para que se desarrolle con el modelo de desarrollo.",
+                        }));
+                    }
+                    if let Some(depth) = follow {
                         use crate::features::model_route as route;
                         chat.follow_up = Some(depth);
-                        let next = route::pick(&route::load(), route::Phase::Writing, depth);
+                        let next =
+                            route::pick(&route::load(), plan.kind(), route::Phase::Writing, depth);
                         let _ = chat.model.apply(&json!({
                             "schema": model::SCHEMA, "schema_version": model::SCHEMA_VERSION,
                             "type": "notice",

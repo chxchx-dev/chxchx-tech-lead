@@ -15,11 +15,13 @@ pub(super) enum Local {
     Retry,
     Skills,
     Plan,
+    Develop,
+    Replan,
     Help,
 }
 
 /// The actions of the chat itself, which never reach the agent.
-const LOCAL: [(&str, &str, Local); 8] = [
+const LOCAL: [(&str, &str, Local); 10] = [
     ("nuevo", "Empieza un chat de cero", Local::New),
     ("modelo", "Elige modelo y esfuerzo", Local::Model),
     (
@@ -40,8 +42,18 @@ const LOCAL: [(&str, &str, Local); 8] = [
     ),
     (
         "plan",
-        "Modo plan (Codex): un modelo piensa y otro escribe el plan",
+        "Modo plan (Codex y Claude): un modelo piensa y otro trabaja",
         Local::Plan,
+    ),
+    (
+        "desarrollar",
+        "Modo plan de Claude: pasa a desarrollar el plan",
+        Local::Develop,
+    ),
+    (
+        "planear",
+        "Modo plan de Claude: vuelve a planear",
+        Local::Replan,
     ),
     ("ayuda", "Muestra los comandos disponibles", Local::Help),
 ];
@@ -152,35 +164,78 @@ pub(super) fn enter(state: &mut Dashboard) -> bool {
     false
 }
 
+/// The kind of plan mode a provider has, if any.
+fn kind_of(chat: &Chat) -> Option<crate::features::model_route::Kind> {
+    use crate::features::agents::Provider;
+    use crate::features::model_route::Kind;
+    match chat.agent.provider {
+        Provider::Codex => Some(Kind::Codex),
+        Provider::Claude => Some(Kind::Claude),
+        _ => None,
+    }
+}
+
 /// `/plan`: turns plan mode on or off for this chat.
 pub(super) fn toggle_plan(chat: &mut Chat) {
     use crate::features::model_route as route;
-    if chat.agent.provider != crate::features::agents::Provider::Codex {
+    let Some(kind) = kind_of(chat) else {
         note(
             chat,
-            "El modo plan funciona solo con Codex por ahora.".to_owned(),
+            "El modo plan funciona con Codex y con Claude por ahora.".to_owned(),
         );
-    } else if chat.plan.take().is_some() {
+        return;
+    };
+    if chat.plan.take().is_some() {
         chat.follow_up = None;
         note(
             chat,
             "Modo plan desactivado: vuelves al modelo y al esfuerzo que elegiste.".to_owned(),
         );
-    } else {
-        let mine = route::load();
-        chat.plan = Some(route::PlanState::default());
-        note(
+        return;
+    }
+    let mine = route::load();
+    chat.plan = Some(route::PlanState::new(kind));
+    let text = match kind {
+        route::Kind::Codex => format!(
+            "Modo plan activado (solo lectura). Planeas con {} ({}). Cuando esté listo para escribir el plan, \
+             o se lo pidas, lo redacta {} ({}, o {} si el trabajo es complejo). `/plan` otra vez lo desactiva.",
+            mine.planner_model,
+            mine.planner_effort,
+            mine.writer_model,
+            mine.writer_effort,
+            mine.writer_deep_effort
+        ),
+        route::Kind::Claude => format!(
+            "Modo plan activado (solo lectura). Planeas con {} ({}). Cuando quieras que lo haga, di «adelante» \
+             (o `/desarrollar`) y todo el desarrollo sigue con {} ({}), con los permisos de este chat. \
+             `/planear` vuelve a planear; `/plan` lo desactiva.",
+            mine.claude_planner_model,
+            mine.claude_planner_effort,
+            mine.claude_developer_model,
+            mine.claude_developer_effort
+        ),
+    };
+    note(chat, text);
+}
+
+/// `/desarrollar` and `/planear` (Claude): where the chat goes next.
+fn go(chat: &mut Chat, phase: crate::features::model_route::Phase) {
+    use crate::features::model_route::{Kind, Phase};
+    match chat.plan.as_mut() {
+        Some(plan) if plan.kind() == Kind::Claude => {
+            plan.go(phase);
+            let text = if phase == Phase::Developing {
+                "El siguiente mensaje se desarrolla con el modelo de desarrollo."
+            } else {
+                "El siguiente mensaje vuelve a planearse."
+            };
+            note(chat, text.to_owned());
+        }
+        _ => note(
             chat,
-            format!(
-                "Modo plan activado (solo lectura). Planeas con {} ({}). Cuando esté listo para escribir el plan, \
-                 o se lo pidas, lo redacta {} ({}, o {} si el trabajo es complejo). `/plan` otra vez lo desactiva.",
-                mine.planner_model,
-                mine.planner_effort,
-                mine.writer_model,
-                mine.writer_effort,
-                mine.writer_deep_effort
-            ),
-        );
+            "Esto es del modo plan de Claude: actívalo con `/plan` en un chat de Claude."
+                .to_owned(),
+        ),
     }
 }
 
@@ -295,6 +350,8 @@ fn run(state: &mut Dashboard, action: Local) -> Task<Message> {
                         note(chat, text);
                     }
                     Local::Plan => toggle_plan(chat),
+                    Local::Develop => go(chat, crate::features::model_route::Phase::Developing),
+                    Local::Replan => go(chat, crate::features::model_route::Phase::Planning),
                     _ => note(chat, help()),
                 }
             }

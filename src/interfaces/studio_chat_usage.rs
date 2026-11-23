@@ -18,11 +18,22 @@ fn window_label(label: &str, window: &Window) -> String {
     format!("{span}: {:.0}%", window.used_percent)
 }
 
-pub(super) fn usage_bar(usage: &Usage) -> Element<'_, Message> {
+pub(super) fn usage_bar<'a>(
+    usage: &'a Usage,
+    spend: &[crate::features::model_route::Spent],
+) -> Element<'a, Message> {
     let mut line = row![].spacing(14).align_y(iced::Center);
     let summary = usage.summary();
     if !summary.is_empty() {
         line = line.push(text(summary).size(11).color(design::muted()));
+    }
+    let by_model = crate::features::model_route::spend_summary(spend);
+    if !by_model.is_empty() {
+        line = line.push(styles::tip(
+            text(by_model).size(11).color(design::accent()),
+            "Lo que gastó cada modelo en el modo plan: entrada/salida y, si el agente lo informa, el costo.",
+            tooltip::Position::Top,
+        ));
     }
     if let Some(percent) = usage.context_percent() {
         let tint = if percent >= 90.0 {

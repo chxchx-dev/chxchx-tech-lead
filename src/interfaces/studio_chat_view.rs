@@ -74,7 +74,7 @@ pub(in crate::interfaces::studio) fn view<'a>(
         column![
             header(chat),
             body,
-            usage::usage_bar(&chat.model.usage),
+            usage::usage_bar(&chat.model.usage, &chat.spend),
             composer::composer(chat)
         ]
         .height(Fill),
