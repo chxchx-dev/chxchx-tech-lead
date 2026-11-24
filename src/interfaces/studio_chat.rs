@@ -179,8 +179,10 @@ pub(super) enum Event {
     Pick(usize, usize, String),
     /// Sends the picked options of the question card at this entry.
     Reply(usize),
-    /// Links of the Markdown are shown, not followed.
-    Link,
+    /// A link of a message was clicked: it opens in the browser if it is a web link.
+    OpenLink(String),
+    /// Copies this text (a code of a message, a code block).
+    CopyText(String),
     /// The "Adjuntar" button.
     Attach,
     Picked(String, Vec<PathBuf>),
@@ -290,7 +292,19 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
             with_chat(state, |chat| pick(chat, entry, question, label))
         }
         Event::Reply(index) => reply(state, index),
-        Event::Link => {}
+        Event::OpenLink(url) => match crate::integrations::system_open::open_url(&url) {
+            Ok(()) => {
+                state.message = format!(
+                    "Abriendo {} en el navegador.",
+                    crate::features::chat_links::label(&url)
+                );
+            }
+            Err(error) => state.message = error,
+        },
+        Event::CopyText(text) => {
+            state.message = "Copiado al portapapeles.".to_owned();
+            return iced::clipboard::write(text);
+        }
         Event::Attach => return images::attach(state),
         Event::Picked(id, paths) => return images::picked(id, paths),
         Event::Dropped(path) => return images::dropped(state, path),

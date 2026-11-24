@@ -375,12 +375,22 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
     .theme(|_: &Dashboard| design::theme())
     .scale_factor(|state: &Dashboard| state.session.scale())
     .default_font(design::UI)
-    .window(iced::window::Settings {
-        size: window_size,
-        position: iced::window::Position::Centered,
-        min_size: Some(iced::Size::new(880.0, 520.0)),
-        icon: brand::window_icon(),
-        ..Default::default()
+    .window({
+        #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
+        let mut window = iced::window::Settings {
+            size: window_size,
+            position: iced::window::Position::Centered,
+            min_size: Some(iced::Size::new(880.0, 520.0)),
+            icon: brand::window_icon(),
+            ..Default::default()
+        };
+        // Wayland finds the icon through the app id (it matches `chxchx-studio.desktop`): without one
+        // the desktop shows a generic letter instead of the logo.
+        #[cfg(target_os = "linux")]
+        {
+            window.platform_specific.application_id = "chxchx-studio".to_owned();
+        }
+        window
     })
     .exit_on_close_request(false)
     .subscription(|state: &Dashboard| {

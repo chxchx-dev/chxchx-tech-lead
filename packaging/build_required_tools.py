@@ -23,6 +23,14 @@ VERSIONS = {
     "basic-memory": "1.0.0",
     "serena-agent": "2.1.0",
 }
+# What cannot be installed on a platform, and why. The bundle says so in its manifest and the installer
+# tells the person, instead of failing: serena-agent 2.1.0 pins cryptography==50.0.0, which has published
+# no wheels for macOS Intel since 49, so it would have to be compiled there.
+UNAVAILABLE = {
+    "macos-x86_64": {
+        "serena-agent": "cryptography 50 ya no publica ruedas para macOS Intel y Serena 2.1.0 lo exige",
+    },
+}
 PLATFORMS = {
     "linux-x86_64": (".tar.gz", "gztar"),
     "windows-x86_64": (".zip", "zip"),
@@ -125,9 +133,12 @@ def build(platform: str, bundle_id: str, output: Path, archive: Path) -> None:
     env = os.environ.copy()
     env["UV_PYTHON_INSTALL_DIR"] = str(python_root)
     env["UV_PYTHON_DOWNLOADS"] = "manual"
-    run([uv, "python", "install", "3.12", "3.13", "--install-dir", str(python_root)], env=env)
+    unavailable = UNAVAILABLE.get(platform, {})
+    packages = [package for package in VERSIONS if package not in unavailable]
+    needed = sorted({PYTHON[package] for package in packages})
+    run([uv, "python", "install", *needed, "--install-dir", str(python_root)], env=env)
     interpreters: dict[str, str] = {}
-    for version in ("3.12", "3.13"):
+    for version in needed:
         executable = Path(run([uv, "python", "find", version, "--managed-python", "--no-python-downloads", "--resolve-links"], env=env))
         try:
             interpreters[version] = executable.relative_to(output).as_posix()
@@ -139,7 +150,8 @@ def build(platform: str, bundle_id: str, output: Path, archive: Path) -> None:
     lock_paths: dict[str, str] = {}
     wheel_paths: dict[str, str] = {}
     requirements_dir = Path(__file__).resolve().parent / "required-tools"
-    for package, version in VERSIONS.items():
+    for package in packages:
+        version = VERSIONS[package]
         requirement = requirements_dir / f"{package}.in"
         expected_requirement = f"{package}=={version}"
         if expected_requirement not in requirement.read_text(encoding="utf-8").splitlines():
@@ -201,10 +213,10 @@ def build(platform: str, bundle_id: str, output: Path, archive: Path) -> None:
         f"bundle_id={final_bundle_id}",
         f"platform={platform}",
         f"uv={uv_name}",
-        f"python.basic-memory={interpreters['3.12']}",
-        f"python.serena-agent={interpreters['3.13']}",
     ]
-    for package in VERSIONS:
+    for package in packages:
+        manifest.append(f"python.{package}={interpreters[PYTHON[package]]}")
+    for package in packages:
         manifest.extend(
             (
                 f"version.{package}={VERSIONS[package]}",
@@ -212,6 +224,8 @@ def build(platform: str, bundle_id: str, output: Path, archive: Path) -> None:
                 f"wheelhouse.{package}={wheel_paths[package]}",
             )
         )
+    for package, reason in unavailable.items():
+        manifest.append(f"unavailable.{package}={reason}")
     (output / "bundle-manifest.txt").write_text("\n".join(manifest) + "\n", encoding="utf-8")
 
     archive.parent.mkdir(parents=True, exist_ok=True)

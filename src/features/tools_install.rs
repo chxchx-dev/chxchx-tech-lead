@@ -54,6 +54,8 @@ pub enum Outcome {
     Installed,
     /// The command that would run.
     Preview(Vec<String>),
+    /// The release bundle says this tool cannot be installed on this platform, and why.
+    Unavailable(String),
 }
 
 pub fn find_tool(name: &str) -> Option<&'static Tool> {
@@ -186,6 +188,9 @@ fn install_from_bundle_at(
     dry_run: bool,
 ) -> Result<Outcome, String> {
     let source = read_bundle(bundle_source)?;
+    if let Some(reason) = unavailable_in(&source, tool) {
+        return Ok(Outcome::Unavailable(reason.to_owned()));
+    }
     if dry_run {
         return Ok(Outcome::Preview(bundle_command(tool, &source)?));
     }
@@ -274,6 +279,10 @@ fn read_bundle(root: &Path) -> Result<Bundle, String> {
     let bundle = Bundle { root, id, values };
     bundle_file(&bundle, "uv", false)?;
     for tool in &TOOLS {
+        // A tool the release cannot offer on this platform says so in the manifest and has no files.
+        if unavailable_in(&bundle, tool).is_some() {
+            continue;
+        }
         bundle_file(&bundle, tool.python_key, false)?;
         bundle_file(&bundle, &format!("lock.{}", tool.package), false)?;
         let wheelhouse = bundle_file(&bundle, &format!("wheelhouse.{}", tool.package), true)?;
@@ -298,6 +307,15 @@ fn read_bundle(root: &Path) -> Result<Bundle, String> {
         }
     }
     Ok(bundle)
+}
+
+/// Why the bundle does not carry `tool` (`unavailable.<package>` in its manifest), if it does not.
+fn unavailable_in<'a>(bundle: &'a Bundle, tool: &Tool) -> Option<&'a str> {
+    bundle
+        .values
+        .get(&format!("unavailable.{}", tool.package))
+        .map(String::as_str)
+        .filter(|reason| !reason.is_empty())
 }
 
 fn bundle_file(bundle: &Bundle, key: &str, directory: bool) -> Result<PathBuf, String> {

@@ -163,15 +163,101 @@ fn tool_icon(kind: &str) -> &'static str {
     }
 }
 
+/// How a message's Markdown reacts: a link opens in the browser (web links only), and a code block can be copied.
+struct LinkViewer;
+
+impl<'a> markdown::Viewer<'a, Message> for LinkViewer {
+    fn on_link_click(url: markdown::Uri) -> Message {
+        send(Event::OpenLink(url))
+    }
+
+    fn code_block(
+        &self,
+        settings: markdown::Settings,
+        _language: Option<&'a str>,
+        code: &'a str,
+        lines: &'a [markdown::Text],
+    ) -> Element<'a, Message> {
+        column![
+            row![
+                Space::new().width(Fill),
+                styles::tip(
+                    button(text("Copiar").size(10).color(design::muted()))
+                        .padding([2, 8])
+                        .style(styles::ghost(false))
+                        .on_press(send(Event::CopyText(code.to_owned()))),
+                    "Copiar este bloque",
+                    iced::widget::tooltip::Position::Top,
+                ),
+            ],
+            markdown::code_block(settings, lines, Self::on_link_click),
+        ]
+        .spacing(2)
+        .into()
+    }
+}
+
+/// The links and codes of a message as buttons: open the link, copy the link or the code.
+fn offered<'a>(message: &str) -> Option<Element<'a, Message>> {
+    use crate::features::chat_links::{Action, actions};
+    if !message.contains("http") && !message.contains(['-', '`']) {
+        return None;
+    }
+    let found = actions(message);
+    if found.is_empty() {
+        return None;
+    }
+    let chip = |label: String, message: Message, primary: bool| {
+        button(text(label).size(11))
+            .padding([4, 10])
+            .style(if primary {
+                styles::primary
+            } else {
+                styles::secondary
+            })
+            .on_press(message)
+    };
+    let mut chips = row![].spacing(6);
+    for action in found {
+        match action {
+            Action::Link { url, label } => {
+                chips = chips
+                    .push(chip(
+                        format!("Abrir {label}"),
+                        send(Event::OpenLink(url.clone())),
+                        true,
+                    ))
+                    .push(styles::tip(
+                        chip(
+                            "Copiar enlace".to_owned(),
+                            send(Event::CopyText(url)),
+                            false,
+                        ),
+                        "Para pegarlo en otro navegador o perfil",
+                        iced::widget::tooltip::Position::Top,
+                    ));
+            }
+            Action::Code { value } => {
+                chips = chips.push(chip(
+                    format!("Copiar código {value}"),
+                    send(Event::CopyText(value)),
+                    true,
+                ));
+            }
+        }
+    }
+    Some(chips.wrap().into())
+}
+
 fn assistant<'a>(chat: &'a Chat, index: usize, entry: &'a Entry) -> Element<'a, Message> {
     let selecting = chat.selecting.iter().any(|(e, _)| *e == index);
     let body: Element<'a, Message> = match chat.rendered.get(index) {
         _ if selecting => selectable(chat, index, 13).unwrap_or_else(|| text("").into()),
-        Some((_, content)) => markdown::view(
+        Some((_, content)) => markdown::view_with(
             content.items(),
             markdown::Settings::with_text_size(13, design::theme()),
-        )
-        .map(|_| send(Event::Link)),
+            &LinkViewer,
+        ),
         None => text(&entry.text).size(13).into(),
     };
     row![
@@ -194,6 +280,7 @@ fn assistant<'a>(chat: &'a Chat, index: usize, entry: &'a Entry) -> Element<'a, 
             ]
             .align_y(iced::Center),
             body,
+            offered(&entry.text).unwrap_or_else(|| Space::new().into()),
         ]
         .spacing(4)
         .width(Fill),

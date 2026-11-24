@@ -169,7 +169,9 @@ pub(super) fn sync(chat: &mut Chat) {
         let wanted = if shown { entry.text.len() } else { 0 };
         let content = || {
             if shown {
-                iced::widget::markdown::Content::parse(&entry.text)
+                iced::widget::markdown::Content::parse(&crate::features::chat_links::linkify(
+                    &entry.text,
+                ))
             } else {
                 iced::widget::markdown::Content::new()
             }
@@ -181,7 +183,8 @@ pub(super) fn sync(chat: &mut Chat) {
                 if shown
                     && cached.0 > 0
                     && cached.0 < wanted
-                    && entry.text.is_char_boundary(cached.0) =>
+                    && entry.text.is_char_boundary(cached.0)
+                    && !touches_a_link(&entry.text, cached.0) =>
             {
                 cached.1.push_str(&entry.text[cached.0..]);
                 cached.0 = wanted;
@@ -190,4 +193,14 @@ pub(super) fn sync(chat: &mut Chat) {
             None => chat.rendered.push((wanted, content())),
         }
     }
+}
+
+/// Whether the part of a message after `from`, or the end of what was already parsed, holds a link:
+/// links are made clickable over the whole text, so a link being written is parsed again from the start.
+pub(super) fn touches_a_link(text: &str, from: usize) -> bool {
+    let mut start = from.saturating_sub(300);
+    while !text.is_char_boundary(start) {
+        start -= 1;
+    }
+    text[start..].contains("http")
 }

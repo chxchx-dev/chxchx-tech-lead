@@ -586,7 +586,7 @@ dependencies = [
 
 [[package]]
 name = "chxchx-tech"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "arboard",
  "axum",
