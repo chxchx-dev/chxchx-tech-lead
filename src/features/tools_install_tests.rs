@@ -249,3 +249,68 @@ fn a_bundle_preview_is_offline_and_does_not_persist_the_bundle() {
     assert!(!data_root.exists());
     assert!(!tool_bin.exists());
 }
+
+#[test]
+fn a_bundle_can_say_a_tool_is_not_available_here_and_the_other_one_still_installs() {
+    let root = scratch("bundle-unavailable");
+    let source = root.join("download");
+    let tool_bin = root.join("tools");
+    fs::create_dir_all(&source).unwrap();
+    write_bundle(&source, "fixture-1234567890abcdef");
+    // The macOS Intel bundle: no Serena files, and the manifest says why.
+    let manifest = fs::read_to_string(source.join("bundle-manifest.txt")).unwrap();
+    let without_serena: String = manifest
+        .lines()
+        .filter(|line| !line.contains("serena"))
+        .map(|line| format!("{line}\n"))
+        .collect::<String>()
+        + "unavailable.serena-agent=cryptography 50 no tiene ruedas para macOS Intel\n";
+    fs::write(source.join("bundle-manifest.txt"), without_serena).unwrap();
+    fs::remove_dir_all(source.join("wheels/serena_agent")).unwrap();
+    fs::remove_file(source.join("locks/serena_agent.txt")).unwrap();
+    fs::remove_file(source.join("python/python313")).unwrap();
+
+    // The bundle is valid, Serena is reported as not available (also as a preview), Basic Memory installs.
+    for dry_run in [true, false] {
+        let outcome = install_from_bundle_at(
+            find_tool("serena").unwrap(),
+            &source,
+            &tool_bin,
+            Some(&root.join("user-data")),
+            dry_run,
+        )
+        .unwrap();
+        assert_eq!(
+            outcome,
+            Outcome::Unavailable("cryptography 50 no tiene ruedas para macOS Intel".into())
+        );
+    }
+    assert!(
+        !root.join("user-data").exists(),
+        "nothing is persisted for a tool that is not offered"
+    );
+    let preview = install_from_bundle_at(
+        find_tool("basic-memory").unwrap(),
+        &source,
+        &tool_bin,
+        None,
+        true,
+    )
+    .unwrap();
+    assert!(
+        matches!(preview, Outcome::Preview(command) if command.contains(&"basic-memory==1.0.0".to_owned()))
+    );
+
+    // A bundle that only claims a tool is unavailable but is missing files of the other one is still refused.
+    fs::remove_dir_all(source.join("wheels/basic_memory")).unwrap();
+    assert!(
+        install_from_bundle_at(
+            find_tool("basic-memory").unwrap(),
+            &source,
+            &tool_bin,
+            None,
+            true
+        )
+        .is_err()
+    );
+}

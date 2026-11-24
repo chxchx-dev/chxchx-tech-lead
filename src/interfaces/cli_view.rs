@@ -290,6 +290,13 @@ pub(super) fn tools_install(
                 .trim_start()
             ),
             Outcome::Preview(command) => println!("DRY RUN: {}", command.join(" ")),
+            Outcome::Unavailable(reason) => println!(
+                "{}",
+                ui.warning(&format!(
+                    "{name}: no está disponible en este equipo ({reason}). Studio funciona sin esta herramienta."
+                ))
+                .trim_start()
+            ),
         }
     }
     Ok(())
