@@ -91,3 +91,23 @@ fn every_sidebar_view_can_be_restored_and_unknown_ones_fall_back_to_the_explorer
     preferences.sanitize();
     assert_eq!(preferences.layout.side, "explorer");
 }
+
+#[test]
+fn saving_keeps_keys_written_by_another_studio() {
+    let home = scratch("unknown-keys");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join(FILE_NAME),
+        r#"{"version":1,"future_panel":{"open":true},"extensions":{"hive":{"enabled":true}}}"#,
+    )
+    .unwrap();
+    // A build that does not carry `future_panel` saves its own state.
+    save_to(&home, &Preferences::default()).unwrap();
+    let text = fs::read_to_string(home.join(FILE_NAME)).unwrap();
+    let saved: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(saved["future_panel"]["open"], true);
+    // Keys this build owns are written from its state, not copied from disk.
+    assert!(saved["extensions"].as_object().unwrap().is_empty());
+    assert!(saved["layout"].is_object());
+    let _ = fs::remove_dir_all(&home);
+}

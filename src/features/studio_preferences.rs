@@ -362,16 +362,19 @@ pub fn load_from(home: &Path) -> LoadedPreferences {
 pub fn save_to(home: &Path, preferences: &Preferences) -> Result<(), String> {
     let mut preferences = preferences.clone();
     preferences.sanitize();
-    let json = serde_json::to_vec_pretty(&preferences)
-        .map_err(|error| format!("No se pudieron serializar las preferencias: {error}"))?;
-    fs::create_dir_all(home)
-        .map_err(|error| format!("No se pudo crear {}: {error}", home.display()))?;
     let target = home.join(FILE_NAME);
     if fs::symlink_metadata(&target).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
         return Err(format!(
             "{FILE_NAME} es un enlace simbólico; no se modificó"
         ));
     }
+    let mut value = serde_json::to_value(&preferences)
+        .map_err(|error| format!("No se pudieron serializar las preferencias: {error}"))?;
+    keep_unknown_keys(&target, &mut value);
+    let json = serde_json::to_vec_pretty(&value)
+        .map_err(|error| format!("No se pudieron serializar las preferencias: {error}"))?;
+    fs::create_dir_all(home)
+        .map_err(|error| format!("No se pudo crear {}: {error}", home.display()))?;
     let temp: PathBuf = home.join(format!(".{FILE_NAME}.{}.tmp", std::process::id()));
     let result = (|| {
         let mut file = fs::File::create(&temp)?;
@@ -385,6 +388,24 @@ pub fn save_to(home: &Path, preferences: &Preferences) -> Result<(), String> {
         return Err(format!("No se pudieron guardar las preferencias: {error}"));
     }
     Ok(())
+}
+
+/// Another Studio (older, or a newer one open at the same time) may have written keys this build
+/// does not know. Saving must not erase them, so top-level keys already on disk and absent from
+/// what is being written are carried over.
+fn keep_unknown_keys(target: &Path, value: &mut serde_json::Value) {
+    let Some(new) = value.as_object_mut() else {
+        return;
+    };
+    let Ok(bytes) = fs::read(target) else {
+        return;
+    };
+    let Ok(serde_json::Value::Object(existing)) = serde_json::from_slice(&bytes) else {
+        return;
+    };
+    for (key, old) in existing {
+        new.entry(key).or_insert(old);
+    }
 }
 
 #[cfg(test)]
