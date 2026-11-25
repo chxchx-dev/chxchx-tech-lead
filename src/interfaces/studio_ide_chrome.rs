@@ -96,7 +96,7 @@ fn layout_toggle<'a>(
 /// panel. At most one item per group is marked, and clicking it again hides the panel.
 pub(super) fn activity_rail(state: &Dashboard) -> Element<'_, Message> {
     let side = |side: Side| state.editor.explorer && state.shell.side == side;
-    let rail = column![
+    let mut rail = column![
         rail_action(
             "folder",
             "Explorador (Ctrl+B)",
@@ -117,21 +117,31 @@ pub(super) fn activity_rail(state: &Dashboard) -> Element<'_, Message> {
             side(Side::Workspace),
             Message::Shell(ShellEvent::ToggleSide(Side::Workspace)),
         ),
-        Space::new().height(Fill),
-        rail_action(
+    ]
+    .spacing(2);
+    // An extension that is off leaves no trace in the rail.
+    if hive::visible(state) {
+        rail = rail.push(rail_action(
+            "hive",
+            "Colmena: tablero, decisiones y roadmap",
+            side(Side::Hive),
+            Message::Shell(ShellEvent::ToggleSide(Side::Hive)),
+        ));
+    }
+    let rail = rail
+        .push(Space::new().height(Fill))
+        .push(rail_action(
             "terminal",
             "Terminal (Ctrl+J)",
             shell::dock_visible(state, DockTab::Terminal),
             Message::Shell(ShellEvent::ToggleTab(DockTab::Terminal)),
-        ),
-        rail_action(
+        ))
+        .push(rail_action(
             "bell",
             "Actividad",
             shell::dock_visible(state, DockTab::Activity),
             Message::Shell(ShellEvent::ToggleTab(DockTab::Activity)),
-        ),
-    ]
-    .spacing(2);
+        ));
     container(rail)
         .padding([8, 0])
         .width(46)

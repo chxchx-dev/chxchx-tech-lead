@@ -15,6 +15,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
                 shell::Side::Git => git_view::view(state),
                 shell::Side::Agents => agents::view(state),
                 shell::Side::Workspace => workspace::view(state),
+                shell::Side::Hive => hive::view(state),
             })
             .push(shell::splitter(state, Split::Explorer));
     }

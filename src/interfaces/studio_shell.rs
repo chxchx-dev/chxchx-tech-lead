@@ -17,6 +17,8 @@ pub(super) enum Side {
     Git,
     Agents,
     Workspace,
+    /// Colmena (ADR 0018); only reachable while the extension is on.
+    Hive,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -11,6 +11,8 @@ use iced::widget::{column, text_input};
 pub(super) mod connection;
 #[path = "studio_settings_data.rs"]
 pub(super) mod data;
+#[path = "studio_settings_extensions.rs"]
+pub(super) mod extensions;
 #[path = "studio_settings_identity.rs"]
 pub(super) mod identity;
 #[path = "studio_settings_node.rs"]
@@ -30,6 +32,7 @@ pub(super) struct State {
     identity: identity::State,
     connection: connection::State,
     data: data::State,
+    extensions: extensions::State,
     #[cfg(feature = "node")]
     remote: remote::State,
     #[cfg(feature = "node")]
@@ -66,6 +69,7 @@ pub(super) enum Event {
     Identity(identity::Event),
     Connection(connection::Event),
     Data(data::Event),
+    Extensions(extensions::Event),
     #[cfg(feature = "node")]
     Remote(remote::Event),
     #[cfg(feature = "node")]
@@ -109,6 +113,7 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         Event::Identity(event) => return identity::update(state, event),
         Event::Connection(event) => return connection::update(state, event),
         Event::Data(event) => return data::update(state, event),
+        Event::Extensions(event) => return extensions::update(state, event),
         #[cfg(feature = "node")]
         Event::Remote(event) => return remote::update(state, event),
         #[cfg(feature = "node")]
@@ -296,6 +301,12 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         "Corre tus agentes aunque cierres Studio y los sigue en tu teléfono.",
     ));
     body = body.push(node::card(state));
+    body = body.push(section_title(
+        "hive",
+        "Extensiones",
+        "Funciones oficiales opcionales. Apagadas, no gastan nada.",
+    ));
+    body = body.push(extensions::card(state));
     if !state.settings.notice.is_empty() {
         body = body.push(
             container(text(&state.settings.notice).size(12))

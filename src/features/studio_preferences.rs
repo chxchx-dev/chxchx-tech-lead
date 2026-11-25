@@ -77,6 +77,15 @@ pub struct NodePrefs {
     pub delegate: bool,
 }
 
+/// Whether an official extension is on (ADR 0018) and when the person accepted what it does.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExtensionPrefs {
+    pub enabled: bool,
+    /// RFC 3339 time of the last time it was turned on.
+    pub accepted_at: Option<String>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectSession {
@@ -86,6 +95,9 @@ pub struct ProjectSession {
     pub recent_files: Vec<String>,
     /// Last visited section of the Home tab.
     pub page: String,
+    /// Colmena writes `.ai/board.json` after every change. Off unless the person asks, so a public
+    /// repository never gets the plan by surprise.
+    pub hive_auto_export: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -99,6 +111,16 @@ pub struct Preferences {
     pub recent_projects: Vec<String>,
     pub projects: BTreeMap<String, ProjectSession>,
     pub node: NodePrefs,
+    /// Official extensions by id. Anything not listed is off.
+    pub extensions: BTreeMap<String, ExtensionPrefs>,
+}
+
+impl Preferences {
+    /// Whether the extension is on in this installation. A build that does not contain it says no.
+    pub fn extension_enabled(&self, id: &str) -> bool {
+        crate::features::extensions::available(id)
+            && self.extensions.get(id).is_some_and(|prefs| prefs.enabled)
+    }
 }
 
 impl Default for Preferences {
@@ -111,6 +133,7 @@ impl Default for Preferences {
             recent_projects: Vec::new(),
             projects: BTreeMap::new(),
             node: NodePrefs::default(),
+            extensions: BTreeMap::new(),
         }
     }
 }

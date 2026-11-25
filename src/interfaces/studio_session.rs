@@ -74,6 +74,12 @@ impl State {
             .unwrap_or_default()
     }
 
+    /// Changes what is remembered about the open project.
+    pub fn edit_session(&mut self, change: impl FnOnce(&mut ProjectSession)) {
+        let key = self.key.clone();
+        self.edit(|preferences| change(preferences.projects.entry(key).or_default()));
+    }
+
     pub fn preferences(&self) -> &Preferences {
         &self.preferences
     }
@@ -117,6 +123,7 @@ pub(super) fn apply(state: &mut Dashboard) {
         "workspace" => shell::Side::Workspace,
         "git" => shell::Side::Git,
         "agents" => shell::Side::Agents,
+        "hive" => shell::Side::Hive,
         _ => shell::Side::Explorer,
     };
     match layout.dock.as_deref() {
@@ -190,6 +197,7 @@ pub(super) fn capture(state: &mut Dashboard) {
         side: match state.shell.side {
             shell::Side::Git => "git",
             shell::Side::Agents => "agents",
+            shell::Side::Hive => "hive",
             shell::Side::Explorer => "explorer",
             shell::Side::Search => "search",
             shell::Side::Workspace => "workspace",

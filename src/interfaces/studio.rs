@@ -37,6 +37,8 @@ mod file_types;
 mod git;
 #[path = "studio_git_view.rs"]
 mod git_view;
+#[path = "studio_hive.rs"]
+mod hive;
 #[path = "studio_home.rs"]
 mod home;
 #[path = "studio_icons.rs"]

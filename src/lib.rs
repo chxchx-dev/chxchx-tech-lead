@@ -17,7 +17,10 @@ pub mod features {
     pub mod error_cache;
     pub mod explicit_memory;
     pub mod explicit_memory_prune;
+    pub mod extensions;
     pub mod git;
+    #[cfg(feature = "hive")]
+    pub mod hive;
     pub mod identity;
     pub mod jobs;
     pub mod manager;

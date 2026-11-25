@@ -42,7 +42,7 @@ path = "src/bin/chxchx-agent-adapter.rs"
 required-features = ["agent-adapter-launcher"]
 
 [features]
-default = ["cli", "tui", "studio", "node"]
+default = ["cli", "tui", "studio", "node", "hive"]
 cli = ["dep:clap"]
 tui = ["dep:ratatui"]
 studio = ["dep:iced", "dep:image", "dep:arboard", "dep:rfd", "terminal"]
@@ -50,6 +50,8 @@ visual-installer = ["studio"]
 terminal = ["dep:portable-pty", "dep:vt100"]
 agent-adapter-launcher = []
 # The local node (ADR 0017): an HTTP API on loopback for jobs, and the web client it serves.
+# Colmena (ADR 0018): the board, decisions and search index, kept in SQLite per project.
+hive = ["dep:rusqlite"]
 node = ["cli", "dep:axum", "dep:tokio", "dep:tower", "dep:getrandom", "dep:qrcode", "dep:image"]
 
 [dependencies]
@@ -74,6 +76,7 @@ tokio = { version = "=1.54.1", features = ["rt-multi-thread", "net", "sync", "si
 tower = { version = "=0.5.3", features = ["util"], optional = true }
 arboard = { version = "=3.7.0", features = ["image-data", "wayland-data-control"], optional = true }
 rfd = { version = "=0.18.0", default-features = false, features = ["xdg-portal"], optional = true }
+rusqlite = { version = "=0.43.0", features = ["bundled"], optional = true }
 
 [build-dependencies]
 embed-resource = "=3.0.11"

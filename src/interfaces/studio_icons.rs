@@ -92,6 +92,10 @@ const ICONS: &[(&str, &str)] = &[
     ),
     ("activity", r#"<path d="M3 12h4l3-7 4 14 3-7h4"/>"#),
     (
+        "hive",
+        r#"<path d="M8 3l4 2.3v4.6L8 12.2 4 9.9V5.3zM16 11l4 2.3v4.6l-4 2.3-4-2.3v-4.6zM16 3l4 2.3v4.6l-4 2.3"/>"#,
+    ),
+    (
         "bell",
         r#"<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/>"#,
     ),
