@@ -9,6 +9,9 @@ mod catalog;
 mod connection;
 #[path = "cli_connectors.rs"]
 mod connectors;
+#[cfg(feature = "hive")]
+#[path = "cli_hive.rs"]
+mod hive;
 #[path = "cli_identity.rs"]
 mod identity;
 #[path = "cli_jobs.rs"]
@@ -160,6 +163,9 @@ enum Command {
         #[command(subcommand)]
         command: local_models::LocalModelsCommand,
     },
+    /// Colmena (extensión opcional): tablero, dependencias y decisiones del proyecto.
+    #[cfg(feature = "hive")]
+    Hive(hive::HiveCommand),
     /// Trabajos que siguen aunque se cierre la ventana: hablar con un agente sin Studio.
     Jobs {
         #[command(subcommand)]
@@ -569,6 +575,8 @@ pub fn run() -> Result<(), String> {
         Command::Packs { command } => catalog::packs(&ui, command),
         Command::Mods { command } => catalog::mods(&ui, command),
         Command::LocalModels { command } => local_models::run(command),
+        #[cfg(feature = "hive")]
+        Command::Hive(command) => hive::run(command),
         Command::Jobs { command } => jobs::run(command),
         Command::Connection { command } => connection::run(command),
         Command::Identity { command } => identity::run(command),

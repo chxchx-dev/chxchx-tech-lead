@@ -2,6 +2,14 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Colmena: estado y pendientes (2026-11-25)
+
+- Código en `dev`: `src/features/hive/{store,board,import_vyro}.rs`, `src/integrations/sqlite.rs`, `src/features/extensions.rs`, `src/interfaces/{cli_hive,studio_hive,studio_settings_extensions}.rs`. Pruebas junto a cada módulo.
+- **Pendiente C2:** vista Kanban en el panel de Studio (hoy dice «Lista para usarse»), crear/mover tarjetas y decidir desde la UI, y mostrar las decisiones que esperan a la persona. **C2.5:** al decidir, avisar al agente que esperaba (sin conceder permisos). Escribir de vuelta en `.vyro/tasks.json` queda para el final.
+- Exportación a `.ai/board.json`: opcional por proyecto y apagada por defecto (interruptor ya existe en Ajustes; falta el exportador).
+- Las pruebas de Studio no ejecutan las tareas devueltas por `update`; las reglas se prueban en `board_tests.rs`.
+- No hay herramienta Basic Memory disponible en esta sesión; el checkpoint queda en estos archivos.
+
 ## Bundle offline para Basic Memory y Serena (2026-11-22)
 
 - **Causa de la instalación incompleta:** `tools install` trataba la existencia de cualquier shim como instalación final y salía sin comprobar versión; `install.sh`/`install.ps1` descargaban `uv`, intérpretes y paquetes durante la instalación. En Fedora, una versión vieja podía quedarse instalada y la vista previa solo explicaba que los extras se descargarían después.

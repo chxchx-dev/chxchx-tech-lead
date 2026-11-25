@@ -11,9 +11,10 @@ pub const FOLDER: &str = "hive";
 
 /// The schema. Ids are text so a card made on another PC never collides (ADR 0019): every row that
 /// can be created remotely carries where it came from.
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    sql: "
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        sql: "
 CREATE TABLE phase (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -74,7 +75,20 @@ CREATE INDEX card_status ON card(status);
 CREATE INDEX decision_status ON decision(status);
 CREATE INDEX event_subject ON event(subject);
 ",
-}];
+    },
+    Migration {
+        version: 2,
+        // A card can wait for decisions the person has not made yet; deciding releases it.
+        sql: "
+CREATE TABLE card_decision (
+    card_id TEXT NOT NULL REFERENCES card(id) ON DELETE CASCADE,
+    decision_id TEXT NOT NULL REFERENCES decision(id) ON DELETE CASCADE,
+    PRIMARY KEY (card_id, decision_id)
+);
+CREATE INDEX card_decision_decision ON card_decision(decision_id);
+",
+    },
+];
 
 /// Where the database of the project at `root` lives, under `home`.
 pub fn path_in(home: &Path, root: &Path) -> PathBuf {
@@ -199,7 +213,7 @@ mod tests {
     fn the_schema_enforces_states_and_dependencies() {
         let home = home("schema");
         let (db, opened) = open_at(&path_in(&home, Path::new("/work/a"))).unwrap();
-        assert_eq!(opened.to_version, 1);
+        assert_eq!(opened.to_version, 2);
         let card = |id: &str, status: &str| {
             db.execute(
                 "INSERT INTO card (id, key, title, status, created_at, updated_at) VALUES (?1, ?1, 't', ?2, 0, 0)",
