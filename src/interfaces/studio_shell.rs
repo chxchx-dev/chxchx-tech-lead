@@ -196,6 +196,7 @@ fn show_side(state: &mut Dashboard, side: Side) -> Task<Message> {
         Side::Search => iced::widget::operation::focus(search::INPUT),
         Side::Git => git::refresh(state),
         Side::Agents => agents::refresh(state),
+        Side::Hive => hive::refresh(state),
         _ => Task::none(),
     }
 }

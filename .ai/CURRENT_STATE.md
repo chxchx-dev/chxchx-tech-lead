@@ -8,7 +8,8 @@
 - **Hecho:** adapter `integrations/sqlite.rs` (WAL, migraciones numeradas, copia previa, rechazo de bases más nuevas); esquema v2 (fases, tarjetas, dependencias, decisiones, tarjeta↔decisión, eventos); `features/hive/board.rs` con las reglas (no avanzar con dependencias pendientes o decisiones abiertas, ciclos rechazados, terminar libera dependientes, decidir libera en cadena, una decisión no concede permisos); `chxchx-tech hive card|decision|import-vyro` (exige la extensión activa); importador de solo lectura de `.vyro/tasks.json` y `docs/DECISIONS.json` (idempotente; probado con Vyro real: 19 tarjetas, 22 dependencias, 10 decisiones).
 - **Arreglo relacionado:** guardar `studio-preferences.json` conserva las claves que la versión en ejecución no conoce (dos ventanas o una versión vieja ya no borran la activación).
 - **Verificado en Linux:** fmt, clippy estricto, 694 + 36 + 6 + 22 pruebas y build `cli`. **No verificado:** Windows/macOS, y el Kanban aún no existe (el panel de Studio sigue provisional).
-- **Siguiente:** C2 vista Kanban en Studio y decisiones; C2.5 decisiones en vivo hacia el agente que espera; luego C3 (RAG léxico FTS5), C4, C5, C6 y C7.
+- **Panel de Studio (C2):** el panel de Colmena ya lista las decisiones que esperan a la persona (elegir opción o descartar) y las tarjetas por estado (crear, mover ◀ ▶); llama a `board.rs` fuera del hilo de la UI. Sin verificar visualmente aún; no es un Kanban de columnas (es una lista por estado en la barra lateral).
+- **Siguiente:** vista Kanban ancha, dependencias/bloqueos desde la UI; C2.5 decisiones en vivo hacia el agente que espera; luego C3 (RAG léxico FTS5), C4, C5, C6 y C7.
 
 ## Nodo local, acceso remoto y app web: H0–H5 hechas (2026-11-21)
 

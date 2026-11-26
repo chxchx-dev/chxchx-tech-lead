@@ -37,7 +37,11 @@ mod file_types;
 mod git;
 #[path = "studio_git_view.rs"]
 mod git_view;
+#[cfg(feature = "hive")]
 #[path = "studio_hive.rs"]
+mod hive;
+#[cfg(not(feature = "hive"))]
+#[path = "studio_hive_off.rs"]
 mod hive;
 #[path = "studio_home.rs"]
 mod home;
@@ -148,6 +152,7 @@ struct Dashboard {
     settings: settings::State,
     menu: menu::State,
     search: search::State,
+    hive: hive::State,
     git: git::State,
     page: Page,
     root: PathBuf,
@@ -187,6 +192,7 @@ enum Message {
     Settings(settings::Event),
     Menu(menu::Event),
     Search(search::Event),
+    Hive(hive::Event),
     Git(git::Event),
     /// Runs several messages in order (open a section, then start its command).
     Sequence(Vec<Message>),
@@ -297,6 +303,7 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 settings: settings::State::default(),
                 menu: menu::State::default(),
                 search: search::State::default(),
+                hive: hive::State::default(),
                 git: git::State::default(),
                 page: Page::Home,
                 root: path.clone(),

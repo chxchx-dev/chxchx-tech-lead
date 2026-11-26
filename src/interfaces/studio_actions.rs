@@ -82,6 +82,9 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
     if let Message::Search(event) = message {
         return search::update(state, event);
     }
+    if let Message::Hive(event) = message {
+        return hive::update(state, event);
+    }
     if let Message::Sequence(messages) = message {
         return Task::batch(messages.into_iter().map(Task::done));
     }
@@ -111,6 +114,7 @@ fn dispatch(state: &mut Dashboard, message: Message) -> Task<Message> {
         | Message::Settings(_)
         | Message::Menu(_)
         | Message::Search(_)
+        | Message::Hive(_)
         | Message::Git(_)
         | Message::Sequence(_)
         | Message::Done(_) => unreachable!(),

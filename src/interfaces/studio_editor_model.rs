@@ -256,6 +256,7 @@ pub(in crate::interfaces::studio) fn fixture() -> Dashboard {
         settings: Default::default(),
         menu: Default::default(),
         search: Default::default(),
+        hive: Default::default(),
         git: Default::default(),
         page: Page::Home,
         root: PathBuf::from("."),
