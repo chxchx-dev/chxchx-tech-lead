@@ -283,6 +283,22 @@ pub fn set_status(
     Ok(released)
 }
 
+/// Blocks a card with a reason written by a person; releasing it is also up to a person.
+pub fn block(db: &Connection, key: &str, reason: &str, actor: &str) -> Result<(), String> {
+    let reason = reason.trim();
+    if reason.is_empty() {
+        return Err("Bloquear necesita un motivo.".into());
+    }
+    if reason.starts_with(WAITING) {
+        return Err(format!("El motivo no puede empezar por «{WAITING}»."));
+    }
+    let id = card_id(db, key)?;
+    let tx = db.unchecked_transaction().map_err(fail)?;
+    write_status(&tx, &id, "blocked", reason)?;
+    record(&tx, actor, "card.blocked", key)?;
+    tx.commit().map_err(fail)
+}
+
 /// Cards still in the backlog whose last obstacle was `id` become ready.
 fn promote_dependents(db: &Connection, id: &str, actor: &str) -> Result<Released, String> {
     let dependents = keys(db, "SELECT card_id FROM card_dep WHERE depends_on = ?1", id)?;

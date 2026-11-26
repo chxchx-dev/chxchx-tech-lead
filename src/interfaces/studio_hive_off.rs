@@ -22,3 +22,11 @@ pub(super) fn update(_: &mut Dashboard, event: Event) -> Task<Message> {
 pub(super) fn view(_: &Dashboard) -> Element<'_, Message> {
     Space::new().into()
 }
+
+pub(super) fn board_view(_: &Dashboard) -> Element<'_, Message> {
+    Space::new().into()
+}
+
+pub(super) fn takes_center(_: &Dashboard) -> bool {
+    false
+}

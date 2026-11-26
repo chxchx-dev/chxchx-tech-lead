@@ -5,7 +5,11 @@ use super::*;
 use iced::widget::{column, opaque, stack};
 
 pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
-    let center = panes::view(state);
+    let center = if state.editor.explorer && hive::takes_center(state) {
+        hive::board_view(state)
+    } else {
+        panes::view(state)
+    };
     let mut work = row![chrome::activity_rail(state)].height(Fill);
     if state.editor.explorer {
         work = work

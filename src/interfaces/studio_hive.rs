@@ -5,8 +5,12 @@
 //! this panel only reads a snapshot and calls those functions off the UI thread.
 use super::*;
 use crate::features::extensions;
-use crate::features::hive::{board, store};
+use crate::features::hive::{board, export, store};
 use iced::widget::{column, text_input};
+
+#[path = "studio_hive_board.rs"]
+mod kanban;
+pub(super) use kanban::{board_view, takes_center};
 
 const ACTOR: &str = "persona";
 pub(super) const INPUT: &str = "hive-new-card";
@@ -19,6 +23,11 @@ pub(super) struct State {
     error: String,
     /// Cards released by the last decision, so the person sees the chain reaction.
     released: Vec<String>,
+    /// The board fills the main area (columns) instead of only the sidebar list.
+    wide: bool,
+    selected: Option<String>,
+    dependency: String,
+    reason: String,
 }
 
 type Snapshot = Result<(Vec<board::Card>, Vec<board::Decision>, board::Released), String>;
@@ -29,6 +38,14 @@ pub(super) enum Event {
     Add,
     Move(String, String),
     Decide(String, Option<String>),
+    Wide(bool),
+    Select(Option<String>),
+    DependencyInput(String),
+    AddDependency,
+    WaitFor(String),
+    ReasonInput(String),
+    Block,
+    Export,
     Loaded(Box<Snapshot>),
 }
 
@@ -42,10 +59,14 @@ pub(super) fn visible(state: &Dashboard) -> bool {
 
 fn snapshot(
     root: &Path,
+    auto_export: bool,
     change: impl FnOnce(&rusqlite::Connection) -> Result<board::Released, String>,
 ) -> Snapshot {
     let (db, _) = store::open(root)?;
     let released = change(&db)?;
+    if auto_export {
+        export::write(&db, root)?;
+    }
     Ok((board::cards(&db)?, board::decisions(&db)?, released))
 }
 
@@ -54,8 +75,9 @@ fn run(
     change: impl FnOnce(&rusqlite::Connection) -> Result<board::Released, String> + Send + 'static,
 ) -> Task<Message> {
     let root = state.root.clone();
+    let auto_export = state.session.session().hive_auto_export;
     jobs::quiet(
-        move || snapshot(&root, change),
+        move || snapshot(&root, auto_export, change),
         |_, result| Task::done(Message::Hive(Event::Loaded(Box::new(result)))),
     )
 }
@@ -88,6 +110,68 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         Event::Decide(key, outcome) => run(state, move |db| {
             board::resolve(db, &key, outcome.as_deref().map(|text| (text, "")), ACTOR)
         }),
+        Event::Wide(on) => {
+            state.hive.wide = on;
+            Task::none()
+        }
+        Event::Select(key) => {
+            state.hive.selected = key;
+            state.hive.dependency.clear();
+            state.hive.reason.clear();
+            Task::none()
+        }
+        Event::DependencyInput(value) => {
+            state.hive.dependency = value;
+            Task::none()
+        }
+        Event::ReasonInput(value) => {
+            state.hive.reason = value;
+            Task::none()
+        }
+        Event::AddDependency => {
+            let (Some(key), dep) = (
+                state.hive.selected.clone(),
+                state.hive.dependency.trim().to_uppercase(),
+            ) else {
+                return Task::none();
+            };
+            state.hive.dependency.clear();
+            run(state, move |db| {
+                board::add_dependency(db, &key, &dep).map(|_| board::Released::default())
+            })
+        }
+        Event::WaitFor(decision) => {
+            let Some(key) = state.hive.selected.clone() else {
+                return Task::none();
+            };
+            run(state, move |db| {
+                board::wait_for(db, &key, &decision, ACTOR).map(|_| board::Released::default())
+            })
+        }
+        Event::Block => {
+            let Some(key) = state.hive.selected.clone() else {
+                return Task::none();
+            };
+            let reason = std::mem::take(&mut state.hive.reason);
+            run(state, move |db| {
+                board::block(db, &key, &reason, ACTOR).map(|_| board::Released::default())
+            })
+        }
+        Event::Export => {
+            let root = state.root.clone();
+            jobs::quiet(
+                move || {
+                    let (db, _) = store::open(&root)?;
+                    export::write(&db, &root)?;
+                    Ok((
+                        board::cards(&db)?,
+                        board::decisions(&db)?,
+                        board::Released::default(),
+                    ))
+                },
+                |_, result| Task::done(Message::Hive(Event::Loaded(Box::new(result)))),
+            )
+        }
         Event::Loaded(result) => {
             match *result {
                 Ok((cards, decisions, released)) => {
@@ -103,7 +187,7 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     }
 }
 
-fn small<'a>(label: &'a str, message: Message) -> Element<'a, Message> {
+pub(super) fn small<'a>(label: &'a str, message: Message) -> Element<'a, Message> {
     button(text(label).size(11))
         .padding([3, 8])
         .style(styles::secondary)
@@ -111,7 +195,7 @@ fn small<'a>(label: &'a str, message: Message) -> Element<'a, Message> {
         .into()
 }
 
-fn decision_card(item: &board::Decision) -> Element<'_, Message> {
+pub(super) fn decision_card(item: &board::Decision) -> Element<'_, Message> {
     let mut choices = row![].spacing(4);
     let options: Vec<String> = if item.options.is_empty() {
         vec!["Aprobada".into()]
@@ -197,7 +281,7 @@ fn label(name: &str, count: usize) -> Element<'static, Message> {
         .into()
 }
 
-fn status_name(status: &str) -> &str {
+pub(super) fn status_name(status: &str) -> &str {
     match status {
         "backlog" => "Pendiente",
         "ready" => "Lista",
@@ -220,6 +304,15 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         row![
             icons::icon("hive", design::accent(), 18.0),
             text("Colmena").size(15).font(design::UI_BOLD),
+            Space::new().width(Fill),
+            small(
+                if hive.wide {
+                    "Cerrar tablero"
+                } else {
+                    "Tablero completo"
+                },
+                Message::Hive(Event::Wide(!hive.wide)),
+            ),
         ]
         .spacing(8)
         .align_y(iced::Center),
@@ -328,5 +421,41 @@ mod tests {
         let _ = update(&mut state, Event::Loaded(Box::new(Err("boom".into()))));
         assert_eq!(state.hive.error, "boom");
         assert_eq!(state.hive.cards.len(), 1, "an error keeps the last board");
+    }
+
+    #[test]
+    fn the_wide_board_selects_a_card_and_takes_the_main_area() {
+        let mut state = super::super::editor::fixture();
+        state.session.edit(|preferences| {
+            preferences.extensions.insert(
+                extensions::HIVE.into(),
+                ExtensionPrefs {
+                    enabled: true,
+                    accepted_at: None,
+                },
+            );
+        });
+        state.shell.side = shell::Side::Hive;
+        assert!(!takes_center(&state));
+        let _ = update(&mut state, Event::Wide(true));
+        assert!(takes_center(&state));
+        let (db, _) = crate::features::hive::store::open_at(
+            &std::env::temp_dir().join(format!("hive-wide-{}.db", std::process::id())),
+        )
+        .unwrap();
+        board::add_card(&db, "Primera", "", ACTOR).unwrap();
+        let snap = Ok((
+            board::cards(&db).unwrap(),
+            board::decisions(&db).unwrap(),
+            board::Released::default(),
+        ));
+        let _ = update(&mut state, Event::Loaded(Box::new(snap)));
+        let _ = update(&mut state, Event::Select(Some("C-001".into())));
+        let _ = update(&mut state, Event::ReasonInput("sin acceso".into()));
+        let _ = board_view(&state);
+        let _ = update(&mut state, Event::Select(None));
+        assert!(state.hive.selected.is_none() && state.hive.reason.is_empty());
+        let _ = update(&mut state, Event::Wide(false));
+        assert!(!takes_center(&state));
     }
 }

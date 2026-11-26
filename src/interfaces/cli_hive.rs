@@ -1,7 +1,7 @@
 //! `chxchx-tech hive`: the board and decisions of Colmena from the terminal. Only calls the
 //! shared board rules; it holds no logic of its own.
 use crate::features::extensions;
-use crate::features::hive::{board, import_vyro, store};
+use crate::features::hive::{board, export, import_vyro, store};
 use crate::features::studio_preferences;
 use clap::Subcommand;
 use rusqlite::Connection;
@@ -29,6 +29,8 @@ pub(super) enum Action {
         #[arg(long)]
         from: Option<PathBuf>,
     },
+    /// Escribe `.ai/board.json` con el tablero actual.
+    Export,
     /// Decisiones que esperan a la persona.
     Decision {
         #[command(subcommand)]
@@ -52,6 +54,8 @@ pub(super) enum CardAction {
     Move { key: String, status: String },
     /// `key` pasa a depender de `depends_on`.
     Dep { key: String, depends_on: String },
+    /// Bloquea la tarjeta con un motivo escrito por una persona.
+    Block { key: String, reason: String },
     /// `key` espera a que se decida `decision`.
     Wait { key: String, decision: String },
 }
@@ -155,7 +159,12 @@ pub(super) fn execute(db: &Connection, root: &Path, action: Action) -> Result<St
                 s.cards, s.dependencies, s.decisions, s.waiting
             ))
         }
+        Action::Export => Ok(format!("{}\n", export::write(db, root)?.display())),
         Action::Card { action } => match action {
+            CardAction::Block { key, reason } => {
+                board::block(db, &key, &reason, WHO)?;
+                Ok(format!("{key} bloqueada: {reason}\n"))
+            }
             CardAction::Add { title, role } => {
                 Ok(format!("{}\n", board::add_card(db, &title, &role, WHO)?))
             }

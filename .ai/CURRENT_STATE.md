@@ -2,12 +2,12 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
-## Colmena (extensión oficial, ADR 0018): C1 y C2 base hechas (2026-11-25)
+## Colmena (extensión oficial, ADR 0018): C1, C2 y C2.5 hechas (2026-11-26)
 
 - **Qué es:** extensión opt-in (Ajustes → Extensiones) con tablero, dependencias y decisiones por proyecto en SQLite (`rusqlite`, feature `hive`, en el build por defecto). Desactivada: sin icono, sin archivos y sin hilos. Una base por proyecto en `<datos>/hive/<clave>.db`; actualizar o reinstalar la app no la toca. Plan completo (local): `.ai/PLAN-COLMENA.md`; ADR 0018 (aceptado) y 0019 (propuesto, varias PC).
 - **Hecho:** adapter `integrations/sqlite.rs` (WAL, migraciones numeradas, copia previa, rechazo de bases más nuevas); esquema v2 (fases, tarjetas, dependencias, decisiones, tarjeta↔decisión, eventos); `features/hive/board.rs` con las reglas (no avanzar con dependencias pendientes o decisiones abiertas, ciclos rechazados, terminar libera dependientes, decidir libera en cadena, una decisión no concede permisos); `chxchx-tech hive card|decision|import-vyro` (exige la extensión activa); importador de solo lectura de `.vyro/tasks.json` y `docs/DECISIONS.json` (idempotente; probado con Vyro real: 19 tarjetas, 22 dependencias, 10 decisiones).
 - **Arreglo relacionado:** guardar `studio-preferences.json` conserva las claves que la versión en ejecución no conoce (dos ventanas o una versión vieja ya no borran la activación).
-- **Verificado en Linux:** fmt, clippy estricto, 694 + 36 + 6 + 22 pruebas y build `cli`. **No verificado:** Windows/macOS, y el Kanban aún no existe (el panel de Studio sigue provisional).
+- **Verificado en Linux:** fmt, clippy estricto, 694 + 36 + 6 + 22 pruebas y build `cli`. **No verificado:** Windows/macOS, y el Kanban en columnas está implementado pero no visto en pantalla.
 - **Panel de Studio (C2):** el panel de Colmena ya lista las decisiones que esperan a la persona (elegir opción o descartar) y las tarjetas por estado (crear, mover ◀ ▶); llama a `board.rs` fuera del hilo de la UI. Sin verificar visualmente aún; no es un Kanban de columnas (es una lista por estado en la barra lateral).
 - **Siguiente:** vista Kanban ancha, dependencias/bloqueos desde la UI; C2.5 hecha vía `hive decision await` (empuje al chat pendiente); luego C3 (RAG léxico FTS5), C4, C5, C6 y C7.
 
