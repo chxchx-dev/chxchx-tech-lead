@@ -77,6 +77,43 @@ pub(super) enum DecisionAction {
     },
     /// Descarta la decisión y libera lo que esperaba.
     Discard { key: String },
+    /// Espera a que la persona cierre la decisión y muestra el resultado (para agentes).
+    Await {
+        key: String,
+        /// Segundos máximos de espera; 0 solo consulta.
+        #[arg(long, default_value_t = 600)]
+        timeout: u64,
+    },
+}
+
+/// Polls the board until `key` is closed. The result is information for the agent; it grants
+/// no permission.
+fn await_decision(
+    db: &Connection,
+    key: &str,
+    timeout: std::time::Duration,
+    poll: std::time::Duration,
+) -> Result<String, String> {
+    let start = std::time::Instant::now();
+    loop {
+        let d = board::decision(db, key)?;
+        match d.status.as_str() {
+            "proposed" => {}
+            "decided" => {
+                let why = if d.why.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", d.why)
+                };
+                return Ok(format!("{key} decidida: {}{why}\n", d.outcome));
+            }
+            other => return Ok(format!("{key} {other}: sin resultado.\n")),
+        }
+        if start.elapsed() >= timeout {
+            return Err(format!("{key} sigue abierta tras la espera."));
+        }
+        std::thread::sleep(poll);
+    }
 }
 
 pub(super) fn run(command: HiveCommand) -> Result<(), String> {
@@ -151,6 +188,12 @@ pub(super) fn execute(db: &Connection, root: &Path, action: Action) -> Result<St
             }
         },
         Action::Decision { action } => match action {
+            DecisionAction::Await { key, timeout } => await_decision(
+                db,
+                &key,
+                std::time::Duration::from_secs(timeout),
+                std::time::Duration::from_millis(500),
+            ),
             DecisionAction::Add { question, options } => Ok(format!(
                 "{}\n",
                 board::add_decision(db, &question, &options, WHO)?
@@ -175,6 +218,28 @@ pub(super) fn execute(db: &Connection, root: &Path, action: Action) -> Result<St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn await_returns_the_outcome_once_the_person_decides() {
+        let home = std::env::temp_dir().join(format!("chxchx-cli-await-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let path = store::path_in(&home, Path::new("/work/w"));
+        let (db, _) = store::open_at(&path).unwrap();
+        board::add_decision(&db, "¿Motor?", &["sqlite".into()], "t").unwrap();
+        let none = std::time::Duration::ZERO;
+        assert!(await_decision(&db, "D-001", none, none).is_err());
+        let other = path.clone();
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let (db, _) = store::open_at(&other).unwrap();
+            board::resolve(&db, "D-001", Some(("sqlite", "es liviano")), "persona").unwrap();
+        });
+        let ms = std::time::Duration::from_millis(20);
+        let out = await_decision(&db, "D-001", std::time::Duration::from_secs(5), ms).unwrap();
+        t.join().unwrap();
+        assert_eq!(out, "D-001 decidida: sqlite (es liviano)\n");
+        let _ = std::fs::remove_dir_all(&home);
+    }
 
     static ROOT_PATH: &str = "/work/a";
 

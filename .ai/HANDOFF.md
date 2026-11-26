@@ -5,7 +5,7 @@
 ## Colmena: estado y pendientes (2026-11-25)
 
 - Código en `dev`: `src/features/hive/{store,board,import_vyro}.rs`, `src/integrations/sqlite.rs`, `src/features/extensions.rs`, `src/interfaces/{cli_hive,studio_hive,studio_settings_extensions}.rs`. Pruebas junto a cada módulo.
-- **C2 hecho (lista en la barra):** `studio_hive.rs` crea/mueve tarjetas y decide desde la UI. **Pendiente:** Kanban en columnas en el área principal, dependencias y bloqueos desde la UI, comprobación visual. **C2.5:** al decidir, avisar al agente que esperaba (sin conceder permisos). Escribir de vuelta en `.vyro/tasks.json` queda para el final.
+- **C2 hecho (lista en la barra):** `studio_hive.rs` crea/mueve tarjetas y decide desde la UI. **Pendiente:** Kanban en columnas en el área principal, dependencias y bloqueos desde la UI, comprobación visual. **C2.5 hecho (mecanismo CLI):** `hive decision await KEY [--timeout S]` bloquea hasta que la persona decide y imprime el resultado; el agente la usa tras `card wait`. Sin permisos concedidos. Pendiente opcional: empujar la respuesta al chat de Studio sin que el agente la consulte. Escribir de vuelta en `.vyro/tasks.json` queda para el final.
 - Exportación a `.ai/board.json`: opcional por proyecto y apagada por defecto (interruptor ya existe en Ajustes; falta el exportador).
 - Las pruebas de Studio no ejecutan las tareas devueltas por `update`; las reglas se prueban en `board_tests.rs`.
 - No hay herramienta Basic Memory disponible en esta sesión; el checkpoint queda en estos archivos.

@@ -9,7 +9,7 @@
 - **Arreglo relacionado:** guardar `studio-preferences.json` conserva las claves que la versión en ejecución no conoce (dos ventanas o una versión vieja ya no borran la activación).
 - **Verificado en Linux:** fmt, clippy estricto, 694 + 36 + 6 + 22 pruebas y build `cli`. **No verificado:** Windows/macOS, y el Kanban aún no existe (el panel de Studio sigue provisional).
 - **Panel de Studio (C2):** el panel de Colmena ya lista las decisiones que esperan a la persona (elegir opción o descartar) y las tarjetas por estado (crear, mover ◀ ▶); llama a `board.rs` fuera del hilo de la UI. Sin verificar visualmente aún; no es un Kanban de columnas (es una lista por estado en la barra lateral).
-- **Siguiente:** vista Kanban ancha, dependencias/bloqueos desde la UI; C2.5 decisiones en vivo hacia el agente que espera; luego C3 (RAG léxico FTS5), C4, C5, C6 y C7.
+- **Siguiente:** vista Kanban ancha, dependencias/bloqueos desde la UI; C2.5 hecha vía `hive decision await` (empuje al chat pendiente); luego C3 (RAG léxico FTS5), C4, C5, C6 y C7.
 
 ## Nodo local, acceso remoto y app web: H0–H5 hechas (2026-11-21)
 
