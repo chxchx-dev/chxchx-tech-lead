@@ -88,6 +88,16 @@ CREATE TABLE card_decision (
 CREATE INDEX card_decision_decision ON card_decision(decision_id);
 ",
     },
+    Migration {
+        version: 3,
+        // The lexical index (C3): one row per file with its hash, and the FTS5 table of its chunks.
+        sql: "
+CREATE TABLE rag_doc (path TEXT PRIMARY KEY, hash TEXT NOT NULL);
+CREATE VIRTUAL TABLE rag_chunk USING fts5(
+    path UNINDEXED, heading, body, tokenize = 'unicode61 remove_diacritics 2'
+);
+",
+    },
 ];
 
 /// Where the database of the project at `root` lives, under `home`.
@@ -213,7 +223,7 @@ mod tests {
     fn the_schema_enforces_states_and_dependencies() {
         let home = home("schema");
         let (db, opened) = open_at(&path_in(&home, Path::new("/work/a"))).unwrap();
-        assert_eq!(opened.to_version, 2);
+        assert_eq!(opened.to_version, 3);
         let card = |id: &str, status: &str| {
             db.execute(
                 "INSERT INTO card (id, key, title, status, created_at, updated_at) VALUES (?1, ?1, 't', ?2, 0, 0)",

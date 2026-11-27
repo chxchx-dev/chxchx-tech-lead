@@ -5,4 +5,5 @@
 pub mod board;
 pub mod export;
 pub mod import_vyro;
+pub mod rag;
 pub mod store;

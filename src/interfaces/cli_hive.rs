@@ -1,7 +1,7 @@
 //! `chxchx-tech hive`: the board and decisions of Colmena from the terminal. Only calls the
 //! shared board rules; it holds no logic of its own.
 use crate::features::extensions;
-use crate::features::hive::{board, export, import_vyro, store};
+use crate::features::hive::{board, export, import_vyro, rag, store};
 use crate::features::studio_preferences;
 use clap::Subcommand;
 use rusqlite::Connection;
@@ -31,6 +31,16 @@ pub(super) enum Action {
     },
     /// Escribe `.ai/board.json` con el tablero actual.
     Export,
+    /// Actualiza el índice de búsqueda con los documentos del proyecto (solo lo que cambió).
+    Index,
+    /// Busca en los documentos indexados (BM25); indexa primero lo que haya cambiado.
+    Search {
+        query: String,
+        #[arg(long, default_value_t = 5)]
+        limit: usize,
+        #[arg(long)]
+        json: bool,
+    },
     /// Decisiones que esperan a la persona.
     Decision {
         #[command(subcommand)]
@@ -158,6 +168,31 @@ pub(super) fn execute(db: &Connection, root: &Path, action: Action) -> Result<St
                 "Importado: {} tarjetas, {} dependencias nuevas, {} decisiones ({} reteniendo tarjetas).\n",
                 s.cards, s.dependencies, s.decisions, s.waiting
             ))
+        }
+        Action::Index => {
+            let s = rag::index(db, root)?;
+            Ok(format!(
+                "Indexado: {} archivos ({} fragmentos), {} sin cambios, {} retirados.\n",
+                s.files, s.chunks, s.unchanged, s.removed
+            ))
+        }
+        Action::Search {
+            query,
+            limit,
+            json: as_json,
+        } => {
+            rag::index(db, root)?;
+            let hits = rag::search(db, &query, limit)?;
+            if as_json {
+                return json(&hits);
+            }
+            if hits.is_empty() {
+                return Ok("Sin resultados.\n".into());
+            }
+            Ok(hits
+                .iter()
+                .map(|h| format!("{} · {}\n  {}\n", h.path, h.heading, h.snippet))
+                .collect())
         }
         Action::Export => Ok(format!("{}\n", export::write(db, root)?.display())),
         Action::Card { action } => match action {

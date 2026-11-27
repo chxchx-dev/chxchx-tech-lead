@@ -2,6 +2,13 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## Colmena C3: búsqueda léxica de documentos (2026-11-26)
+
+- `features/hive/rag.rs` + migración v3 (`rag_doc`, `rag_chunk` FTS5/BM25). Indexa `.md` y `.txt` que git no ignora (con `git ls-files`; fuera de git, un recorrido que salta `target`, `node_modules`, `.venv`), trocea por encabezados y bloques (sin cortar dentro de bloques de código), es incremental por SHA-256 y retira lo borrado. Nunca indexa `.env*`, `*credential*`, `*secret*`, claves ni certificados, y cada fragmento pasa por `error_cache::redact` antes de guardarse.
+- CLI: `hive index` y `hive search "…" [--limit N] [--json]` (este último indexa antes lo que cambió).
+- Medido (build debug, Linux): este repo 118 archivos/851 fragmentos en 5,1 s la primera vez y 0,14 s después; Vyro 71/472 en 2,2 s; unos 26 MB de memoria máxima.
+- Verificado: fmt, clippy estricto, 703 + 36 + 6 + 22 pruebas y build `cli`. **Pendiente de C3:** inyectar los mejores fragmentos en el chat con presupuesto y citas (`studio_chat_prepare`), y un botón de búsqueda en el panel de Colmena.
+
 ## Colmena (extensión oficial, ADR 0018): C1, C2 y C2.5 hechas (2026-11-26)
 
 - **Qué es:** extensión opt-in (Ajustes → Extensiones) con tablero, dependencias y decisiones por proyecto en SQLite (`rusqlite`, feature `hive`, en el build por defecto). Desactivada: sin icono, sin archivos y sin hilos. Una base por proyecto en `<datos>/hive/<clave>.db`; actualizar o reinstalar la app no la toca. Plan completo (local): `.ai/PLAN-COLMENA.md`; ADR 0018 (aceptado) y 0019 (propuesto, varias PC).

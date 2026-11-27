@@ -2,6 +2,11 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Colmena C3: pendientes (2026-11-26)
+
+- Hecho: índice FTS5 y `hive index|search` (ver CURRENT_STATE). Falta la inyección en el chat (`studio_chat_prepare`) con presupuesto de tokens y citas, y una caja de búsqueda en el panel. Windows/macOS sin verificar (usa el `git` del sistema).
+- El diario del chat, las tarjetas y las decisiones aún no se indexan; hoy solo documentos.
+
 ## Colmena: estado y pendientes (2026-11-25)
 
 - Código en `dev`: `src/features/hive/{store,board,import_vyro}.rs`, `src/integrations/sqlite.rs`, `src/features/extensions.rs`, `src/interfaces/{cli_hive,studio_hive,studio_settings_extensions}.rs`. Pruebas junto a cada módulo.
