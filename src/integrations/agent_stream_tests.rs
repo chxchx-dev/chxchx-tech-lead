@@ -186,3 +186,22 @@ fn a_claude_message_reports_what_it_used_live_once_per_message_id() {
     let bare = json!({"type":"assistant", "message":{"content":[{"type":"text", "text":"x"}]}});
     assert_eq!(kinds(&normalize("Claude", &bare)), ["message"]);
 }
+
+#[test]
+fn a_claude_rate_limit_event_becomes_the_five_hour_and_weekly_windows() {
+    let record = json!({"type":"rate_limit_event", "rate_limit_info":{
+        "status":"allowed", "rateLimitType":"five_hour", "resetsAt":100,
+        "unifiedWindows":{
+            "five_hour":{"utilization":0.02, "resetsAt":100, "status":"allowed"},
+            "seven_day":{"utilization":0.25, "resetsAt":200, "status":"allowed"}}}});
+    let events = normalize("Claude", &record);
+    assert_eq!(kinds(&events), ["limits"]);
+    assert_event_schema(&events);
+    assert_eq!(events[0]["primary"]["used_percent"], 2.0);
+    assert_eq!(events[0]["primary"]["window_minutes"], 300);
+    assert_eq!(events[0]["secondary"]["used_percent"], 25.0);
+    assert_eq!(events[0]["secondary"]["resets_at"], 200);
+
+    let bare = json!({"type":"rate_limit_event", "rate_limit_info":{"status":"allowed"}});
+    assert!(normalize("Claude", &bare).is_empty());
+}

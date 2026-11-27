@@ -2,6 +2,12 @@
 
 > Historial anterior: `.ai/history/HANDOFF.md` (no se lee al iniciar un chat).
 
+## Chats: pendientes (2026-11-27)
+
+- Comprobar en pantalla que el porcentaje de Claude coincide con `/usage` (si `utilization` fuera ya un porcentaje, ajustar `claude_rate_limits`).
+- Los límites de Claude solo aparecen tras el primer mensaje de cada sesión de Studio; no se persisten entre reinicios.
+- Opcional: comandos para copiar la última respuesta y compactar contexto.
+
 ## Colmena C3: pendientes (2026-11-26)
 
 - Hecho: índice FTS5 y `hive index|search` (ver CURRENT_STATE). La inyección en el chat está hecha (`hive/context.rs`, llamada desde `studio_chat_turns.rs`; refresco en `studio_chat_prepare.rs`) y no está vista en pantalla. Falta una caja de búsqueda en el panel. Windows/macOS sin verificar (usa el `git` del sistema).

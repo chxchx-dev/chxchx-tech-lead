@@ -232,6 +232,9 @@ fn claude(record: &Map<String, Value>) -> Vec<Value> {
     {
         return vec![event(json!({"type":"session", "session_id":session_id}))];
     }
+    if kind == "rate_limit_event" {
+        return claude_rate_limits(record).into_iter().collect();
+    }
     if kind == "result" {
         let usage_data = record.get("usage").and_then(Value::as_object);
         let context: i64 = [
@@ -529,6 +532,52 @@ fn claude_permission(identifier: &str, name: &str, data: Option<&Map<String, Val
             ),
         ],
     )
+}
+
+/// What is left of the plan, as Claude reports it with each reply (`rate_limit_event`).
+/// `utilization` is a 0..1 fraction; the 5 hour and weekly windows come as `unifiedWindows`.
+fn claude_rate_limits(record: &Map<String, Value>) -> Option<Value> {
+    let info = record.get("rate_limit_info")?;
+    let window = |value: Option<&Value>, minutes: u64, fallback: Option<&Value>| {
+        let value = value?;
+        let used = value
+            .get("utilization")
+            .and_then(Value::as_f64)
+            .or_else(|| fallback.and_then(Value::as_f64))?;
+        (used >= 0.0).then(|| {
+            json!({
+                "used_percent": (used * 100.0).clamp(0.0, 100.0),
+                "window_minutes": minutes,
+                "resets_at": value.get("resetsAt").and_then(Value::as_i64).unwrap_or(0),
+            })
+        })
+    };
+    let windows = info.get("unifiedWindows");
+    let mut primary = window(windows.and_then(|w| w.get("five_hour")), 300, None);
+    let mut secondary = window(windows.and_then(|w| w.get("seven_day")), 10080, None);
+    if primary.is_none() && secondary.is_none() {
+        // Older shape: a single window named by `rateLimitType`.
+        let single = window(Some(info), 0, None);
+        match info.get("rateLimitType").and_then(Value::as_str) {
+            Some("five_hour") => primary = single.map(|w| with_minutes(w, 300)),
+            Some(kind) if kind.starts_with("seven_day") => {
+                secondary = single.map(|w| with_minutes(w, 10080));
+            }
+            _ => {}
+        }
+    }
+    if primary.is_none() && secondary.is_none() {
+        return None;
+    }
+    Some(event(json!({
+        "type":"limits", "context_tokens":null, "context_window":null,
+        "primary":primary, "secondary":secondary, "plan":null
+    })))
+}
+
+fn with_minutes(mut window: Value, minutes: u64) -> Value {
+    window["window_minutes"] = json!(minutes);
+    window
 }
 
 fn claude_context_window(model_usage: Option<&Value>) -> Option<u64> {

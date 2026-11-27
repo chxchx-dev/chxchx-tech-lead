@@ -2,6 +2,13 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## Chats: límites de Claude y elecciones recordadas (2026-11-27)
+
+- **Límites de Claude:** Claude Code emite `rate_limit_event` en `stream-json` con `unifiedWindows.five_hour` y `seven_day` (`utilization` 0..1, `resetsAt`). `integrations/agent_stream.rs::claude_rate_limits` lo convierte en un evento `limits` y la barra de uso muestra «quedan X% · reinicia en…» tras cada respuesta. El botón de Claude explica que se actualiza con el siguiente mensaje. Forma capturada de un evento real (Claude Code 2.1.327); `utilization` como fracción es una suposición razonable, sin contrastar con `/usage`.
+- **Elecciones del chat:** modelo, esfuerzo, acceso (ahora **también acceso total**, a petición de la persona) y red se recuerdan por proyecto y agente (`ChatChoices`, `restore_choices`).
+- **Rediseño y responsivo de Colmena** y comandos nuevos del chat (`/red`, `/acceso`, `/esfuerzo`, `/limites`, `/estado`) ya en `dev`.
+- Verificado en Linux: fmt, clippy estricto, 715 + 6 + 22 pruebas y build `cli`. **No visto en pantalla** el porcentaje de Claude; Windows/macOS sin verificar.
+
 ## Basic Memory y Serena activos en cada arranque (2026-11-26)
 
 - `features/mcp_auto.rs`: al iniciar o reiniciar, Studio comprueba en segundo plano (solo lectura de `~/.claude.json`) si Claude Code tiene `basic-memory` y `serena` para el proyecto; si falta alguno y el proyecto es de confianza y está preparado (`.ai/memory`), aplica la misma integración con copia y vuelta atrás que `integrate --client claude --apply` (CLI oficial). Idempotente y silenciosa si no hay nada que hacer. Solo Claude Code; Codex y OpenCode siguen con `integrate`. No visto en pantalla.

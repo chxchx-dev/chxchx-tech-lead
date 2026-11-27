@@ -445,7 +445,7 @@ fn refresh_limits(state: &mut Dashboard) -> Task<Message> {
     let id = chat.agent.id.clone();
     if chat.agent.provider != crate::features::agents::Provider::Codex {
         state.message = format!(
-            "{} no publica cuánto queda de su plan fuera de su propia terminal; ábrelo con /terminal y usa /usage.",
+            "{} informa cuánto queda de tu plan con cada respuesta; aparece o se actualiza después de tu siguiente mensaje.",
             chat.agent.label()
         );
         return Task::none();

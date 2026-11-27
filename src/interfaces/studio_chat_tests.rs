@@ -547,11 +547,11 @@ fn model_access_and_network_come_back_when_the_chat_opens_again() {
     assert_eq!(chat.effort.as_deref(), Some("high"));
     assert_eq!(chat.model_id.as_deref(), Some("opus"));
 
-    // Full access is never silently brought back.
+    // Full access is remembered too, because the person chose it.
     let _ = update(&mut state, Event::Access("full-access".into()));
     state.chat.chats.clear();
     let _ = open(&mut state, agent);
-    assert_eq!(state.chat.chats[0].mode, "workspace-commands");
+    assert_eq!(state.chat.chats[0].mode, "full-access");
 }
 
 #[test]
