@@ -9,7 +9,12 @@ pub(in crate::interfaces) fn takes_center(state: &Dashboard) -> bool {
 }
 
 fn tile<'a>(item: &'a board::Card, selected: bool) -> Element<'a, Message> {
-    let mut body = column![text(format!("{} · {}", item.key, item.title)).size(12)].spacing(3);
+    let tint = super::look::status_color(&item.status);
+    let mut body = column![
+        super::key_chip(&item.key, tint),
+        text(&item.title).size(12).color(design::fg()),
+    ]
+    .spacing(5);
     if !item.blocker.is_empty() {
         body = body.push(text(&item.blocker).size(11).color(design::danger()));
     } else if !item.waits_for.is_empty() || !item.depends_on.is_empty() {
@@ -29,12 +34,8 @@ fn tile<'a>(item: &'a board::Card, selected: bool) -> Element<'a, Message> {
     };
     button(body)
         .width(Fill)
-        .padding([6, 8])
-        .style(if selected {
-            styles::primary
-        } else {
-            styles::secondary
-        })
+        .padding([8, 10])
+        .style(super::look::tile(selected))
         .on_press(Message::Hive(Event::Select(target)))
         .into()
 }
@@ -62,10 +63,8 @@ fn detail<'a>(hive: &'a State, item: &'a board::Card) -> Element<'a, Message> {
     container(
         column![
             row![
-                text(format!("{} · {}", item.key, item.title))
-                    .size(13)
-                    .font(design::UI_BOLD)
-                    .width(Fill),
+                super::key_chip(&item.key, super::look::status_color(&item.status)),
+                text(&item.title).size(13).font(design::UI_BOLD).width(Fill),
                 small("Cerrar", Message::Hive(Event::Select(None))),
             ],
             text("Mover a").size(11).color(design::faint()),
@@ -91,9 +90,9 @@ fn detail<'a>(hive: &'a State, item: &'a board::Card) -> Element<'a, Message> {
         ]
         .spacing(6),
     )
-    .padding(10)
+    .padding(12)
     .width(Fill)
-    .style(styles::card)
+    .style(super::look::panel(design::brand_blue()))
     .into()
 }
 
@@ -109,15 +108,17 @@ pub(in crate::interfaces) fn board_view(state: &Dashboard) -> Element<'_, Messag
         }
         columns = columns.push(
             container(styles::vscroll(lane).height(Fill))
-                .width(230)
+                .width(240)
                 .height(Fill)
-                .padding(8)
-                .style(styles::surface(design::bg_panel())),
+                .padding(10)
+                .style(super::look::lane),
         );
     }
     let mut top = column![
         row![
-            text("Colmena · tablero").size(15).font(design::UI_BOLD),
+            icons::icon("hive", design::accent(), 18.0),
+            text("Colmena").size(16).font(design::UI_BOLD),
+            text("tablero").size(12).color(design::faint()),
             Space::new().width(Fill),
             small("Exportar .ai/board.json", Message::Hive(Event::Export)),
             small("Cerrar tablero", Message::Hive(Event::Wide(false))),

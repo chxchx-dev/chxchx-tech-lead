@@ -6,10 +6,13 @@
 use super::*;
 use crate::features::extensions;
 use crate::features::hive::{board, export, store};
+use iced::Color;
 use iced::widget::{column, text_input};
 
 #[path = "studio_hive_board.rs"]
 mod kanban;
+#[path = "studio_hive_style.rs"]
+mod look;
 pub(super) use kanban::{board_view, takes_center};
 
 const ACTOR: &str = "persona";
@@ -217,14 +220,15 @@ pub(super) fn decision_card(item: &board::Decision) -> Element<'_, Message> {
     ));
     container(
         column![
-            text(format!("{} · {}", item.key, item.question)).size(12),
+            key_chip(&item.key, design::warning()),
+            text(&item.question).size(12),
             choices.wrap(),
         ]
         .spacing(6),
     )
     .padding(10)
     .width(Fill)
-    .style(styles::card)
+    .style(look::panel(design::warning()))
     .into()
 }
 
@@ -252,9 +256,14 @@ fn card_row(item: &board::Card) -> Element<'_, Message> {
             )),
         ));
     }
-    let mut body = column![text(format!("{} · {}", item.key, item.title)).size(12)].spacing(4);
+    let tint = look::status_color(&item.status);
+    let mut body = column![
+        key_chip(&item.key, tint),
+        text(&item.title).size(12).color(design::fg()),
+    ]
+    .spacing(4);
     if !item.blocker.is_empty() {
-        body = body.push(text(&item.blocker).size(11).color(design::muted()));
+        body = body.push(text(&item.blocker).size(11).color(design::danger()));
     } else if !item.depends_on.is_empty() {
         body = body.push(
             text(format!("Depende de {}", item.depends_on.join(", ")))
@@ -273,12 +282,39 @@ fn card_row(item: &board::Card) -> Element<'_, Message> {
     .into()
 }
 
-fn label(name: &str, count: usize) -> Element<'static, Message> {
-    text(format!("{} ({count})", name.to_uppercase()))
-        .size(10)
-        .font(design::UI_BOLD)
-        .color(design::faint())
+/// A key such as `C-004` as a small tinted chip.
+fn key_chip<'a>(key: &'a str, tint: Color) -> Element<'a, Message> {
+    container(text(key).size(10).font(design::MONO).color(tint))
+        .padding([1, 6])
+        .style(look::chip(tint))
         .into()
+}
+
+fn label(name: &str, count: usize) -> Element<'static, Message> {
+    let tint = look::status_color(status_key(name));
+    row![
+        text("●").size(9).color(tint),
+        text(name.to_uppercase())
+            .size(10)
+            .font(design::UI_BOLD)
+            .color(design::muted()),
+        Space::new().width(Fill),
+        container(text(count.to_string()).size(10).color(tint))
+            .padding([1, 7])
+            .style(look::chip(tint)),
+    ]
+    .spacing(6)
+    .align_y(iced::Center)
+    .into()
+}
+
+/// Maps the visible name back to its status so the label can take its color.
+fn status_key(name: &str) -> &'static str {
+    board::STATUSES
+        .iter()
+        .copied()
+        .find(|s| status_name(s) == name)
+        .unwrap_or("backlog")
 }
 
 pub(super) fn status_name(status: &str) -> &str {
