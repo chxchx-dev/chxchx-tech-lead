@@ -15,7 +15,25 @@ fn window_label(label: &str, window: &Window) -> String {
     } else {
         span
     };
-    format!("{span}: {:.0}%", window.used_percent)
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64);
+    // A window that already reset says so instead of showing last period's figure.
+    if window.resets_at > 0 && window.resets_at <= now {
+        return format!("{span}: reiniciado");
+    }
+    let left = (100.0 - window.used_percent).max(0.0);
+    let again = if window.resets_at > now {
+        let minutes = (window.resets_at - now) / 60;
+        match minutes {
+            m if m >= 1440 => format!(" · reinicia en {} d {} h", m / 1440, m % 1440 / 60),
+            m if m >= 60 => format!(" · reinicia en {} h {} min", m / 60, m % 60),
+            m => format!(" · reinicia en {m} min"),
+        }
+    } else {
+        String::new()
+    };
+    format!("{span}: quedan {left:.0}%{again}")
 }
 
 /// What the running turn has used so far, and with which model when plan mode chose one.
@@ -29,6 +47,7 @@ pub(super) fn usage_bar<'a>(
     usage: &'a Usage,
     spend: &[crate::features::model_route::Spent],
     running: Option<Running>,
+    refresh: Option<Message>,
 ) -> Element<'a, Message> {
     let mut line = row![].spacing(14).align_y(iced::Center);
     let summary = usage.summary();
@@ -89,21 +108,43 @@ pub(super) fn usage_bar<'a>(
             tooltip::Position::Top,
         ));
     }
+    let mut any = false;
     for (label, window) in [("5 h", &usage.primary), ("semana", &usage.secondary)] {
         if let Some(window) = window {
-            let plan = if usage.plan.is_empty() {
-                String::new()
-            } else {
-                format!(" · {}", usage.plan)
-            };
+            any = true;
             line = line.push(
-                text(format!("{}{plan}", window_label(label, window)))
+                text(window_label(label, window))
                     .size(11)
                     .color(design::muted()),
             );
         }
     }
-    container(line)
+    if any && !usage.plan.is_empty() {
+        line = line.push(text(usage.plan.clone()).size(11).color(design::faint()));
+    }
+    if let Some(message) = refresh {
+        let hint = if usage.limits_at > 0 {
+            "Vuelve a leer lo que queda de tu plan. Solo lee archivos locales: no gasta tokens ni hace peticiones."
+        } else {
+            "Lee lo que queda de tu plan (5 h y semana). Solo lee archivos locales y solo cuando lo pides."
+        };
+        line = line.push(styles::tip(
+            button(
+                text(if any {
+                    "Actualizar límites"
+                } else {
+                    "Ver límites"
+                })
+                .size(11),
+            )
+            .padding([2, 8])
+            .style(styles::secondary)
+            .on_press(message),
+            hint,
+            tooltip::Position::Top,
+        ));
+    }
+    container(line.wrap())
         .padding([6, 16])
         .width(Fill)
         .style(styles::surface(design::bg_deep()))

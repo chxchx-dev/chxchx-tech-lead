@@ -2,6 +2,7 @@
 
 pub mod features {
     pub mod agent_launch;
+    pub mod agent_limits;
     pub mod agents;
     pub mod catalog;
     pub mod catalog_view;

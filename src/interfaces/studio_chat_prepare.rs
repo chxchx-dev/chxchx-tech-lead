@@ -47,6 +47,7 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
         commands: Vec::new(),
     });
     state.chat.active = state.chat.chats.len() - 1;
+    restore_choices(state);
     let root = state.root.clone();
     let id = agent.id.clone();
     let provider = super::turns::state_provider(agent.provider).to_owned();
@@ -205,4 +206,23 @@ pub(super) fn touches_a_link(text: &str, from: usize) -> bool {
         start -= 1;
     }
     text[start..].contains("http")
+}
+
+/// Applies what the person chose last time in this agent's chat. Full access is never restored
+/// on its own: it has to be granted again each time Studio opens the chat.
+fn restore_choices(state: &mut Dashboard) {
+    let Some(chat) = state.chat.chats.last_mut() else {
+        return;
+    };
+    let Some(choices) = state.session.session().chats.get(&chat.agent.id).cloned() else {
+        return;
+    };
+    if choices.mode != "full-access" {
+        chat.mode = choices.mode;
+    } else {
+        chat.mode = "workspace-commands".to_owned();
+    }
+    chat.network = choices.network;
+    chat.model_id = choices.model;
+    chat.effort = choices.effort;
 }

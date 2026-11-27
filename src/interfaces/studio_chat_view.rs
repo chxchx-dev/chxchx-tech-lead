@@ -74,7 +74,17 @@ pub(in crate::interfaces::studio) fn view<'a>(
         column![
             header(chat),
             body,
-            usage::usage_bar(&chat.model.usage, &chat.spend, running(chat)),
+            usage::usage_bar(
+                &chat.model.usage,
+                &chat.spend,
+                running(chat),
+                matches!(
+                    chat.agent.provider,
+                    crate::features::agents::Provider::Codex
+                        | crate::features::agents::Provider::Claude
+                )
+                .then(|| send(Event::RefreshLimits)),
+            ),
             composer::composer(chat)
         ]
         .height(Fill),

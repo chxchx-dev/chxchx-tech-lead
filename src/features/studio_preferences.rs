@@ -86,9 +86,30 @@ pub struct ExtensionPrefs {
     pub accepted_at: Option<String>,
 }
 
+/// What the person chose in an agent's chat, kept so closing or restarting does not undo it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ChatChoices {
+    /// Access level (`read-only`, `workspace-write`, `workspace-commands`, `full-access`).
+    pub mode: String,
+    pub network: bool,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+}
+
+pub const CHAT_MODES: [&str; 4] = [
+    "read-only",
+    "workspace-write",
+    "workspace-commands",
+    "full-access",
+];
+const MAX_CHAT_AGENTS: usize = 16;
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectSession {
+    /// Per agent id: model, effort, access and network.
+    pub chats: BTreeMap<String, ChatChoices>,
     pub tabs: Vec<String>,
     pub active: Option<String>,
     pub expanded: Vec<String>,
@@ -225,6 +246,25 @@ impl Preferences {
             self.projects.pop_first();
         }
         for session in self.projects.values_mut() {
+            session
+                .chats
+                .retain(|agent, _| !agent.is_empty() && agent.len() <= 64);
+            while session.chats.len() > MAX_CHAT_AGENTS {
+                session.chats.pop_last();
+            }
+            for choices in session.chats.values_mut() {
+                if !CHAT_MODES.contains(&choices.mode.as_str()) {
+                    choices.mode = "workspace-write".to_owned();
+                }
+                for value in [&mut choices.model, &mut choices.effort] {
+                    if value
+                        .as_deref()
+                        .is_some_and(|v| v.is_empty() || v.len() > 160)
+                    {
+                        *value = None;
+                    }
+                }
+            }
             clean_paths(&mut session.tabs, MAX_TABS);
             clean_paths(&mut session.expanded, MAX_EXPANDED);
             clean_paths(&mut session.recent_files, MAX_RECENT_FILES);

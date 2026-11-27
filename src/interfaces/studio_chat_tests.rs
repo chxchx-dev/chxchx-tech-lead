@@ -528,3 +528,45 @@ fn a_link_that_is_still_being_written_makes_the_markdown_start_again() {
         "a link far behind is already parsed"
     );
 }
+
+#[test]
+fn model_access_and_network_come_back_when_the_chat_opens_again() {
+    let mut state = dashboard();
+    let agent = state.chat.chats[0].agent.clone();
+    let _ = update(&mut state, Event::Access("workspace-commands".into()));
+    let _ = update(&mut state, Event::Network(true));
+    let _ = update(&mut state, Event::Effort("high".into()));
+    state.chat.chats[0].model_id = Some("opus".into());
+    remember(&mut state);
+    state.chat.chats.clear();
+    state.chat.active = 0;
+    let _ = open(&mut state, agent.clone());
+    let chat = &state.chat.chats[0];
+    assert_eq!(chat.mode, "workspace-commands");
+    assert!(chat.network);
+    assert_eq!(chat.effort.as_deref(), Some("high"));
+    assert_eq!(chat.model_id.as_deref(), Some("opus"));
+
+    // Full access is never silently brought back.
+    let _ = update(&mut state, Event::Access("full-access".into()));
+    state.chat.chats.clear();
+    let _ = open(&mut state, agent);
+    assert_eq!(state.chat.chats[0].mode, "workspace-commands");
+}
+
+#[test]
+fn typed_commands_change_network_access_and_effort_like_the_panels() {
+    let mut state = dashboard();
+    let _ = slash::resolve(&mut state, "/red si");
+    assert!(state.chat.chats[0].network);
+    let _ = slash::resolve(&mut state, "/red");
+    assert!(!state.chat.chats[0].network);
+    let _ = slash::resolve(&mut state, "/acceso lectura");
+    assert_eq!(state.chat.chats[0].mode, "read-only");
+    let _ = slash::resolve(&mut state, "/estado");
+    assert!(
+        slash::items(&state.chat.chats[0], "lim")
+            .iter()
+            .any(|i| i.name == "limites")
+    );
+}

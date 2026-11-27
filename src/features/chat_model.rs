@@ -116,6 +116,8 @@ pub struct Usage {
     pub primary: Option<Window>,
     pub secondary: Option<Window>,
     pub plan: String,
+    /// When the limits were last read (unix seconds); 0 when never.
+    pub limits_at: i64,
 }
 
 impl Usage {

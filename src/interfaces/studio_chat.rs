@@ -231,6 +231,9 @@ pub(super) enum Event {
     Network(bool),
     Model(String),
     Effort(String),
+    /// Reads the plan's 5 hour and weekly limits once; nothing refreshes them on its own.
+    RefreshLimits,
+    LimitsRead(String, Option<crate::features::agent_limits::Snapshot>),
     NewChat,
 }
 
@@ -397,19 +400,33 @@ pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
         Event::Starter(text) => with_chat(state, |chat| {
             chat.composer = text_editor::Content::with_text(&text)
         }),
-        Event::Access(mode) => with_chat(state, |chat| chat.mode = mode),
-        Event::Network(on) => with_chat(state, |chat| chat.network = on),
-        Event::Model(id) => with_chat(state, |chat| {
-            chat.effort = chat
-                .options
-                .as_ref()
-                .and_then(|o| o.models.iter().find(|m| m.id == id))
-                .map(|m| m.default_effort.clone())
-                .filter(|e| !e.is_empty());
-            chat.model_id = Some(id);
-            chat.models_open = false;
-        }),
-        Event::Effort(effort) => with_chat(state, |chat| chat.effort = Some(effort)),
+        Event::Access(mode) => {
+            with_chat(state, |chat| chat.mode = mode);
+            remember(state);
+        }
+        Event::Network(on) => {
+            with_chat(state, |chat| chat.network = on);
+            remember(state);
+        }
+        Event::Model(id) => {
+            with_chat(state, |chat| {
+                chat.effort = chat
+                    .options
+                    .as_ref()
+                    .and_then(|o| o.models.iter().find(|m| m.id == id))
+                    .map(|m| m.default_effort.clone())
+                    .filter(|e| !e.is_empty());
+                chat.model_id = Some(id);
+                chat.models_open = false;
+            });
+            remember(state);
+        }
+        Event::Effort(effort) => {
+            with_chat(state, |chat| chat.effort = Some(effort));
+            remember(state);
+        }
+        Event::RefreshLimits => return refresh_limits(state),
+        Event::LimitsRead(id, snapshot) => limits_read(state, &id, snapshot),
         Event::NewChat => return new_chat(state),
     }
     Task::none()
@@ -419,6 +436,63 @@ fn with_agent(state: &mut Dashboard, id: &str, apply: impl FnOnce(&mut Chat)) {
     if let Some(chat) = state.chat.chats.iter_mut().find(|c| c.agent.id == id) {
         apply(chat);
     }
+}
+
+fn refresh_limits(state: &mut Dashboard) -> Task<Message> {
+    let Some(chat) = state.chat.chats.get(state.chat.active) else {
+        return Task::none();
+    };
+    let id = chat.agent.id.clone();
+    if chat.agent.provider != crate::features::agents::Provider::Codex {
+        state.message = format!(
+            "{} no publica cuánto queda de su plan fuera de su propia terminal; ábrelo con /terminal y usa /usage.",
+            chat.agent.label()
+        );
+        return Task::none();
+    }
+    jobs::quiet(
+        || {
+            crate::features::agent_limits::codex_home()
+                .and_then(|home| crate::features::agent_limits::codex_snapshot(&home))
+        },
+        move |_, snapshot| Task::done(Message::Chat(Event::LimitsRead(id, snapshot))),
+    )
+}
+
+fn limits_read(
+    state: &mut Dashboard,
+    id: &str,
+    snapshot: Option<crate::features::agent_limits::Snapshot>,
+) {
+    let Some(snapshot) = snapshot else {
+        state.message =
+            "Aún no hay límites guardados; aparecen después del primer mensaje.".to_owned();
+        return;
+    };
+    with_agent(state, id, |chat| {
+        let usage = &mut chat.model.usage;
+        usage.primary = snapshot.primary;
+        usage.secondary = snapshot.secondary;
+        usage.plan = snapshot.plan;
+        usage.limits_at = snapshot.observed_at;
+    });
+}
+
+/// Keeps the active chat's model, effort, access and network for the next time it opens.
+fn remember(state: &mut Dashboard) {
+    let Some(chat) = state.chat.chats.get(state.chat.active) else {
+        return;
+    };
+    let choices = crate::features::studio_preferences::ChatChoices {
+        mode: chat.mode.clone(),
+        network: chat.network,
+        model: chat.model_id.clone(),
+        effort: chat.effort.clone(),
+    };
+    let agent = chat.agent.id.clone();
+    state.session.edit_session(|session| {
+        session.chats.insert(agent, choices);
+    });
 }
 
 fn with_chat(state: &mut Dashboard, apply: impl FnOnce(&mut Chat)) {

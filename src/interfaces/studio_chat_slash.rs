@@ -18,10 +18,15 @@ pub(super) enum Local {
     Develop,
     Replan,
     Help,
+    Network,
+    Access,
+    Effort,
+    Limits,
+    Status,
 }
 
 /// The actions of the chat itself, which never reach the agent.
-const LOCAL: [(&str, &str, Local); 10] = [
+const LOCAL: [(&str, &str, Local); 15] = [
     ("nuevo", "Empieza un chat de cero", Local::New),
     ("modelo", "Elige modelo y esfuerzo", Local::Model),
     (
@@ -56,6 +61,31 @@ const LOCAL: [(&str, &str, Local); 10] = [
         Local::Replan,
     ),
     ("ayuda", "Muestra los comandos disponibles", Local::Help),
+    (
+        "red",
+        "Permite o corta la red: /red si, /red no (sin argumento, alterna)",
+        Local::Network,
+    ),
+    (
+        "acceso",
+        "Nivel de acceso: /acceso lectura|editar|ejecutar|total",
+        Local::Access,
+    ),
+    (
+        "esfuerzo",
+        "Esfuerzo del modelo: /esfuerzo y el nivel (sin argumento, los lista)",
+        Local::Effort,
+    ),
+    (
+        "limites",
+        "Lee lo que queda de tu plan (5 h y semana), sin gastar tokens",
+        Local::Limits,
+    ),
+    (
+        "estado",
+        "Modelo, esfuerzo, acceso, red y contexto de este chat",
+        Local::Status,
+    ),
 ];
 
 const MENU_ROWS: usize = 8;
@@ -247,6 +277,82 @@ fn note(chat: &mut Chat, text: String) {
     super::sync(chat);
 }
 
+/// `/red`, `/acceso` and `/esfuerzo`: the same choices as the panels, typed.
+fn choose(chat: &mut Chat, action: Local, args: &str) -> String {
+    let word = args.to_lowercase();
+    match action {
+        Local::Network => {
+            chat.network = match word.as_str() {
+                "si" | "sí" | "on" => true,
+                "no" | "off" => false,
+                _ => !chat.network,
+            };
+            format!(
+                "Red {} desde tu siguiente mensaje.",
+                if chat.network { "permitida" } else { "cortada" }
+            )
+        }
+        Local::Access => {
+            let mode = match word.as_str() {
+                "lectura" | "solo-lectura" => "read-only",
+                "editar" | "archivos" => "workspace-write",
+                "ejecutar" | "comandos" => "workspace-commands",
+                "total" => "full-access",
+                _ => {
+                    chat.perms_open = true;
+                    chat.models_open = false;
+                    return "Elige el nivel de acceso en el panel, o escribe /acceso lectura, editar, ejecutar o total.".to_owned();
+                }
+            };
+            chat.mode = mode.to_owned();
+            let label = super::ACCESS
+                .iter()
+                .find(|(m, _)| *m == mode)
+                .map_or(mode, |(_, l)| *l);
+            format!("Acceso: {label}, desde tu siguiente mensaje.")
+        }
+        _ => {
+            let levels = chat
+                .options
+                .as_ref()
+                .and_then(|o| {
+                    o.models
+                        .iter()
+                        .find(|m| Some(&m.id) == chat.model_id.as_ref())
+                })
+                .map(|m| m.efforts.clone())
+                .unwrap_or_default();
+            if levels.is_empty() {
+                return "Este modelo no tiene niveles de esfuerzo.".to_owned();
+            }
+            match levels.iter().find(|l| l.to_lowercase() == word) {
+                Some(level) => {
+                    chat.effort = Some(level.clone());
+                    format!("Esfuerzo: {level}.")
+                }
+                None => format!("Niveles disponibles: {}.", levels.join(", ")),
+            }
+        }
+    }
+}
+
+fn status(chat: &Chat) -> String {
+    let access = super::ACCESS
+        .iter()
+        .find(|(m, _)| *m == chat.mode)
+        .map_or("?", |(_, l)| *l);
+    let mut text = format!(
+        "Modelo: {} · Esfuerzo: {} · Acceso: {access} · Red: {}",
+        chat.model_id.as_deref().unwrap_or("predeterminado"),
+        chat.effort.as_deref().unwrap_or("predeterminado"),
+        if chat.network { "sí" } else { "no" }
+    );
+    if let Some(percent) = chat.model.usage.context_percent() {
+        text.push_str(&format!(" · Contexto: {percent:.0}%"));
+    }
+    text
+}
+
 fn listing(commands: &[Found]) -> String {
     if commands.is_empty() {
         return "Este proyecto no tiene skills ni comandos para este agente.".to_owned();
@@ -312,7 +418,7 @@ pub(super) fn resolve(state: &mut Dashboard, text: &str) -> Outcome {
     let (name, args) = body.split_once(char::is_whitespace).unwrap_or((body, ""));
     let name = name.to_lowercase();
     if let Some((_, _, action)) = LOCAL.iter().find(|(n, _, _)| *n == name) {
-        return Outcome::Done(run(state, *action));
+        return Outcome::Done(run(state, *action, args.trim()));
     }
     let Some(chat) = state.chat.active_chat() else {
         return Outcome::Plain;
@@ -323,12 +429,20 @@ pub(super) fn resolve(state: &mut Dashboard, text: &str) -> Outcome {
     }
 }
 
-fn run(state: &mut Dashboard, action: Local) -> Task<Message> {
+fn run(state: &mut Dashboard, action: Local, args: &str) -> Task<Message> {
     let id = state.chat.active_chat().map(|c| c.agent.id.clone());
     let mut task = Task::none();
     match action {
         Local::New => task = super::new_chat(state),
         Local::Retry => super::turns::retry(state),
+        Local::Limits => task = super::refresh_limits(state),
+        Local::Network | Local::Access | Local::Effort => {
+            if let Some(chat) = state.chat.chats.get_mut(state.chat.active) {
+                let text = choose(chat, action, args);
+                note(chat, text);
+            }
+            super::remember(state);
+        }
         Local::Terminal => {
             if let Some(id) = id {
                 task = Task::done(Message::Agents(super::super::agents::Event::Terminal(id)));
@@ -347,6 +461,10 @@ fn run(state: &mut Dashboard, action: Local) -> Task<Message> {
                     }
                     Local::Skills => {
                         let text = listing(&chat.commands);
+                        note(chat, text);
+                    }
+                    Local::Status => {
+                        let text = status(chat);
                         note(chat, text);
                     }
                     Local::Plan => toggle_plan(chat),
