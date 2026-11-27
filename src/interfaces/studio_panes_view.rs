@@ -11,11 +11,17 @@ pub(in crate::interfaces::studio) fn view(state: &Dashboard) -> Element<'_, Mess
         let current = group.current();
         let mut controls = row![].spacing(2).align_y(iced::Center);
         if matches!(current, Some(Content::Terminal(_))) {
-            controls = controls.push(control(
-                "stop",
-                "Interrumpir (Ctrl+C)",
-                Message::Terminal(terminal::Event::Interrupt),
-            ));
+            controls = controls
+                .push(control(
+                    "plus",
+                    "Nueva terminal (Ctrl+Mayús+T)",
+                    Message::Terminal(terminal::Event::Open),
+                ))
+                .push(control(
+                    "stop",
+                    "Interrumpir (Ctrl+C)",
+                    Message::Terminal(terminal::Event::Interrupt),
+                ));
         }
         if !is_maximized {
             controls = if group.tabs.len() > 1 {

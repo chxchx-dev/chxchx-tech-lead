@@ -70,6 +70,18 @@ pub fn open(root: &Path) -> Result<Session, String> {
     Session::spawn(command)
 }
 
+/// What a shell tab is called: the name of the shell that runs in it (`bash`, `zsh`, `PowerShell`).
+pub fn shell_name() -> String {
+    if cfg!(windows) {
+        return "PowerShell".to_owned();
+    }
+    let shell = user_shell(std::env::var_os("SHELL").as_deref());
+    shell.file_name().map_or_else(
+        || "shell".to_owned(),
+        |name| name.to_string_lossy().into_owned(),
+    )
+}
+
 /// The shell the person already uses (`$SHELL`), so the terminal has their completion, history,
 /// prompt and aliases. Only an absolute path to an existing file is trusted; otherwise `/bin/sh`.
 fn user_shell(configured: Option<&std::ffi::OsStr>) -> std::path::PathBuf {
@@ -81,6 +93,12 @@ fn user_shell(configured: Option<&std::ffi::OsStr>) -> std::path::PathBuf {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_shell_tab_is_named_after_its_shell() {
+        let name = super::shell_name();
+        assert!(!name.is_empty() && !name.contains('/'), "{name}");
+    }
+
     #[test]
     fn the_terminal_uses_the_shell_of_the_system_and_falls_back_to_sh() {
         let sh = std::ffi::OsString::from("/bin/sh");

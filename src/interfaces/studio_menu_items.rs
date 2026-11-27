@@ -327,6 +327,11 @@ pub(super) fn entries(menu: Menu, state: &Dashboard) -> Vec<Entry> {
                 Message::Shell(ShellEvent::Dock(DockTab::Terminal)),
             ),
             item(
+                "Nueva terminal",
+                key(keymap::Action::NewTerminal),
+                Message::Terminal(terminal::Event::Open),
+            ),
+            item(
                 "Actividad",
                 "",
                 Message::Shell(ShellEvent::Dock(DockTab::Activity)),

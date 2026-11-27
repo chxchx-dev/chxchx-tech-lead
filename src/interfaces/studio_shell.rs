@@ -345,6 +345,7 @@ fn shortcut(
     Some(match action {
         Action::ToggleSidebar => Message::Shell(Event::ToggleSide(Side::Explorer)),
         Action::ToggleDock => Message::Shell(Event::ToggleDock),
+        Action::NewTerminal => Message::Terminal(terminal::Event::Open),
         Action::SearchProject => Message::Shell(Event::ShowSide(Side::Search)),
         Action::Save => Message::Editor(editor::Event::Save),
         Action::CloseTab => Message::Editor(editor::Event::CloseCurrent),

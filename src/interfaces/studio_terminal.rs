@@ -89,7 +89,10 @@ pub(super) const PADDING: f32 = 8.0;
 
 pub(super) fn update(state: &mut Dashboard, event: Event) -> Task<Message> {
     match event {
-        Event::Open => return open(state, Kind::Shell, "Shell".to_owned(), None),
+        Event::Open => {
+            let title = crate::features::workspace_terminal::shell_name();
+            return open(state, Kind::Shell, title, None);
+        }
         Event::OpenAgent(agent) => {
             let title = agent.label();
             return update(state, Event::OpenAgentAs(agent, title));

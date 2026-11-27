@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub(super) enum Action {
     ToggleSidebar,
     ToggleDock,
+    NewTerminal,
     SearchProject,
     Save,
     CloseTab,
@@ -32,9 +33,10 @@ pub(super) enum Action {
 }
 
 impl Action {
-    pub const ALL: [Action; 20] = [
+    pub const ALL: [Action; 21] = [
         Action::ToggleSidebar,
         Action::ToggleDock,
+        Action::NewTerminal,
         Action::SearchProject,
         Action::Save,
         Action::CloseTab,
@@ -59,6 +61,7 @@ impl Action {
         match self {
             Action::ToggleSidebar => "toggle-sidebar",
             Action::ToggleDock => "toggle-dock",
+            Action::NewTerminal => "new-terminal",
             Action::SearchProject => "search-project",
             Action::Save => "save",
             Action::CloseTab => "close-tab",
@@ -84,6 +87,7 @@ impl Action {
         match self {
             Action::ToggleSidebar => "Mostrar u ocultar la barra lateral",
             Action::ToggleDock => "Mostrar u ocultar el panel inferior",
+            Action::NewTerminal => "Nueva terminal",
             Action::SearchProject => "Buscar en el proyecto",
             Action::Save => "Guardar el archivo",
             Action::CloseTab => "Cerrar la pestaña",
@@ -109,6 +113,7 @@ impl Action {
         match self {
             Action::ToggleSidebar => "mod+b",
             Action::ToggleDock => "mod+j",
+            Action::NewTerminal => "mod+shift+t",
             Action::SearchProject => "mod+shift+f",
             Action::Save => "mod+s",
             Action::CloseTab => "mod+w",
