@@ -69,10 +69,15 @@ pub(super) fn start_turn_as(
         .plan
         .as_mut()
         .map(|plan| plan.begin(&crate::features::model_route::load(), prompt, follow_up));
-    let agent_prompt = match &routed {
+    let mut agent_prompt = match &routed {
         Some(route) => format!("{prompt}\n\n{}", route.instructions),
         None => prompt.to_owned(),
     };
+    // Colmena: the best fragments of the project's documents, cited (only if it is on).
+    #[cfg(feature = "hive")]
+    if show {
+        agent_prompt.push_str(&crate::features::hive::context::for_prompt(&root, prompt));
+    }
     let attached = if show {
         std::mem::take(&mut chat.images)
     } else {

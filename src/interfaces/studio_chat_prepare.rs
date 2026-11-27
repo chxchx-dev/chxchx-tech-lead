@@ -60,6 +60,8 @@ pub(super) fn open(state: &mut Dashboard, agent: Agent) -> Task<Message> {
             jobs::offload(move || -> Prepared {
                 // Looks for the agent-adapter service (Codex, OpenCode) before the first turn.
                 bridge::prepare_native(&agent, &root);
+                #[cfg(feature = "hive")]
+                crate::features::hive::context::refresh(&root);
                 let options = crate::integrations::agent_catalog::options(&agent, &root);
                 let provider_memories =
                     crate::features::explicit_memory::prepare_provider_history(&root);

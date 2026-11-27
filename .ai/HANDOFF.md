@@ -4,7 +4,7 @@
 
 ## Colmena C3: pendientes (2026-11-26)
 
-- Hecho: índice FTS5 y `hive index|search` (ver CURRENT_STATE). Falta la inyección en el chat (`studio_chat_prepare`) con presupuesto de tokens y citas, y una caja de búsqueda en el panel. Windows/macOS sin verificar (usa el `git` del sistema).
+- Hecho: índice FTS5 y `hive index|search` (ver CURRENT_STATE). La inyección en el chat está hecha (`hive/context.rs`, llamada desde `studio_chat_turns.rs`; refresco en `studio_chat_prepare.rs`) y no está vista en pantalla. Falta una caja de búsqueda en el panel. Windows/macOS sin verificar (usa el `git` del sistema).
 - El diario del chat, las tarjetas y las decisiones aún no se indexan; hoy solo documentos.
 
 ## Colmena: estado y pendientes (2026-11-25)
