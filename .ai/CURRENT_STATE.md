@@ -2,6 +2,11 @@
 
 > Historial anterior: `.ai/history/CURRENT_STATE.md` (no se lee al iniciar un chat).
 
+## Basic Memory y Serena activos en cada arranque (2026-11-26)
+
+- `features/mcp_auto.rs`: al iniciar o reiniciar, Studio comprueba en segundo plano (solo lectura de `~/.claude.json`) si Claude Code tiene `basic-memory` y `serena` para el proyecto; si falta alguno y el proyecto es de confianza y está preparado (`.ai/memory`), aplica la misma integración con copia y vuelta atrás que `integrate --client claude --apply` (CLI oficial). Idempotente y silenciosa si no hay nada que hacer. Solo Claude Code; Codex y OpenCode siguen con `integrate`. No visto en pantalla.
+- Observación: `integrate --apply` devuelve «aplicó parcialmente» aunque todo salió bien, porque el aviso informativo del plan se cuenta como advertencia (`cli_view.rs`); pendiente de corregir.
+
 ## Colmena C3: búsqueda léxica de documentos (2026-11-26)
 
 - `features/hive/rag.rs` + migración v3 (`rag_doc`, `rag_chunk` FTS5/BM25). Indexa `.md` y `.txt` que git no ignora (con `git ls-files`; fuera de git, un recorrido que salta `target`, `node_modules`, `.venv`), trocea por encabezados y bloques (sin cortar dentro de bloques de código), es incremental por SHA-256 y retira lo borrado. Nunca indexa `.env*`, `*credential*`, `*secret*`, claves ni certificados, y cada fragmento pasa por `error_cache::redact` antes de guardarse.

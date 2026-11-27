@@ -346,6 +346,24 @@ pub fn run_with_file(path: PathBuf, file: Option<PathBuf>) -> Result<(), String>
                 plans::refresh(&mut state),
                 agents::refresh(&mut state),
                 git::refresh(&mut state),
+                // Basic Memory and Serena stay registered in Claude Code at every start/restart.
+                {
+                    let root = path.clone();
+                    jobs::quiet(
+                        move || crate::features::mcp_auto::ensure_claude(&root),
+                        |state, result| {
+                            match result {
+                                Ok(Some(done)) => state.message = done,
+                                Ok(None) => {}
+                                Err(error) => {
+                                    state.message =
+                                        format!("No pude activar Basic Memory: {error}");
+                                }
+                            }
+                            Task::none()
+                        },
+                    )
+                },
                 file.as_ref()
                     .map(|file| editor::load(path.clone(), file.clone()))
                     .unwrap_or_else(Task::none),
