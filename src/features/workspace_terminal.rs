@@ -53,7 +53,13 @@ pub fn open(root: &Path) -> Result<Session, String> {
         command.args(["-NoLogo", "-NoProfile"]);
         command
     } else {
-        CommandBuilder::new("/bin/sh")
+        let shell = user_shell(std::env::var_os("SHELL").as_deref());
+        let mut command = CommandBuilder::new(&shell);
+        // macOS terminals start a login shell, so the user's PATH and profile are the usual ones.
+        if cfg!(target_os = "macos") {
+            command.arg("-l");
+        }
+        command
     };
     command.cwd(root);
     command.env("TERM", "xterm-256color");
@@ -64,8 +70,37 @@ pub fn open(root: &Path) -> Result<Session, String> {
     Session::spawn(command)
 }
 
+/// The shell the person already uses (`$SHELL`), so the terminal has their completion, history,
+/// prompt and aliases. Only an absolute path to an existing file is trusted; otherwise `/bin/sh`.
+fn user_shell(configured: Option<&std::ffi::OsStr>) -> std::path::PathBuf {
+    configured
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute() && path.is_file())
+        .unwrap_or_else(|| std::path::PathBuf::from("/bin/sh"))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_terminal_uses_the_shell_of_the_system_and_falls_back_to_sh() {
+        let sh = std::ffi::OsString::from("/bin/sh");
+        assert_eq!(
+            super::user_shell(Some(&sh)),
+            std::path::PathBuf::from("/bin/sh")
+        );
+        for bad in ["bash", "/no/existe/zsh", "/tmp"] {
+            let bad = std::ffi::OsString::from(bad);
+            assert_eq!(
+                super::user_shell(Some(&bad)),
+                std::path::PathBuf::from("/bin/sh")
+            );
+        }
+        assert_eq!(super::user_shell(None), std::path::PathBuf::from("/bin/sh"));
+        if let Some(own) = std::env::var_os("SHELL").filter(|s| std::path::Path::new(s).is_file()) {
+            assert_eq!(super::user_shell(Some(&own)), std::path::PathBuf::from(own));
+        }
+    }
+
     #[test]
     fn an_untrusted_project_cannot_start_a_terminal() {
         let root = std::env::temp_dir().join(format!(
