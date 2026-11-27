@@ -451,10 +451,17 @@ pub(super) fn integrate(
     for action in result.completed {
         println!("{}", ui.done(&action));
     }
-    for warning in &result.warnings {
+    // Los avisos del plan son informativos y ya se mostraron; solo los
+    // nuevos del aplicado indican un resultado parcial.
+    let new_warnings: Vec<&String> = result
+        .warnings
+        .iter()
+        .filter(|w| !plan.warnings.contains(w))
+        .collect();
+    for warning in &new_warnings {
         println!("{}", ui.warning(warning));
     }
-    if !result.warnings.is_empty() {
+    if !new_warnings.is_empty() {
         return Err("La integración MCP se aplicó parcialmente; revisa los avisos".to_owned());
     }
     Ok(())
