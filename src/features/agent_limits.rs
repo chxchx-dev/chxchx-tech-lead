@@ -1,5 +1,8 @@
 //! What is left of an agent's plan (the 5 hour and weekly windows), read on demand.
 //!
+//! Claude reports its limits with every reply; the last ones seen are kept in a small file so the
+//! button can show them without sending a message.
+//!
 //! Codex writes its latest limits into the session files it already keeps, so reading them costs
 //! no request and no tokens. Nothing here runs on its own: the chat's "Actualizar" button calls it.
 use crate::features::chat_model::Window;
@@ -116,6 +119,77 @@ pub fn codex_snapshot(codex_home: &Path) -> Option<Snapshot> {
     found
 }
 
+fn claude_file() -> Option<PathBuf> {
+    let home = std::env::var_os("CHXCHX_TECH_HOME")
+        .map(PathBuf::from)
+        .or_else(crate::features::data_home::chosen)
+        .or_else(crate::features::data_home::default_home)?;
+    Some(home.join("cache").join("claude-limits.json"))
+}
+
+fn window_json(window: &Option<Window>) -> Value {
+    window.map_or(Value::Null, |w| {
+        serde_json::json!({
+            "used_percent": w.used_percent,
+            "window_minutes": w.window_minutes,
+            "resets_at": w.resets_at,
+        })
+    })
+}
+
+/// Keeps the limits Claude just reported so they survive closing the chat or Studio.
+pub fn remember_claude(primary: &Option<Window>, secondary: &Option<Window>) {
+    if cfg!(test) {
+        return; // tests never write into the real data folder
+    }
+    if let Some(path) = claude_file() {
+        remember_claude_in(&path, primary, secondary);
+    }
+}
+
+fn remember_claude_in(path: &Path, primary: &Option<Window>, secondary: &Option<Window>) {
+    if primary.is_none() && secondary.is_none() {
+        return;
+    }
+    let observed_at = std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64);
+    let body = serde_json::json!({
+        "primary": window_json(primary), "secondary": window_json(secondary),
+        "observed_at": observed_at,
+    });
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let temp = path.with_extension("json.tmp");
+    if std::fs::write(&temp, body.to_string()).is_ok() {
+        let _ = std::fs::rename(&temp, path);
+    }
+}
+
+/// The limits Claude reported last, or `None` when it has not reported any yet.
+pub fn claude_snapshot() -> Option<Snapshot> {
+    claude_snapshot_in(&claude_file()?)
+}
+
+fn claude_snapshot_in(path: &Path) -> Option<Snapshot> {
+    let value: Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let primary = window(value.get("primary"));
+    let secondary = window(value.get("secondary"));
+    if primary.is_none() && secondary.is_none() {
+        return None;
+    }
+    Some(Snapshot {
+        primary,
+        secondary,
+        plan: String::new(),
+        observed_at: value
+            .get("observed_at")
+            .and_then(Value::as_i64)
+            .unwrap_or(0),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,5 +239,27 @@ mod tests {
         .unwrap();
         assert!(codex_snapshot(&root).is_none());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn claude_limits_are_kept_for_the_next_time_and_empty_ones_change_nothing() {
+        let path = home("claude").join("claude-limits.json");
+        let five = Some(Window {
+            used_percent: 7.0,
+            window_minutes: 300,
+            resets_at: 10,
+        });
+        let week = Some(Window {
+            used_percent: 25.0,
+            window_minutes: 10080,
+            resets_at: 20,
+        });
+        remember_claude_in(&path, &five, &week);
+        remember_claude_in(&path, &None, &None);
+        let snapshot = claude_snapshot_in(&path).expect("kept");
+        assert_eq!(snapshot.primary, five);
+        assert_eq!(snapshot.secondary, week);
+        assert!(snapshot.observed_at > 0);
+        assert!(claude_snapshot_in(&path.with_file_name("none.json")).is_none());
     }
 }

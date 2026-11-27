@@ -388,3 +388,18 @@ fn control_requests_rust_cannot_serve_are_refused_so_claude_never_waits() {
     assert_eq!(response["response"]["subtype"], "error");
     assert_eq!(response["response"]["request_id"], "unsupported-1");
 }
+
+#[test]
+fn the_plan_limits_claude_reports_reach_the_chat() {
+    let dir = scratch("limits");
+    let limits = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"five_hour","resetsAt":4102444800,"unifiedWindows":{"five_hour":{"utilization":0.07,"resetsAt":4102444800,"status":"allowed"},"seven_day":{"utilization":0.25,"resetsAt":4102448400,"status":"allowed"}}}}"#;
+    let claude = fake_claude(&dir, &answering(&[INIT, REPLY, limits, RESULT]));
+    let mut turn = Turn::launch(&spec(&dir, &claude)).unwrap();
+    let events = wait_done(&mut turn);
+    let event = events
+        .iter()
+        .find(|e| e["type"] == "limits" && !e["primary"].is_null())
+        .unwrap_or_else(|| panic!("no limits event reached the chat: {events:?}"));
+    assert_eq!(event["primary"]["used_percent"], 7.0);
+    assert_eq!(event["secondary"]["window_minutes"], 10080);
+}

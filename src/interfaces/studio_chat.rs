@@ -443,17 +443,15 @@ fn refresh_limits(state: &mut Dashboard) -> Task<Message> {
         return Task::none();
     };
     let id = chat.agent.id.clone();
-    if chat.agent.provider != crate::features::agents::Provider::Codex {
-        state.message = format!(
-            "{} informa cuánto queda de tu plan con cada respuesta; aparece o se actualiza después de tu siguiente mensaje.",
-            chat.agent.label()
-        );
-        return Task::none();
-    }
+    let claude = chat.agent.provider == crate::features::agents::Provider::Claude;
     jobs::quiet(
-        || {
-            crate::features::agent_limits::codex_home()
-                .and_then(|home| crate::features::agent_limits::codex_snapshot(&home))
+        move || {
+            if claude {
+                crate::features::agent_limits::claude_snapshot()
+            } else {
+                crate::features::agent_limits::codex_home()
+                    .and_then(|home| crate::features::agent_limits::codex_snapshot(&home))
+            }
         },
         move |_, snapshot| Task::done(Message::Chat(Event::LimitsRead(id, snapshot))),
     )
@@ -466,7 +464,8 @@ fn limits_read(
 ) {
     let Some(snapshot) = snapshot else {
         state.message =
-            "Aún no hay límites guardados; aparecen después del primer mensaje.".to_owned();
+            "Aún no hay límites guardados; aparecen después de tu primer mensaje con este agente."
+                .to_owned();
         return;
     };
     with_agent(state, id, |chat| {
@@ -512,7 +511,16 @@ fn tick(state: &mut Dashboard) {
                 {
                     chat.turn_replies.push(text.to_owned());
                 }
+                let fresh_limits = chat.agent.provider == crate::features::agents::Provider::Claude
+                    && event.get("type").and_then(Value::as_str) == Some("limits");
                 chat.model.apply(&event);
+                if fresh_limits {
+                    let usage = &chat.model.usage;
+                    let (primary, secondary) = (usage.primary, usage.secondary);
+                    std::thread::spawn(move || {
+                        crate::features::agent_limits::remember_claude(&primary, &secondary);
+                    });
+                }
             }
         }
         let finished = chat.turn.as_ref().is_some_and(|turn| turn.exit.is_some());

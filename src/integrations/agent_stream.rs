@@ -546,7 +546,7 @@ fn claude_rate_limits(record: &Map<String, Value>) -> Option<Value> {
             .or_else(|| fallback.and_then(Value::as_f64))?;
         (used >= 0.0).then(|| {
             json!({
-                "used_percent": (used * 100.0).clamp(0.0, 100.0),
+                "used_percent": (used * 10000.0).round().clamp(0.0, 10000.0) / 100.0,
                 "window_minutes": minutes,
                 "resets_at": value.get("resetsAt").and_then(Value::as_i64).unwrap_or(0),
             })
