@@ -12,7 +12,10 @@ fn tile<'a>(item: &'a board::Card, selected: bool) -> Element<'a, Message> {
     let tint = super::look::status_color(&item.status);
     let mut body = column![
         super::key_chip(&item.key, tint),
-        text(&item.title).size(12).color(design::fg()),
+        text(&item.title)
+            .size(12)
+            .color(design::fg())
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
     ]
     .spacing(5);
     if !item.blocker.is_empty() {
@@ -40,7 +43,20 @@ fn tile<'a>(item: &'a board::Card, selected: bool) -> Element<'a, Message> {
         .into()
 }
 
-fn detail<'a>(hive: &'a State, item: &'a board::Card) -> Element<'a, Message> {
+/// An input with its button: side by side when there is room, stacked when there is not.
+fn field<'a>(
+    narrow: bool,
+    input: Element<'a, Message>,
+    action: Element<'a, Message>,
+) -> Element<'a, Message> {
+    if narrow {
+        column![input, action].spacing(4).into()
+    } else {
+        row![input, action].spacing(6).into()
+    }
+}
+
+fn detail<'a>(hive: &'a State, item: &'a board::Card, narrow: bool) -> Element<'a, Message> {
     let at = board::STATUSES
         .iter()
         .position(|s| *s == item.status)
@@ -69,22 +85,24 @@ fn detail<'a>(hive: &'a State, item: &'a board::Card) -> Element<'a, Message> {
             ],
             text("Mover a").size(11).color(design::faint()),
             moves.wrap(),
-            row![
+            field(
+                narrow,
                 text_input("Depende de (C-002)", &hive.dependency)
                     .size(12)
                     .on_input(|v| Message::Hive(Event::DependencyInput(v)))
-                    .on_submit(Message::Hive(Event::AddDependency)),
+                    .on_submit(Message::Hive(Event::AddDependency))
+                    .into(),
                 small("Añadir dependencia", Message::Hive(Event::AddDependency)),
-            ]
-            .spacing(6),
-            row![
+            ),
+            field(
+                narrow,
                 text_input("Motivo del bloqueo", &hive.reason)
                     .size(12)
                     .on_input(|v| Message::Hive(Event::ReasonInput(v)))
-                    .on_submit(Message::Hive(Event::Block)),
+                    .on_submit(Message::Hive(Event::Block))
+                    .into(),
                 small("Bloquear", Message::Hive(Event::Block)),
-            ]
-            .spacing(6),
+            ),
             text("Esperar una decisión").size(11).color(design::faint()),
             waits.wrap(),
         ]
@@ -96,9 +114,22 @@ fn detail<'a>(hive: &'a State, item: &'a board::Card) -> Element<'a, Message> {
     .into()
 }
 
+/// Under this width the lanes stack in one column instead of side by side.
+const STACK_BELOW: f32 = 620.0;
+const GAP: f32 = 10.0;
+
 pub(in crate::interfaces) fn board_view(state: &Dashboard) -> Element<'_, Message> {
+    iced::widget::responsive(move |size| board_at(state, size.width)).into()
+}
+
+fn board_at(state: &Dashboard, width: f32) -> Element<'_, Message> {
     let hive = &state.hive;
-    let mut columns = row![].spacing(10);
+    let narrow = width < STACK_BELOW;
+    let inner = (width - 24.0).max(0.0);
+    let lanes = board::STATUSES.len() as f32;
+    let each = ((inner - GAP * (lanes - 1.0)) / lanes).clamp(200.0, 260.0);
+    let mut columns = row![].spacing(GAP);
+    let mut stacked = column![].spacing(GAP);
     for status in board::STATUSES {
         let cards: Vec<&board::Card> = hive.cards.iter().filter(|c| c.status == status).collect();
         let mut lane = column![label(status_name(status), cards.len())].spacing(6);
@@ -106,13 +137,22 @@ pub(in crate::interfaces) fn board_view(state: &Dashboard) -> Element<'_, Messag
             let on = hive.selected.as_deref() == Some(item.key.as_str());
             lane = lane.push(tile(item, on));
         }
-        columns = columns.push(
-            container(styles::vscroll(lane).height(Fill))
-                .width(240)
-                .height(Fill)
-                .padding(10)
-                .style(super::look::lane),
-        );
+        if narrow {
+            stacked = stacked.push(
+                container(lane)
+                    .width(Fill)
+                    .padding(10)
+                    .style(super::look::lane),
+            );
+        } else {
+            columns = columns.push(
+                container(styles::vscroll(lane).height(Fill))
+                    .width(each)
+                    .height(Fill)
+                    .padding(10)
+                    .style(super::look::lane),
+            );
+        }
     }
     let mut top = column![
         row![
@@ -120,11 +160,15 @@ pub(in crate::interfaces) fn board_view(state: &Dashboard) -> Element<'_, Messag
             text("Colmena").size(16).font(design::UI_BOLD),
             text("tablero").size(12).color(design::faint()),
             Space::new().width(Fill),
+        ]
+        .spacing(8)
+        .align_y(iced::Center),
+        row![
             small("Exportar .ai/board.json", Message::Hive(Event::Export)),
             small("Cerrar tablero", Message::Hive(Event::Wide(false))),
         ]
-        .spacing(8)
-        .align_y(iced::Center)
+        .spacing(6)
+        .wrap(),
     ]
     .spacing(8);
     if !hive.error.is_empty() {
@@ -145,18 +189,24 @@ pub(in crate::interfaces) fn board_view(state: &Dashboard) -> Element<'_, Messag
         .as_deref()
         .and_then(|key| hive.cards.iter().find(|c| c.key == key))
     {
-        top = top.push(detail(hive, item));
+        top = top.push(detail(hive, item, narrow || width < 820.0));
     }
-    container(
+    let body: Element<'_, Message> = if narrow {
+        styles::vscroll(column![top, stacked].spacing(GAP))
+            .height(Fill)
+            .into()
+    } else {
         column![
             styles::vscroll(top).height(iced::Shrink),
             styles::hscroll(columns).height(Fill)
         ]
-        .spacing(10),
-    )
-    .padding(12)
-    .width(Fill)
-    .height(Fill)
-    .style(styles::surface(design::bg_deep()))
-    .into()
+        .spacing(GAP)
+        .into()
+    };
+    container(body)
+        .padding(12)
+        .width(Fill)
+        .height(Fill)
+        .style(styles::surface(design::bg_deep()))
+        .into()
 }

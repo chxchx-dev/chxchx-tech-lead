@@ -221,7 +221,9 @@ pub(super) fn decision_card(item: &board::Decision) -> Element<'_, Message> {
     container(
         column![
             key_chip(&item.key, design::warning()),
-            text(&item.question).size(12),
+            text(&item.question)
+                .size(12)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             choices.wrap(),
         ]
         .spacing(6),
@@ -232,7 +234,7 @@ pub(super) fn decision_card(item: &board::Decision) -> Element<'_, Message> {
     .into()
 }
 
-fn card_row(item: &board::Card) -> Element<'_, Message> {
+fn card_row(item: &board::Card, narrow: bool) -> Element<'_, Message> {
     let at = board::STATUSES
         .iter()
         .position(|s| *s == item.status)
@@ -259,7 +261,10 @@ fn card_row(item: &board::Card) -> Element<'_, Message> {
     let tint = look::status_color(&item.status);
     let mut body = column![
         key_chip(&item.key, tint),
-        text(&item.title).size(12).color(design::fg()),
+        text(&item.title)
+            .size(12)
+            .color(design::fg())
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
     ]
     .spacing(4);
     if !item.blocker.is_empty() {
@@ -271,15 +276,19 @@ fn card_row(item: &board::Card) -> Element<'_, Message> {
                 .color(design::muted()),
         );
     }
-    container(
+    let inner: Element<'_, Message> = if narrow {
+        column![body, actions].spacing(6).into()
+    } else {
         row![body.width(Fill), actions]
             .spacing(6)
-            .align_y(iced::Center),
-    )
-    .padding([6, 10])
-    .width(Fill)
-    .style(styles::card)
-    .into()
+            .align_y(iced::Center)
+            .into()
+    };
+    container(inner)
+        .padding([8, 10])
+        .width(Fill)
+        .style(look::panel(tint))
+        .into()
 }
 
 /// A key such as `C-004` as a small tinted chip.
@@ -336,16 +345,18 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         .iter()
         .filter(|d| d.status == "proposed")
         .collect();
+    let narrow = state.shell.explorer_width < 260.0;
     let mut body = column![
         row![
             icons::icon("hive", design::accent(), 18.0),
             text("Colmena").size(15).font(design::UI_BOLD),
             Space::new().width(Fill),
             small(
-                if hive.wide {
-                    "Cerrar tablero"
-                } else {
-                    "Tablero completo"
+                match (hive.wide, narrow) {
+                    (true, true) => "Cerrar",
+                    (true, false) => "Cerrar tablero",
+                    (false, true) => "Tablero",
+                    (false, false) => "Tablero completo",
                 },
                 Message::Hive(Event::Wide(!hive.wide)),
             ),
@@ -386,7 +397,7 @@ pub(super) fn view(state: &Dashboard) -> Element<'_, Message> {
         }
         body = body.push(label(status_name(status), cards.len()));
         for item in cards {
-            body = body.push(card_row(item));
+            body = body.push(card_row(item, narrow));
         }
     }
     if hive.cards.is_empty() && hive.decisions.is_empty() && hive.error.is_empty() {
